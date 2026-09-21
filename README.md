@@ -1,13 +1,20 @@
 # Jevistication
 
-**A calibrated decision engine for developer workflows.**
+**The measurement layer for agent policy.**
 
 Every developer workflow is full of decisions made by a regex, a hardcoded threshold, or
 nothing at all. Which model should handle this turn. Should this tool call run. Which tests
 does this diff actually need. Is this failure real or flaky. Is another revision pass worth it.
 
-Jevistication makes those decisions with a fast structured-decision model, and — the part that
-matters — **can prove whether its policy is any good**, before and after you ship it.
+Tools exist to make those decisions. What none of them can tell you is whether their rules are
+any good — how often they fire wrongly, or what a different threshold would have done.
+
+And the decision models everyone thresholds on are measurably overconfident: independent
+evaluation found one claiming 0.98 confidence while being right 89% of the time, with accuracy
+ranging 55%–100% by task and no universal threshold.
+
+> **The model says 0.98. It's right 89% of the time. Jevistication is the layer that knows the
+> difference.**
 
 > Status: pre-alpha. The design is settled; the code is not written yet.
 > Start with [`docs/BUILD-PLAN.md`](docs/BUILD-PLAN.md).
@@ -36,10 +43,16 @@ wearing a probability distribution.
 
 - **Decision ledger** — every decision logs its full probability distribution and its eventual
   outcome, not just the answer. An audit trail and a growing calibration set at once.
-- **Counterfactual replay** — because policies are pure functions over logged state, a candidate
-  policy can be replayed across history *before* shipping: *"this threshold would have skipped
-  340 more test runs and missed 2 real failures."*
-- **Every pack reports its own accuracy.** Structural, not aspirational.
+- **Counterfactual replay, done correctly** — policies are pure functions over logged state, so a
+  candidate policy can be replayed across history *before* shipping: *"this threshold would have
+  fired 340 more times and missed 2 real incidents."* Naive replay over a deterministic log is
+  biased; unbiased off-policy evaluation needs logged propensities, which is why decisions are
+  sampled and their propensities recorded from the very first one.
+- **Every pack reports its own accuracy.** Structural, not aspirational — a pack without an
+  outcome signal does not ship.
+- **Backend portfolio.** Hosted or local (7–13 ms on-device), measured side by side on accuracy,
+  latency and cost. No backend dominates; the ledger decides which suits which pack.
+- **Your ledger trains your model.** Logged decisions are a training set, not just an audit trail.
 
 ## Documents
 
