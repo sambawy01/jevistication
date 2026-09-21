@@ -1,6 +1,6 @@
 # Product Specification
 
-Locked. This is the whole product. Nothing here is a later release — the build order in §9
+Locked. This is the whole product. Nothing here is a later release — the build order in §10
 is an order of work, not a scope cut.
 
 Evidence behind the design decisions is in [`RESEARCH.md`](RESEARCH.md).
@@ -107,7 +107,8 @@ shipping or billing — decided from page context rather than from field names, 
 works on the forms browser autofill breaks on. And it declines to fill when the form has no
 business asking.
 
-**Fraud and identity-mismatch detection.** See §5.
+**The watchers** — expiry radar, recurring-money census, term-change detection, person
+impersonation, site fraud. See §5.
 
 **Third-party app tasks.** Navigate to and prepare a state in another app — pick the service,
 pick the tier, prefill the destination — and hand you the screen with your thumb over the
@@ -152,7 +153,42 @@ photos, files and SMS. *"We never see it"* is what is true of Gmail and Sheets.
 
 ---
 
-## 5. Fraud and identity mismatch
+## 5. What it notices
+
+The product is not a filing cabinet. It is an attentive one.
+
+> **It notices what you'd miss.**
+
+Five watchers share one shape: something that will cost you, caught at the moment it would cost
+you, using judgment where rules fail, across sources nothing else sees together.
+
+### Obligation and expiry radar
+
+Passports, visas, insurance, warranties, contracts, licences, leases — scattered across email
+attachments, PDFs and photographs of paper, tracked by nobody. *"Your passport expires in four
+months. Schengen requires six."* Judgment identifies the document and its type; extraction and
+date arithmetic are mechanical. Missing a visa renewal is genuinely catastrophic and no product
+covers this today.
+
+### Recurring-money census
+
+Email receipts, card statements and app-store charges together: every recurring payment, with
+the ones you have not touched. *"14 subscriptions, 5 unused for six months."* Classify then
+count — the census primitive pointed at the most legible value there is.
+
+### Term-change detection
+
+Banks, insurers, ISPs and landlords email when terms change, and nobody reads those. *"Your
+premium rose 23% at renewal."* A comparison judgment against the previous version of the same
+document. One catch pays for the app for years.
+
+### Person impersonation
+
+The sibling of site fraud, and more important. *"This message from 'Mom' is from a number that
+isn't Mom's."* Contacts, message history and writing patterns in one place. No messaging app can
+do this, because none of them sees your contacts' history *and* your other channels.
+
+### Site fraud and identity mismatch
 
 The same judgment that lets form filling refuse.
 
@@ -183,7 +219,52 @@ it is, locally, and stop you if it is not.*
 
 ---
 
-## 6. Actuators
+## 6. Accuracy, and what we promise
+
+The published numbers on the best-calibrated open model: **easy tier 87.5%, standard 69.4%,
+hard 36.9%** at 11.8% ECE. The telling detail is that the inference fixes which lifted standard
+by +6.9 points moved hard by **exactly zero**. Hard means multi-hop reasoning or genuinely
+contested judgment — the analogous benchmark breakdown shows logical deduction at 100% and
+causal attribution at 55%, and humans disagree on causal attribution too.
+
+**Two things follow, and the second is the important one.**
+
+**First, that is a benchmark of deliberately hard tasks, not our distribution.** "Is this a
+receipt" is easy tier. "Does this domain match the brand" is mostly mechanical. Some of our
+judgments genuinely are hard — *"would I want to be reminded of this?"* — but most are not. The
+number is a warning about a subset, not a ceiling on all of them.
+
+**Second: accuracy at full coverage is the wrong metric for a system that can abstain.** The
+right one is the risk–coverage curve. The evidence: overall 85% accuracy, but the ≥0.90
+confidence band was **92% correct**. A model at 37% raw on hard items may be 85% accurate on the
+40% it is confident about, with the rest going to the queue. **Selective accuracy is our
+number**, it is what the app reports, and it is what §9 measures.
+
+Five levers follow:
+
+1. **Per-judgment measurement, never aggregate.** "Is this a receipt" might be 94% on your data
+   while "is this urgent" is 61%. Both are shown. There is no single system accuracy.
+2. **Decompose hard judgments into easy ones.** *"Is this email urgent?"* is hard; *"does it
+   name a deadline?"*, *"do you reply to this sender within a day?"*, *"does it ask a direct
+   question?"* are each easy, and code combines them. The primitive is a focused judgment;
+   composition belongs in code. Push work out of the model.
+3. **Mechanical-first shrinks the residual.** Domain comparison, dedup, date arithmetic and
+   hashing are not judgments. Every one resolved mechanically is one the model cannot be wrong
+   about.
+4. **The personal fine-tune moves your hard cases into distribution.** Hard partly means
+   unfamiliar. Your senders, your categories, your corrections. This is why the ledger matters.
+5. **Cross-architecture agreement, on uncertain items only.** An encoder model, a decision
+   transformer and a decoder-with-heads are architecturally different, so their errors may
+   decorrelate where frontier models' do not. Three 150M models is still ~60 ms, and only where
+   the first is unsure. Measure it; if the errors correlate, drop it.
+
+None of this makes hard judgments accurate. It makes the system honest about which ones are
+hard, shrinks their share, and abstains rather than guessing — the same discipline as warning
+without ever blessing.
+
+---
+
+## 7. Actuators
 
 One judgment engine; the hands change with the environment.
 
@@ -213,7 +294,7 @@ encrypted, with our servers never in the path.
 
 ---
 
-## 7. Architecture
+## 8. Architecture
 
 ```
 source → mechanical extractors (hash, EXIF, OCR, MIME, regex, domain, cert)
@@ -234,7 +315,7 @@ counterfactuals built on that history are biased forever.
 **The model is behind an interface.** Candidates: openJev-verdict (149.6M, Apache-2.0,
 20–25 ms, in-browser WebGPU engine), Laya-MLX (322/421M, 7–13 ms, Apple Silicon), NanoJev
 (0.6B, MIT), or any open model through logit scoring. Which one ships as the default is settled
-by measurement, not by argument — see §8.
+by measurement, not by argument — see §9.
 
 **Calibration is per judgment, per source, and per option-count.** Temperature that is right
 for a 3-option choice is wrong for a 20-option one; that exact bug shipped in production
@@ -246,7 +327,7 @@ text by definition.
 
 ---
 
-## 8. What measurement decides
+## 9. What measurement decides
 
 Not opinions — these are settled by running the harness:
 
@@ -254,7 +335,9 @@ Not opinions — these are settled by running the harness:
    benchmark, but per-task accuracy ranges 55–100% and the leader flips by task.
 2. **Every threshold.** Fourteen of fourteen projects surveyed ship a threshold nobody
    validated. Ours are fitted on a held-out calibration split, never on test.
-3. **Whether each judgment beats its dumb baseline.** Upstream, a model-selected compaction lost
+3. **The risk–coverage curve per judgment**, not accuracy at full coverage — see §6. What the
+   app reports is selective accuracy and the share it declined to answer.
+4. **Whether each judgment beats its dumb baseline.** Upstream, a model-selected compaction lost
    to "keep the last 24k characters" and the authors shipped the plain tail. That outcome is
    possible for any judgment we write, and the app should be able to tell us.
 
@@ -264,7 +347,7 @@ results as much as the algorithm does, so it is a controlled variable.
 
 ---
 
-## 9. Build order
+## 10. Build order
 
 Order of work. Nothing here is cut, and nothing waits for a second release.
 
@@ -283,9 +366,9 @@ Order of work. Nothing here is cut, and nothing waits for a second release.
 
 ---
 
-## 10. Open
+## 11. Open
 
 - **Platform.** iOS, Android, or both. Sources are ~85% identical either way; the differences
   are SMS, notifications, filesystem and the accessibility path.
 - **Name.** "Jevistication" was chosen for a developer tool and does not fit a consumer app.
-- **Default model.** Settled by §8, not by preference.
+- **Default model.** Settled by §9, not by preference.

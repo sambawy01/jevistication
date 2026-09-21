@@ -22,6 +22,14 @@ Organising your files, screening a call, ranking flight options, triggering an a
 flagging a fake bank page are the same feature wearing different clothes. No single-app tool
 can do that, because no single-app tool sees the other apps.
 
+And the point of seeing all of them at once:
+
+> **It notices what you'd miss.**
+
+A passport expiring before a visa rule bites. Five subscriptions you stopped using. A premium
+that rose 23% in an email you never opened. A message from “Mom” sent from a number that isn't
+hers. A bank page that isn't your bank.
+
 ## Why it runs on your phone
 
 The model is ~150M parameters, answers in 7–25 ms, emits zero output tokens, and is
@@ -38,10 +46,12 @@ Airplane mode: everything still works.
 - **The uncertain queue** — you review only what teaches it most
 - **A threshold slider that shows the counterfactual** before you commit
 - **Form filling that can refuse**, decided from page context rather than field names
-- **Fraud and identity-mismatch detection**, across page, email and SMS at once
+- **Watchers** — expiry radar, recurring money, silent term changes, person impersonation,
+  and site fraud across page, email and SMS at once
 - **Semantic automation triggers** — *when an email arrives that is actually urgent*
 - **Search and compare** across many options in one call
-- **Visible calibration** — how well it knows you, and how that changed
+- **Visible calibration** — how well it knows you per judgment, and how often it declines
+  to answer rather than guess
 
 ## What it never does
 
