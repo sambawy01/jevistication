@@ -380,3 +380,15 @@ their acceptance criteria are met; entries here record increments toward them.
   through the same authoring path users take, so a test asserts the library passes the lint it
   holds users to.** C2's acceptance runs as a test: a compiled judgment is immediately usable by
   the engine. 147 tests green.
+- **2026-09-22 — C3 (2 of 5): expiry radar and recurring-money census.** `ExpiryRadar` composes the
+  split the spec insists on: deciding *what a document is* is a judgment the model makes; finding
+  the date and comparing it to a `ValidityRule` is arithmetic the model never touches. Two safety
+  choices are pinned by tests — the **latest** date on a document is the expiry (issue dates come
+  first), and an **ambiguous** date resolves to the **earlier** reading, because warning early about
+  a passport is recoverable and warning late is not. An item the engine abstains on raises nothing:
+  an uncertain document type is no basis for telling someone their visa is lapsing.
+  `RecurringMoney.census` groups charges by merchant and classifies cadence from the median gap
+  (weekly/monthly/quarterly/annual, else **irregular** rather than an invented schedule), with
+  `dormant()` for the still-charging-but-unused list. Amounts are `Long` minor units — money is
+  never a `Double` in a thing that sums thousands of rows. Remaining watchers: term-change,
+  impersonation, site-fraud composition. 165 tests green.
