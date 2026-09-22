@@ -22,6 +22,7 @@ Sixteen repositories and a competitive survey. Every design decision in
 | Median agent turn = 8 API calls; 192,000 input vs 5,600 output tokens — **97% input** | `kerpopule/hermes-jev-skills` | Blended pricing misranks models for this workload. |
 | Hosted requests cap at 32k tokens | `tamaratran/fast-jev-compaction` | State plus questions must be fitted and split below it. |
 | Fine-tuned in 8.8 hours on a consumer laptop GPU | `TianyuCodings/NanoJev` | An overnight on-device personalisation pass is realistic. |
+| **Tier routing is often cost-negative.** At published frontier prices and a realistic token mix, `pure-strong` costs **two-thirds** of `strong→cheap→strong`, because the cheap model's context must be re-processed by the strong one on the way back | *thoughts on a typesafe coding agent* (public design note) | Confirms demoting model routing. Our product never pays this tax: one local model, no hosted backend, no cache rebuild. Pairs with the 97%-input finding — per-call pricing misleads about agent workloads. |
 
 ---
 
@@ -29,6 +30,8 @@ Sixteen repositories and a competitive survey. Every design decision in
 
 - **Mechanical before judgment.** Deterministic checks run first and free; the model is asked only what they cannot answer. — `memovai/openevals`, `TianyuCodings/NanoJev`
 - **Never summarise, only delete.** Selection preserves; summarisation loses the exact error, path or constraint you needed later. — `tamaratran/fast-jev-compaction`, corroborated by hermes
+- **Retention is three-way, not binary:** keep verbatim, truncate with a marker, or remove. — `tamaratran/fast-jev-compaction`
+- **Query-aware compression beats generic compression.** Compressing against a known question is a far easier problem than summarising in the abstract — which is the argument for judgment-first filtering over summarisation, and why the census works at all. — *thoughts on a typesafe coding agent*
 - **Speculative parallel branches.** Ask for the operation *and* every possible target in one call, discard the branches that do not apply. Halves round trips. — `droidrun/mobile-jev`
 - **State-dependent legal candidate sets.** Do not offer "close" when nothing is open; mass is not wasted on illegal options. — `droidrun/mobile-jev`, `aowang-ai/jev-trade`
 - **An explicit no-op in every choice set** — `hold`, `WAIT`, `BLOCKED`, ask-the-user. Without one the model is forced to act. — four independent projects
@@ -86,3 +89,5 @@ is a phone app.
 - **A safety verdict.** The system warns; it never blesses. A false negative costs a bank
   account; a false positive costs a shrug.
 - **Suppression of anything security-relevant.** Rank and surface, never silently drop.
+- **Tier routing between a cheap and a strong model.** Crowded, and often cost-negative once the
+  cache rebuild is counted. We run one local model.
