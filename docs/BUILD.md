@@ -15,8 +15,8 @@ an incomplete spec.
 | Layer | Choice |
 |---|---|
 | Language / UI | Kotlin, Jetpack Compose |
-| **Decision model** | **openJev-verdict-2.0** — 149.6M, Apache-2.0, ModernBERT-base + GLiClass |
-| **Second backend** | **simple-jev logit scoring** over a small open model — no custom heads |
+| **Decision model** | **`knowledgator/gliclass-modern-base-v2.0`** — 151M, Apache-2.0, ModernBERT backbone |
+| **Second backend** | **NanoJev** — 0.6B, MIT, Qwen3 + decision heads |
 | Model runtime | ONNX Runtime Mobile (NNAPI / XNNPACK execution providers) |
 | Ledger | SQLite via Room |
 | Background | WorkManager, charging + idle constraints |
@@ -24,26 +24,31 @@ an incomplete spec.
 | Speech | on-device recognizer |
 | Email | Gmail API over OAuth; IMAP for everything else |
 | Form filling | `AutofillService` |
-| Messages | default SMS handler via `RoleManager` |
 | Notifications | `NotificationListenerService` |
 | Files | Storage Access Framework + MediaStore |
 
-**Why that model.** Smallest of the candidates, best measured accuracy (77.10% against Laya's
-76.60% and hosted Jev's 72.70%), and by a distance the best calibrated — a dedicated confidence
-head at 1.44% ECE, which is the property the whole product rests on. Encoder, non-autoregressive,
-20–25 ms. Laya is disqualified for Android: it is an MLX port, Apple Silicon only. NanoJev is
-four times the size on games-only evidence.
+**Why that model.** GLiClass is a single-forward-pass classifier over candidate labels — which
+*is* the Choice primitive. ModernBERT backbone, encoder, non-autoregressive, 151M. Apache-2.0,
+and the authors state it was trained on synthetic and licensed data permitting commercial use.
+It is the cleanest licence in the entire survey, and it is the same base the openJev derivative
+was built on.
 
-**Why that second backend.** It reads next-token logits off any model and has **no custom
-heads**, so it is the escape hatch if openJev's decision heads resist ONNX export, and it gives
-the architecturally-decorrelated pair that §6 of the spec needs for agreement checks on
-uncertain items.
+We fine-tune it on our own fixtures and fit our own calibration — which is what A6 required
+anyway, and which means **we depend on nobody's calibration claim.** That is the product's own
+argument applied to its own foundations.
+
+**Why that second backend.** NanoJev is MIT with published weights and dataset, and is
+architecturally different — a decoder with decision heads against our encoder. That difference
+is what makes the agreement check in §6 of the spec meaningful; two similar architectures would
+fail alike.
+
+**Rejected, and why — see [`LICENSING.md`](LICENSING.md).** openJev-verdict-2.0 was the original
+choice and is disqualified: its checkpoint is unobtainable and its LICENSE is a truncated Apache
+text that GitHub classifies as `NOASSERTION`. simple-jev has no repository licence at all.
+Laya-MLX is Apache-2.0 but Apple Silicon only.
 
 **No hosted backend, ever.** Not an omission. A network call breaks the offline guarantee the
 product rests on.
-
-**Verify the weight licence on Hugging Face separately.** The repository is Apache-2.0; weights
-and datasets are distributed under their own terms and a code licence does not carry over.
 
 **Model delivery.** Weights are not in the base APK. Play Asset Delivery, or fetched on first
 run. A ~150M model at int8 is a few hundred megabytes — normal for a mobile app, fatal for an
@@ -60,17 +65,23 @@ moment that matters — the instant before you type. Search-and-compare runs in 
 
 Everything depends on this track. Built first, in this order.
 
-**A1 · Model runtime.** Export **openJev-verdict-2.0** to ONNX; integrate ONNX Runtime Mobile;
-wire Choice, Score and Noul through one call interface.
+**A0 · Licence verification at source.** Before any weights are fetched: confirm the licence
+tag on the HF model card for the base model, confirm NanoJev's weight **and dataset** licences
+separately, and confirm neither carries a use restriction or acceptable-use addendum. A badge in
+a README is not evidence — one repository in our own survey shipped an Apache badge over a
+mangled licence. See [`LICENSING.md`](LICENSING.md).
+*Accept:* each licence read from its source, recorded with the date and the revision it applied to.
+
+**A1 · Model runtime.** Fine-tune the base on our fixtures; export to ONNX; integrate ONNX
+Runtime Mobile; wire Choice, Score and Noul through one call interface.
 *Accept:* p50 and p95 latency measured on a real mid-range device, not an emulator; a Choice
 over 200 candidates returns a normalised distribution.
-*Risk:* it is an encoder with custom decision heads, and clean export of those heads is the
-first thing to prove before anything is built on it. Mitigating evidence: the authors already
-ship an in-browser WebGPU engine, so the model has been exported out of PyTorch once already,
-and ModernBERT is a standard architecture with mature export support.
+*Risk:* export of the classification head is the first thing to prove before anything is built
+on it. Mitigating: ModernBERT is a standard architecture with mature export support, and
+GLiClass scores labels in one forward pass rather than through bespoke decoding.
 
-**A2 · Backend interface and the second implementation.** One interface; openJev-verdict and
-simple-jev logit scoring behind it.
+**A2 · Backend interface and the second implementation.** One interface; the GLiClass-based
+model and NanoJev behind it.
 *Accept:* the same fixture set runs on both; a fidelity suite shows identical selected answers
 across precisions, and repeated calls show no memory growth.
 
@@ -117,7 +128,7 @@ Ordered by breadth of value per unit of work.
 | B4 | Photos and screenshots | MediaStore + ML Kit OCR and labels |
 | B5 | Calendar and contacts | contacts also feed the impersonation watcher |
 | B6 | Voice memos | on-device transcription |
-| B7 | SMS | default handler role |
+| B7 | SMS | not built — see below |
 | B8 | Notifications | listener service |
 | B9 | Web pages | WebView and autofill context |
 
@@ -191,7 +202,7 @@ has no business requesting, and says why.
 **F2 · Retroactive sweep** — a new judgment applied across full history, with progress and cancel.
 **F3 · Overnight fine-tune** — ledger exported as a decision-question dataset with soft targets.
 **F4 · Export** — judgments, calibration and ledger as portable files.
-**F5 · The game** — the model deciding ~50 times a second with probability bars visible, offline.
+**F5 · The game** — the model deciding many times a second with probability bars visible, offline.
 
 ---
 
@@ -230,7 +241,8 @@ judgments is the difference between this product and a confident guess.
 
 | | Risk | Response |
 |---|---|---|
-| 1 | ONNX export of custom decision heads may not be clean | Prove in A1 before anything is built on it; a second backend in A2 de-risks it |
+| 0 | **Third-party weight licences are not what badges claim** | A0 verifies every licence at source before a byte is fetched; `LICENSING.md` records what was checked and when |
+| 1 | ONNX export of the classification head may not be clean | Prove in A1 before anything is built on it; a second backend in A2 de-risks it |
 | 2 | Model size versus APK limits | Play Asset Delivery or first-run fetch; never in the base APK |
 | 3 | Battery and thermal cost of retroactive sweeps | Charging-constrained, throttled, cancellable, progress visible |
 | 4 | ~~SMS default-handler review~~ | **Closed.** Not building messaging; impersonation runs on email and contacts |
