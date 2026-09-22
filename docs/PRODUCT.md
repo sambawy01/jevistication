@@ -389,8 +389,9 @@ Nothing material. Closed since locking:
 - **Model** — `gliclass-modern-base-v2.0` (Apache-2.0), with a logit-scored `Qwen3-0.6B`
   (Apache-2.0) as the second backend. No hosted backend. Three candidates were rejected on
   licence grounds; see [`LICENSING.md`](LICENSING.md).
-- **Name** — **Sift**. One syllable, works as a verb, and names no vendor whose model we might
-  one day replace.
+- **Name** — **Loupe**. A loupe is the lens you hold up to something before you trust it:
+  it magnifies, it does not decide for you, and it names no vendor whose model we might one
+  day replace. The mark is crowded — see risk 9 in [`BUILD.md`](BUILD.md).
 - **SMS** — not built. Person impersonation runs on email and contacts instead.
 - **Browser** — `AutofillService` plus an in-app WebView. No separate extension.
 

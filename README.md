@@ -1,4 +1,4 @@
-# Jevistication
+# Loupe
 
 **An on-device decision engine for everything you own.**
 
