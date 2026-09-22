@@ -33,12 +33,14 @@ class CalibrationTest {
 
     @Test
     fun `ece of an empty set is zero`() {
-        assertEquals(0.0, Calibration.ece(emptyList()))
+        assertEquals(0.0, Calibration.ece(emptyList<Pair<Distribution, String>>()))
     }
 
     @Test
     fun `ece rejects a non-positive bin count`() {
-        assertFailsWith<IllegalArgumentException> { Calibration.ece(emptyList(), bins = 0) }
+        assertFailsWith<IllegalArgumentException> {
+            Calibration.ece(emptyList<Pair<Distribution, String>>(), bins = 0)
+        }
     }
 
     @Test

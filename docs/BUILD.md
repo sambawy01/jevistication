@@ -348,3 +348,15 @@ their acceptance criteria are met; entries here record increments toward them.
   interesting — a test replays an explored ledger through `OffPolicy`. This is the shape of proving
   milestone 2, "It decides"; the milestone itself still needs a real source and the real model.
   107 tests green.
+- **2026-09-22 — §7 measurement harness.** `Calibration` gains reliability bins and a multiclass
+  **Brier** score, reported beside ECE because a model can be perfectly calibrated and still
+  useless — always saying 0.5 on a coin flip calibrates perfectly and tells you nothing.
+  `Fixtures.splitByGroup` splits **by source group, never by item**: two photos of one receipt or
+  two emails in one thread are not independent, and splitting them across arms leaks the answer and
+  reports an accuracy the model will not reproduce; calibration is kept distinct from test so §9's
+  "never fit on test" holds structurally. `Harness.evaluate` produces a per-judgment
+  `JudgmentReport` — coverage, selective accuracy, accuracy at full coverage, abstention rate, ECE,
+  Brier, reliability bins, and the dumb-baseline comparison — with **no aggregate across
+  judgments**, since a single system accuracy would hide both numbers it averaged. The baseline is
+  compared at *equal coverage*, the only honest comparison. **Milestone 6 runs as a test:** a
+  judgment that merely ties its dumb baseline is reported as not beating it. 121 tests green.
