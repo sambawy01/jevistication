@@ -289,3 +289,12 @@ their acceptance criteria are met; entries here record increments toward them.
   pure, total `Policy.decide` (A7) acts on the top calibrated label at/above a threshold and
   otherwise abstains to the uncertain queue (§4's "never acts when unsure"). Fitting isotonic/Platt
   calibration and the A8 counterfactual engine come next.
+- **2026-09-22 — A6: fitted recalibration and ECE.** `Calibration.ece` computes expected
+  calibration error over equal-width confidence bins on the top-mass label. `TemperatureScaling`
+  is a one-parameter recalibrator (masses raised to `1/T` and renormalised — the probability-space
+  form of dividing logits by `T`), fitted by deterministic coarse-to-fine NLL minimisation over a
+  bounded range. Because scaling is monotone it never changes which label wins, only how sure the
+  engine claims to be, which is what the A7 threshold reads. **A6's acceptance criterion now runs
+  as a test:** on a synthetic model claiming 0.99 while right 70% of the time, the fitted
+  recalibrator softens to ≈0.70 and beats the identity baseline on ECE (0.29 → <0.05). Fitting on
+  real data still needs a fixture corpus (see open questions). 44 tests green.
