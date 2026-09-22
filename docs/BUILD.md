@@ -360,3 +360,11 @@ their acceptance criteria are met; entries here record increments toward them.
   judgments**, since a single system accuracy would hide both numbers it averaged. The baseline is
   compared at *equal coverage*, the only honest comparison. **Milestone 6 runs as a test:** a
   judgment that merely ties its dumb baseline is reported as not beating it. 121 tests green.
+- **2026-09-22 — D1: the uncertain queue.** `Distribution.margin` (gap between the top two masses)
+  gives the selection signal; `UncertainQueue.select` ranks unreviewed decisions by `1 - margin` and
+  mixes in a seeded **random audit arm drawn from confident decisions**. The audit arm is not
+  padding: a labelled set drawn only from what the model found hard can never contain the case it
+  is confidently and quietly wrong about, so drift in the easy majority would go unmeasured — it is
+  what makes the corrections a usable calibration and fine-tuning set rather than a pile of edge
+  cases. Rows already carrying a correction are skipped. D4's baseline comparison already ships
+  inside `Harness`. 130 tests green.

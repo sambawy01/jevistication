@@ -29,6 +29,19 @@ class Distribution private constructor(
         masses[label] ?: throw IllegalArgumentException("not a candidate label: $label")
 
     /**
+     * The gap between the top two masses.
+     *
+     * Zero is a tie: the model has no view on which label wins, which is the most informative
+     * thing a correction can land on. A single-candidate distribution has nothing to be unsure
+     * between, so its margin is 1.
+     */
+    val margin: Double
+        get() {
+            val sorted = masses.values.map { it.value }.sortedDescending()
+            return if (sorted.size < 2) 1.0 else sorted[0] - sorted[1]
+        }
+
+    /**
      * The label carrying the greatest mass — the selected answer for a Choice.
      * Ties break to the label supplied first.
      */
