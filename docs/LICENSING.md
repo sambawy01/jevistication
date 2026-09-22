@@ -20,6 +20,7 @@ or a search result.
 | openJev-verdict-2.0 | `NOASSERTION` | **Rejected** |
 | `featherless-ai/simple-jev` | no licence file | **Rejected** |
 | Laya-MLX | Apache-2.0 | Rejected on platform, not licence |
+| `com.microsoft.onnxruntime:onnxruntime:1.20.0` | `MIT License` in the resolved POM | **Adopted** — runtime, pending review |
 
 ---
 
@@ -114,3 +115,60 @@ independently against Qwen3-0.6B. We do not copy their source, prompt templates 
 
 Nothing blocking. On first fetch, re-read each frontmatter at the exact revision pinned and
 record the commit hash here beside the date.
+
+**ONNX Runtime is the project's first runtime dependency** and is not yet on `main`. It is
+isolated in the `backend-onnx` module, so `:engine` still resolves to nothing but the Kotlin
+standard library and the offline core carries no third-party code at all. Verified
+2026-09-22 by reading `<licenses>` from the POM Gradle resolved
+(`onnxruntime-1.20.0.pom`), not from a badge: `MIT License`,
+`https://opensource.org/licenses/MIT`. It declares **no transitive dependencies**, so the
+verification covers the whole of what it brings in — which is the check the NanoJev rejection
+exists to enforce.
+
+### Native binaries — checked 2026-09-22
+
+The desktop jar (89 MB) bundles `libonnxruntime` for five platforms: linux-x64, linux-aarch64,
+osx-x64, osx-aarch64 and win-x64. It carries a 345 KB `ThirdPartyNotices.txt` covering roughly
+**85 components**.
+
+**No copyleft and no non-commercial obligation.** Four strings looked alarming on a keyword scan
+and all four are false positives, recorded here so nobody re-runs the scare:
+
+- `GNU General Public` / `GNU Lesser` / `Affero` at lines 489–493 are MPL 2.0's own definition of
+  *"Secondary License"* — definitional text inside a permissive licence, not a component under GPL.
+- `GNU Lesser` at line 17 is Microsoft boilerplate *granting* reverse-engineering rights for
+  LGPL debugging. A grant, not an obligation. The literal string `LGPL` appears **zero** times as
+  a component licence.
+- All three `non-commercial` hits are permissive grants — the Unlicense (G3log), SQLite's
+  public-domain dedication and a CC dedication — each reading "for any purpose, commercial or
+  non-commercial".
+
+Licence families present: MIT, Apache-2.0, BSD 2- and 3-clause, ISC, Boost, zlib, public
+domain/Unlicense, **MPL-2.0 (Eigen)**, and a distinct **Intel licence** carrying a limited patent
+grant and its own jurisdiction terms.
+
+Two conditions do apply, and neither is satisfied by merging:
+
+- **MPL-2.0 on Eigen** is file-level weak copyleft. Shipping it unmodified inside a binary is
+  fine; modifying any MPL-covered file obliges us to publish that file. Do not patch Eigen.
+- **Attribution is owed to ~85 components.** MIT, BSD, ISC and Apache all require the notice to
+  travel with the binary.
+
+**The jar ships no `LICENSE` file.** The MIT grant exists only in POM metadata, so even ONNX
+Runtime's own licence has to be reproduced by us rather than lifted from the artifact.
+
+### `onnxruntime-android` — checked 2026-09-22
+
+A separate coordinate, as expected, and separately declared: `MIT License` in
+`onnxruntime-android-1.20.0.pom`, packaging `aar`, versions published through 1.30.0. ABIs
+shipped: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`.
+
+**The AAR contains no licence or notice files at all** — no `LICENSE`, no `ThirdPartyNotices`,
+nothing. The desktop jar at least carries its notices; the artifact that would actually ship
+carries none. So shipping the Android build satisfies **none** of the attribution obligations
+above from the artifact itself. The notices must be sourced upstream and bundled by us, and the
+Android build's component set cannot be assumed identical to the desktop jar's — it is a
+different native build.
+
+Recorded as **build risk 11**. It does not block adopting the dependency; it blocks *shipping*
+without a notices screen.

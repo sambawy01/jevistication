@@ -253,6 +253,7 @@ judgments is the difference between this product and a confident guess.
 | 8 | The second backend is weak zero-shot | Untuned Qwen3-0.6B scores poorly on decision tasks. Both backends are fine-tuned on our fixtures; its votes do not count until it is |
 | 9 | **Name collision.** `LOUPE` is a crowded mark. Registrations exist for jewellery-trade software (Atelier Technology), sports-card retail (Loupe Tech LLC) and a CRM (Apex); Mysk ships an iOS privacy app called Loupe | None is a consumer personal-data or fraud-detection app, but a crowded mark is a weak mark, and the Mysk app is adjacent on privacy and mobile. **Clear the mark in the target jurisdictions, and check Play Store and domain availability, before any spend on branding, the listing or the domain.** Decision taken with this known |
 | 10 | **Approximate public suffix list.** The engine ships a small built-in set of multi-label public suffixes, not the real Public Suffix List | Getting eTLD+1 wrong is a correctness bug in the fraud check, not a cosmetic one: it decides whether `paypal.secure-login.com` reads as PayPal or as `secure-login.com`. The suffix set is a parameter at every call site, so the real list drops in without touching callers. **Load the real PSL, with a refresh path, before the fraud check ships.** |
+| 11 | **Third-party attribution is unshipped.** The ONNX Runtime Android AAR bundles native libraries but contains no `LICENSE` and no `ThirdPartyNotices` at all; the desktop jar's notices cover ~85 components (MIT, BSD, ISC, Apache, Boost, zlib, MPL-2.0 Eigen, an Intel licence) | All of those require the notice to travel with the binary, and the shipping artifact supplies none of it. No copyleft or non-commercial obligation was found, so this is a compliance task, not a licence blocker. **Bundle a notices screen sourced upstream, and never patch Eigen — its MPL-2.0 is file-level copyleft.** Verify the Android component set separately; it is a different native build from the jar |
 
 ---
 
@@ -586,3 +587,19 @@ confusing way to lose an hour.
 Every number this repository currently reports comes from **synthetic fixtures**. A real model does
 not change that on its own — real measurement needs a real model *and* a labelled corpus. Until
 both exist, the harness is proven machinery producing numbers that mean nothing about the world.
+- **2026-09-22 — A2: a real `Backend` implementation (branch `onnx-backend`).** `OnnxBackend` runs
+  ONNX Runtime inference behind the existing interface. It lives in a **separate `backend-onnx`
+  module** so `:engine` keeps **zero runtime dependencies** — the offline core carries no
+  third-party code. It returns the **raw** label-to-mass map, never a validated `Distribution`,
+  because the engine validating a backend's output is the A4 boundary and handing back something
+  well-formed would disable it. Tokenization is an interface, not a bound implementation: the
+  export decides vocabulary and special tokens, so binding one tokenizer would tie the backend to
+  one export. Softmax is computed in `Double` and shifted by the maximum, since `exp` of a large
+  logit overflows in `Float` and these masses must normalise.
+  **Failure is by exception, deliberately:** `DecisionEngine` catches it and applies the judgment's
+  declared posture, so a mismatched export degrades one item rather than aborting a sweep — a test
+  runs ten items alternating good and bad and asserts all ten are logged with five marked failed.
+  Tested against a 352-byte synthetic ONNX graph (`tools/make-synthetic-onnx.py`), because the real
+  weights are blocked by network policy. **The graph is not a model of anything** — it proves the
+  loading, tensor, output and softmax path, nothing about accuracy. 264 tests green across both
+  modules.
