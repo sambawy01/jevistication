@@ -524,3 +524,65 @@ Nothing below is deferred by choice; each needs something this environment does 
   which can be validated, calibrated and scored like anything else. Both inherit the strict
   validation and failure containment. **Track A (A0, A2 interface, A3–A8) is now complete except
   A1/A2's implementations, which need the model weights and a device.** 254 tests green.
+
+---
+
+## Hand-off: the next step
+
+Written 2026-09-22 for whoever picks this up next, including a fresh session with no memory of how
+we got here. The state of every track is in **Where the build stands** above; this is only what
+comes next and what will bite.
+
+### The next piece of work
+
+**`OnnxBackend`: a real implementation of the existing `Backend` interface.** Everything it plugs
+into is built and green — `DecisionEngine` already composes the whole path, and the only reason
+the engine has never seen a real model is that no implementation of `Backend` exists.
+
+It must return the **raw** `Map<String, Double>` of label to mass. It must *not* return a
+validated `Distribution`. That is the A4 boundary: the engine validates what a backend returns
+precisely so a backend cannot hand over something already well-formed and skip the check. A
+backend that pre-validates would quietly disable the guarantee.
+
+### Why it is not done
+
+The model weights could not be fetched. This environment's network policy denies
+`huggingface.co` at the gateway:
+
+```
+kind:   connect_rejected
+detail: gateway answered 403 to CONNECT (policy denial or upstream failure)
+host:   huggingface.co:443
+```
+
+That is a deliberate access control, not a transient failure, and it was left alone rather than
+worked around. The owner was asked to change the environment's network policy.
+
+**When allowing it, allow the CDN too.** Model metadata comes from `huggingface.co`, but the
+weight files themselves redirect to a separate LFS CDN — `cdn-lfs.huggingface.co` and `*.hf.co`.
+Allowing only the API host produces a working metadata call and a failed download, which is a
+confusing way to lose an hour.
+
+### What was already established
+
+- **ONNX Runtime for Java is on Maven Central**, latest `1.30.0` at time of writing.
+- **PyPI works** (it bypasses the proxy), so a small synthetic ONNX graph can be generated locally
+  to test the loading and tensor path without any weights at all.
+- Disk headroom is ~30 GB. Not a constraint.
+- The **tokenizer artifact is unresolved**: `ai/djl/huggingface/tokenizers` was not found at the
+  coordinates tried. Settle this before designing around it.
+
+### Two things to get right first
+
+1. **Verify the licence at source.** ONNX Runtime would be this repository's *first runtime
+   dependency* — everything so far has zero. A0's rule applies: read the licence from the artifact
+   itself, not from a badge or from memory, and record it in [`LICENSING.md`](LICENSING.md).
+2. **Weights are necessary but not sufficient for A1.** Its acceptance criterion is latency
+   measured on a real mid-range device, not an emulator. A CPU backend running here makes the model
+   *real*; it does not close A1.
+
+### And the thing that stays true regardless
+
+Every number this repository currently reports comes from **synthetic fixtures**. A real model does
+not change that on its own — real measurement needs a real model *and* a labelled corpus. Until
+both exist, the harness is proven machinery producing numbers that mean nothing about the world.
