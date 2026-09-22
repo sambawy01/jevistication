@@ -405,3 +405,11 @@ their acceptance criteria are met; entries here record increments toward them.
   attack the fraud check exists to catch. `host()` now falls back to manual authority extraction
   (stripping userinfo and port) and validates against a hostname pattern that allows unicode
   letters. Pinned by regression tests. 186 tests green.
+- **2026-09-22 — C3 complete (5 of 5): term-change detection.** `TermChangeDetector` extracts
+  labelled amounts from two versions of the same document and reports what moved, plus terms added
+  and removed. A **currency marker is required**, deliberately: matching bare numbers would turn
+  every policy number and date in a statement into a "term". Labels key on their last two words, so
+  "Your monthly premium" and "Monthly premium" agree, while a label reworded beyond that reads as a
+  removal plus an addition — the honest result, since we cannot know they are the same term. The
+  spec's own example runs as a test: a premium going £450.00 → £553.50 is reported as **+23%**.
+  All five watchers now have their mechanical halves. 196 tests green.
