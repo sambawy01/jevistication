@@ -46,5 +46,5 @@ model = helper.make_model(
 )
 model.ir_version = 9  # keep within what ONNX Runtime 1.20 accepts
 onnx.checker.check_model(model)
-onnx.save(model, "engine/src/test/resources/synthetic-classifier.onnx")
-print("wrote engine/src/test/resources/synthetic-classifier.onnx")
+onnx.save(model, "backend-onnx/src/test/resources/synthetic-classifier.onnx")
+print("wrote backend-onnx/src/test/resources/synthetic-classifier.onnx")

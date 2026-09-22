@@ -586,3 +586,19 @@ confusing way to lose an hour.
 Every number this repository currently reports comes from **synthetic fixtures**. A real model does
 not change that on its own — real measurement needs a real model *and* a labelled corpus. Until
 both exist, the harness is proven machinery producing numbers that mean nothing about the world.
+- **2026-09-22 — A2: a real `Backend` implementation (branch `onnx-backend`).** `OnnxBackend` runs
+  ONNX Runtime inference behind the existing interface. It lives in a **separate `backend-onnx`
+  module** so `:engine` keeps **zero runtime dependencies** — the offline core carries no
+  third-party code. It returns the **raw** label-to-mass map, never a validated `Distribution`,
+  because the engine validating a backend's output is the A4 boundary and handing back something
+  well-formed would disable it. Tokenization is an interface, not a bound implementation: the
+  export decides vocabulary and special tokens, so binding one tokenizer would tie the backend to
+  one export. Softmax is computed in `Double` and shifted by the maximum, since `exp` of a large
+  logit overflows in `Float` and these masses must normalise.
+  **Failure is by exception, deliberately:** `DecisionEngine` catches it and applies the judgment's
+  declared posture, so a mismatched export degrades one item rather than aborting a sweep — a test
+  runs ten items alternating good and bad and asserts all ten are logged with five marked failed.
+  Tested against a 352-byte synthetic ONNX graph (`tools/make-synthetic-onnx.py`), because the real
+  weights are blocked by network policy. **The graph is not a model of anything** — it proves the
+  loading, tensor, output and softmax path, nothing about accuracy. 264 tests green across both
+  modules.

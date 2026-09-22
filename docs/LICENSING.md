@@ -116,7 +116,9 @@ independently against Qwen3-0.6B. We do not copy their source, prompt templates 
 Nothing blocking. On first fetch, re-read each frontmatter at the exact revision pinned and
 record the commit hash here beside the date.
 
-**ONNX Runtime is the project's first runtime dependency** and is not yet on `main`. Verified
+**ONNX Runtime is the project's first runtime dependency** and is not yet on `main`. It is
+isolated in the `backend-onnx` module, so `:engine` still resolves to nothing but the Kotlin
+standard library and the offline core carries no third-party code at all. Verified
 2026-09-22 by reading `<licenses>` from the POM Gradle resolved
 (`onnxruntime-1.20.0.pom`), not from a badge: `MIT License`,
 `https://opensource.org/licenses/MIT`. It declares **no transitive dependencies**, so the
