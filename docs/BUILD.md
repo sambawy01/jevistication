@@ -453,7 +453,8 @@ SDK, no device. CI runs the full suite on every push to `main`.
 | Track | State |
 |---|---|
 | A0 Licence verification | Done (2026-09-22, see `LICENSING.md`) |
-| A2 Backend **interface** | Done — `Backend`; no implementation can exist headless |
+| A2 Backend interface | Done — `Backend` |
+| A2 **first implementation** | Done — `OnnxBackend` in `backend-onnx`, real ONNX Runtime inference; tested against a synthetic graph because the weights are blocked. The second (Qwen) backend still needs weights |
 | A3 Mechanical extractors, text state | **Complete** — hash, dedup, MIME, dates, origin facts, OCR-presence, `TextState` |
 | A4 Judgment type and validation | **Complete** — Choice, Bool and Score; strict validation, failure postures, never throws |
 | A5 Ledger | Complete — append-only, propensity required, criteria hash |
@@ -478,7 +479,7 @@ Nothing below is deferred by choice; each needs something this environment does 
 | Blocked | Needs |
 |---|---|
 | **A1** model runtime, fine-tune, latency | The 151M weights, ONNX export, and a real mid-range device — its acceptance criterion is a measurement on hardware |
-| **A2** the two real backends | Model weights and a runtime |
+| **A2** the two real backends | Model weights. The runtime and the interface now exist |
 | **B1–B9** every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, calendar, contacts, notifications, WebView |
 | **D5** actions, preview, undo | UI |
 | **E1–E4** actuation | Android `AutofillService`, App Intents, accessibility, WebView |
@@ -527,79 +528,79 @@ Nothing below is deferred by choice; each needs something this environment does 
   A1/A2's implementations, which need the model weights and a device.** 254 tests green.
 
 ---
+## Hand-off
 
-## Hand-off: the next step
+State as of 2026-09-22, for whoever picks this up — including a session with no memory of how it
+got here. Track-by-track status is in **Where the build stands** above; this is what to do next,
+and what will bite.
 
-Written 2026-09-22 for whoever picks this up next, including a fresh session with no memory of how
-we got here. The state of every track is in **Where the build stands** above; this is only what
-comes next and what will bite.
+### What changed most recently
 
-### The next piece of work
+`OnnxBackend` is built and merged (PR #1, squashed onto `main` as `392e25e`). The `Backend`
+interface finally has a real implementation; before that the only ones were stubs in tests. It
+lives in its own `backend-onnx` module so `:engine` still resolves to nothing but the Kotlin
+standard library — check that before adding anything to `:engine`.
 
-**`OnnxBackend`: a real implementation of the existing `Backend` interface.** Everything it plugs
-into is built and green — `DecisionEngine` already composes the whole path, and the only reason
-the engine has never seen a real model is that no implementation of `Backend` exists.
+ONNX Runtime 1.20.0 is the project's **first runtime dependency**. Both licence checks are
+complete and recorded in [`LICENSING.md`](LICENSING.md), which also filed **build risk 11**.
 
-It must return the **raw** `Map<String, Double>` of label to mass. It must *not* return a
-validated `Distribution`. That is the A4 boundary: the engine validates what a backend returns
-precisely so a backend cannot hand over something already well-formed and skip the check. A
-backend that pre-validates would quietly disable the guarantee.
+### The thing that has not changed, and matters most
 
-### Why it is not done
+**There is no model, so there are no real numbers.** Every metric this repository produces comes
+from synthetic fixtures. The ONNX work made the *path* real; it did nothing to the *numbers*.
 
-The model weights could not be fetched. This environment's network policy denies
-`huggingface.co` at the gateway:
+Getting a real measurement needs **both** a real model **and** a labelled corpus. Neither alone is
+worth anything, and it is easy to land one and feel finished. If an accuracy figure from this repo
+ever gets quoted at anyone, check which of the two it actually had.
 
-```
-kind:   connect_rejected
-detail: gateway answered 403 to CONNECT (policy denial or upstream failure)
-host:   huggingface.co:443
-```
+### Buildable here, right now
 
-That is a deliberate access control, not a transient failure, and it was left alone rather than
-worked around. The owner was asked to change the environment's network policy.
+1. **Close risk 11.** A generator that extracts `ThirdPartyNotices` from the resolved artifacts
+   into a bundled resource, plus a test that fails when notices are missing or stale. Catches the
+   obligation at build time instead of at store review. The most completable item on this list.
+2. **A fixture corpus.** Synthetic but realistic labelled fixtures, so the harness reports
+   something. Groundwork only — see above.
+3. **Hardening.** Property-based tests for the calibration and off-policy maths, where a subtle
+   error hides quietly; API docs; an engine README.
 
-**When allowing it, allow the CDN too.** Model metadata comes from `huggingface.co`, but the
-weight files themselves redirect to a separate LFS CDN — `cdn-lfs.huggingface.co` and `*.hf.co`.
-Allowing only the API host produces a working metadata call and a failed download, which is a
-confusing way to lose an hour.
+### Blocked, and on precisely what
 
-### What was already established
+| Blocked | Needs |
+|---|---|
+| A1 real model, on-device latency | The weights, ONNX export, and a real mid-range device — its acceptance criterion is a hardware measurement |
+| A2's two real backends | The weights |
+| B1–B9 every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, contacts, notifications |
+| D5, E1–E4, F1, F5 | Android UI, autofill, accessibility, WorkManager |
+| F2, F3 | Sources to sweep; weights and a GPU |
+| Any real measurement | A labelled corpus **and** a model |
 
-- **ONNX Runtime for Java is on Maven Central**, latest `1.30.0` at time of writing.
-- **PyPI works** (it bypasses the proxy), so a small synthetic ONNX graph can be generated locally
-  to test the loading and tensor path without any weights at all.
-- Disk headroom is ~30 GB. Not a constraint.
-- The **tokenizer artifact is unresolved**: `ai/djl/huggingface/tokenizers` was not found at the
-  coordinates tried. Settle this before designing around it.
+### Traps — each of these was hit or narrowly avoided
 
-### Two things to get right first
+- **Do not hand-roll a tokenizer.** A HuggingFace `tokenizer.json` carries normalizers,
+  pre-tokenizers, a BPE/WordPiece/Unigram model and post-processors. A subtly wrong implementation
+  does not fail loudly — it silently shifts every prediction, which is worse than having none. Use
+  a real library. `ai/djl/huggingface/tokenizers` did not resolve at the coordinates tried; settle
+  that before designing around it.
+- **Do not patch Eigen.** It is MPL-2.0, file-level weak copyleft. Unmodified it ships fine;
+  modified, we owe the source of every file touched.
+- **Do not re-run the copyleft scare.** A keyword scan of `ThirdPartyNotices.txt` trips on `GNU`,
+  `Affero` and `non-commercial`. All four hits are documented false positives in `LICENSING.md`,
+  with the reason for each. Read that before concluding anything.
+- **`onnx-backend` will always look unmerged** to `git branch --merged`, because PR #1 was
+  squashed. The content is in `392e25e`. The branch is kept deliberately: it holds the
+  commit-by-commit record, including a WIP commit that documents its own defects.
+- **A HuggingFace token does not unblock the weights.** The denial is at the proxy, on CONNECT,
+  before TLS — no credential is ever transmitted. Only the environment's network policy opens it.
 
-1. **Verify the licence at source.** ONNX Runtime would be this repository's *first runtime
-   dependency* — everything so far has zero. A0's rule applies: read the licence from the artifact
-   itself, not from a badge or from memory, and record it in [`LICENSING.md`](LICENSING.md).
-2. **Weights are necessary but not sufficient for A1.** Its acceptance criterion is latency
-   measured on a real mid-range device, not an emulator. A CPU backend running here makes the model
-   *real*; it does not close A1.
+### To unblock the model
 
-### And the thing that stays true regardless
+Allow `huggingface.co` **and** the LFS CDN (`cdn-lfs.huggingface.co`, `*.hf.co`) — allowing only
+the API host yields a working metadata call and a failed download, which reads as a bug and is
+not one. The policy appears to be a creation-time choice, so this may mean a new environment
+rather than an edit.
 
-Every number this repository currently reports comes from **synthetic fixtures**. A real model does
-not change that on its own — real measurement needs a real model *and* a labelled corpus. Until
-both exist, the harness is proven machinery producing numbers that mean nothing about the world.
-- **2026-09-22 — A2: a real `Backend` implementation (branch `onnx-backend`).** `OnnxBackend` runs
-  ONNX Runtime inference behind the existing interface. It lives in a **separate `backend-onnx`
-  module** so `:engine` keeps **zero runtime dependencies** — the offline core carries no
-  third-party code. It returns the **raw** label-to-mass map, never a validated `Distribution`,
-  because the engine validating a backend's output is the A4 boundary and handing back something
-  well-formed would disable it. Tokenization is an interface, not a bound implementation: the
-  export decides vocabulary and special tokens, so binding one tokenizer would tie the backend to
-  one export. Softmax is computed in `Double` and shifted by the maximum, since `exp` of a large
-  logit overflows in `Float` and these masses must normalise.
-  **Failure is by exception, deliberately:** `DecisionEngine` catches it and applies the judgment's
-  declared posture, so a mismatched export degrades one item rather than aborting a sweep — a test
-  runs ten items alternating good and bad and asserts all ten are logged with five marked failed.
-  Tested against a 352-byte synthetic ONNX graph (`tools/make-synthetic-onnx.py`), because the real
-  weights are blocked by network policy. **The graph is not a model of anything** — it proves the
-  loading, tensor, output and softmax path, nothing about accuracy. 264 tests green across both
-  modules.
+Put the token in the environment's **API credentials**, never in environment variables: the
+settings UI states plainly that variables are visible to anyone using the environment.
+
+A session's proxy configuration is fixed at startup, so any policy change needs a **fresh
+session** to take effect.
