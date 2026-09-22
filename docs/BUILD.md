@@ -413,3 +413,11 @@ their acceptance criteria are met; entries here record increments toward them.
   removal plus an addition — the honest result, since we cannot know they are the same term. The
   spec's own example runs as a test: a premium going £450.00 → £553.50 is reported as **+23%**.
   All five watchers now have their mechanical halves. 196 tests green.
+- **2026-09-22 — A3 mechanical extractors complete.** `MimeFacts` sniffs content type by leading
+  signature, and **magic bytes beat the extension, always**: a file named `.pdf` that begins with
+  `PK` is a zip whatever it claims, and a pipeline trusting the name is one rename away from
+  feeding a judgment something it cannot read. `extensionLies()` reports that disagreement
+  directly. `OcrFacts.hasUsableText` gates on whether OCR produced enough text, enough of it
+  letters, to judge on — an image yielding three stray marks must reach the uncertain queue rather
+  than get a confident answer about noise. A3's extractor set (hash, dedup, MIME, dates, domain and
+  certificate-adjacent origin facts, OCR-presence, text state) is now complete. 209 tests green.
