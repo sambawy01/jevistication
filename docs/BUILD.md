@@ -15,6 +15,8 @@ an incomplete spec.
 | Layer | Choice |
 |---|---|
 | Language / UI | Kotlin, Jetpack Compose |
+| **Decision model** | **openJev-verdict-2.0** — 149.6M, Apache-2.0, ModernBERT-base + GLiClass |
+| **Second backend** | **simple-jev logit scoring** over a small open model — no custom heads |
 | Model runtime | ONNX Runtime Mobile (NNAPI / XNNPACK execution providers) |
 | Ledger | SQLite via Room |
 | Background | WorkManager, charging + idle constraints |
@@ -26,15 +28,31 @@ an incomplete spec.
 | Notifications | `NotificationListenerService` |
 | Files | Storage Access Framework + MediaStore |
 
+**Why that model.** Smallest of the candidates, best measured accuracy (77.10% against Laya's
+76.60% and hosted Jev's 72.70%), and by a distance the best calibrated — a dedicated confidence
+head at 1.44% ECE, which is the property the whole product rests on. Encoder, non-autoregressive,
+20–25 ms. Laya is disqualified for Android: it is an MLX port, Apple Silicon only. NanoJev is
+four times the size on games-only evidence.
+
+**Why that second backend.** It reads next-token logits off any model and has **no custom
+heads**, so it is the escape hatch if openJev's decision heads resist ONNX export, and it gives
+the architecturally-decorrelated pair that §6 of the spec needs for agreement checks on
+uncertain items.
+
+**No hosted backend, ever.** Not an omission. A network call breaks the offline guarantee the
+product rests on.
+
+**Verify the weight licence on Hugging Face separately.** The repository is Apache-2.0; weights
+and datasets are distributed under their own terms and a code licence does not carry over.
+
 **Model delivery.** Weights are not in the base APK. Play Asset Delivery, or fetched on first
 run. A ~150M model at int8 is a few hundred megabytes — normal for a mobile app, fatal for an
 APK.
 
 **Browser reach.** Chrome for Android does not support extensions. Form filling and the fraud
-check reach Chrome through `AutofillService`, which sees focused form structure. Full-page
-analysis for search-and-compare runs in an in-app WebView. A Firefox extension is an option if
-whole-page context in the user's own browser proves necessary; the Autofill path covers the
-moment that matters, which is the instant before you type.
+check reach Chrome through `AutofillService`, which sees focused form structure and fires at the
+moment that matters — the instant before you type. Search-and-compare runs in an in-app WebView.
+**No Firefox extension**: one codebase, and Autofill already covers where Android users are.
 
 ---
 
@@ -42,14 +60,17 @@ moment that matters, which is the instant before you type.
 
 Everything depends on this track. Built first, in this order.
 
-**A1 · Model runtime.** Export the decision model to ONNX; integrate ONNX Runtime Mobile; wire
-Choice, Score and Noul through one call interface.
+**A1 · Model runtime.** Export **openJev-verdict-2.0** to ONNX; integrate ONNX Runtime Mobile;
+wire Choice, Score and Noul through one call interface.
 *Accept:* p50 and p95 latency measured on a real mid-range device, not an emulator; a Choice
 over 200 candidates returns a normalised distribution.
-*Risk:* the candidate model is an encoder with custom decision heads. Clean ONNX export of
-those heads is the first thing to prove, before anything else is built on it.
+*Risk:* it is an encoder with custom decision heads, and clean export of those heads is the
+first thing to prove before anything is built on it. Mitigating evidence: the authors already
+ship an in-browser WebGPU engine, so the model has been exported out of PyTorch once already,
+and ModernBERT is a standard architecture with mature export support.
 
-**A2 · Backend interface and a second implementation.** One interface, two backends behind it.
+**A2 · Backend interface and the second implementation.** One interface; openJev-verdict and
+simple-jev logit scoring behind it.
 *Accept:* the same fixture set runs on both; a fidelity suite shows identical selected answers
 across precisions, and repeated calls show no memory growth.
 
@@ -103,10 +124,12 @@ Ordered by breadth of value per unit of work.
 *Accept, each:* items sync incrementally, produce text state, and appear in a judgment's results
 with a ledger row.
 
-**B7 carries a distribution condition.** Becoming default SMS handler means shipping a working
-messaging app and justifying the permission as core functionality at review. Person
-impersonation depends on it. Decide deliberately whether that watcher is worth building a
-messaging surface for.
+**B7 is not built.** Becoming default SMS handler means shipping send, receive and conversation
+UI plus a core-functionality justification at review — a messaging app we have no other reason
+to build. **Person impersonation therefore runs on email and contacts**, where display-name
+spoofing is the identical attack and needs no permission fight: a familiar name over an
+unfamiliar address, a fake delivery notice, a fake bank mail. SMS extends it only if messaging
+is ever built for its own sake.
 
 ---
 
@@ -210,7 +233,7 @@ judgments is the difference between this product and a confident guess.
 | 1 | ONNX export of custom decision heads may not be clean | Prove in A1 before anything is built on it; a second backend in A2 de-risks it |
 | 2 | Model size versus APK limits | Play Asset Delivery or first-run fetch; never in the base APK |
 | 3 | Battery and thermal cost of retroactive sweeps | Charging-constrained, throttled, cancellable, progress visible |
-| 4 | SMS default-handler review | A messaging surface plus a core-functionality justification. Gates the impersonation watcher only |
+| 4 | ~~SMS default-handler review~~ | **Closed.** Not building messaging; impersonation runs on email and contacts |
 | 5 | Accessibility and Play policy | Build flag; Play build cooperative-only |
 | 6 | Judgments that do not beat their baseline | Expected for some. Milestone 6 exists to find them, and the honest answer is to ship the baseline |
 | 7 | Prompt wording moving results as much as the algorithm | Wording is a controlled variable, and criteria text is hashed into every ledger row |
