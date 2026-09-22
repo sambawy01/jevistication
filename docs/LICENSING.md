@@ -125,11 +125,50 @@ standard library and the offline core carries no third-party code at all. Verifi
 verification covers the whole of what it brings in — which is the check the NanoJev rejection
 exists to enforce.
 
-Two things remain before it ships:
+### Native binaries — checked 2026-09-22
 
-- The published jar bundles **native binaries** per platform. A licence on the Java artifact is
-  not automatically a licence on the shipped `.so`/`.dylib` blobs, and the standing rule that
-  weights, datasets and code are licensed separately applies to native objects for the same
-  reason. Read the native licence at the revision shipped.
-- The Android artifact is a **different coordinate** (`onnxruntime-android`). Verify that one
-  too; do not carry this finding across to it.
+The desktop jar (89 MB) bundles `libonnxruntime` for five platforms: linux-x64, linux-aarch64,
+osx-x64, osx-aarch64 and win-x64. It carries a 345 KB `ThirdPartyNotices.txt` covering roughly
+**85 components**.
+
+**No copyleft and no non-commercial obligation.** Four strings looked alarming on a keyword scan
+and all four are false positives, recorded here so nobody re-runs the scare:
+
+- `GNU General Public` / `GNU Lesser` / `Affero` at lines 489–493 are MPL 2.0's own definition of
+  *"Secondary License"* — definitional text inside a permissive licence, not a component under GPL.
+- `GNU Lesser` at line 17 is Microsoft boilerplate *granting* reverse-engineering rights for
+  LGPL debugging. A grant, not an obligation. The literal string `LGPL` appears **zero** times as
+  a component licence.
+- All three `non-commercial` hits are permissive grants — the Unlicense (G3log), SQLite's
+  public-domain dedication and a CC dedication — each reading "for any purpose, commercial or
+  non-commercial".
+
+Licence families present: MIT, Apache-2.0, BSD 2- and 3-clause, ISC, Boost, zlib, public
+domain/Unlicense, **MPL-2.0 (Eigen)**, and a distinct **Intel licence** carrying a limited patent
+grant and its own jurisdiction terms.
+
+Two conditions do apply, and neither is satisfied by merging:
+
+- **MPL-2.0 on Eigen** is file-level weak copyleft. Shipping it unmodified inside a binary is
+  fine; modifying any MPL-covered file obliges us to publish that file. Do not patch Eigen.
+- **Attribution is owed to ~85 components.** MIT, BSD, ISC and Apache all require the notice to
+  travel with the binary.
+
+**The jar ships no `LICENSE` file.** The MIT grant exists only in POM metadata, so even ONNX
+Runtime's own licence has to be reproduced by us rather than lifted from the artifact.
+
+### `onnxruntime-android` — checked 2026-09-22
+
+A separate coordinate, as expected, and separately declared: `MIT License` in
+`onnxruntime-android-1.20.0.pom`, packaging `aar`, versions published through 1.30.0. ABIs
+shipped: `arm64-v8a`, `armeabi-v7a`, `x86`, `x86_64`.
+
+**The AAR contains no licence or notice files at all** — no `LICENSE`, no `ThirdPartyNotices`,
+nothing. The desktop jar at least carries its notices; the artifact that would actually ship
+carries none. So shipping the Android build satisfies **none** of the attribution obligations
+above from the artifact itself. The notices must be sourced upstream and bundled by us, and the
+Android build's component set cannot be assumed identical to the desktop jar's — it is a
+different native build.
+
+Recorded as **build risk 11**. It does not block adopting the dependency; it blocks *shipping*
+without a notices screen.
