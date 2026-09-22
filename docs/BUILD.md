@@ -439,3 +439,62 @@ their acceptance criteria are met; entries here record increments toward them.
   is hand-rolled and adds **no dependency**: licence provenance is a documented concern here, and
   correct escaping plus locale-independent number formatting is a small thing to own outright.
   233 tests green.
+
+---
+
+## Where the build stands
+
+As of 2026-09-22. Everything below was built headless: JVM Kotlin, no model weights, no Android
+SDK, no device. CI runs the full suite on every push to `main`.
+
+### Built and green
+
+| Track | State |
+|---|---|
+| A0 Licence verification | Done (2026-09-22, see `LICENSING.md`) |
+| A2 Backend **interface** | Done — `Backend`; no implementation can exist headless |
+| A3 Mechanical extractors, text state | **Complete** — hash, dedup, MIME, dates, origin facts, OCR-presence, `TextState` |
+| A4 Judgment type and validation | **Choice only** — `Bool` and `Score` variants not built |
+| A5 Ledger | Complete — append-only, propensity required, criteria hash |
+| A6 Recalibrator | Complete — temperature scaling fitted by NLL; ECE, Brier, reliability bins |
+| A7 Policy runner | Complete — pure, total, calibrated-only by construction |
+| A8 Counterfactual engine | Complete — IPS, SNIPS, seeded bootstrap intervals, threshold replay |
+| C1 Judgment library | Complete — seven built-ins on the three-part template |
+| C2 Plain-language authoring | Complete — lint plus compilation to a typed judgment |
+| C3 The five watchers | **Mechanical halves complete** — expiry, recurring money, term change, impersonation, site fraud |
+| D1 Uncertain queue | Complete — margin ranking plus random audit arm |
+| D2 Visible calibration | Complete — per judgment, no aggregate possible |
+| D3 Threshold slider | Complete — counterfactual preview over logged rows |
+| D4 Baseline runner | Complete — inside `Harness` |
+| F4 Export | Complete — lossless ledger, judgments, calibration |
+| §7 Measurement harness | Complete — group-wise splits, selective accuracy, coverage, ECE, Brier, baseline |
+| Engine wiring | `DecisionEngine` composes the §8 architecture end to end |
+
+### Blocked, and on what
+
+Nothing below is deferred by choice; each needs something this environment does not have.
+
+| Blocked | Needs |
+|---|---|
+| **A1** model runtime, fine-tune, latency | The 151M weights, ONNX export, and a real mid-range device — its acceptance criterion is a measurement on hardware |
+| **A2** the two real backends | Model weights and a runtime |
+| **B1–B9** every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, calendar, contacts, notifications, WebView |
+| **D5** actions, preview, undo | UI |
+| **E1–E4** actuation | Android `AutofillService`, App Intents, accessibility, WebView |
+| **F1** passive mode | WorkManager, charging and thermal constraints |
+| **F2** retroactive sweep | Sources to sweep |
+| **F3** overnight fine-tune | Model weights and a GPU |
+| **F5** the game | UI |
+| Real measurement | **A labelled fixture corpus.** Every number the harness produces today comes from synthetic fixtures; the machinery is proven, the numbers are not real |
+
+### Proving milestones
+
+| | Milestone | State |
+|---|---|---|
+| 1 | It runs | Blocked — needs a device |
+| 2 | It decides | **Wired and tested** end to end with a stub backend; needs a real source and model to count |
+| 3 | It learns | Machinery built (fit beats baseline on ECE in a test); needs real corrections |
+| 4 | It shows its work | Machinery built (`replayThreshold`, `ThresholdSlider`); needs real logged history |
+| 5 | It notices | Watchers' mechanical halves built; needs real personal data |
+| 6 | It is honest | **Runs as a test** — a judgment that ties its baseline is reported as not beating it |
+| 7 | It is local | Structurally true of the engine: no network call exists anywhere in it |
