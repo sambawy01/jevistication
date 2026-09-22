@@ -255,7 +255,7 @@ Five levers follow:
 4. **The personal fine-tune moves your hard cases into distribution.** Hard partly means
    unfamiliar. Your senders, your categories, your corrections. This is why the ledger matters.
 5. **Cross-architecture agreement, on uncertain items only.** An encoder scoring labels and a
-   decoder with decision heads are architecturally different, so their errors may decorrelate
+   decoder scored by its logits are architecturally different, so their errors may decorrelate
    where similar models' do not. Two small models is still tens of milliseconds, and only where
    the first is unsure. Measure it; if the errors correlate, drop it.
 
@@ -316,10 +316,10 @@ counterfactuals built on that history are biased forever.
 **The model is `knowledgator/gliclass-modern-base-v2.0`**, behind an interface — 151M,
 Apache-2.0, ModernBERT backbone, encoder, non-autoregressive, scoring candidate labels in a
 single forward pass. Fine-tuned on our fixtures, with calibration we fit ourselves rather than
-inherit. Second backend is NanoJev (MIT), architecturally different so that the agreement check
-in §6 means something. **There is no hosted backend**: a network call breaks the offline
-guarantee. Licence provenance for every candidate, including the ones rejected, is recorded in
-[`LICENSING.md`](LICENSING.md).
+inherit. Second backend is a logit-scored `Qwen/Qwen3-0.6B` (Apache-2.0), architecturally
+different so that the agreement check in §6 means something. **There is no hosted backend**: a
+network call breaks the offline guarantee. Licence provenance for every candidate, including
+the ones rejected, is recorded in [`LICENSING.md`](LICENSING.md).
 
 **Calibration is per judgment, per source, and per option-count.** Temperature that is right
 for a 3-option choice is wrong for a 20-option one; that exact bug shipped in production
@@ -377,9 +377,9 @@ Nothing material. Closed since locking:
 
 - **Platform** — Android. The spec needs known-sender message history, notification arrival,
   broad filesystem access and cross-app form filling; iOS grants none of the first three.
-- **Model** — `gliclass-modern-base-v2.0` (Apache-2.0), with NanoJev (MIT) as the second
-  backend. No hosted backend. Two earlier candidates were rejected on licence grounds;
-  see [`LICENSING.md`](LICENSING.md).
+- **Model** — `gliclass-modern-base-v2.0` (Apache-2.0), with a logit-scored `Qwen3-0.6B`
+  (Apache-2.0) as the second backend. No hosted backend. Three candidates were rejected on
+  licence grounds; see [`LICENSING.md`](LICENSING.md).
 - **Name** — **Sift**. One syllable, works as a verb, and names no vendor whose model we might
   one day replace.
 - **SMS** — not built. Person impersonation runs on email and contacts instead.
