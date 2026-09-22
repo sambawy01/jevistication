@@ -368,3 +368,15 @@ their acceptance criteria are met; entries here record increments toward them.
   what makes the corrections a usable calibration and fine-tuning set rather than a pile of edge
   cases. Rows already carrying a correction are skipped. D4's baseline comparison already ships
   inside `Harness`. 130 tests green.
+- **2026-09-22 — C1/C2: judgment library and plain-language authoring.** `JudgmentLint` refuses
+  text-judge phrasing — rating scales ("rate 1–10", "out of 100"), requests for prose
+  ("explain why", "describe", "summarise"), requests to *write*, and two questions in one. Every
+  rule enforces the same fact: this is a classifier and there is no generative model, so a question
+  asking for an explanation describes a product that was never built, and catching it at authoring
+  time beats discovering it as a judgment that scores badly for invisible reasons.
+  `JudgmentAuthor.compile` infers yes/no candidates for a yes/no question and *refuses to guess*
+  otherwise. `BuiltInJudgments` ships the seven the spec names, each authored to the three-part
+  template (invariant / what breaks it / what merely resembles it) — and **each is constructed
+  through the same authoring path users take, so a test asserts the library passes the lint it
+  holds users to.** C2's acceptance runs as a test: a compiled judgment is immediately usable by
+  the engine. 147 tests green.
