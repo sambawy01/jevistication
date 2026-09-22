@@ -16,6 +16,24 @@ class OriginFactsTest {
     }
 
     @Test
+    fun `parses a non-ascii host instead of discarding it as unparseable`() {
+        // Regression: java.net.URI returns a null host for a non-ASCII authority. Discarding it
+        // would throw away the homograph URL the fraud check exists to catch.
+        assertEquals("p\u0430ypal.com", OriginFacts.host("https://p\u0430ypal.com/signin"))
+        assertTrue(OriginFacts.hasMixedScripts(OriginFacts.host("https://p\u0430ypal.com")!!))
+    }
+
+    @Test
+    fun `strips userinfo and port from the authority`() {
+        assertEquals("example.com", OriginFacts.host("https://user:pw@example.com:8443/path"))
+    }
+
+    @Test
+    fun `parses a punycode host from a full url`() {
+        assertEquals("xn--pypal-4ve.com", OriginFacts.host("https://xn--pypal-4ve.com/login"))
+    }
+
+    @Test
     fun `returns null for something with no host`() {
         assertNull(OriginFacts.host("not a url at all"))
         assertNull(OriginFacts.host(""))

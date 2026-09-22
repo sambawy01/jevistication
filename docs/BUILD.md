@@ -392,3 +392,16 @@ their acceptance criteria are met; entries here record increments toward them.
   `dormant()` for the still-charging-but-unused list. Amounts are `Long` minor units — money is
   never a `Double` in a thing that sums thousands of rows. Remaining watchers: term-change,
   impersonation, site-fraud composition. 165 tests green.
+- **2026-09-22 — C3 (4 of 5): impersonation and site fraud; a real bug found.** `Impersonation`
+  raises mechanical signals only — a known contact's display name over an address they never write
+  from, a near-miss domain by edit distance, punycode or mixed scripts in the address, and a first
+  sighting of an address. This is the watcher nothing else can build: a messaging app sees one
+  channel and not the contact's history across the others. `SiteFraud` composes the origin facts
+  into a `FraudAssessment` that **has no `isSafe`** — §4 forbids an all-clear, so an empty signal
+  list is reported as "these checks found nothing, which is not an all-clear", and a test asserts
+  the wording never says safe, legitimate or trusted.
+  **Bug caught by these tests:** `java.net.URI` returns a *null host* for a non-ASCII authority, so
+  `OriginFacts.host` was discarding homograph URLs as unparseable — silently dropping the exact
+  attack the fraud check exists to catch. `host()` now falls back to manual authority extraction
+  (stripping userinfo and port) and validates against a hostname pattern that allows unicode
+  letters. Pinned by regression tests. 186 tests green.

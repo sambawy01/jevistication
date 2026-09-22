@@ -30,11 +30,33 @@ object PublicSuffix {
  */
 object OriginFacts {
 
+    /**
+     * A hostname: unicode letters and digits, plus dot, hyphen and underscore.
+     *
+     * Non-ASCII is explicitly allowed, because a homograph host is the attack we most need to
+     * name, not one to discard as malformed.
+     */
+    private val HOSTNAME = Regex("""^[\p{L}\p{N}][\p{L}\p{N}.\-_]*$""")
+
     /** The lowercase host of [url], or null if it cannot be parsed or names no host. */
     fun host(url: String): String? {
         val candidate = if (url.contains("://")) url else "https://$url"
-        val parsed = runCatching { URI(candidate) }.getOrNull() ?: return null
-        return parsed.host?.lowercase()?.removeSuffix(".")?.takeIf { it.isNotEmpty() }
+        val parsed = runCatching { URI(candidate) }.getOrNull()
+
+        // java.net.URI returns a null host for a non-ASCII authority, since those characters are
+        // not legal in a URI. Falling through to manual extraction is not a nicety: without it a
+        // homograph host -- the whole point of the check -- would be discarded as unparseable.
+        val fromUri = parsed?.host
+        val raw = fromUri ?: candidate
+            .substringAfter("://")
+            .substringBefore('/')
+            .substringBefore('?')
+            .substringBefore('#')
+            .substringAfterLast('@')
+            .substringBefore(':')
+
+        val host = raw.lowercase().removeSuffix(".")
+        return host.takeIf { it.isNotEmpty() && HOSTNAME.matches(it) }
     }
 
     /** The dot-separated labels of [host]. */
