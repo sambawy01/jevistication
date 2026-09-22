@@ -16,7 +16,7 @@ an incomplete spec.
 |---|---|
 | Language / UI | Kotlin, Jetpack Compose |
 | **Decision model** | **`knowledgator/gliclass-modern-base-v2.0`** — 151M, Apache-2.0, ModernBERT backbone |
-| **Second backend** | **NanoJev** — 0.6B, MIT, Qwen3 + decision heads |
+| **Second backend** | **`Qwen/Qwen3-0.6B`** — Apache-2.0, decoder, scored by logits |
 | Model runtime | ONNX Runtime Mobile (NNAPI / XNNPACK execution providers) |
 | Ledger | SQLite via Room |
 | Background | WorkManager, charging + idle constraints |
@@ -37,14 +37,16 @@ We fine-tune it on our own fixtures and fit our own calibration — which is wha
 anyway, and which means **we depend on nobody's calibration claim.** That is the product's own
 argument applied to its own foundations.
 
-**Why that second backend.** NanoJev is MIT with published weights and dataset, and is
-architecturally different — a decoder with decision heads against our encoder. That difference
-is what makes the agreement check in §6 of the spec meaningful; two similar architectures would
-fail alike.
+**Why that second backend.** A decoder scored by its logits against our encoder scoring labels:
+architecturally different, which is what makes the agreement check in §6 of the spec meaningful.
+Two similar architectures would fail alike. Apache-2.0, verified at source, and it is the same
+base NanoJev used — so we get the diversity NanoJev offered without its licence problem. We
+implement the logit-scoring ourselves; the method is a technique, not protected expression.
 
-**Rejected, and why — see [`LICENSING.md`](LICENSING.md).** openJev-verdict-2.0 was the original
-choice and is disqualified: its checkpoint is unobtainable and its LICENSE is a truncated Apache
-text that GitHub classifies as `NOASSERTION`. simple-jev has no repository licence at all.
+**Rejected, and why — see [`LICENSING.md`](LICENSING.md).** openJev-verdict-2.0: checkpoint
+unobtainable, LICENSE a truncated Apache text GitHub classifies as `NOASSERTION`. simple-jev: no
+repository licence. **NanoJev: its GitHub repository is MIT, but the weights and dataset on
+Hugging Face declare no licence at all** — and a code licence does not carry to weights.
 Laya-MLX is Apache-2.0 but Apple Silicon only.
 
 **No hosted backend, ever.** Not an omission. A network call breaks the offline guarantee the
@@ -65,12 +67,11 @@ moment that matters — the instant before you type. Search-and-compare runs in 
 
 Everything depends on this track. Built first, in this order.
 
-**A0 · Licence verification at source.** Before any weights are fetched: confirm the licence
-tag on the HF model card for the base model, confirm NanoJev's weight **and dataset** licences
-separately, and confirm neither carries a use restriction or acceptable-use addendum. A badge in
-a README is not evidence — one repository in our own survey shipped an Apache badge over a
-mangled licence. See [`LICENSING.md`](LICENSING.md).
-*Accept:* each licence read from its source, recorded with the date and the revision it applied to.
+**A0 · Licence verification at source. — DONE 2026-09-22.** Every model and dataset read from
+its Hugging Face frontmatter, not from a badge. Two candidates were eliminated by this check
+after being chosen. Results in [`LICENSING.md`](LICENSING.md).
+*Standing:* re-verify at the exact revision shipped, and record it. This work item reopens for
+any new artifact.
 
 **A1 · Model runtime.** Fine-tune the base on our fixtures; export to ONNX; integrate ONNX
 Runtime Mobile; wire Choice, Score and Noul through one call interface.
@@ -81,7 +82,7 @@ on it. Mitigating: ModernBERT is a standard architecture with mature export supp
 GLiClass scores labels in one forward pass rather than through bespoke decoding.
 
 **A2 · Backend interface and the second implementation.** One interface; the GLiClass-based
-model and NanoJev behind it.
+model and a logit-scored Qwen3-0.6B behind it.
 *Accept:* the same fixture set runs on both; a fidelity suite shows identical selected answers
 across precisions, and repeated calls show no memory growth.
 
@@ -241,7 +242,7 @@ judgments is the difference between this product and a confident guess.
 
 | | Risk | Response |
 |---|---|---|
-| 0 | **Third-party weight licences are not what badges claim** | A0 verifies every licence at source before a byte is fetched; `LICENSING.md` records what was checked and when |
+| 0 | ~~Third-party weight licences are not what badges claim~~ | **Verified 2026-09-22.** Three candidates eliminated; see `LICENSING.md`. Reopens for any new artifact |
 | 1 | ONNX export of the classification head may not be clean | Prove in A1 before anything is built on it; a second backend in A2 de-risks it |
 | 2 | Model size versus APK limits | Play Asset Delivery or first-run fetch; never in the base APK |
 | 3 | Battery and thermal cost of retroactive sweeps | Charging-constrained, throttled, cancellable, progress visible |
@@ -249,3 +250,4 @@ judgments is the difference between this product and a confident guess.
 | 5 | Accessibility and Play policy | Build flag; Play build cooperative-only |
 | 6 | Judgments that do not beat their baseline | Expected for some. Milestone 6 exists to find them, and the honest answer is to ship the baseline |
 | 7 | Prompt wording moving results as much as the algorithm | Wording is a controlled variable, and criteria text is hashed into every ledger row |
+| 8 | The second backend is weak zero-shot | Untuned Qwen3-0.6B scores poorly on decision tasks. Both backends are fine-tuned on our fixtures; its votes do not count until it is |
