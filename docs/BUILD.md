@@ -335,3 +335,16 @@ their acceptance criteria are met; entries here record increments toward them.
   `alternate` reading, and a judgment receiving one should treat it as uncertain rather than pick.
   Dates that name no real day (`2026-02-30`) are skipped rather than coerced. Identifying *what a
   document is* stays a judgment; finding its dates does not. 95 tests green.
+- **2026-09-22 — the engine wired end to end.** `Backend` (A2's interface) returns a *raw*
+  label-to-mass response rather than a validated `Distribution`, so a backend cannot bypass the A4
+  boundary by handing over something already well-formed; there is no hosted implementation, since
+  a network call would break the offline guarantee. `DecisionEngine` composes the §8 architecture:
+  source text → text state → **mechanical checks first** → model → recalibrator → policy → ledger.
+  Two properties are structural, not conventional: an item a mechanical check answers never reaches
+  the model (a test asserts the backend is not called), and *every* decision — mechanical, acted or
+  abstained — writes a row carrying its propensity. Adds optional ε-exploration: a deterministic
+  engine logs propensity 1 everywhere, and a ledger with no propensity variation can only evaluate
+  candidates that agree with what was already done, so exploration is what makes A8 answer anything
+  interesting — a test replays an explored ledger through `OffPolicy`. This is the shape of proving
+  milestone 2, "It decides"; the milestone itself still needs a real source and the real model.
+  107 tests green.
