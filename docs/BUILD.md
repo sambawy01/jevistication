@@ -252,6 +252,7 @@ judgments is the difference between this product and a confident guess.
 | 7 | Prompt wording moving results as much as the algorithm | Wording is a controlled variable, and criteria text is hashed into every ledger row |
 | 8 | The second backend is weak zero-shot | Untuned Qwen3-0.6B scores poorly on decision tasks. Both backends are fine-tuned on our fixtures; its votes do not count until it is |
 | 9 | **Name collision.** `LOUPE` is a crowded mark. Registrations exist for jewellery-trade software (Atelier Technology), sports-card retail (Loupe Tech LLC) and a CRM (Apex); Mysk ships an iOS privacy app called Loupe | None is a consumer personal-data or fraud-detection app, but a crowded mark is a weak mark, and the Mysk app is adjacent on privacy and mobile. **Clear the mark in the target jurisdictions, and check Play Store and domain availability, before any spend on branding, the listing or the domain.** Decision taken with this known |
+| 10 | **Approximate public suffix list.** The engine ships a small built-in set of multi-label public suffixes, not the real Public Suffix List | Getting eTLD+1 wrong is a correctness bug in the fraud check, not a cosmetic one: it decides whether `paypal.secure-login.com` reads as PayPal or as `secure-login.com`. The suffix set is a parameter at every call site, so the real list drops in without touching callers. **Load the real PSL, with a refresh path, before the fraud check ships.** |
 
 ---
 
@@ -318,3 +319,12 @@ their acceptance criteria are met; entries here record increments toward them.
   criterion as a measured number. `ContentHash` and `Dedup` do exact byte-identical duplicate
   detection by SHA-256 (near-duplicates stay a model-side judgment). Still to come in A3: domain
   and certificate facts, date extraction, MIME sniffing, OCR-presence. 72 tests green.
+- **2026-09-22 — A3: origin facts for the fraud check.** `OriginFacts` computes the mechanical,
+  unforgeable half of the site-fraud signal: host extraction, registrable domain (eTLD+1), punycode
+  and non-ASCII hosts, single-label **mixed-script homograph** detection, cross-origin form posts,
+  and brand-versus-origin comparison. The brand test compares against the registrable domain's own
+  label rather than the host string, because the attack is precisely putting the brand elsewhere in
+  the name — `paypal.secure-login.com` contains "paypal" and belongs to `secure-login.com`; a test
+  pins that case. Nothing here reads page content, honouring §4's rule that content can only add
+  suspicion, never raise trust. The built-in public suffix set is an approximation and is now
+  recorded as **risk 10**. 83 tests green.
