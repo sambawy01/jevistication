@@ -454,7 +454,7 @@ SDK, no device. CI runs the full suite on every push to `main`.
 | A0 Licence verification | Done (2026-09-22, see `LICENSING.md`) |
 | A2 Backend **interface** | Done — `Backend`; no implementation can exist headless |
 | A3 Mechanical extractors, text state | **Complete** — hash, dedup, MIME, dates, origin facts, OCR-presence, `TextState` |
-| A4 Judgment type and validation | **Choice only** — `Bool` and `Score` variants not built |
+| A4 Judgment type and validation | **Choice only** — `Bool`/`Score` variants not built; failure postures and the never-throws guarantee are done |
 | A5 Ledger | Complete — append-only, propensity required, criteria hash |
 | A6 Recalibrator | Complete — temperature scaling fitted by NLL; ECE, Brier, reliability bins |
 | A7 Policy runner | Complete — pure, total, calibrated-only by construction |
@@ -498,3 +498,19 @@ Nothing below is deferred by choice; each needs something this environment does 
 | 5 | It notices | Watchers' mechanical halves built; needs real personal data |
 | 6 | It is honest | **Runs as a test** — a judgment that ties its baseline is reported as not beating it |
 | 7 | It is local | Structurally true of the engine: no network call exists anywhere in it |
+
+- **2026-09-22 — A4: failure postures and the never-throws guarantee.** A4's acceptance criterion
+  is that *fuzzed malformed responses never throw* and that *each judgment declares its failure
+  posture and honours it* — neither was true, so a single malformed answer would abort a sweep over
+  a whole library. `FailurePosture` (OPEN / LOUD / NULL_ACTION) is now declared per judgment and
+  carried on `Decision.Unusable`, **not chosen by the calling code**, so a judgment cannot be made
+  quietly permissive by whoever happens to invoke it. The engine catches both validation failure
+  and a backend that throws outright — a backend is an untrusted component: a bad export, a
+  truncated model file, a future implementation with a bug. An unusable response still writes a
+  ledger row, marked with its `failure` reason and carrying a **flat** distribution, which is the
+  honest shape of having no view; the harness counts it as wrong per §7 but keeps it out of the
+  calibration metrics rather than scoring a placeholder as an opinion. The expiry judgment declares
+  **LOUD**, because quiet failure there is indistinguishable from "your passport is fine".
+  A 500-iteration fuzz over negative, NaN, infinite, empty and unknown-label responses runs as a
+  test. Two earlier tests asserted the old throwing contract and were updated to the new one.
+  242 tests green.

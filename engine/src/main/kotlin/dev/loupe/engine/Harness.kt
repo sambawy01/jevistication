@@ -20,6 +20,13 @@ data class JudgmentReport(
     val ece: Double,
     val brier: Double,
     val reliability: List<ReliabilityBin>,
+    /**
+     * Items whose model response could not be used at all.
+     *
+     * Reported rather than folded away: §7 counts an error as wrong, and a judgment failing on a
+     * tenth of its inputs is a different problem from one answering them badly.
+     */
+    val unusable: Int,
     /** The dumb baseline's accuracy, at full coverage. */
     val baselineAccuracy: Double,
     /** False when the model does not beat its dumb baseline — and the app says so. */
@@ -65,13 +72,10 @@ object Harness {
         var actedCorrect = 0
         var correctAtFullCoverage = 0
         var baselineCorrect = 0
+        var unusable = 0
 
         for (fixture in fixtures) {
             val outcome = engine.decide(judgment, fixture.item)
-            val distribution = outcome.row.distribution
-            predictions += distribution to fixture.trueLabel
-
-            if (distribution.argmax == fixture.trueLabel) correctAtFullCoverage++
             if (baseline(fixture.item) == fixture.trueLabel) baselineCorrect++
 
             when (val decision = outcome.decision) {
@@ -80,7 +84,18 @@ object Harness {
                     if (decision.label == fixture.trueLabel) actedCorrect++
                 }
                 is Decision.Abstain -> Unit
+                is Decision.Unusable -> {
+                    // Errors count as wrong and are never retried. The recorded distribution is a
+                    // flat placeholder, not an opinion, so it is kept out of the calibration
+                    // metrics rather than being scored as if the model had expressed a view.
+                    unusable++
+                    continue
+                }
             }
+
+            val distribution = outcome.row.distribution
+            predictions += distribution to fixture.trueLabel
+            if (distribution.argmax == fixture.trueLabel) correctAtFullCoverage++
         }
 
         val n = fixtures.size
@@ -97,6 +112,7 @@ object Harness {
             ece = Calibration.ece(predictions, bins),
             brier = Calibration.brier(predictions),
             reliability = Calibration.reliability(predictions, bins),
+            unusable = unusable,
             baselineAccuracy = baselineAccuracy,
             // Compared at equal coverage: forcing the model to answer everything, as the
             // baseline does, is the only honest comparison.

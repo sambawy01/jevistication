@@ -98,6 +98,7 @@ object JudgmentAuthor {
         id: String,
         question: String,
         candidates: List<String>? = null,
+        onFailure: FailurePosture = FailurePosture.NULL_ACTION,
     ): AuthorResult {
         val findings = JudgmentLint.check(question).toMutableList()
         val trimmed = question.trim()
@@ -113,7 +114,7 @@ object JudgmentAuthor {
         }
         if (findings.isNotEmpty()) return AuthorResult.Rejected(findings)
 
-        return runCatching { Judgment.Choice(id, trimmed, resolved!!) }
+        return runCatching { Judgment.Choice(id, trimmed, resolved!!, onFailure) }
             .fold(
                 onSuccess = { AuthorResult.Compiled(it) },
                 onFailure = {

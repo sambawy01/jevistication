@@ -82,21 +82,24 @@ class DecisionEngineTest {
     }
 
     @Test
-    fun `rejects a malformed backend response at the A4 boundary`() {
+    fun `contains a malformed backend response at the A4 boundary`() {
+        // A4 requires that a malformed response never throws: it is caught at the boundary and
+        // becomes an unusable decision, so one bad answer cannot abort a sweep over a library.
         val engine = DecisionEngine(
             Backend { _, _ -> mapOf("yes" to 0.5, "no" to 0.2) }, // does not normalise
             threshold = Probability.of(0.5),
         )
-        assertFailsWith<IllegalArgumentException> { engine.decide(receipt, Item("a", "x")) }
+        assertIs<Decision.Unusable>(engine.decide(receipt, Item("a", "x")).decision)
     }
 
     @Test
-    fun `rejects a backend naming an unknown candidate`() {
+    fun `contains a backend naming an unknown candidate`() {
         val engine = DecisionEngine(
             Backend { _, _ -> mapOf("yes" to 0.4, "no" to 0.3, "perhaps" to 0.3) },
             threshold = Probability.of(0.5),
         )
-        assertFailsWith<IllegalArgumentException> { engine.decide(receipt, Item("a", "x")) }
+        val decision = engine.decide(receipt, Item("a", "x")).decision
+        assertTrue(assertIs<Decision.Unusable>(decision).reason.contains("perhaps"))
     }
 
     @Test

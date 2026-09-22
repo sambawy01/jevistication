@@ -1,6 +1,25 @@
 package dev.loupe.engine
 
 /**
+ * What a judgment does when the model's response cannot be used.
+ *
+ * The engine never acts on an unusable response, whatever the posture; the posture decides who
+ * hears about it. Declaring it per judgment is the point: a failed junk check should be silent and
+ * change nothing, while a failed expiry check must be noisy, because silence there is
+ * indistinguishable from "your passport is fine".
+ */
+enum class FailurePosture {
+    /** Let it through unremarked: the judgment simply finds nothing. */
+    OPEN,
+
+    /** Surface the failure — for judgments where quiet failure is itself the danger. */
+    LOUD,
+
+    /** Take nothing on it and queue it for review. The safe default. */
+    NULL_ACTION,
+}
+
+/**
  * A typed judgment: a question the engine answers over an item's text state (A4 in the build
  * plan). This increment implements [Choice]; Bool and Score judgments follow.
  */
@@ -18,6 +37,9 @@ sealed interface Judgment {
      */
     val criteriaHash: String
 
+    /** What this judgment does when the model's answer cannot be used. */
+    val onFailure: FailurePosture
+
     /**
      * Pick among a fixed set of candidate labels. The model's answer is a [Distribution] over
      * exactly these candidates — the GLiClass primitive, labels scored in one forward pass.
@@ -26,6 +48,7 @@ sealed interface Judgment {
         override val id: String,
         override val question: String,
         val candidates: List<String>,
+        override val onFailure: FailurePosture = FailurePosture.NULL_ACTION,
     ) : Judgment {
         init {
             require(id.isNotBlank()) { "judgment id must not be blank" }
@@ -39,6 +62,13 @@ sealed interface Judgment {
 
         override val criteriaHash: String
             get() = Hashing.sha256Hex(question + "\u0000" + candidates.joinToString("\u0000"))
+
+        /**
+         * A flat distribution over this Choice's candidates: maximum entropy, which is the honest
+         * shape of "the engine has no view at all". Used to record an unusable response.
+         */
+        fun noInformation(): Distribution =
+            Distribution.of(candidates.associateWith { 1.0 / candidates.size })
 
         /**
          * Validates a raw model response (label to mass) into a [Distribution] over exactly this

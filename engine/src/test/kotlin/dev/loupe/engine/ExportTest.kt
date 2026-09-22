@@ -22,7 +22,8 @@ class ExportTest {
         val jsonl = Export.ledgerToJsonl(listOf(row(0.75, "yes")))
         assertEquals(
             """{"judgmentId":"is-receipt","criteriaHash":"abc123","action":"yes",""" +
-                """"propensity":1.0,"correction":null,"distribution":{"yes":0.75,"no":0.25}}""",
+                """"propensity":1.0,"correction":null,"failure":null,""" +
+                """"distribution":{"yes":0.75,"no":0.25}}""",
             jsonl,
         )
     }

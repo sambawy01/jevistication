@@ -21,6 +21,13 @@ data class LedgerRow(
     val propensity: Probability,
     /** The user's correction, once known; null until they correct it (or never). */
     val correction: String? = null,
+    /**
+     * Why the model's answer was unusable, when it was. Null on a normal decision.
+     *
+     * Kept so a run of malformed responses is visible in the history rather than looking like a
+     * run of genuinely uncertain ones.
+     */
+    val failure: String? = null,
 )
 
 /**

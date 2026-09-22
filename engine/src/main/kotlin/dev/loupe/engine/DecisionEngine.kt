@@ -77,8 +77,24 @@ class DecisionEngine(
             is Mechanical.Deferred -> Unit
         }
 
-        // A4: whatever the backend returns is validated before anything else may read it.
-        val raw = judgment.validate(backend.score(judgment, state))
+        // A4: whatever the backend returns is validated before anything else may read it, and
+        // a response that fails validation must never escape as an exception. A backend is an
+        // untrusted component -- a bad export, a truncated model file, a future implementation
+        // with a bug -- and one malformed answer must not take down a sweep over a whole library.
+        val raw = runCatching { judgment.validate(backend.score(judgment, state)) }
+            .getOrElse { failure ->
+                return record(
+                    judgment = judgment,
+                    distribution = judgment.noInformation(),
+                    decision = Decision.Unusable(
+                        reason = failure.message ?: failure::class.simpleName ?: "unusable response",
+                        posture = judgment.onFailure,
+                    ),
+                    propensity = Probability.of(1.0),
+                    mechanical = false,
+                    failure = failure.message ?: "unusable response",
+                )
+            }
         val calibrated = recalibrator.calibrate(raw)
         val greedy = Policy.decide(calibrated, threshold)
         val decision = explore(calibrated, greedy)
@@ -136,6 +152,7 @@ class DecisionEngine(
         decision: Decision,
         propensity: Probability,
         mechanical: Boolean,
+        failure: String? = null,
     ): DecisionOutcome {
         val row = LedgerRow(
             judgmentId = judgment.id,
@@ -143,6 +160,7 @@ class DecisionEngine(
             distribution = distribution,
             action = Policy.actionOf(decision),
             propensity = propensity,
+            failure = failure,
         )
         ledger.append(row)
         return DecisionOutcome(decision, row, mechanical)

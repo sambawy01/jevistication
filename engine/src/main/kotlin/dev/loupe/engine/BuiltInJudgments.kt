@@ -78,6 +78,8 @@ object BuiltInJudgments {
         lookalikes = "Many documents carry dates that are not expiries — an issue date, a " +
             "statement period, a printed-on date. The date arithmetic is mechanical; deciding " +
             "the document type is not.",
+        // Quiet failure here is indistinguishable from "your passport is fine".
+        onFailure = FailurePosture.LOUD,
     )
 
     val JUNK = define(
@@ -104,9 +106,10 @@ object BuiltInJudgments {
         invariant: String,
         breaks: String,
         lookalikes: String,
+        onFailure: FailurePosture = FailurePosture.NULL_ACTION,
     ): JudgmentDefinition {
         // Built-ins go through the same authoring path users do; nothing is exempt from the lint.
-        val result = JudgmentAuthor.compile(id, question)
+        val result = JudgmentAuthor.compile(id, question, onFailure = onFailure)
         check(result is AuthorResult.Compiled) {
             "built-in judgment '$id' does not pass its own lint: " +
                 (result as AuthorResult.Rejected).findings

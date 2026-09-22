@@ -71,6 +71,7 @@ object Export {
                     "action" to Json.string(row.action),
                     "propensity" to Json.number(row.propensity.value),
                     "correction" to Json.stringOrNull(row.correction),
+                    "failure" to Json.stringOrNull(row.failure),
                     "distribution" to Json.obj(
                         row.distribution.labels.map { label ->
                             label to Json.number(row.distribution.getValue(label).value)

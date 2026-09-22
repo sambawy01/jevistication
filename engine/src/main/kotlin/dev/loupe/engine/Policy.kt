@@ -9,6 +9,15 @@ sealed interface Decision {
 
     /** Decline to act — the item goes to the uncertain queue (D1). */
     data class Abstain(val topLabel: String, val topMass: Probability) : Decision
+
+    /**
+     * The model's answer could not be used at all.
+     *
+     * The engine never acts on one of these. [posture] is the judgment's declared stance on who
+     * hears about it, and it is carried here rather than decided by the caller so that a judgment
+     * cannot be made quietly permissive by the code that happens to call it.
+     */
+    data class Unusable(val reason: String, val posture: FailurePosture) : Decision
 }
 
 /**
@@ -23,10 +32,14 @@ object Policy {
      */
     const val ABSTAIN: String = "__abstain__"
 
+    /** The action recorded when the model's answer could not be used. */
+    const val UNUSABLE: String = "__unusable__"
+
     /** The action string a [Decision] records in a [LedgerRow]. */
     fun actionOf(decision: Decision): String = when (decision) {
         is Decision.Act -> decision.label
         is Decision.Abstain -> ABSTAIN
+        is Decision.Unusable -> UNUSABLE
     }
 
     /**
