@@ -282,3 +282,10 @@ their acceptance criteria are met; entries here record increments toward them.
   `Distribution.getValue` for the selected-label lookup. Tests cover "a decision writes a row
   carrying a propensity", append ordering, snapshot isolation, and criteria-hash sensitivity to
   wording.
+- **2026-09-22 — A6/A7 (started): the calibrated decision path.** `Recalibrator` (A6) maps a raw
+  `Distribution` to a `CalibratedDistribution`; its constructor is `internal`, so a recalibrator
+  is the only way to obtain one — making "the policy never reads a raw probability" a compile-time
+  guarantee. Ships the `Identity` recalibrator as the honest baseline a fit must beat on ECE. The
+  pure, total `Policy.decide` (A7) acts on the top calibrated label at/above a threshold and
+  otherwise abstains to the uncertain queue (§4's "never acts when unsure"). Fitting isotonic/Platt
+  calibration and the A8 counterfactual engine come next.
