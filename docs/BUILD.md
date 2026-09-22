@@ -430,3 +430,12 @@ their acceptance criteria are met; entries here record increments toward them.
   specific **overconfident bins** — per judgment, with **no API to average across judgments at
   all**, because "is this a receipt" at 94% and "is this urgent" at 61% have no meaningful mean and
   a single system number would hide both. 221 tests green.
+- **2026-09-22 — F4: export.** `Export` writes judgments, calibration and decision history as
+  portable files. The ledger exports **losslessly** — full distribution and propensity, not just
+  the chosen label — because these files are what an overnight fine-tune reads and what every later
+  counterfactual is computed from; an export keeping only the answer would be a record of what
+  happened with the reason thrown away. JSON Lines for the ledger, so a long history appends
+  without rewriting and a truncated file still parses to its last complete line. The JSON emitter
+  is hand-rolled and adds **no dependency**: licence provenance is a documented concern here, and
+  correct escaping plus locale-independent number formatting is a small thing to own outright.
+  233 tests green.
