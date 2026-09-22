@@ -88,4 +88,78 @@ sealed interface Judgment {
             return Distribution.of(candidates.associateWith { response.getValue(it) })
         }
     }
+
+    /**
+     * A yes/no judgment.
+     *
+     * This is a named shape over a two-candidate [Choice], not a separate mechanism: it validates
+     * and scores through exactly the same path, and only spares every caller from spelling out
+     * `listOf("yes", "no")` and from inventing its own label for "yes".
+     */
+    data class Bool(
+        override val id: String,
+        override val question: String,
+        override val onFailure: FailurePosture = FailurePosture.NULL_ACTION,
+    ) : Judgment {
+
+        /** The equivalent [Choice]; everything defers to it. */
+        val asChoice: Choice = Choice(id, question, listOf(YES, NO), onFailure)
+
+        override val criteriaHash: String get() = asChoice.criteriaHash
+
+        /** @see Choice.validate */
+        fun validate(response: Map<String, Double>): Distribution = asChoice.validate(response)
+
+        /** The mass on "yes" — the number a threshold reads. */
+        fun probabilityOfYes(distribution: Distribution): Probability = distribution.getValue(YES)
+
+        companion object {
+            const val YES: String = "yes"
+            const val NO: String = "no"
+        }
+    }
+
+    /**
+     * A score over a declared, bounded range of whole numbers.
+     *
+     * The backend is a classifier, so a score is a **distribution over ordinal bins**, never a
+     * free-form number the model writes out. That is exactly why the authoring lint refuses
+     * "rate 1–10" while this type is fine: the difference is a declared range the answer must land
+     * inside, which can be validated, calibrated and scored like any other judgment.
+     */
+    data class Score(
+        override val id: String,
+        override val question: String,
+        val range: IntRange,
+        override val onFailure: FailurePosture = FailurePosture.NULL_ACTION,
+    ) : Judgment {
+
+        init {
+            require(range.count() >= 2) {
+                "a Score needs a range of at least two values, was $range"
+            }
+        }
+
+        /** The range as candidate labels, low to high. */
+        val candidates: List<String> = range.map(Int::toString)
+
+        /** The equivalent [Choice]; everything defers to it. */
+        val asChoice: Choice = Choice(id, question, candidates, onFailure)
+
+        override val criteriaHash: String get() = asChoice.criteriaHash
+
+        /** @see Choice.validate */
+        fun validate(response: Map<String, Double>): Distribution = asChoice.validate(response)
+
+        /**
+         * The probability-weighted mean of the range — the point estimate that uses the whole
+         * distribution rather than only its peak, which is what makes an ordinal score worth
+         * having over a bare label.
+         */
+        fun expectedValue(distribution: Distribution): Double =
+            range.sumOf { value -> value * distribution.getValue(value.toString()).value }
+
+        /** The single most likely value. */
+        fun mostLikely(distribution: Distribution): Int = distribution.argmax.toInt()
+    }
 }

@@ -109,6 +109,20 @@ class DecisionEngine(
         )
     }
 
+    /** Decides a yes/no judgment. */
+    fun decide(
+        judgment: Judgment.Bool,
+        item: Item,
+        mechanical: (Item) -> Mechanical<String> = { Mechanical.Deferred },
+    ): DecisionOutcome = decide(judgment.asChoice, item, mechanical)
+
+    /** Decides a scored judgment. */
+    fun decide(
+        judgment: Judgment.Score,
+        item: Item,
+        mechanical: (Item) -> Mechanical<String> = { Mechanical.Deferred },
+    ): DecisionOutcome = decide(judgment.asChoice, item, mechanical)
+
     /** With probability [exploration], take a sampled label instead of the policy's choice. */
     private fun explore(calibrated: CalibratedDistribution, greedy: Decision): Decision {
         if (exploration <= 0.0 || random.nextDouble() >= exploration) return greedy

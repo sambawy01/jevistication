@@ -454,7 +454,7 @@ SDK, no device. CI runs the full suite on every push to `main`.
 | A0 Licence verification | Done (2026-09-22, see `LICENSING.md`) |
 | A2 Backend **interface** | Done — `Backend`; no implementation can exist headless |
 | A3 Mechanical extractors, text state | **Complete** — hash, dedup, MIME, dates, origin facts, OCR-presence, `TextState` |
-| A4 Judgment type and validation | **Choice only** — `Bool`/`Score` variants not built; failure postures and the never-throws guarantee are done |
+| A4 Judgment type and validation | **Complete** — Choice, Bool and Score; strict validation, failure postures, never throws |
 | A5 Ledger | Complete — append-only, propensity required, criteria hash |
 | A6 Recalibrator | Complete — temperature scaling fitted by NLL; ECE, Brier, reliability bins |
 | A7 Policy runner | Complete — pure, total, calibrated-only by construction |
@@ -514,3 +514,13 @@ Nothing below is deferred by choice; each needs something this environment does 
   A 500-iteration fuzz over negative, NaN, infinite, empty and unknown-label responses runs as a
   test. Two earlier tests asserted the old throwing contract and were updated to the new one.
   242 tests green.
+- **2026-09-22 — A4 complete: `Bool` and `Score` judgments.** `Bool` is a named shape over a
+  two-candidate `Choice`, not a separate mechanism — it validates and scores through the identical
+  path and only spares callers from inventing their own label for "yes". `Score` is the one worth
+  the type: because the backend is a classifier, a score is a **distribution over ordinal bins**,
+  never a free-form number the model writes out, and `expectedValue` reads the whole distribution
+  rather than only its peak. That is precisely why C2's lint refuses "rate 1–10" while a `Score`
+  with a declared range is fine — the difference is a bounded range the answer must land inside,
+  which can be validated, calibrated and scored like anything else. Both inherit the strict
+  validation and failure containment. **Track A (A0, A2 interface, A3–A8) is now complete except
+  A1/A2's implementations, which need the model weights and a device.** 254 tests green.
