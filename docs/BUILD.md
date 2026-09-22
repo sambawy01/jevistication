@@ -252,3 +252,19 @@ judgments is the difference between this product and a confident guess.
 | 7 | Prompt wording moving results as much as the algorithm | Wording is a controlled variable, and criteria text is hashed into every ledger row |
 | 8 | The second backend is weak zero-shot | Untuned Qwen3-0.6B scores poorly on decision tasks. Both backends are fine-tuned on our fixtures; its votes do not count until it is |
 | 9 | **Name collision.** `LOUPE` is a crowded mark. Registrations exist for jewellery-trade software (Atelier Technology), sports-card retail (Loupe Tech LLC) and a CRM (Apex); Mysk ships an iOS privacy app called Loupe | None is a consumer personal-data or fraud-detection app, but a crowded mark is a weak mark, and the Mysk app is adjacent on privacy and mobile. **Clear the mark in the target jurisdictions, and check Play Store and domain availability, before any spend on branding, the listing or the domain.** Decision taken with this known |
+
+---
+
+## Progress log
+
+A dated record of work landed on `main`. Spec-track items above are marked **DONE** only when
+their acceptance criteria are met; entries here record increments toward them.
+
+- **2026-09-22 — Engine project and CI stood up.** Kotlin/JVM Gradle build (`engine` module,
+  JDK 21, JUnit 5), the Gradle wrapper pinned to 8.14.3, and a GitHub Actions workflow that runs
+  `./gradlew build` on every push and pull request to `main`. First engine primitive landed:
+  `Probability`, the validated `[0,1]` value type that A4's response validation and A7's policy
+  runner both depend on. This starts the CI-testable engine core (A3–A8). The Android app, the
+  ONNX model runtime (A1) and the second backend (A2) are deferred until a device or the Android
+  SDK is available, since neither an APK nor on-phone latency can be exercised in the headless CI
+  environment.
