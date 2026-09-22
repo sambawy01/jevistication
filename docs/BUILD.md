@@ -309,3 +309,12 @@ their acceptance criteria are met; entries here record increments toward them.
   logged decisions replayed against a candidate threshold, delta positive with the interval
   bracketing it. The corpus is logged by an *exploring* policy, because off-policy evaluation needs
   the propensity variation A5 exists to capture. 54 tests green.
+- **2026-09-22 — A3 (started): text-state pipeline and mechanical dedup.** `TextState.build` fits
+  sources into a character budget under the spec's §8 rule: each item is kept **verbatim**,
+  **truncated with an explicit marker**, or **removed**, and the state reports which — there is
+  deliberately no "summarised" case, and a test asserts the surviving text is always a genuine
+  prefix of the original. `Mechanical`/`MechanicalStats` expresses mechanical-first resolution and
+  tracks the share of items answered without consulting the model, which is A3's acceptance
+  criterion as a measured number. `ContentHash` and `Dedup` do exact byte-identical duplicate
+  detection by SHA-256 (near-duplicates stay a model-side judgment). Still to come in A3: domain
+  and certificate facts, date extraction, MIME sniffing, OCR-presence. 72 tests green.
