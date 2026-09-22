@@ -20,6 +20,7 @@ or a search result.
 | openJev-verdict-2.0 | `NOASSERTION` | **Rejected** |
 | `featherless-ai/simple-jev` | no licence file | **Rejected** |
 | Laya-MLX | Apache-2.0 | Rejected on platform, not licence |
+| `com.microsoft.onnxruntime:onnxruntime:1.20.0` | `MIT License` in the resolved POM | **Adopted** — runtime, pending review |
 
 ---
 
@@ -114,3 +115,19 @@ independently against Qwen3-0.6B. We do not copy their source, prompt templates 
 
 Nothing blocking. On first fetch, re-read each frontmatter at the exact revision pinned and
 record the commit hash here beside the date.
+
+**ONNX Runtime is the project's first runtime dependency** and is not yet on `main`. Verified
+2026-09-22 by reading `<licenses>` from the POM Gradle resolved
+(`onnxruntime-1.20.0.pom`), not from a badge: `MIT License`,
+`https://opensource.org/licenses/MIT`. It declares **no transitive dependencies**, so the
+verification covers the whole of what it brings in — which is the check the NanoJev rejection
+exists to enforce.
+
+Two things remain before it ships:
+
+- The published jar bundles **native binaries** per platform. A licence on the Java artifact is
+  not automatically a licence on the shipped `.so`/`.dylib` blobs, and the standing rule that
+  weights, datasets and code are licensed separately applies to native objects for the same
+  reason. Read the native licence at the revision shipped.
+- The Android artifact is a **different coordinate** (`onnxruntime-android`). Verify that one
+  too; do not carry this finding across to it.
