@@ -298,3 +298,14 @@ their acceptance criteria are met; entries here record increments toward them.
   as a test:** on a synthetic model claiming 0.99 while right 70% of the time, the fitted
   recalibrator softens to ≈0.70 and beats the identity baseline on ECE (0.29 → <0.05). Fitting on
   real data still needs a fixture corpus (see open questions). 44 tests green.
+- **2026-09-22 — A8: counterfactual engine.** `OffPolicy.estimate` computes IPS and SNIPS over
+  logged propensities, reporting **support** and Kish effective sample size beside every estimate —
+  the honest caveat, since an importance-weighted number only sees rows where the candidate agrees
+  with what was logged. `OffPolicy.replayThreshold` replays a ledger against a candidate threshold
+  (the same rule `Policy.decide` applies live) and reports the delta against observed reward with a
+  seeded bootstrap percentile interval, so a given ledger and threshold always report the same
+  interval. This is what D3's slider reads. `Policy.ABSTAIN` and `Policy.actionOf` added so an
+  abstention is recordable and replayable. **A8's acceptance criterion runs as a test:** 1,000
+  logged decisions replayed against a candidate threshold, delta positive with the interval
+  bracketing it. The corpus is logged by an *exploring* policy, because off-policy evaluation needs
+  the propensity variation A5 exists to capture. 54 tests green.

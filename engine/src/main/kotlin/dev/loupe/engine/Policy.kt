@@ -18,6 +18,18 @@ sealed interface Decision {
  */
 object Policy {
     /**
+     * The action recorded when the policy declines to act. Reserved: it is not a candidate label,
+     * so it cannot collide with one, and the A8 replay compares against it directly.
+     */
+    const val ABSTAIN: String = "__abstain__"
+
+    /** The action string a [Decision] records in a [LedgerRow]. */
+    fun actionOf(decision: Decision): String = when (decision) {
+        is Decision.Act -> decision.label
+        is Decision.Abstain -> ABSTAIN
+    }
+
+    /**
      * Acts on the highest-mass label when its calibrated mass is at least [threshold]; otherwise
      * abstains, and the item queues. This is "never acts on something it is unsure about" (§4 of
      * the spec) expressed as a total function: every calibrated distribution yields a decision.
