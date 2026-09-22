@@ -328,3 +328,10 @@ their acceptance criteria are met; entries here record increments toward them.
   pins that case. Nothing here reads page content, honouring §4's rule that content can only add
   suspicion, never raise trust. The built-in public suffix set is an approximation and is now
   recorded as **risk 10**. 83 tests green.
+- **2026-09-22 — A3: date extraction and validity arithmetic.** `DateFacts` finds ISO, numeric and
+  textual dates and does the arithmetic the expiry radar needs (`daysUntil`, and `expiresWithin`
+  for rules like "Schengen requires six months of validity"). **Ambiguity is surfaced, not
+  guessed:** `03/04/2026` is two different dates, so a match reports `ambiguous` plus the
+  `alternate` reading, and a judgment receiving one should treat it as uncertain rather than pick.
+  Dates that name no real day (`2026-02-30`) are skipped rather than coerced. Identifying *what a
+  document is* stays a judgment; finding its dates does not. 95 tests green.
