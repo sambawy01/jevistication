@@ -421,3 +421,12 @@ their acceptance criteria are met; entries here record increments toward them.
   letters, to judge on — an image yielding three stray marks must reach the uncertain queue rather
   than get a confident answer about noise. A3's extractor set (hash, dedup, MIME, dates, domain and
   certificate-adjacent origin facts, OCR-presence, text state) is now complete. 209 tests green.
+- **2026-09-22 — D2/D3: visible calibration and the threshold slider.** `ThresholdSlider.preview`
+  counts what a candidate threshold would have changed about decisions *already logged* — how many
+  more or fewer items acted on — and grounds the cost half only in items the user actually
+  corrected. Where no correction covers the affected items it reports **"the cost is unknown"**
+  rather than producing a confident figure from nothing, which is the same discipline the engine
+  applies to its own answers. `VisibleCalibration` reports agreement, ECE, reliability bins and the
+  specific **overconfident bins** — per judgment, with **no API to average across judgments at
+  all**, because "is this a receipt" at 94% and "is this urgent" at 61% have no meaningful mean and
+  a single system number would hide both. 221 tests green.
