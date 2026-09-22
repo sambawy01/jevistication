@@ -12,6 +12,13 @@ sealed interface Judgment {
     val question: String
 
     /**
+     * A stable fingerprint of the wording that defines this judgment. A5 writes it into every
+     * ledger row and A6 keys calibration on it, so changing the wording invalidates calibration
+     * fitted against the old text rather than silently reusing it.
+     */
+    val criteriaHash: String
+
+    /**
      * Pick among a fixed set of candidate labels. The model's answer is a [Distribution] over
      * exactly these candidates — the GLiClass primitive, labels scored in one forward pass.
      */
@@ -29,6 +36,9 @@ sealed interface Judgment {
                 "Choice candidates must be distinct, were $candidates"
             }
         }
+
+        override val criteriaHash: String
+            get() = Hashing.sha256Hex(question + "\u0000" + candidates.joinToString("\u0000"))
 
         /**
          * Validates a raw model response (label to mass) into a [Distribution] over exactly this

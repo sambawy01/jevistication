@@ -276,3 +276,9 @@ their acceptance criteria are met; entries here record increments toward them.
   `Judgment` type; the `Choice` variant validates a raw model response into a `Distribution` over
   exactly its candidates, rejecting unknown labels, missing candidates, and malformed masses —
   A4's stated failure cases. Bool and Score variants follow.
+- **2026-09-22 — A5 (started): append-only ledger.** `LedgerRow` records a decision's full
+  distribution and a required propensity, plus a `criteriaHash` fingerprint of the judgment
+  wording (added to `Judgment`); `Ledger` appends and reads rows with no mutate/remove API. Added
+  `Distribution.getValue` for the selected-label lookup. Tests cover "a decision writes a row
+  carrying a propensity", append ordering, snapshot isolation, and criteria-hash sensitivity to
+  wording.

@@ -21,6 +21,14 @@ class Distribution private constructor(
     operator fun get(label: String): Probability? = masses[label]
 
     /**
+     * The mass assigned to [label].
+     *
+     * @throws IllegalArgumentException if [label] is not a candidate.
+     */
+    fun getValue(label: String): Probability =
+        masses[label] ?: throw IllegalArgumentException("not a candidate label: $label")
+
+    /**
      * The label carrying the greatest mass — the selected answer for a Choice.
      * Ties break to the label supplied first.
      */
