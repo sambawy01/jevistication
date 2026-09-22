@@ -272,3 +272,7 @@ their acceptance criteria are met; entries here record increments toward them.
   validated on construction (non-empty, every mass a valid `Probability`, masses sum to 1 within
   tolerance) with `argmax` for the selected answer. This is what a Choice returns (A1) and what
   the ledger stores in full (A5). CI green on the scaffold before this landed.
+- **2026-09-22 — A4 (started): typed `Judgment.Choice` with response validation.** A sealed
+  `Judgment` type; the `Choice` variant validates a raw model response into a `Distribution` over
+  exactly its candidates, rejecting unknown labels, missing candidates, and malformed masses —
+  A4's stated failure cases. Bool and Score variants follow.
