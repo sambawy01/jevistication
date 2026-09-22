@@ -268,3 +268,7 @@ their acceptance criteria are met; entries here record increments toward them.
   ONNX model runtime (A1) and the second backend (A2) are deferred until a device or the Android
   SDK is available, since neither an APK nor on-phone latency can be exercised in the headless CI
   environment.
+- **2026-09-22 — `Distribution` primitive.** A normalised distribution over candidate labels,
+  validated on construction (non-empty, every mass a valid `Probability`, masses sum to 1 within
+  tolerance) with `argmax` for the selected answer. This is what a Choice returns (A1) and what
+  the ledger stores in full (A5). CI green on the scaffold before this landed.
