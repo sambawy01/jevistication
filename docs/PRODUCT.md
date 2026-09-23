@@ -151,6 +151,16 @@ has become fatal, and the screen flashes when it does. Below a **threshold slide
 handed to the player ("your turn"). A **dumb baseline** autopilot flies the same seeds, and the game
 reports which wins. The bars show the model's **raw** output — not calibrated, and labelled so.
 
+*It gets harder (added 2026-09-23).* Each bridge ends a **section**, and each section is faster
+(7 → 11.5 rows/s), twistier (the river drifts sideways and changes shape more often), narrower,
+busier (more enemies, more of them moving, faster) and drier (rarer depots, more fuel burned per
+row), up to a cap at section 10 so it never becomes impossible. Section 1 is the original game
+exactly. However fast it runs, the river is **provably passable**: the walls slow down as the
+plane's reach per row shrinks, and a test walks every section on 30 seeds to prove a path exists.
+The HUD shows the section; the model is told the section and speed. Nobody flies forever now: over
+300 s the baseline typically dies in section 5 (7 for the best quarter of runs), the untuned model
+in section 3.
+
 *Honest status:* untuned, the model **loses to the baseline** (it does not seek fuel, so it runs dry
 — see `BUILD.md` F5 for the numbers); fine-tuning on baseline-flown states is the planned fix. On a
 desktop CPU it decides in ~65 ms; on a phone that is **unmeasured** (risk 13). It runs on macOS

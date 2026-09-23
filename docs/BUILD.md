@@ -234,7 +234,9 @@ placeholder): `:game` (pure Kotlin, depends only on `:engine`) and `:game-deskto
 threshold, a baseline autopilot and a headless model-vs-baseline run. *Accept* (proposed): the
 model decides at ≥10 Hz with bars visible **on a phone**, offline, and the game reports honestly
 whether it beats the baseline. The desktop half is met (10 decisions/s, ~65 ms P50); the phone half
-is not measured, and untuned it does not beat the baseline — see the progress log.
+is not measured, and untuned it does not beat the baseline — see the progress log. *Since
+2026-09-23 the game gets harder:* each bridge ends a section, and sections ramp speed, twist,
+enemies and fuel pressure to a cap at section 10, with the river proven passable at every speed.
 
 ---
 
@@ -504,7 +506,7 @@ need them skip there. The Laya weights exist only on the machine that ran the ex
 | D3 Threshold slider | Complete — counterfactual preview over logged rows |
 | D4 Baseline runner | Complete — inside `Harness` |
 | F4 Export | Complete — lossless ledger, judgments, calibration |
-| F5 The game | **Desktop half built** — `:game` + `:game-desktop` (Compose Desktop). Runs the real Laya on this CPU at 10 decisions/s; untuned it loses to the baseline. Needs a phone and a fine-tune |
+| F5 The game | **Desktop half built** — `:game` + `:game-desktop` (Compose Desktop). Runs the real Laya on this CPU at 10 decisions/s; untuned it loses to the baseline. Section-based difficulty (branch `game-difficulty`): it now gets harder and ends. Needs a phone and a fine-tune |
 | §7 Measurement harness | Complete — group-wise splits, selective accuracy, coverage, ECE, Brier, baseline |
 | Engine wiring | `DecisionEngine` composes the §8 architecture end to end |
 
@@ -631,6 +633,48 @@ Nothing below is deferred by choice; each needs something this environment does 
   neither is an accuracy: the planned fix is fine-tuning on baseline-flown states (the baseline is
   cheap and deterministic, so it can label thousands). Tests: `:game` 35 (3 gated on the weights);
   whole build 316, run with and without `models/`.
+- **2026-09-23 — F5: the game gets harder, section by section.** The owner: "the game doesn't get
+  faster or harder, it can go forever" — true: constant scroll, constant fuel burn, constant spawn
+  rates. Branch `game-difficulty`. **Each bridge ends a section** (every 140 rows), and
+  `Difficulty.of(section)` — a pure function of the section index, so deterministic for a seed —
+  ramps, eased (exponent 2) from section 1 to a **cap at section 10**: scroll 7 → 11.5 rows/s; bank
+  noise frequency 0.068 → 0.10; widest bank 8 → 10 (single channel ≥ 8); channels beside islands
+  7 → 5; a new sideways drift of the whole river, 0 → ±4 columns; enemy chance per eligible row
+  0.30 → 0.60, heli share 0.40 → 0.55, moving boats 0.50 → 0.90, enemy speed ×1.0 → ×1.6; depot
+  gap 40–65 → 56–91 rows; fuel burn 0.357 → 0.400 % per row (2.5 → 4.6 %/s), refill scaled with the
+  scroll so one pass over a depot gives the same fuel at any speed. **Section 1 is the original game
+  exactly** — a test compares its rows, spawns included, with a verbatim copy of the old generator
+  on 303 seeds. *Passability.* The plane's sideways speed is fixed, so its reach per row
+  (`LATERAL / scroll`) falls from 2.0 to 1.22 columns; a fixed wall step would eventually outrun
+  it. The average wall step is therefore derived, `min(1, 0.7 × reach)` (1.0 up to section 8,
+  0.85 at the cap), spent as a per-row move budget so no wall ever moves more than one column in a
+  row, and bank/island moves and drift moves never share a row. The narrowest channel is derived
+  too and stays 5: a channel sliding a column a row loses two columns across the plane's three-row
+  footprint, and the plane needs its 1.5 width plus the move. A new exhaustive reachability check
+  walks 30 seeds through sections 1–14 (past the cap, across every transition) with the plane's
+  real footprint, 90% of the fewest whole ticks of reach any row gives, and padding for the
+  plane's tick-step position, and finds a path every time; a companion test shows it does reject
+  impassable rivers. *Look-ahead.* Legal-set and override horizons stay in ticks: they measure time
+  (decision hold, next decision), and the plane's sideways speed is the same in every section.
+  Doubling the recovery horizon, or stretching it with the scroll, was measured at the cap (10
+  seeds, baseline and a random pilot, override on) and changed nothing material; tests hold the
+  legal set and the override to their promises at the cap. The observation's "near", "far" and
+  threat ranges, enemy activation, and the baseline's row thresholds stretch with the speed so
+  they mean the same *time* ahead (identical in section 1). The state text opens with
+  `section 3, speed 8.`: over 452 real states, including the cap, **65 tokens mean, 100 max**;
+  whole Laya sequence 120 mean, 160 max (limits 120/200). The HUD shows the section, the side
+  panel the speed. *Measured, baseline only, 400 seeds × 300 s, override on:* section reached,
+  10th/25th/50th/75th/90th percentile **2 / 4 / 5 / 7 / 8**, max 11, every run dead (fuel 243,
+  bank 96, enemy 61); the same pilot on the unchanged game (a temporary flat-difficulty switch,
+  not committed) reached 4 / 6 / 9 at the quartiles and up to section 16 when the 300 s ran out.
+  *Model vs baseline, 10 seeds × 300 s, charged delay 4 ticks:* **with the override the baseline
+  wins — score 16,280 vs 7,370, sections mean 5.3 (max 8) vs 3.2 (max 4), both 10/10 dead**; the
+  model's ten deaths are all fuel (it still never seeks a depot), the baseline's are 7 fuel, 2
+  enemy, 1 bank. *Override off:* baseline 6,580 vs model 4,410, sections 2.6 vs 2.4, 10/10 each.
+  Model P50 62–73 ms per episode on the M4. Tests: `:game` 50 (3 gated); whole build 331, run with
+  and without `models/`. Changed: the river-passable test now uses each row's section reach; the
+  state-text test expects the new prefix; "some baseline run survives 120 s" became "some run
+  reaches section 5" — surviving forever is what was removed.
 
 ---
 ## Hand-off
@@ -641,7 +685,17 @@ and what will bite.
 
 ### What changed most recently
 
-**The demo game (F5), desktop half**, on branch `game-riverflight`: `:game` and `:game-desktop`,
+**The game gets harder (F5)**, on branch `game-difficulty`: sections, one per bridge, each faster,
+twistier, busier and drier up to a cap at section 10; `Difficulty.kt` holds the whole table and the
+derivation of the two passability parameters. `World(seed, startSection)` / `GameSession(...,
+startSection = n)` / `Match.Settings(startSection = n)` start a run just past a section's bridge —
+use it to test or measure the late game without flying there. Section 1 is byte-for-byte the old
+river (`SectionOneTest`). If you tune `Difficulty`, `DifficultyTest` will tell you if the river
+stops being passable; do not tune `wallStep` or `minChannel` by hand, they are derived. A snapshot
+of a late section needs a start-section hook in `GameController`, not added here to keep
+`:game-desktop` changes minimal.
+
+The change before it, **the demo game (F5), desktop half**, on branch `game-riverflight`: `:game` and `:game-desktop`,
 an original river shooter flown by Laya with its raw probability bars, a safety override, a
 hand-off slider and a baseline it currently loses to. Run it with
 `./gradlew :game-desktop:run` (JDK 21); `./gradlew :game-desktop:match -Pseeds=1,2,3 -Pseconds=60`
@@ -750,6 +804,9 @@ came from labelled fixtures.
 - **The build cache replays test results across the weights appearing.** With
   `org.gradle.caching=true`, a gated test that passed locally was restored as "passed" after the
   weights were removed. `models/` is now a declared test input; keep it that way.
+- **A `models` symlink is not ignored.** `.gitignore`'s `models/` matches a directory only; a
+  worktree that links the weights in with `ln -s …/models models` shows `?? models` and
+  `git add -A` would commit the link. Stage paths explicitly in such a worktree.
 - **Upstream `laya.Agent` edits the checkpoint directory.** `_fix_tokenizer_config` rewrites
   `tokenizer/tokenizer_config.json` in place (not `tokenizer.json`, whose hash is what we pin).
 - **transformers is pinned to 5.0.0**, the version that saved `encoder/config.json` — it uses the
