@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct NowView: View {
+    @EnvironmentObject private var launcher: GameLauncher
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -33,6 +35,7 @@ struct NowView: View {
                         }
                     }
                 }
+                PlayCard { launcher.open($0) }
                 HonestEmptyState(
                     title: "Nothing to judge yet",
                     message: "Now fills in once Loupe can read the photos, mail and files on this phone. Until then there is nothing to count, so it shows nothing.",

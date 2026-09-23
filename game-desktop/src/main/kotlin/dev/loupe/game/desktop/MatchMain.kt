@@ -5,6 +5,7 @@ import dev.loupe.game.Match
 import dev.loupe.game.ModelPilot
 import dev.loupe.game.Pilot
 import dev.loupe.game.Rules
+import dev.loupe.game.report
 import kotlin.system.exitProcess
 
 /**

@@ -1,38 +1,55 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm")
+    kotlin("multiplatform")
 }
 
 repositories {
     mavenCentral()
 }
 
-dependencies {
-    // The game's only runtime dependency. It needs nothing but the engine's Backend and Judgment
-    // types, so it ports to Android unchanged and carries no third-party code of its own.
-    api(project(":engine"))
-
-    // Tests only: the gated real-model tests load Laya through the ONNX backend. Never on the
-    // game's runtime classpath.
-    testImplementation(project(":backend-onnx"))
-    testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
+// The game's rules in common Kotlin (JVM + iOS), exported to the iPhone app through LoupeKit.
+// Its only runtime dependency is the engine's Backend and Judgment types; it carries no
+// third-party code. JVM-only pieces (the thread-pool AsyncDecider, Match.report's String.format)
+// live in jvmMain. ParityTest (commonTest) runs on both and pins the same world bit for bit.
+val appleHost = System.getProperty("os.name").startsWith("Mac")
 
 kotlin {
+    jvm {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_21)
+        }
+    }
+    if (appleHost) {
+        iosArm64()
+        iosSimulatorArm64()
+    }
+
+    applyDefaultHierarchyTemplate()
+
     compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
+        // GameClock is an expect object (System.nanoTime / the kernel's monotonic clock).
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
+    sourceSets {
+        commonMain.dependencies {
+            api(project(":engine"))
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+        }
+        jvmTest.dependencies {
+            // Tests only: the gated real-model tests load Laya through the ONNX backend. Never on
+            // the game's runtime classpath.
+            implementation(project(":backend-onnx"))
+            implementation("org.junit.jupiter:junit-jupiter:5.11.4")
+            runtimeOnly("org.junit.platform:junit-platform-launcher")
+        }
     }
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-tasks.test {
+tasks.named<Test>("jvmTest") {
     useJUnitPlatform()
     // The gated tests look for the gitignored Laya weights here and skip without them.
     val models = rootProject.file("models")

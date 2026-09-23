@@ -28,7 +28,7 @@ class MechanicsTest {
     }
 
     @Test
-    fun `in open water every action is offered, the no-op included`() {
+    fun `in open water every action is offered - the no-op included`() {
         val world = World(1)
         world.clearEntities()
         assertEquals(Action.entries.toList(), Mechanics.legalActions(world).actions)
@@ -45,7 +45,7 @@ class MechanicsTest {
     }
 
     @Test
-    fun `low on fuel, shots that would destroy the depot ahead are not offered`() {
+    fun `low on fuel - shots that would destroy the depot ahead are not offered`() {
         val world = World(1)
         world.clearEntities()
         world.setFuel(20.0)
@@ -59,7 +59,7 @@ class MechanicsTest {
     }
 
     @Test
-    fun `no legal action ever dies within its hold, across whole baseline runs`() {
+    fun `no legal action ever dies within its hold - across whole baseline runs`() {
         // Property check over thousands of real states: wherever some action survives, every
         // action offered survives the hold (the recovery half is checked by Mechanics itself).
         var checked = 0
@@ -88,7 +88,7 @@ class MechanicsTest {
     }
 
     @Test
-    fun `the safety override replaces a fatal action, records it, and saves the plane`() {
+    fun `the safety override replaces a fatal action - records it - and saves the plane`() {
         val guarded = GameSession(1, Control.Human, overrideEnabled = true)
         guarded.human = HumanInput(left = true)
         repeat(300) {

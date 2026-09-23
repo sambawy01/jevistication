@@ -520,6 +520,30 @@ their acceptance criteria are met; entries here record increments toward them.
   SHA-256 disagree. The official upstream test vectors (CC0) run as a test, all 77 passing. MPL-2.0,
   bundled unmodified; recorded in `THIRD_PARTY_NOTICES.md` and `LICENSING.md`. 376 tests green.
 
+- **2026-09-23 — Epic #7 child G: the game on iPhone.** `:game` is now Kotlin Multiplatform (jvm,
+  iosArm64, iosSimulatorArm64) with the rules unchanged; JVM-only pieces moved to `jvmMain`
+  (`AsyncDecider`, `Match.report`), and `GameClock` is an expect object (System.nanoTime / the
+  kernel's monotonic clock). `ParityTest` (commonTest) digests river rows, whole baseline sessions
+  (world bits, legal sets, decisions every tick) and `Match` episodes as raw IEEE-754 bits and pins
+  the same golden values on JVM and the iOS simulator: identical. The deterministic tests
+  (Simulation, Mechanics, StateText) moved to commonTest and run on both (test names lost their
+  commas: Kotlin/Native rejects them). New `HostedDecider` lets a host run the pilot on its own
+  thread; `GameSessions` gives Swift default-free factories. `:game` is exported through LoupeKit.
+  iOS: `ios/Loupe/Game/` — SpriteKit `RiverScene` (pooled nodes, pixel-snapped, nearest-sampled
+  original pixel art in the app palette), `GameController` (fixed 60 Hz ticks from accumulated time),
+  `PilotScheduler` (Laya's `decide` on one shared serial background queue, result handed back on
+  main; never blocks a frame), touch mapping (`TouchSteering`: drag steers toward the finger with a
+  deadband, hold fires, tap pauses; auto-fire toggle). Watch mode flies the same `ModelPilot` as
+  the desktop, shows raw (uncalibrated) bars, decisions/s, p50 latency and a scoreboard against the
+  baseline on the same seed in lockstep; without the model the baseline flies with a note and a link
+  to Me → Laya model. Entry: Play card on Now, Game section in Me (still 5 tabs), first-launch
+  onboarding offering "Watch Laya fly". Pause on background, reduced motion (system or in-app: few
+  sparks, no shake), VoiceOver labels on the HUD, haptics on hits (toggle). Measured on the
+  iPhone 17 Pro Max simulator (M-series Mac, debug LoupeKit): 58–60 fps in both modes; Laya
+  7–9.5 decisions/s at p50 76–86 ms. Tests: 2 new common test classes (on both platforms), XCTest
+  `GameInputTests` (7) and `PilotSchedulingTests` (6, fake Backend), UI `GameUITests` (2). Real-device
+  fps and latency still need an iPhone.
+
 ---
 
 ## Where the build stands
@@ -557,7 +581,7 @@ that ran the export spike.
 | F2 Retroactive sweep | **Built on desktop** — background, single model thread, progress, items/s, median latency, cancel; skips items already judged under the current wording |
 | F4 Export | Complete — lossless ledger, judgments, calibration; **desktop UI** |
 | Desktop stand-ins for B1/B2 | `:sources-desktop`: folders and mail exports (`.mbox`/`.eml`), read-only; text from plain text, Markdown, CSV, JSON, HTML, email (mime4j) and PDF (PDFBox); images metadata only (no OCR) |
-| F5 The game | **Desktop half built** — `:game` + `:game-desktop` (Compose Desktop). Runs the real Laya on this CPU at 10 decisions/s; untuned it loses to the baseline. Needs a phone and a fine-tune |
+| F5 The game | **Desktop and iPhone simulator built** (epic #7 G) — `:game` + `:game-desktop` (Compose Desktop). Runs the real Laya on this CPU at 10 decisions/s; untuned it loses to the baseline. Needs a phone and a fine-tune |
 | §7 Measurement harness | Complete — group-wise splits, selective accuracy, coverage, ECE, Brier, baseline |
 | Engine wiring | `DecisionEngine` composes the §8 architecture end to end |
 
@@ -596,6 +620,13 @@ after 1, 6 needs 3, 4 and 5.
 **Blocked on:** an **Apple developer account** (signing, a device build, TestFlight), a
 **physical iPhone** (child 3's latency — milestone 1's phone half — and anything on device), and a
 **Duffel test key** (child 6 end to end; the helper holds no key of its own).
+
+### iPhone feature parity (epic #7)
+
+| # | Child | State |
+|---|---|---|
+| G | Game on iPhone | **Done 2026-09-23 (simulator)** — KMP `:game`, JVM/iOS parity identical, SpriteKit at 60 fps, Laya live at ~9 decisions/s; device fps/latency need an iPhone |
+| 1–9 | Ledger, sample source, judgments, unsure queue, watchers, sweep, phone sources, mascot, model delivery | Not started |
 
 ### Proving milestones
 

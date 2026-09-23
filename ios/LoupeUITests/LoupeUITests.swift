@@ -5,7 +5,7 @@ final class LoupeUITests: XCTestCase {
 
     func testWebTabShowsKeyOnboarding() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeEphemeralKeychain"]
+        app.launchArguments = ["-LoupeEphemeralKeychain", "-LoupeSkipOnboarding"]
         app.launch()
         app.tabBars.buttons["Web"].tap()
         let addKey = app.buttons["web.onboarding.addKey"]
@@ -17,7 +17,7 @@ final class LoupeUITests: XCTestCase {
 
     func testFixtureSearchShowsRankedResults() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "web"]
+        app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "web", "-LoupeSkipOnboarding"]
         app.launch()
         let go = app.buttons["search.go"]
         XCTAssertTrue(go.waitForExistence(timeout: 5))

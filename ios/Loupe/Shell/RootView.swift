@@ -7,6 +7,10 @@ enum AppTab: String, CaseIterable {
 struct RootView: View {
     @State var initialTab: AppTab
     @State private var selection: AppTab = .now
+    @StateObject private var launcher = GameLauncher()
+    @AppStorage("onboarding.seen") private var onboardingSeen = false
+    @State private var showOnboarding = false
+    @State private var watchAfterOnboarding = false
 
     var body: some View {
         TabView(selection: $selection) {
@@ -30,7 +34,33 @@ struct RootView: View {
                 .tabItem { Label("Me", systemImage: "person") }
                 .tag(AppTab.me)
         }
-        .onAppear { selection = initialTab }
+        .environmentObject(launcher)
+        .fullScreenCover(item: $launcher.mode) { mode in
+            GameView(mode: mode, seed: launcher.seed)
+        }
+        .sheet(isPresented: $showOnboarding, onDismiss: {
+            // Open the game only once the sheet is gone: two presentations cannot overlap.
+            if watchAfterOnboarding { watchAfterOnboarding = false; launcher.open(.watch) }
+        }) {
+            OnboardingView(onWatch: {
+                onboardingSeen = true
+                watchAfterOnboarding = true
+                showOnboarding = false
+            }, onSkip: {
+                onboardingSeen = true
+                showOnboarding = false
+            })
+        }
+        .onAppear {
+            selection = initialTab
+            let launch = LaunchOptions.current
+            launcher.seed = launch.gameSeed
+            if let game = launch.game {
+                launcher.open(game)
+            } else if !onboardingSeen && !launch.skipOnboarding {
+                showOnboarding = true
+            }
+        }
     }
 }
 

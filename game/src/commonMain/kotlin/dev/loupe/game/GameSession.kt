@@ -1,5 +1,7 @@
 package dev.loupe.game
 
+import kotlin.concurrent.Volatile
+
 /** The keys a human is holding. Written by the UI thread, read by the simulation. */
 data class HumanInput(val left: Boolean = false, val right: Boolean = false, val fire: Boolean = false) {
     val action: Action get() = Action.of((if (right) 1 else 0) - (if (left) 1 else 0), fire)
@@ -39,7 +41,7 @@ class GameSession(
     threshold: Double = 0.0,
     overrideEnabled: Boolean = true,
     /** The clock throughput is measured against: wall time live, simulation time headless. */
-    private val clock: () -> Long = System::nanoTime,
+    private val clock: () -> Long = GameClock::nanoTime,
 ) : AutoCloseable {
     init {
         require(decisionInterval >= 1) { "decision interval must be at least one tick, was $decisionInterval" }

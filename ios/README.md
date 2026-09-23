@@ -22,7 +22,10 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
 - Me → Laya model: the consented one-time download screen (~418 MB, SHA-256 checked). Me → Licences: iOS notices and the font OFLs.
 - Dev model: install the app on the simulator, then `ios-native/sideload-models.sh dev.loupe.app booted`. `LoupeTests/LayaOnDeviceTests` runs the real model when present and skips otherwise.
 
+- Game (epic #7 G): `Loupe/Game/` — SpriteKit river over the KMP `:game` rules from LoupeKit. Now → Play card or Me → Game. You fly (drag steer, hold fire, tap pause, auto-fire) or Watch Laya (raw probability bars, decisions/s, scoreboard vs the baseline on the same seed; baseline + note without the model). Pauses on background; reduced motion; haptics toggle. DEBUG args: `-LoupeGame human|watch`, `-LoupeSeed n`, `-LoupeGameLog` (fps/decisions per second to stdout), `-LoupeSkipOnboarding`.
+
 ## Pending
+- Game fps and Laya latency on a real iPhone (simulator: 60 fps, ~9 decisions/s, p50 ~80 ms).
 - Model download host: `LayaModelSource.baseURL` is empty (no host recorded); the screen says so.
 - Laya is untuned: on the fixture it is unsure of every offer and ranks an over-cap fare first.
 - Mascot: static reference render with SwiftUI transforms for now. The rigged SceneKit/RealityKit robot comes later.

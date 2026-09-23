@@ -8,7 +8,7 @@ repositories {
     mavenCentral()
 }
 
-// LoupeKit: the iOS-facing umbrella over :engine and :templates, shipped as one XCFramework.
+// LoupeKit: the iOS-facing umbrella over :engine, :templates and :game, shipped as one XCFramework.
 // `./gradlew :loupe-kit:assembleLoupeKitXCFramework` (macOS only; see docs/BUILD.md).
 val appleHost = System.getProperty("os.name").startsWith("Mac")
 // Laya on iOS (ORT + the Rust tokenizer) is exported when settings.gradle.kts included it, i.e. once
@@ -27,6 +27,7 @@ kotlin {
                 isStatic = true
                 export(project(":engine"))
                 export(project(":templates"))
+                export(project(":game"))
                 if (layaIos != null) {
                     export(layaIos)
                     export(project(":backend-laya-common"))
@@ -42,6 +43,8 @@ kotlin {
         commonMain.dependencies {
             api(project(":engine"))
             api(project(":templates"))
+            // The game (Riverflight) for the iPhone app: rules, pilots, GameSessions, HostedDecider.
+            api(project(":game"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

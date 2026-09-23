@@ -68,10 +68,10 @@ class BaselinePilot : Pilot {
     override val name: String = "baseline"
 
     override fun decide(observation: Observation): PilotDecision {
-        val started = System.nanoTime()
+        val started = GameClock.nanoTime()
         val preferred = Action.of(steerToward(target(observation)), shouldFire(observation))
         val action = closestLegal(preferred, observation.legal.actions)
-        return PilotDecision(action, DecisionSource.BASELINE, latencyNanos = System.nanoTime() - started, observedTick = observation.tick)
+        return PilotDecision(action, DecisionSource.BASELINE, latencyNanos = GameClock.nanoTime() - started, observedTick = observation.tick)
     }
 
     /** Columns to move, right positive. */
@@ -161,9 +161,9 @@ class ModelPilot(
             onFailure = FailurePosture.NULL_ACTION,
         )
         val state = TextState.build(listOf("river" to StateText.describe(observation)), STATE_BUDGET)
-        val started = System.nanoTime()
+        val started = GameClock.nanoTime()
         val validated = runCatching { judgment.validate(backend.score(judgment, state).masses) }
-        val latency = System.nanoTime() - started
+        val latency = GameClock.nanoTime() - started
         return validated.fold(
             onSuccess = { distribution ->
                 val raw = legal.associateWith { distribution.getValue(it.label).value }

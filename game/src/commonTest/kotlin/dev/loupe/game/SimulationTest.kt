@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 class SimulationTest {
 
     @Test
-    fun `the same seed and actions give the same world, bit for bit`() {
+    fun `the same seed and actions give the same world - bit for bit`() {
         fun run(seed: Long): List<String> {
             val world = World(seed)
             val trace = mutableListOf<String>()
@@ -97,7 +97,7 @@ class SimulationTest {
     }
 
     @Test
-    fun `hitting an enemy kills the plane, and shooting it scores`() {
+    fun `hitting an enemy kills the plane - and shooting it scores`() {
         val crash = World(1)
         crash.clearEntities()
         crash.addEnemy(Enemy(EnemyKind.BOAT, crash.playerX, crash.playerY + 3, 0.0))
@@ -114,7 +114,7 @@ class SimulationTest {
     }
 
     @Test
-    fun `an intact bridge kills, a shot bridge does not`() {
+    fun `an intact bridge kills - a shot bridge does not`() {
         // Fly (terrain only, guarded by the override) until the first bridge is a few rows ahead,
         // then take the controls away from the override.
         val world = World(1)
@@ -139,7 +139,7 @@ class SimulationTest {
     }
 
     @Test
-    fun `fuel drains, refills over a depot, and running dry ends the run`() {
+    fun `fuel drains - refills over a depot - and running dry ends the run`() {
         val world = World(1)
         world.clearEntities()
         val start = world.fuel

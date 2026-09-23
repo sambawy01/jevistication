@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MeView: View {
     @EnvironmentObject private var web: WebModel
+    @EnvironmentObject private var launcher: GameLauncher
     @ObservedObject private var laya = LayaModel.shared
     @State private var showWebSettings = false
     private let engine = EngineInfo.load()
@@ -17,6 +18,15 @@ struct MeView: View {
                         row("Laya model", layaStatus)
                     }
                     .accessibilityIdentifier("me.model")
+                }
+                Section("Game") {
+                    Button { launcher.open(.watch) } label: {
+                        row("Riverflight", "watch Laya fly")
+                    }
+                    .foregroundStyle(Palette.ink)
+                    .accessibilityIdentifier("me.game")
+                    Button("Play it yourself") { launcher.open(.human) }
+                        .accessibilityIdentifier("me.game.play")
                 }
                 Section("Web") {
                     Button("Web settings") { showWebSettings = true }
