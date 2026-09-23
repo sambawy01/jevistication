@@ -7,6 +7,8 @@ struct NowView: View {
     @ObservedObject var watchers: WatchersService = .shared
     @ObservedObject var sources: SourcesService = .shared
     @ObservedObject var sort: SortService = .shared
+    @ObservedObject var privacy: PrivacyService = .shared
+    @State private var showPrivacy = false
     @State private var openItem: SourceItem?
     @State private var showQueue = false
     @State private var opened = false
@@ -15,6 +17,7 @@ struct NowView: View {
         NavigationStack {
             content
                 .navigationDestination(isPresented: $showQueue) { UnsureQueueView(service: service) }
+                .navigationDestination(isPresented: $showPrivacy) { PrivacyView(privacy: privacy) }
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(item: $openItem) { ItemTextView(item: $0) }
         }
@@ -23,6 +26,7 @@ struct NowView: View {
         .onReceive(sources.$sampleScan.combineLatest(sources.$sampleEnabled, sources.$revision)) { _ in
             guard !sources.scanning else { return }
             Task { await watchers.run() }
+            Task { await privacy.run() }
         }
         .task {
             service.load()
@@ -90,6 +94,10 @@ struct NowView: View {
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("now.sorted")
                 }
+                Button { showPrivacy = true } label: { PrivacyCard(privacy: privacy) }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("now.privacy")
                 findingsSection
                 PlayCard { launcher.open($0) }
             }

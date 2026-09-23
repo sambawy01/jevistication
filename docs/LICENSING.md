@@ -374,6 +374,13 @@ the fonts by themselves, keep the copyright and licence with them, and do not us
 Name for a modified version. The fonts are unmodified, and both licence texts are bundled in the
 app and shown under Me → Licences (with `ios-native/THIRD_PARTY_NOTICES-ios.txt`). Adopted.
 
+## Loupe Station privacy rules — checked 2026-09-23
+
+The privacy check (epic #7 child 10) ports rule tables, regexes and tests from the owner's Loupe
+Station repository (`~/laya-studio`, commit `ea7697a4f78e9a648ba49fc8bf9d13226c26cb0e`). Same
+owner, so no licence obligation; provenance is recorded in each source header and in
+`THIRD_PARTY_NOTICES.md`. Adopted.
+
 ## Rejected
 
 ### NanoJev — weights and dataset declare no licence

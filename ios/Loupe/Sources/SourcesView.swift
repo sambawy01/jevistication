@@ -26,6 +26,16 @@ struct SourcesView: View {
                 } footer: {
                     Text("Each source is off until you turn it on. Turning one on is the only time Loupe asks iOS for its permission. Off means its items leave every judgment and watcher.")
                 }
+                Section {
+                    NavigationLink {
+                        PrivacyView(privacy: PrivacyService.shared)
+                    } label: {
+                        PrivacyCard(privacy: PrivacyService.shared)
+                    }
+                    .accessibilityIdentifier("sources.privacy")
+                } footer: {
+                    Text("Checks every source that is on for ID and card numbers, IBANs, contact lists, keys and tokens, and duplicate files. Mechanical, on this iPhone.")
+                }
                 if let problem = sources.problem {
                     Section { Text(problem).font(.footnote).foregroundStyle(Palette.red) }
                 }

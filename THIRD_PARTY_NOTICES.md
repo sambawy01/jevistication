@@ -103,3 +103,16 @@ its sources".
 | metadata-extractor 2.21.0 (Drew Noakes) | Apache-2.0 | the Apache-2.0 text; the jar ships none |
 | Adobe XMPCore 6.1.11 | BSD-3-Clause | the BSD-3-Clause text with Adobe's copyright; the jar ships none |
 | Compose Multiplatform 1.7.3, skiko 0.8.18, ONNX Runtime 1.20.0, DJL 0.38.0, Gson 2.13.1 | see `docs/LICENSING.md` | in the generated `THIRD_PARTY_NOTICES.txt` |
+
+---
+
+## Loupe Station (the owner's own repository)
+
+- **Upstream:** the owner's Loupe Station repository (`~/laya-studio`), commit
+  `ea7697a4f78e9a648ba49fc8bf9d13226c26cb0e` (read 2026-09-23). Same owner as this repository; no
+  third-party licence applies.
+- **Used in:** `loupe-kit/src/commonMain/kotlin/dev/loupe/kit/privacy/` — rule tables, regular
+  expressions, severities and masking from `laya_studio/scan/{pii_rules,secret_rules,dupes,planner,rules}.py`,
+  and the ported test cases in `loupe-kit/src/commonTest/kotlin/dev/loupe/kit/privacy/` from
+  `tests/test_scan.py`. Wording on the iOS Privacy screen follows its `static/js/scan-*.js` / `i18n.js`.
+

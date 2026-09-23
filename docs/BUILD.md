@@ -564,6 +564,42 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-23 — Epic #7 child 10: privacy check (personal data, secrets, duplicate files).** On
+  the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
+  - **Shared rules, ported from Loupe Station** (the owner's `~/laya-studio`, commit `ea7697a`):
+    new `loupe-kit` package `dev.loupe.kit.privacy` — `PiiRules`/`PiiCollector` (`pii_rules.py`),
+    `SecretRules`/`SecretCollector` (`secret_rules.py`), `Duplicates` (`dupes.py` + the duplicates
+    half of `planner.py`), `NameHints` (the `id_document` row of `rules.py` `KEYWORDS`). Rule ids,
+    labels, tables, regexes, thresholds, `SEVERITY` (secret 3, personal 3, business 2, duplicate 1),
+    masking (first character only for personal data; four characters for long secrets) and
+    placeholder / entropy false-positive handling copied verbatim. Duplicates reuse the engine's
+    `ContentHash` (SHA-256, already on every `SourceItem`) instead of BLAKE2b; keep suggestion =
+    oldest, then shortest path. `PrivacyCheck` groups findings (secrets, IDs/passports, cards,
+    IBANs, phone/email = contact lists, payroll, duplicates); "mark safe" is a `CorrectionRecord`
+    (`privacy` / `privacy-v1`, label `safe`; Undo appends a retraction).
+  - **Deviation, deliberate:** the station raises personal/name findings only in *unsafe* places
+    (Downloads, Desktop, synced folders) and business data only outside a business folder. The phone
+    has no such places, so every enabled source is checked as if exposed. Only the `id_document`
+    name row is used (bank/contract/tax names are ordinary documents). Contact cards are skipped (the
+    address book is not a leak). Raw `email`/`phone` hits are not findings, as in the station.
+  - **iOS:** `Loupe/Privacy/` — `PrivacyService` (runs `PrivacyCheck` on `ModelWork` at sweep
+    priority; no model), `PrivacyView` (groups, masked previews, item, Open / Mark safe; for picked
+    Files and Send-to-Loupe items Delete (confirmation; held in `Application Support/Loupe/privacy-held`
+    so Undo works until the screen closes, then removed) and Move to a chosen folder (Undo); Photos
+    delete through `PHAssetChangeRequest` with the system prompt; sample, mail, calendar
+    suggest-only). Now card "Privacy check: N findings"; Sources section link. Nothing is logged.
+  - **Regex:** the station's leading lookbehinds run through `GuardedRegex` (see Traps); hostile-text case 1.5 s on the iOS simulator, 0.1 s on the JVM.
+  - **Tests:** `PrivacyRulesTest` (5: the station's `test_pii_rules_unit`, `test_secret_rules_unit`,
+    per-file secret cases, masking, hostile-text linearity — bound 5 s for Kotlin/Native),
+    `PrivacyCheckTest` (4: sample IDs + duplicate receipts, size-then-content grouping, signals to
+    findings with no raw value anywhere, mark safe), JVM + iOS simulator; XCTest `PrivacyTests` (5:
+    sample, ledger correction + undo, delete/undo/commit and move/undo in a temp directory, no secret
+    in the ledger or findings); UI `PrivacyUITests` (Now → Privacy check shows the SPECIMEN passport
+    and licence and the duplicate receipt).
+  - On the sample: 2 ID documents (by name: the SPECIMEN passport number `000000000` has no letter
+    prefix, so the station's content rule does not fire) and 1 duplicate group (the fresh-basket
+    receipt and its copy).
+
 - **2026-09-23 — Epic #7 child 9: model delivery and device verification, built to the owner's
   blockers.** On the owner's "Go" for epic #7. Uncommitted pending review.
   - **Manifest.** `ios/Loupe/Resources/Laya/models.json`: variants `int8` (default; tokenizer
@@ -743,6 +779,7 @@ after 1, 6 needs 3, 4 and 5.
 | 7 | Phone sources | **Done 2026-09-23 (simulator)** — Photos (PhotoKit, limited-aware, Vision OCR on device, screenshots, change tokens), Files (document picker + persisted security-scoped bookmarks, rescan on open) + Share Extension "Send to Loupe" (App Group inbox), Calendar (EventKit), Contacts (feed the impersonation watcher), Mail (read-only IMAP over TLS, app password in the Keychain, UIDVALIDITY/UID incremental, labelled Online); each off by default with its own permission prompt only on enable; Sources rows with permission state, counts, last scan, errors with recovery text. **Owner-blocked:** Google/Microsoft OAuth client IDs (flow built, gated on empty config); App Group on a device (needs the developer account) |
 | 8 | 3D mascot | **Done 2026-09-23 (simulator)** — native SceneKit rigged robot ported from the web prototype (geometry, PBR clearcoat materials, rig, pose keyframes); animated visor face texture; 8 states with eased blending; tap waves; pauses offscreen/background; Reduce Motion static poses; still renders under 40 pt; reference PNG if no Metal. 60 fps measured on the simulator (Now, game HUD) |
 | 9 | Model delivery + device verification | **Built to owner blockers 2026-09-23 (simulator)** — `models.json` manifest (int8 default, int8-partial opt-in, sizes + SHA-256 pinned, host EMPTY → "not configured"); consent screen; background URLSession download (Wi-Fi unless mobile data allowed, pause/resume with resume data, disk-space precheck, streaming SHA-256, atomic move, no backup, remove); Me → Diagnostics (42 parity questions on device vs JVM INT8, p50/p95 by tokens, peak phys_footprint, thermal, battery, JSON export); `Config/Signing.xcconfig` + git-ignored local Team ID; `ios/scripts/device-build.sh`. **Owner-blocked:** model host, Apple developer account (Team ID, App Group), an iPhone to run Diagnostics |
+| 10 | Privacy check | **Done 2026-09-23 (simulator)** — Loupe Station's PII, secret and duplicate rules ported verbatim to shared `dev.loupe.kit.privacy` (rule ids, severities, masking, false-positive handling; duplicates on the engine's `ContentHash`); Now card + Sources link → findings by type with masked previews, Open, Mark safe (ledger correction, Undo), Delete / Move with Undo for reachable Files items, PhotoKit delete with the system prompt; everything else suggest-only |
 
 ### Proving milestones
 
@@ -1425,6 +1462,11 @@ came from labelled fixtures.
   (`WatchersService`, finding/census/item views); the expiry model half runs when Laya is installed.
   Tests: `WatcherRunTest` (5, JVM with PDFBox + iOS simulator with PDFKit), `WatchersTests` (5
   XCTests), `NowFindingsUITests` (1). Note the sample's real numbers are £450 → £553.50.
+- **A leading lookbehind is quadratic in Kotlin/Native's regex.** The station's `(?<!\d)…` PII
+  patterns took 376 s on 50,000 characters on the iOS simulator; simply dropping the lookbehind and
+  checking the previous character after `find` made ASSIGN's possessive prefix quadratic on the
+  JVM instead. `GuardedRegex` (privacy) tries only the positions the lookbehind allows, each with
+  an anchored `matchAt`: same results, linear on both.
 - **Kotlin/Native regex has no `\p{N}`.** It throws "No such character class" at class init
   (surfacing as `FileFailedToInitializeException`). Write `\p{Nd}\p{Nl}\p{No}`; `\p{L}` works.
 - **Test names with `,` or `()` do not compile for iOS.** Backticked names are fine on the JVM but

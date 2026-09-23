@@ -50,6 +50,8 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
   - Usage strings (`project.yml`): Photos, Calendars (full access), Contacts — plain language, "Nothing leaves the phone."
   - Tests: `LoupeTests/PhoneSourcesTests.swift` (fakes for PhotoKit/EventKit/Contacts, bookmarks, recorded IMAP transcripts in `LoupeTests/Fixtures/imap-*.txt`, OAuth, Keychain; no network), `LoupeUITests/SourcesUITests.swift`.
 
+- Privacy check (epic #7 child 10): `Loupe/Privacy/` over LoupeKit's shared `dev.loupe.kit.privacy` (Loupe Station's `pii_rules`, `secret_rules`, `dupes` and name hints, ported verbatim from the owner's repo at `ea7697a`). Now → "Privacy check: N findings" card, or Sources → Privacy check. Runs over every enabled source on the model queue at sweep priority (no model). Findings grouped: keys/tokens/private keys, IDs and passports, card numbers, IBANs, phone numbers and emails (contact lists), payroll, duplicate files; masked previews only. Actions: Open, Mark safe (corrections log, Undo); for picked Files / Send to Loupe items Delete (confirm; Undo until you leave the screen) and Move to a folder (Undo); Photos delete through PhotoKit's own prompt; sample, mail and calendar are suggest-only. Tests: `LoupeTests/PrivacyTests.swift`, `LoupeUITests/PrivacyUITests.swift`.
+
 ## Pending
 - Sorting on a real iPhone: battery drain and thermal behaviour of a charging-window sort, and whether iOS grants the window at all, need a device (owner-blocked).
 - Game fps and Laya latency on a real iPhone (simulator: 60 fps, ~9 decisions/s, p50 ~80 ms).
