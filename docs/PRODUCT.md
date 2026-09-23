@@ -52,6 +52,8 @@ which is precisely what an offline model is.
 
 ---
 
+> **Note (2026-09-23): Composio integrations do not work offline.** A Composio bridge for email, calendar and social media would run through a third-party cloud and need the network. It is not part of this spec; before any integration, decide how it fits "nothing leaves your device" (see `BUILD.md` risk 14).
+
 ## 3. Capabilities
 
 **Judgments.** Write a question in plain language; it becomes a typed decision (choice, score,
