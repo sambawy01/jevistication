@@ -135,6 +135,27 @@ stays on the device.
 bars visible, offline. Nobody understands "typed decisions with calibrated probabilities";
 everybody understands watching it think. It is the onboarding, and it is the store video.
 
+*What it is (decided 2026-09-23):* an original vertical-scrolling river shooter in the spirit of
+the early-1980s genre — fly up a procedurally generated river, steer, shoot boats, drones and
+bridges, refuel over depots, run dry and it is over. **Working name *Riverflight*, a placeholder**
+not yet cleared as a mark. It uses no one else's name, sprites or look: a genre is free, a name and
+a trade dress are not. **Not Tetris,** for two reasons: *Tetris Holding v. Xio* (D.N.J. 2012) held
+a clone that copied Tetris's look to infringe copyright and trade dress, and a Tetris placement is a
+choice among up to ~40 options where the model's own card advises staying under ~20.
+
+It is the product in miniature. Each decision (10 a second) runs **mechanical first**: exact
+look-ahead removes every move that would crash before the model sees the question, and when one
+move is left the model is not asked. The model then picks among at most six plain-language moves,
+"hold course" always among them when it is safe. A **safety override** replaces a held move that
+has become fatal, and the screen flashes when it does. Below a **threshold slider**, the decision is
+handed to the player ("your turn"). A **dumb baseline** autopilot flies the same seeds, and the game
+reports which wins. The bars show the model's **raw** output — not calibrated, and labelled so.
+
+*Honest status:* untuned, the model **loses to the baseline** (it does not seek fuel, so it runs dry
+— see `BUILD.md` F5 for the numbers); fine-tuning on baseline-flown states is the planned fix. On a
+desktop CPU it decides in ~65 ms; on a phone that is **unmeasured** (risk 13). It runs on macOS
+today as a Compose Desktop app written to move to Android.
+
 ---
 
 ## 4. The never list

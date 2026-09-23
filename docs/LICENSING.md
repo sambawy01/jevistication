@@ -32,6 +32,8 @@ filed as build risk 12. The tokenizer dependency it needs (DJL) is recorded unde
 | ~~Laya-MLX~~ | Apache-2.0 | ~~Rejected on platform~~ — **a misreading, corrected 2026-09-23.** Laya-MLX is only an MLX runtime port; the model family runs anywhere. See Laya above |
 | `com.microsoft.onnxruntime:onnxruntime:1.20.0` | `MIT License` in the resolved POM | **Adopted** — runtime, pending review |
 | `ai.djl.huggingface:tokenizers:0.38.0` + 8 transitive | Apache-2.0 (JNA: Apache-2.0 OR LGPL-2.1+; SLF4J: MIT) in the resolved POMs | **Adopted** — tokenizer, 2026-09-23 |
+| `joaoneto/river-raid-2k` @ `5148ace` (code) | MIT — `LICENSE` file; GitHub reports SPDX `MIT` | **Ported in part** — the demo game's river generator, 2026-09-23. Notice kept |
+| Compose Multiplatform `1.7.3` (`org.jetbrains.compose.*`) + skiko `0.8.18` + 26 transitive | Apache-2.0 in every resolved POM | **Adopted** — `:game-desktop` only, 2026-09-23. Native Skia bundles BSD/MIT/ICU/IJG/zlib code, unattributed — risk 11 |
 
 ---
 
@@ -135,6 +137,78 @@ terms** the model card does not mention. Fine-tuning on our own fixtures does no
 shipping** until one of: the authors publish the full training mix and it is clean; they confirm
 the non-commercial sources are absent from the multilingual checkpoint; or we train the head (or
 the whole model) on data we can account for. Asking the authors is the cheapest first step.
+
+---
+
+## The demo game (F5) — checked 2026-09-23
+
+Two modules: `:game` (the simulation, pilots and mechanics; its only runtime dependency is
+`:engine`, so it adds no third-party code) and `:game-desktop` (a Compose Desktop window over it,
+which brings in Compose Multiplatform and its native renderer). `:engine` still resolves to the
+Kotlin standard library alone.
+
+### `river-raid-2k` — ported in part, MIT
+
+`joaoneto/river-raid-2k`, commit `5148ace`, © 2017 João Neto. Its `LICENSE` is the MIT text and
+GitHub reports SPDX `MIT`. **What was taken:** the gradient-noise function (`lib.js` `Utils.perlin`,
+adapted in `game/.../Noise.kt`, whose corner hash was rewritten because the JavaScript's mixed
+32-bit/double arithmetic does not carry to the JVM) and the idea of `MapChunk._build` — bank width
+from the magnitude of noise sampled down the river, and an island when the banks leave enough water
+(`RiverGenerator`, which adds the passability guarantees the prototype does not have). **What was
+not:** its sprites, palette and engine. The MIT notice is reproduced in `Noise.kt`'s header and in
+[`THIRD_PARTY_NOTICES.md`](../THIRD_PARTY_NOTICES.md); MIT asks for nothing more.
+
+### The game is not River Raid, and not Tetris
+
+The genre — a vertical-scrolling river shooter with fuel — is a game mechanic, and mechanics are
+not protected. A **name** and a **look** can be. So the game uses no one else's name ("River Raid"
+is Activision's; the working name *Riverflight* is a placeholder that has **not** been cleared as a
+mark — the same caution as risk 9), draws its own sprites (a chevron glider, not a jet; a striped
+unlettered buoy, not a lettered fuel tank), uses its own palette (dusk teal and sand) and its own
+point values. Tetris was considered first and rejected: in *Tetris Holding, LLC v. Xio Interactive,
+Inc.* (D.N.J. 2012) a clone that copied Tetris's look — board, piece shapes and colours, visual
+style — was held to infringe both copyright and trade dress, so a Tetris-shaped demo carries real
+exposure however original its code. (Tetris also asks a worse question of this model: a placement
+choice has up to ~40 options — rotations × columns — against Laya's card's advice to stay under
+~20.) None of this is legal advice; clear the final name before any release.
+
+### Compose Multiplatform `1.7.3` and skiko — Apache-2.0
+
+**Version choice.** The repository pins Kotlin `2.1.0`. Since Kotlin 2.0 the Compose compiler is a
+Kotlin plugin versioned with Kotlin (`org.jetbrains.kotlin.plugin.compose:2.1.0`), and Compose
+Multiplatform `1.7.3` is built against the 2.1.0 line; `1.8.x` onwards moves to newer Kotlin
+tooling. So **no module's Kotlin version changed.** The two Gradle plugins are build-time only and
+ship nothing.
+
+Licences read from the `<licenses>` block of every POM Gradle resolved for
+`:game-desktop:runtimeClasspath` (following `<parent>` where a POM declares none), not from a badge.
+Beyond the ONNX Runtime and DJL sets already recorded above, that is 66 coordinates:
+
+| Artifacts | Declared |
+|---|---|
+| `org.jetbrains.compose.{runtime,ui,foundation,animation,material,desktop,…}:*:1.7.3` (37 coordinates, incl. `desktop-jvm-macos-arm64`) | The Apache Software License, Version 2.0 |
+| `org.jetbrains.skiko:skiko`, `skiko-awt`, `skiko-awt-runtime-macos-arm64` `0.8.18` | The Apache License, Version 2.0 |
+| `androidx.annotation` 1.8.0, `androidx.collection` 1.4.0, `androidx.arch.core:core-common` 2.2.0, `androidx.lifecycle:*` 2.8.5 | The Apache Software License, Version 2.0 |
+| `org.jetbrains.androidx.lifecycle:*` 2.8.4 | The Apache Software License, Version 2.0 |
+| `org.jetbrains.kotlinx:kotlinx-coroutines-*` 1.8.0, `atomicfu` 0.23.2 | The Apache Software License, Version 2.0 |
+| `org.jetbrains.kotlin:kotlin-stdlib*` (2.1.0; `-jdk7`/`-jdk8` 1.9.24) | The Apache License, Version 2.0 |
+| `org.jetbrains:annotations` 23.0.0 | The Apache Software License, Version 2.0 |
+
+GitHub reports SPDX `Apache-2.0` for `JetBrains/compose-multiplatform`,
+`JetBrains/compose-multiplatform-core` and `JetBrains/skiko`. **No copyleft and no
+non-commercial term anywhere in the set.**
+
+**Native code.** `skiko-awt-runtime-macos-arm64` is an 18 MB jar holding `libskiko` for
+macos-arm64 and macos-x64 (the other platforms are separate coordinates, resolved per OS by
+`compose.desktop.currentOs`). It is Skia — `google/skia`, SPDX `BSD-3-Clause` — statically linked
+with Skia's own third-party code; strings in the arm64 library identify **ICU** (Unicode licence),
+**HarfBuzz**, **libpng**, **expat**, **libjpeg-turbo 2.1.4**, **libwebp** and **zlib**, all
+permissive, plus an OFL-licensed symbol font. No `GPL` string appears in it. **No runtime jar in the set —
+Compose, skiko, AndroidX, lifecycle or kotlinx — ships a `LICENSE` or `NOTICE` file** (only the
+build-time `compose-gradle-plugin` does), so this is the same attribution gap as ONNX Runtime and DJL: build risk 11 now covers Compose and Skia too.
+
+**Android is not affected by this check.** An Android build would use Jetpack Compose (`androidx.*`,
+Apache-2.0) and the platform's own Skia; the desktop artifacts above would not ship in an APK.
 
 ---
 

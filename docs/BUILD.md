@@ -228,6 +228,13 @@ has no business requesting, and says why.
 **F3 · Overnight fine-tune** — ledger exported as a decision-question dataset with soft targets.
 **F4 · Export** — judgments, calibration and ledger as portable files.
 **F5 · The game** — the model deciding many times a second with probability bars visible, offline.
+*Built on desktop 2026-09-23* as an original river shooter (working name *Riverflight*, a
+placeholder): `:game` (pure Kotlin, depends only on `:engine`) and `:game-desktop` (Compose Desktop,
+`./gradlew :game-desktop:run`). Mechanical-first legal moves, a safety override, a hand-off
+threshold, a baseline autopilot and a headless model-vs-baseline run. *Accept* (proposed): the
+model decides at ≥10 Hz with bars visible **on a phone**, offline, and the game reports honestly
+whether it beats the baseline. The desktop half is met (10 decisions/s, ~65 ms P50); the phone half
+is not measured, and untuned it does not beat the baseline — see the progress log.
 
 ---
 
@@ -277,9 +284,9 @@ judgments is the difference between this product and a confident guess.
 | 8 | The second backend is weak zero-shot | Untuned Qwen3-0.6B scores poorly on decision tasks. Both backends are fine-tuned on our fixtures; its votes do not count until it is |
 | 9 | **Name collision.** `LOUPE` is a crowded mark. Registrations exist for jewellery-trade software (Atelier Technology), sports-card retail (Loupe Tech LLC) and a CRM (Apex); Mysk ships an iOS privacy app called Loupe | None is a consumer personal-data or fraud-detection app, but a crowded mark is a weak mark, and the Mysk app is adjacent on privacy and mobile. **Clear the mark in the target jurisdictions, and check Play Store and domain availability, before any spend on branding, the listing or the domain.** Decision taken with this known |
 | 10 | **Approximate public suffix list.** The engine ships a small built-in set of multi-label public suffixes, not the real Public Suffix List | Getting eTLD+1 wrong is a correctness bug in the fraud check, not a cosmetic one: it decides whether `paypal.secure-login.com` reads as PayPal or as `secure-login.com`. The suffix set is a parameter at every call site, so the real list drops in without touching callers. **Load the real PSL, with a refresh path, before the fraud check ships.** |
-| 11 | **Third-party attribution is unshipped.** The ONNX Runtime Android AAR bundles native libraries but contains no `LICENSE` and no `ThirdPartyNotices` at all; the desktop jar's notices cover ~85 components (MIT, BSD, ISC, Apache, Boost, zlib, MPL-2.0 Eigen, an Intel licence). **Since 2026-09-23 also DJL:** neither DJL jar ships a LICENSE or NOTICE, and nothing credits the Rust crates linked into `libtokenizers` | All of those require the notice to travel with the binary, and the shipping artifact supplies none of it. No copyleft or non-commercial obligation was found, so this is a compliance task, not a licence blocker. **Bundle a notices screen sourced upstream, and never patch Eigen — its MPL-2.0 is file-level copyleft.** Verify the Android component set separately; it is a different native build from the jar |
+| 11 | **Third-party attribution is unshipped.** The ONNX Runtime Android AAR bundles native libraries but contains no `LICENSE` and no `ThirdPartyNotices` at all; the desktop jar's notices cover ~85 components (MIT, BSD, ISC, Apache, Boost, zlib, MPL-2.0 Eigen, an Intel licence). **Since 2026-09-23 also DJL:** neither DJL jar ships a LICENSE or NOTICE, and nothing credits the Rust crates linked into `libtokenizers`. **Since 2026-09-23 also the desktop demo game:** no Compose, skiko or AndroidX runtime jar ships a LICENSE or NOTICE, and `libskiko` statically links Skia with ICU, HarfBuzz, libpng, expat, libjpeg-turbo, libwebp and zlib | All of those require the notice to travel with the binary, and the shipping artifact supplies none of it. No copyleft or non-commercial obligation was found, so this is a compliance task, not a licence blocker. **Bundle a notices screen sourced upstream, and never patch Eigen — its MPL-2.0 is file-level copyleft.** Verify the Android component set separately; it is a different native build from the jar |
 | 12 | **Laya's training data is only partly published, and the published part includes non-commercial sources.** The authors' own benchmark flags as "in training" `Tobi-Bueck/customer-support-tickets` (CC-BY-NC-4.0) and MS MARCO (Microsoft: non-commercial research only), plus LGPL-3.0, CC-BY-SA-3.0, `unknown` and undeclared sources; the full mix is not published. The tokenizer is Gemma 2's, whose Terms of Use may or may not reach it | Adopted for development on the owner's decision; **not cleared for shipping.** Close it by one of: the authors publishing a clean full mix, or confirming the NC sources are absent from the multilingual checkpoint; or training the head (or model) on data we can account for. Ask the authors first — it is the cheapest. Details in `LICENSING.md` |
-| 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8, 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
+| 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8, 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" (**on a desktop M4 CPU the game now measures 10 decisions/s at ~62–66 ms P50, ~80 ms P95**, with ~106-token questions; a phone is still unmeasured) | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
 
 ---
 
@@ -497,6 +504,7 @@ need them skip there. The Laya weights exist only on the machine that ran the ex
 | D3 Threshold slider | Complete — counterfactual preview over logged rows |
 | D4 Baseline runner | Complete — inside `Harness` |
 | F4 Export | Complete — lossless ledger, judgments, calibration |
+| F5 The game | **Desktop half built** — `:game` + `:game-desktop` (Compose Desktop). Runs the real Laya on this CPU at 10 decisions/s; untuned it loses to the baseline. Needs a phone and a fine-tune |
 | §7 Measurement harness | Complete — group-wise splits, selective accuracy, coverage, ECE, Brier, baseline |
 | Engine wiring | `DecisionEngine` composes the §8 architecture end to end |
 
@@ -514,7 +522,7 @@ Nothing below is deferred by choice; each needs something this environment does 
 | **F1** passive mode | WorkManager, charging and thermal constraints |
 | **F2** retroactive sweep | Sources to sweep |
 | **F3** overnight fine-tune | Model weights and a GPU |
-| **F5** the game | UI |
+| **F5** the game, on a phone | An Android build and a device. The desktop game runs (`:game-desktop`); the Compose UI is written to move |
 | Real measurement | **A labelled fixture corpus.** Every number the harness produces today comes from synthetic fixtures; the machinery is proven, the numbers are not real. The Laya parity numbers measure agreement with upstream, not accuracy |
 
 ### Proving milestones
@@ -580,6 +588,49 @@ Nothing below is deferred by choice; each needs something this environment does 
   and the JVM path reproduces the Python parity numbers. None of this is an accuracy number: the
   fixture measures agreement with upstream, not correctness, and there is still no labelled
   corpus. Training-data provenance is open (risk 12); on-device cost is unmeasured (risk 13).
+- **2026-09-23 — F5 (desktop half): the demo game, an original river shooter.** On the owner's
+  "Go". Working name ***Riverflight***, a placeholder not cleared as a mark. **Why not Tetris:**
+  *Tetris Holding v. Xio* (D.N.J. 2012) held a clone copying Tetris's look to infringe copyright and
+  trade dress, and a placement is a choice among up to ~40 options against Laya's ~20. The genre is
+  free, a name and a look are not, so nothing here uses "River Raid", Activision's name, or its
+  sprites or palette. **Provenance:** the river generator adapts the MIT prototype
+  `joaoneto/river-raid-2k` (`5148ace`, © 2017 João Neto) — its Perlin function and its
+  bank-width-from-noise / island idea; its notice is kept in `Noise.kt` and `THIRD_PARTY_NOTICES.md`.
+  Its sprites were not used (its player imitates the original's silhouette). Shooting, fuel,
+  scoring, collisions, bridges and game over are new. Two modules:
+  **`:game`** (pure Kotlin, runtime dependency `:engine` only) and **`:game-desktop`** (Compose
+  Multiplatform 1.7.3 on the existing Kotlin 2.1.0 — no Kotlin upgrade; licences in `LICENSING.md`).
+  *Design.* A seeded, fixed-timestep (60 Hz) world; the river's walls move ≤1 column per row against
+  the plane's 2, channels ≥5 columns, so it is always passable (a test walks 3,000 rows on six
+  seeds). **Mechanical first:** each decision's legal set comes from exact look-ahead on a copy of
+  the world — a move is offered only if holding it for the 12 ticks a decision is held leaves some
+  move that survives 12 more; low on fuel, shots that would destroy the depot ahead are removed;
+  with one legal move the model is not asked. A **safety override** re-checks the held move every
+  tick and replaces a fatal one, recorded and flashed on screen. **One question, not two:** a
+  single `Judgment.Choice` over at most six labels ("steer left", "steer left and shoot", "hold
+  course", …), because Laya scores all options in one forward pass; "hold course" is the no-op and
+  is offered whenever it is safe. Failure posture null-action: a backend that throws or fails
+  validation yields "hold course", counted, never an exception. Decisions run at 10 Hz off the
+  sim tick — lockstep with a fixed charged delay headless, a background thread live. Probabilities
+  are raw model output and labelled so. A hand-off threshold passes an unsure decision to the
+  keyboard. Text state sample: `fuel 75%, gun reloading. water 4 left, 9 right. far ahead water 8
+  left to 1 left and 5 right to 12 right. boat 7 ahead 4 left moving right. heli 16 ahead 12 right
+  moving left. fuel depot 25 ahead center.` — over 360 real states **51 tokens mean, 81 max**; the
+  whole Laya sequence 106 mean, 137 max.
+  *Measured, Apple M4 CPU, Laya INT8, ORT 1.20 — not a phone:* 200 back-to-back decisions **P50
+  61.7–64.3 ms, P95 73.6–75.8 ms, 15.5–16 decisions/s** (two runs); the live window holds **10.0
+  decisions/s** (its cap) at P50 ~66 ms, P95 ~83 ms, with no failures.
+  *Model vs baseline, 10 seeds × 60 s, same charged delay (4 ticks, 67 ms):* **with the override
+  (the product configuration) the baseline wins — score 10,100 vs 7,380, rows 4,174 vs 3,146,
+  deaths 1/10 vs 9/10.** Eight of the model's nine deaths are fuel: untuned, it never steers for a
+  depot and runs dry at row 280, the distance a full tank lasts. It also leans on the safety net —
+  3,216 overrides against the baseline's 1,475. Its mean top raw probability is ~0.48 over up to
+  six options. *With the override off* the order flips on score (5,900 vs 4,330) with both nearly
+  always dying (10/10 vs 9/10): the baseline's rules crash early on several seeds, while the legal
+  set keeps the model out of the banks until its fuel runs out. Neither number is flattering, and
+  neither is an accuracy: the planned fix is fine-tuning on baseline-flown states (the baseline is
+  cheap and deterministic, so it can label thousands). Tests: `:game` 35 (3 gated on the weights);
+  whole build 316, run with and without `models/`.
 
 ---
 ## Hand-off
@@ -589,6 +640,16 @@ got here. Track-by-track status is in **Where the build stands** above; this is 
 and what will bite.
 
 ### What changed most recently
+
+**The demo game (F5), desktop half**, on branch `game-riverflight`: `:game` and `:game-desktop`,
+an original river shooter flown by Laya with its raw probability bars, a safety override, a
+hand-off slider and a baseline it currently loses to. Run it with
+`./gradlew :game-desktop:run` (JDK 21); `./gradlew :game-desktop:match -Pseeds=1,2,3 -Pseconds=60`
+for the headless comparison; `./gradlew :game-desktop:snapshot -Pout=<dir> [-Pcompare]` renders the
+real UI to PNG off-screen. Numbers are in the progress log. Next for it: fine-tune on baseline-flown
+states, an Android module, and a phone latency number.
+
+The earlier change, still the base of everything:
 
 **Laya replaced GLiClass as the primary model**, on the owner's decision, in a feasibility spike
 on branch `laya-onnx-spike` (not yet reviewed or merged when this was written). The spike proved
@@ -643,11 +704,25 @@ came from labelled fixtures.
 | A1/F3 fine-tuning | A labelled corpus and a GPU |
 | A2's second backend | Qwen3-0.6B weights and its own export |
 | B1–B9 every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, contacts, notifications |
-| D5, E1–E4, F1, F5 | Android UI, autofill, accessibility, WorkManager |
+| D5, E1–E4, F1 | Android UI, autofill, accessibility, WorkManager |
+| F5 on a phone | An Android module and a device; the game logic (`:game`) needs no change |
 | F2 | Sources to sweep |
 | Any real measurement | A labelled corpus **and** a model — the model half now exists |
 
 ### Traps — each of these was hit or narrowly avoided
+
+- **Compose strong skipping hides live state.** Kotlin 2.x skips a composable whose arguments are
+  the same instances, and the game mutates its session in place — so a panel that did not read the
+  frame counter showed "waiting for the first decision" while the model was flying. Every composable
+  that shows simulation state takes and reads `frame`.
+- **`screencapture` fails from an agent session** ("could not create image from display"). Use
+  `:game-desktop:snapshot`, which renders the same `App` through an off-screen `ImageComposeScene`.
+- **Do not bump Compose Multiplatform past 1.7.x** without moving Kotlin: 1.7.3 is the line that
+  matches the repo's Kotlin 2.1.0 Compose compiler plugin.
+- **The game's look-ahead is exact only because the world is deterministic.** Anything that adds
+  randomness after generation (enemy AI with its own rng, wall-clock reads) breaks the legal set,
+  the override and the model-vs-baseline comparison at once. Draw it from the river's seed, in row
+  order, or not at all.
 
 - **Do not hand-roll a tokenizer.** Settled: `ai.djl.huggingface:tokenizers:0.38.0` resolves (the
   coordinates tried earlier were an older guess). It reproduces all 194 upstream token segments.
