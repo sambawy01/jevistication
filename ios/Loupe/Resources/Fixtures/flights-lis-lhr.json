@@ -1,0 +1,296 @@
+{
+ "schema": 1,
+ "source": "duffel",
+ "fetchedAt": "2026-09-23T12:03:11.000Z",
+ "live": false,
+ "offers": [
+  {
+   "id": "off_fixture_01",
+   "totalAmount": "143.20",
+   "currency": "GBP",
+   "owner": "easyJet",
+   "slices": [
+    {
+     "segments": [
+      {
+       "from": "LIS",
+       "to": "LGW",
+       "departAt": "2026-10-14T06:10:00",
+       "arriveAt": "2026-10-14T08:45:00",
+       "carrier": "U2",
+       "flight": "U28732",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 155
+    },
+    {
+     "segments": [
+      {
+       "from": "LGW",
+       "to": "LIS",
+       "departAt": "2026-10-16T19:05:00",
+       "arriveAt": "2026-10-16T21:40:00",
+       "carrier": "U2",
+       "flight": "U28733",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 155
+    }
+   ],
+   "baggage": {
+    "checked": 0,
+    "carryOn": 1
+   },
+   "conditions": {
+    "refundable": false,
+    "changeable": true
+   },
+   "expiresAt": "2026-09-23T13:32:11.000000Z"
+  },
+  {
+   "id": "off_fixture_02",
+   "totalAmount": "187.40",
+   "currency": "GBP",
+   "owner": "TAP Air Portugal",
+   "slices": [
+    {
+     "segments": [
+      {
+       "from": "LIS",
+       "to": "LHR",
+       "departAt": "2026-10-14T07:35:00",
+       "arriveAt": "2026-10-14T10:10:00",
+       "carrier": "TP",
+       "flight": "TP1350",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 155
+    },
+    {
+     "segments": [
+      {
+       "from": "LHR",
+       "to": "LIS",
+       "departAt": "2026-10-16T17:20:00",
+       "arriveAt": "2026-10-16T20:00:00",
+       "carrier": "TP",
+       "flight": "TP1363",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 160
+    }
+   ],
+   "baggage": {
+    "checked": 1,
+    "carryOn": 1
+   },
+   "conditions": {
+    "refundable": false,
+    "changeable": true
+   },
+   "expiresAt": "2026-09-23T13:32:11.000000Z"
+  },
+  {
+   "id": "off_fixture_03",
+   "totalAmount": "196.10",
+   "currency": "GBP",
+   "owner": "British Airways",
+   "slices": [
+    {
+     "segments": [
+      {
+       "from": "LIS",
+       "to": "LHR",
+       "departAt": "2026-10-14T09:50:00",
+       "arriveAt": "2026-10-14T12:25:00",
+       "carrier": "BA",
+       "flight": "BA501",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 155
+    },
+    {
+     "segments": [
+      {
+       "from": "LHR",
+       "to": "LIS",
+       "departAt": "2026-10-16T15:10:00",
+       "arriveAt": "2026-10-16T17:50:00",
+       "carrier": "BA",
+       "flight": "BA502",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 160
+    }
+   ],
+   "baggage": {
+    "checked": 1,
+    "carryOn": 1
+   },
+   "conditions": {
+    "refundable": false,
+    "changeable": true
+   },
+   "expiresAt": "2026-09-23T13:32:11.000000Z"
+  },
+  {
+   "id": "off_fixture_04",
+   "totalAmount": "162.00",
+   "currency": "GBP",
+   "owner": "Iberia",
+   "slices": [
+    {
+     "segments": [
+      {
+       "from": "LIS",
+       "to": "MAD",
+       "departAt": "2026-10-14T08:15:00",
+       "arriveAt": "2026-10-14T10:25:00",
+       "carrier": "IB",
+       "flight": "IB3107",
+       "aircraft": "Airbus A320"
+      },
+      {
+       "from": "MAD",
+       "to": "LHR",
+       "departAt": "2026-10-14T11:40:00",
+       "arriveAt": "2026-10-14T13:05:00",
+       "carrier": "IB",
+       "flight": "IB3166",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 290
+    },
+    {
+     "segments": [
+      {
+       "from": "LHR",
+       "to": "MAD",
+       "departAt": "2026-10-16T14:00:00",
+       "arriveAt": "2026-10-16T17:20:00",
+       "carrier": "IB",
+       "flight": "IB3163",
+       "aircraft": "Airbus A320"
+      },
+      {
+       "from": "MAD",
+       "to": "LIS",
+       "departAt": "2026-10-16T18:30:00",
+       "arriveAt": "2026-10-16T18:45:00",
+       "carrier": "IB",
+       "flight": "IB3102",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 345
+    }
+   ],
+   "baggage": {
+    "checked": 1,
+    "carryOn": 1
+   },
+   "conditions": {
+    "refundable": false,
+    "changeable": true
+   },
+   "expiresAt": "2026-09-23T13:32:11.000000Z"
+  },
+  {
+   "id": "off_fixture_05",
+   "totalAmount": "241.80",
+   "currency": "GBP",
+   "owner": "British Airways",
+   "slices": [
+    {
+     "segments": [
+      {
+       "from": "LIS",
+       "to": "LHR",
+       "departAt": "2026-10-14T13:05:00",
+       "arriveAt": "2026-10-14T15:40:00",
+       "carrier": "BA",
+       "flight": "BA503",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 155
+    },
+    {
+     "segments": [
+      {
+       "from": "LHR",
+       "to": "LIS",
+       "departAt": "2026-10-16T08:25:00",
+       "arriveAt": "2026-10-16T11:05:00",
+       "carrier": "BA",
+       "flight": "BA500",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 160
+    }
+   ],
+   "baggage": {
+    "checked": 1,
+    "carryOn": 1
+   },
+   "conditions": {
+    "refundable": true,
+    "changeable": true
+   },
+   "expiresAt": "2026-09-23T13:32:11.000000Z"
+  },
+  {
+   "id": "off_fixture_06",
+   "totalAmount": "171.55",
+   "currency": "GBP",
+   "owner": "TAP Air Portugal",
+   "slices": [
+    {
+     "segments": [
+      {
+       "from": "LIS",
+       "to": "LHR",
+       "departAt": "2026-10-14T18:30:00",
+       "arriveAt": "2026-10-14T21:05:00",
+       "carrier": "TP",
+       "flight": "TP1366",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 155
+    },
+    {
+     "segments": [
+      {
+       "from": "LHR",
+       "to": "LIS",
+       "departAt": "2026-10-16T21:15:00",
+       "arriveAt": "2026-10-16T23:55:00",
+       "carrier": "TP",
+       "flight": "TP1369",
+       "aircraft": "Airbus A320"
+      }
+     ],
+     "durationMinutes": 160
+    }
+   ],
+   "baggage": {
+    "checked": 0,
+    "carryOn": 1
+   },
+   "conditions": {
+    "refundable": false,
+    "changeable": true
+   },
+   "expiresAt": "2026-09-23T13:32:11.000000Z"
+  }
+ ]
+}

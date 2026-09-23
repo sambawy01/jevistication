@@ -1,0 +1,82 @@
+name: Loupe
+options:
+  bundleIdPrefix: dev.loupe
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    "CODE_SIGN_IDENTITY[sdk=iphonesimulator*]": "-"
+targets:
+  Loupe:
+    type: application
+    platform: iOS
+    sources:
+      - path: Loupe
+        excludes:
+          - "Resources/Fonts/*.txt"
+    dependencies:
+      # The engine, consumed as the KMP-built XCFramework (static). Build it first:
+      #   ./gradlew :loupe-kit:assembleLoupeKitDebugXCFramework
+      - framework: ../loupe-kit/build/XCFrameworks/debug/LoupeKit.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.loupe.app
+        PRODUCT_NAME: Loupe
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""
+        OTHER_LDFLAGS: ["$(inherited)", "-lc++"]
+        GENERATE_INFOPLIST_FILE: YES
+    info:
+      path: Loupe/Info.plist
+      properties:
+        CFBundleDisplayName: Loupe
+        UILaunchScreen:
+          UIColorName: ""
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIAppFonts:
+          - Rajdhani-SemiBold.ttf
+          - Rajdhani-Bold.ttf
+          - JetBrainsMono.ttf
+        ITSAppUsesNonExemptEncryption: false
+  LoupeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: LoupeTests
+    dependencies:
+      - target: Loupe
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: dev.loupe.app.tests
+  LoupeUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: LoupeUITests
+    dependencies:
+      - target: Loupe
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: dev.loupe.app.uitests
+        TEST_TARGET_NAME: Loupe
+schemes:
+  Loupe:
+    build:
+      targets:
+        Loupe: all
+        LoupeTests: [test]
+        LoupeUITests: [test]
+    test:
+      targets: [LoupeTests, LoupeUITests]
+      gatherCoverageData: false
