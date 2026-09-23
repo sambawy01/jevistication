@@ -4,125 +4,10 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import dev.loupe.engine.Backend
-import dev.loupe.engine.Extent
 import dev.loupe.engine.Judgment
 import dev.loupe.engine.Scored
 import dev.loupe.engine.TextState
 import java.nio.file.Path
-import kotlin.math.exp
-
-/** The tensors one scoring call feeds to the model. */
-class TokenizedInput(
-    val inputIds: LongArray,
-    val attentionMask: LongArray,
-    /**
-     * For a model that scores each candidate at its own position in the sequence (Laya scores
-     * each option at a `<mask>` marker), the index of each candidate's marker, in candidate
-     * order. Null for a model that emits one logit per candidate from the sequence as a whole.
-     */
-    val markerPositions: LongArray? = null,
-    /**
-     * How many tokens the state encoded to, and how many of them made it into [inputIds], when the
-     * tokenizer fits the state to a context (see `LayaSequence`). Null when it does not report it,
-     * which the backend reads as "read in full".
-     */
-    val stateTokens: Int? = null,
-    val stateTokensKept: Int? = null,
-    /**
-     * How many tokens the options' text (labels and any descriptions) encoded to, and how many
-     * survived the model's option budget. Null when the tokenizer does not report it.
-     */
-    val optionTokens: Int? = null,
-    val optionTokensKept: Int? = null,
-) {
-    init {
-        require(inputIds.isNotEmpty()) { "tokenizer produced no tokens" }
-        require(inputIds.size == attentionMask.size) {
-            "input ids and attention mask must be the same length, were " +
-                "${inputIds.size} and ${attentionMask.size}"
-        }
-        markerPositions?.let { markers ->
-            require(markers.isNotEmpty()) { "marker positions must not be empty" }
-            // In range and strictly increasing: a marker outside the sequence would be clamped by
-            // the graph's gather and silently score the wrong token, and two candidates sharing a
-            // marker would be scored identically whatever the text says.
-            require(markers.all { it >= 0 && it < inputIds.size }) {
-                "marker positions must lie inside the ${inputIds.size}-token sequence, were " +
-                    markers.contentToString()
-            }
-            require((1 until markers.size).all { markers[it] > markers[it - 1] }) {
-                "marker positions must be strictly increasing, were ${markers.contentToString()}"
-            }
-        }
-    }
-
-    val length: Int get() = inputIds.size
-
-    /** The context's cut of the state, in tokens, or null when none was reported. */
-    val stateCut: Extent?
-        get() {
-            val total = stateTokens ?: return null
-            val kept = stateTokensKept ?: return null
-            return if (kept < total) Extent(kept, total, Extent.Measure.TOKENS) else null
-        }
-
-    /** The option budget's cut of the options' text, in tokens, or null when none was reported. */
-    val optionCut: Extent?
-        get() {
-            val total = optionTokens ?: return null
-            val kept = optionTokensKept ?: return null
-            return if (kept < total) Extent(kept, total, Extent.Measure.TOKENS) else null
-        }
-}
-
-/**
- * Turns a judgment's question, an item's text and the judgment's candidate labels into model
- * inputs.
- *
- * This is an interface rather than a concrete tokenizer because the exported model decides the
- * vocabulary, the special tokens and how the question and candidate labels are presented to it.
- * Binding one tokenizer here would tie the backend to a single export. The question is part of
- * the signature because a model that reads it — Laya does, as its "instructions" — answers a
- * different question without it; the original two-argument form could not express that.
- */
-fun interface Tokenizer {
-    fun encode(question: String, text: String, candidates: List<String>): TokenizedInput
-
-    /**
-     * As [encode], with a description per candidate (null = bare label) for a model that can read
-     * them. A tokenizer that cannot must refuse rather than silently drop them — the judgment's
-     * criteria hash says the model read them. The default accepts only all-null.
-     */
-    fun encodeDescribed(
-        question: String,
-        text: String,
-        candidates: List<String>,
-        descriptions: List<String?>,
-    ): TokenizedInput {
-        if (descriptions.any { it != null }) {
-            throw UnsupportedOperationException("this tokenizer cannot show option descriptions to its model")
-        }
-        return encode(question, text, candidates)
-    }
-}
-
-/** The tensor names a particular exported model uses. */
-data class TensorNames(
-    val inputIds: String = "input_ids",
-    /** Null when the model takes no mask. */
-    val attentionMask: String? = "attention_mask",
-    val logits: String = "logits",
-    /**
-     * The per-candidate marker positions input (see [TokenizedInput.markerPositions]). Null for a
-     * model that takes none; when set, the tokenizer must supply exactly one per candidate.
-     */
-    val markerPositions: String? = null,
-) {
-    companion object {
-        /** The graph `tools/export-laya-onnx.py` writes; its contract is in that script. */
-        val LAYA: TensorNames = TensorNames(markerPositions = "marker_pos")
-    }
-}
 
 /**
  * A [Backend] backed by ONNX Runtime.
@@ -146,27 +31,7 @@ class OnnxBackend(
 ) : Backend, AutoCloseable {
 
     override fun score(judgment: Judgment.Choice, state: TextState): Scored {
-        val encoded = if (judgment.descriptions.isEmpty()) {
-            tokenizer.encode(judgment.question, state.text, judgment.candidates)
-        } else {
-            tokenizer.encodeDescribed(judgment.question, state.text, judgment.candidates, judgment.descriptionList)
-        }
-        // A tokenizer and a graph that disagree about markers are a wiring mistake, not a model
-        // answer: feeding markers to a graph that ignores them, or omitting them from one that
-        // needs them, would still produce numbers. Refuse before running anything.
-        require((names.markerPositions == null) == (encoded.markerPositions == null)) {
-            if (names.markerPositions == null) {
-                "tokenizer produced marker positions but the model takes no marker input"
-            } else {
-                "model takes marker input '${names.markerPositions}' but the tokenizer produced none"
-            }
-        }
-        encoded.markerPositions?.let { markers ->
-            require(markers.size == judgment.candidates.size) {
-                "tokenizer produced ${markers.size} marker positions but judgment " +
-                    "'${judgment.id}' declares ${judgment.candidates.size} candidates"
-            }
-        }
+        val encoded = ChoiceScoring.encode(tokenizer, names, judgment, state)
         val inputs = LinkedHashMap<String, OnnxTensor>()
         try {
             inputs[names.inputIds] = OnnxTensor.createTensor(environment, arrayOf(encoded.inputIds))
@@ -183,16 +48,7 @@ class OnnxBackend(
                         "model has no output named '${names.logits}'; it has ${results.map { it.key }}",
                     )
                 }
-                val logits = firstRow(output.value)
-                require(logits.size == judgment.candidates.size) {
-                    "model produced ${logits.size} logits but judgment '${judgment.id}' declares " +
-                        "${judgment.candidates.size} candidates"
-                }
-                return Scored(
-                    softmax(logits, judgment.candidates),
-                    modelContext = encoded.stateCut,
-                    optionCriteria = encoded.optionCut,
-                )
+                return ChoiceScoring.scored(firstRow(output.value), judgment, encoded)
             }
         } finally {
             inputs.values.forEach { it.close() }
@@ -213,20 +69,6 @@ class OnnxBackend(
         require(rows.size == 1) { "expected a batch of 1, got ${rows.size}" }
         return rows[0] as? FloatArray
             ?: throw IllegalStateException("expected float logits, got ${rows[0]?.let { it::class.simpleName }}")
-    }
-
-    /**
-     * Softmax over the logits, computed in [Double] and shifted by the maximum.
-     *
-     * The shift is not cosmetic: `exp` of a large logit overflows to infinity in [Float], and the
-     * masses this produces are fed straight into a distribution that must normalise.
-     */
-    private fun softmax(logits: FloatArray, candidates: List<String>): Map<String, Double> {
-        val highest = logits.max().toDouble()
-        val exponentials = logits.map { exp(it.toDouble() - highest) }
-        val total = exponentials.sum()
-        check(total > 0.0 && total.isFinite()) { "logits produced a degenerate softmax: $total" }
-        return candidates.indices.associate { i -> candidates[i] to exponentials[i] / total }
     }
 
     companion object {

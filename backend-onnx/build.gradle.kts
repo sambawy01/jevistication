@@ -10,6 +10,8 @@ repositories {
 
 dependencies {
     api(project(":engine"))
+    // LayaPrompt and the model-input types, shared with the iOS backend (see that module).
+    api(project(":backend-laya-common"))
 
     // The project's first runtime dependency. MIT, verified at source from the resolved POM
     // rather than from a badge, with no transitive dependencies -- see docs/LICENSING.md.

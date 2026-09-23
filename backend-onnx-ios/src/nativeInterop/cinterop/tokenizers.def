@@ -1,0 +1,5 @@
+# ios-native/tokenizers-ffi: Hugging Face tokenizers 0.21.4 behind a five-function C ABI.
+# The static library is embedded into the klib by build.gradle.kts (-staticLibrary).
+package = dev.loupe.backend.onnx.ios.tok
+headers = loupe_tokenizers.h
+headerFilter = loupe_tokenizers.h

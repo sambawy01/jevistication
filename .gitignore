@@ -16,3 +16,6 @@ models/
 *.onnx
 !backend-onnx/src/test/resources/synthetic-classifier.onnx
 __pycache__/
+
+# ios-native (ios-native/build.sh): Rust build output; the xcframeworks land in ios-native/build/
+ios-native/tokenizers-ffi/target/

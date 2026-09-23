@@ -45,8 +45,9 @@ it is kept, because it is still what the Android build would use.
 | Online sources | opt-in, fetch-only helper — see `PRODUCT.md` §4a and risk 14 | same rules |
 
 **What is not known yet, stated plainly.** Laya's latency on an iPhone is **unmeasured** (risk 13);
-the model is **untuned** and loses to keyword baselines on the synthetic sample. The KMP port,
-ORT iOS and the iOS tokenizer build are planned (epic #6, children 2–3), not done.
+the model is **untuned** and loses to keyword baselines on the synthetic sample. The KMP port
+(child 2) and Laya on the iOS simulator (child 3: ORT iOS + the Rust tokenizer, same answers as the
+JVM on every fixture) are done; latency on a physical iPhone is not measured yet.
 
 **Why that model.** *Changed 2026-09-23, on the owner's decision that GLiClass's performance is
 not comparable.* Laya is a typed decision model: a bidirectional encoder plus a small head that
@@ -584,7 +585,7 @@ after 1, 6 needs 3, 4 and 5.
 |---|---|---|
 | 1 | Record the iOS decision and the online helper rules in `PRODUCT.md` / `BUILD.md` | Done 2026-09-23 (this) |
 | 2 | Port `engine` + `templates` to Kotlin Multiplatform (`jvm`, `iosArm64`, `iosSimulatorArm64`), XCFramework `LoupeKit` | **Done 2026-09-23** — see progress log |
-| 3 | Laya on iOS: ONNX Runtime iOS + HF `tokenizers` for iOS behind `Backend`; parity against the JVM fixtures; latency on a real iPhone | Not started |
+| 3 | Laya on iOS: ONNX Runtime iOS + HF `tokenizers` for iOS behind `Backend`; parity against the JVM fixtures; latency on a real iPhone | **Done 2026-09-23 except device latency** — simulator parity 34/34 + 8/8 identical to JVM INT8; phone latency needs a physical iPhone. See progress log |
 | 4 | Helper `sambawy01/loupe-web-helper` on Railway: `POST /v1/flights/search` (Duffel), schema v1 | **Deployed** — https://loupe-web-helper-production.up.railway.app |
 | 5 | SwiftUI app shell — tabs Now, Judgments, Web, Sources, Me — with `LoupeKit` | Not started |
 | 6 | Web tab: Flights — key onboarding, search, results ranked on device, "Online" labels, off switch | Not started |
@@ -966,6 +967,56 @@ after 1, 6 needs 3, 4 and 5.
   tests and the XCFramework (10x Linux minute cost, hence not on every push). `kotlinx-datetime` is
   Apache-2.0 and is in the regenerated third-party notices.
 
+- **2026-09-23 — Epic #6 child 3: Laya runs on iOS behind `Backend`; simulator parity identical
+  to the JVM.** On the owner's "Go". Three pieces:
+  - **Shared prompt.** `LayaPrompt`, `LayaSequence`, `LayaTokenizer`, `SubwordEncoder`,
+    `TokenizedInput`, `Tokenizer`, `TensorNames` moved from JVM-only `backend-onnx` into a new KMP
+    module `backend-laya-common` (jvm + iOS, same package, code unchanged), plus `ChoiceScoring`
+    (the marker checks before a run and the Double softmax after), which the JVM `OnnxBackend` now
+    calls too. JVM behaviour unchanged: the 41 `backend-onnx` tests, including the gated Laya ones,
+    pass as before.
+  - **Tokenizer.** `ios-native/tokenizers-ffi`: a five-function C ABI over Hugging Face
+    `tokenizers` **=0.21.4** with `onig` 6.5.1 — the exact versions inside DJL 0.38.0's
+    `libtokenizers` (read from its binary) — `default-features = false` (no `http`: no network
+    code compiled in), encode with `add_special_tokens=false`, truncation and padding cleared on
+    load. Rust toolchain pinned (1.98.1, `rust-toolchain.toml`), `Cargo.lock` committed,
+    `IPHONEOS_DEPLOYMENT_TARGET=14.0` to match Kotlin/Native. `ios-native/build.sh` builds
+    `LoupeTokenizers.xcframework` (device + simulator) and fetches the official ORT iOS package
+    (`pod-archive-onnxruntime-c-1.20.0.zip`, SHA-256 pinned) into `ios-native/build/` (gitignored).
+  - **Inference.** New module `backend-onnx-ios` (iOS only; included by `settings.gradle.kts` on
+    macOS once `ios-native/build.sh` has run): cinterop on the ORT C API and the tokenizer header,
+    both static libraries embedded in the klib. `RustSubwordEncoder` (twin of
+    `HuggingFaceSubwordEncoder`, checks the special-token ids), `OrtLayaBackend : Backend` (CPU,
+    default session options as on the JVM), `LayaModelStore` (expects `tokenizer.json` and the INT8
+    graph in `Library/Application Support/Loupe/laya-multilingual`, streams SHA-256 through
+    CommonCrypto and refuses anything not matching the pins — the tokenizer hash from
+    `export-laya-onnx.py`, the graph hash from `laya-export-report.json`). **No network:** the
+    consented first-run download is the app layer's; `ios-native/sideload-models.sh <bundle-id>`
+    copies the files onto a simulator for development (checked against the pins).
+
+  Parity, `./gradlew :backend-onnx-ios:iosSimulatorArm64Test` (iPhone simulator, iOS 26.3, Apple
+  silicon Mac mini), INT8 graph `8b994315…`, same fixtures the JVM reads:
+
+  | Check | iOS simulator | JVM INT8 |
+  |---|---|---|
+  | Tokenizer segments identical to upstream (golden + criteria) | 239/239 | 239/239 |
+  | Rebuilt input ids + marker positions | 42/42 | 42/42 |
+  | Golden: same selected answer as JVM INT8 | **34/34**, max \|p − p_JVM\| 2.2e-16 | — |
+  | Criteria: same selected answer as JVM INT8 | **8/8**, max \|p − p_JVM\| 0.0 | — |
+  | Golden vs PyTorch | 33/34 (flips `en-sentiment-5`), max \|Δp\| 0.0929 | 33/34 (same case), 0.0929 |
+  | Criteria vs PyTorch | 8/8, max \|Δp\| 0.114 | 8/8 |
+  | Mean latency per item (simulator on a Mac, **not a phone**) | 82 ms golden, 87 ms criteria | — |
+
+  **Phone latency: still unmeasured** — needs a physical iPhone (owner to provide); record model,
+  iOS version and thermal state with it. Tests: JVM still 440; iOS simulator +11 (engine 288,
+  templates 22, backend-onnx-ios 11). The device slice (`iosArm64`) compiles and links. Notices:
+  the iOS app ships new native code, so `:backend-laya-common:generateIosThirdPartyNotices` writes
+  `ios-native/THIRD_PARTY_NOTICES-ios.txt` (ORT 1.20.0 iOS, its ThirdPartyNotices, Rust std, 71
+  crates from `third-party/ios-tokenizers-crates.tsv` — `refresh-tokenizers-crates.py --ios`),
+  checked by `check` and cross-checked against the crate paths in `libloupe_tokenizers.a`. Not yet
+  done: `LoupeKit` does not export `backend-onnx-ios` (the app shell, child 5, decides how it links
+  it); the app must bundle the iOS notices file.
+
 ## Hand-off
 
 State as of 2026-09-23, for whoever picks this up — including a session with no memory of how it
@@ -1063,7 +1114,7 @@ came from labelled fixtures.
 
 | Blocked | Needs |
 |---|---|
-| Epic #6 children 3, 5, 6 | An Apple developer account and a physical iPhone; child 6 also a Duffel test key |
+| Epic #6 child 3's device latency; children 5, 6 | An Apple developer account and a physical iPhone; child 6 also a Duffel test key |
 | A1 on-device latency | A real device — an iPhone first — the export and runtime path exist |
 | A1/F3 fine-tuning | A labelled corpus and a GPU |
 | A2's second backend | Qwen3-0.6B weights and its own export |
@@ -1120,6 +1171,14 @@ came from labelled fixtures.
   the override and the model-vs-baseline comparison at once. Draw it from the river's seed, in row
   order, or not at all.
 
+- **Kotlin/Native links cinterop static libraries only as `lib*.a`.** ORT's iOS framework binary
+  (`onnxruntime`, no extension) embedded fine and then left `_OrtGetApiBase` undefined at link.
+  `ios-native/build.sh` copies it to `onnxruntime-lib/<slice>/libonnxruntime.a` (arm64-thinned).
+- **Rust/cc objects default to the SDK's iOS version** (26.x) and ld warns against Kotlin/Native's
+  14.0 floor; `build.sh` sets `IPHONEOS_DEPLOYMENT_TARGET=14.0`.
+- **The iOS tokenizer must be the DJL one.** `tokenizers =0.21.4`, `onig` 6.5.1, feature `onig`
+  (not `fancy-regex`), `default-features = false`. Another version or regex engine can change ids
+  silently; the 239-segment iOS test is what catches it.
 - **Do not hand-roll a tokenizer.** Settled: `ai.djl.huggingface:tokenizers:0.38.0` resolves (the
   coordinates tried earlier were an older guess). It reproduces all 194 upstream token segments.
 - **DJL truncates to 512 tokens by default.** `HuggingFaceTokenizer` defaults to

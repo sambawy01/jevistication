@@ -1,0 +1,25 @@
+[package]
+name = "loupe-tokenizers-ffi"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+description = "C ABI over Hugging Face tokenizers for Loupe on iOS (encode only, no network)"
+
+[lib]
+name = "loupe_tokenizers"
+crate-type = ["staticlib"]
+
+[dependencies]
+# Pinned to the exact version DJL 0.38.0's JNI library is built from (strings in its
+# libtokenizers.dylib: tokenizers-0.21.4, onig-6.5.1), so iOS and the JVM run the same code.
+# default-features = false drops `http` (hub downloads) and `progressbar`: no network path is
+# compiled in at all. `onig` is the regex engine DJL's build uses; fancy-regex could differ.
+tokenizers = { version = "=0.21.4", default-features = false, features = ["onig"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "debuginfo"

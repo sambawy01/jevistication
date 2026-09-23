@@ -1,0 +1,7 @@
+# ONNX Runtime 1.20.0's C API, from the official iOS package (ios-native/build.sh). The static
+# library itself is embedded into the klib by build.gradle.kts (-staticLibrary), so anything that
+# links this module links ORT; these are the system libraries ORT's own podspec asks for.
+package = dev.loupe.backend.onnx.ios.ort
+headers = onnxruntime_c_api.h
+headerFilter = onnxruntime_c_api.h
+linkerOpts = -lc++ -framework Foundation -framework CoreML

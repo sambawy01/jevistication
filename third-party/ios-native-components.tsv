@@ -1,0 +1,7 @@
+# Native code linked into the iOS build of Laya (:backend-onnx-ios, via ios-native/build.sh) that
+# does not come from a Rust crate listed in ios-tokenizers-crates.tsv. Reviewed by hand; a version
+# bump means re-reviewing what the new binary links.
+# Columns: component, version, licence (SPDX), copyright, licence text ids in third-party/texts
+# ('-' = canonical SPDX text), source of the finding.
+ONNX Runtime (official iOS C package, pod archive onnxruntime-c, static)	1.20.0	MIT	Copyright (c) Microsoft Corporation	2f07c72751aed997	LICENSE inside pod-archive-onnxruntime-c-1.20.0.zip (SHA-256 pinned in ios-native/build.sh); its bundled components are listed in ORT 1.20.0's ThirdPartyNotices.txt, reproduced below from the identical-version Maven artifact
+Rust standard library (std, core, alloc)	1.98.1	MIT OR Apache-2.0	Copyright (c) The Rust Project Contributors	-	Statically linked into libloupe_tokenizers.a; toolchain pinned in ios-native/tokenizers-ffi/rust-toolchain.toml
