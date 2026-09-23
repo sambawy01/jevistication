@@ -7,26 +7,46 @@ scope cut; the ordering is dependency, not release.
 
 ## 0. Platform and stack
 
-**Android.** The locked spec needs message history from known senders (person impersonation),
-notification arrival, broad filesystem access, and cross-app form filling. iOS grants none of
-the first three and only a Safari-scoped version of the fourth. Building for iOS means shipping
-an incomplete spec.
+**iOS first; Android second.** *Changed 2026-09-23, on the owner's decision (epic #6). Until
+then this section read "Android", and the reason is still true:* the locked spec needs message
+history from known senders (person impersonation), notification arrival, broad filesystem
+access, and cross-app form filling, and iOS grants none of the first three and only a
+Safari-scoped version of the fourth. The owner chose iOS anyway, knowing that. So the iPhone app
+ships a **reduced spec**, and this is what the platform takes away:
 
-| Layer | Choice |
-|---|---|
-| Language / UI | Kotlin, Jetpack Compose |
-| **Decision model** | **`convaiinnovations/laya-multilingual`** — 322M, Apache-2.0 weights, mmBERT-base backbone. *Training-data provenance open — risk 12* |
-| **Second backend** | **`Qwen/Qwen3-0.6B`** — Apache-2.0, decoder, scored by logits |
-| Model runtime | ONNX Runtime Mobile (NNAPI / XNNPACK execution providers) |
-| Tokenizer | Hugging Face `tokenizers` (Rust) via DJL `ai.djl.huggingface:tokenizers`, offline mode enforced |
-| Ledger | SQLite via Room |
-| Background | WorkManager, charging + idle constraints |
-| OCR and image labels | ML Kit, on-device |
-| Speech | on-device recognizer |
-| Email | Gmail API over OAuth; IMAP for everything else |
-| Form filling | `AutofillService` |
-| Notifications | `NotificationListenerService` |
-| Files | Storage Access Framework + MediaStore |
+| iOS does not allow | What iOS offers instead | Spec capability, on iOS |
+|---|---|---|
+| Reading the SMS inbox | An unknown-sender Message Filter extension, barred from the network | SMS was already not built (risk 4); the filter slot is the only SMS surface |
+| Reading other apps' notifications | Nothing | **Triage on arrival** for notifications: **not possible** |
+| Broad filesystem access | Files / document picker, the share sheet, PhotoKit | Files arrive when the user picks or shares them; photos through PhotoKit |
+| Filling forms in other apps | Safari (a Safari web extension) and a Credential Provider extension | **Form filling: limited** to Safari and credential-shaped fields |
+| Message history from known senders | Nothing outside our own app | **Person impersonation: email and contacts only** — already decided under risk 4 |
+
+Nothing above is worked around. Android stays the second platform: where its row below differs,
+it is kept, because it is still what the Android build would use.
+
+| Layer | iOS (leads) | Android (second) |
+|---|---|---|
+| Language / UI | Swift, SwiftUI app shell | Kotlin, Jetpack Compose |
+| Engine and templates | **Kotlin Multiplatform** (`jvm`, `iosArm64`, `iosSimulatorArm64`), exported as the XCFramework **`LoupeKit`** | the same modules, JVM/Android |
+| **Decision model** | **`convaiinnovations/laya-multilingual`** — 322M, Apache-2.0 weights, mmBERT-base backbone. *Training-data provenance open — risk 12* | same |
+| **Second backend** | **`Qwen/Qwen3-0.6B`** — Apache-2.0, decoder, scored by logits | same |
+| Model runtime | ONNX Runtime iOS | ONNX Runtime Mobile (NNAPI / XNNPACK execution providers) |
+| Tokenizer | Hugging Face `tokenizers` Rust crate built for iOS, called through a C FFI, offline only — the same crate DJL wraps, so ids match | DJL `ai.djl.huggingface:tokenizers`, offline mode enforced |
+| Ledger | not decided (the desktop app uses plain files) | SQLite via Room |
+| Background | Background Tasks: `BGProcessingTask`, requiring charging | WorkManager, charging + idle constraints |
+| OCR and image labels | Vision, on-device | ML Kit, on-device |
+| Speech | on-device recognizer | on-device recognizer |
+| Photos, calendar, contacts | PhotoKit, EventKit, Contacts | MediaStore, CalendarProvider, Contacts |
+| Email | Gmail API over OAuth; IMAP for everything else | same |
+| Form filling | Safari web extension + Credential Provider only | `AutofillService` |
+| Notifications | none — iOS does not expose them | `NotificationListenerService` |
+| Files | Files / document picker + share sheet | Storage Access Framework + MediaStore |
+| Online sources | opt-in, fetch-only helper — see `PRODUCT.md` §4a and risk 14 | same rules |
+
+**What is not known yet, stated plainly.** Laya's latency on an iPhone is **unmeasured** (risk 13);
+the model is **untuned** and loses to keyword baselines on the synthetic sample. The KMP port,
+ORT iOS and the iOS tokenizer build are planned (epic #6, children 2–3), not done.
 
 **Why that model.** *Changed 2026-09-23, on the owner's decision that GLiClass's performance is
 not comparable.* Laya is a typed decision model: a bidirectional encoder plus a small head that
@@ -68,11 +88,14 @@ port, and the port is what is Apple-only. The model family is now the primary (a
 **No hosted backend, ever.** Not an omission. A network call breaks the offline guarantee the
 product rests on.
 
-**Model delivery.** Weights are not in the base APK. Play Asset Delivery, or fetched on first
-run. Laya's INT8 graph is 384 MB (plus a 34 MB tokenizer) — heavy for a mobile download but
+**Model delivery.** Weights are not in the app binary. On iOS, fetched on first run from a pinned
+URL with a SHA-256 check, after explicit consent — a one-time, labelled network use. On Android,
+Play Asset Delivery or the same first-run fetch. Laya's INT8 graph is 384 MB (plus a 34 MB tokenizer) — heavy for a mobile download but
 normal for an asset pack, and fatal for an APK.
 
-**Browser reach.** Chrome for Android does not support extensions. Form filling and the fraud
+**Browser reach.** *On iOS* (leads): a Safari web extension, inside the same app bundle, for the
+fraud check and form filling in Safari only; search and compare runs in the app, and web results
+come through the Web tab's online sources (`PRODUCT.md` §4a). *On Android* (second): Chrome for Android does not support extensions. Form filling and the fraud
 check reach Chrome through `AutofillService`, which sees focused form structure and fires at the
 moment that matters — the instant before you type. Search-and-compare runs in an in-app WebView.
 **No Firefox extension**: one codebase, and Autofill already covers where Android users are.
@@ -288,7 +311,7 @@ judgments is the difference between this product and a confident guess.
 | 11 | ~~Third-party attribution is unshipped~~ (ONNX Runtime, DJL and the Rust crates in `libtokenizers`, Compose/skiko/Skia, the desktop sources, PDFBox's bundled fonts and data) | **Closed 2026-09-23.** `./gradlew :loupe-desktop:generateThirdPartyNotices` writes `loupe-desktop/src/main/resources/THIRD_PARTY_NOTICES.txt`, packaged in the app jar, from the resolved runtime jars and POMs, 213 pinned Rust crates and the reviewed tables in `third-party/`; `check` and `ThirdPartyNoticesTest` fail when it is stale. Never patch Eigen (MPL-2.0, file-level). **The Android component set is still unverified** — the AAR is a different native build and needs its own run when an Android module exists |
 | 12 | **Laya's training data is only partly published, and the published part includes non-commercial sources.** The authors' own benchmark flags as "in training" `Tobi-Bueck/customer-support-tickets` (CC-BY-NC-4.0) and MS MARCO (Microsoft: non-commercial research only), plus LGPL-3.0, CC-BY-SA-3.0, `unknown` and undeclared sources; the full mix is not published. The tokenizer is Gemma 2's, whose Terms of Use may or may not reach it | Adopted for development on the owner's decision; **not cleared for shipping.** Close it by one of: the authors publishing a clean full mix, or confirming the NC sources are absent from the multilingual checkpoint; or training the head (or model) on data we can account for. Ask the authors first — it is the cheapest. Details in `LICENSING.md` |
 | 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8 (357 MB opt-in `int8-partial`; SmoothQuant and static calibration tried 2026-09-23 and rejected — the full 58 MB saving costs answers), 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" (**on a desktop M4 CPU the game now measures 10 decisions/s at ~62–66 ms P50, ~80 ms P95**, with ~106-token questions; a phone is still unmeasured). The desktop app's sweeps measured a median **73–99 ms per item** on the sample (a light machine) and **125–152 ms** with the machine's load average near 20 — desktop latency depends on what else is running, and a phone shares its CPU with everything | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
-| 14 | **Composio integrations do not work offline.** A proposed Composio bridge (email, calendar, social media) runs through Composio's cloud and needs the network and third-party OAuth. It cannot work in airplane mode and sends data off the device, which conflicts with §1 and the never list in `PRODUCT.md`. | **Decide before integrating.** If built, it is an opt-in, clearly labelled online source, never a dependency of any judgment, watcher or core flow; everything must keep working with it off and the device offline, and the app must say when a result used online data. Not in the build order until the owner decides. |
+| 14 | **Online sources do not work offline.** A proposed Composio bridge (email, calendar, social media) runs through Composio's cloud and needs the network and third-party OAuth; the Web tab's flight search (2026-09-23) fetches through our helper. Neither works in airplane mode, and both send something off the device. | **Governed by the online helper rules, `PRODUCT.md` §4a** (decided 2026-09-23): offline by default, fetch-only, never judge, send the minimum, labelled "Online" with source and fetch time, an off switch, fully usable offline with them off; user keys in the Keychain, never stored or logged server-side. The flight helper is `sambawy01/loupe-web-helper` (private), deployed on Railway. **Composio is still undecided** and, if built, is bound by the same rules. Not in the build order until the owner decides |
 
 ---
 
@@ -498,7 +521,10 @@ their acceptance criteria are met; entries here record increments toward them.
 
 ## Where the build stands
 
-As of 2026-09-23. Everything below was built on JVM Kotlin: no Android SDK, no device. Since
+As of 2026-09-23. Everything below was built on JVM Kotlin: no iOS or Android build, no device.
+Where the tables below say "Android", read "the phone": since 2026-09-23 Loupe **leads on iOS**
+(§0), so these tracks are blocked on the iOS equivalents first — see *The iPhone app (epic #6)*
+below. Since
 2026-09-23 there is also a **desktop app** (`:loupe-desktop`) that runs the engine over real folders
 and mail exports with the real model. CI runs the full suite on every push to `main`, **without
 model weights** — the tests that need them skip there. The Laya weights exist only on the machine
@@ -548,6 +574,25 @@ Nothing below is deferred by choice; each needs something this environment does 
 | **F3** overnight fine-tune | Model weights and a GPU |
 | **F5** the game, on a phone | An Android build and a device. The desktop game runs (`:game-desktop`); the Compose UI is written to move |
 | Real measurement | **A labelled fixture corpus.** Every number the harness produces today comes from synthetic fixtures; the machinery is proven, the numbers are not real. The Laya parity numbers measure agreement with upstream, not accuracy. The desktop app now *collects* labels — every correction is one — so the corpus can start with the owner's own files |
+
+### The iPhone app (epic #6)
+
+Decided 2026-09-23 (#6, "Go" from the owner). Children, in order; 2 before 3 and 5, 4 in parallel
+after 1, 6 needs 3, 4 and 5.
+
+| # | Child | State |
+|---|---|---|
+| 1 | Record the iOS decision and the online helper rules in `PRODUCT.md` / `BUILD.md` | Done 2026-09-23 (this) |
+| 2 | Port `engine` + `templates` to Kotlin Multiplatform (`jvm`, `iosArm64`, `iosSimulatorArm64`), XCFramework `LoupeKit` | Not started |
+| 3 | Laya on iOS: ONNX Runtime iOS + HF `tokenizers` for iOS behind `Backend`; parity against the JVM fixtures; latency on a real iPhone | Not started |
+| 4 | Helper `sambawy01/loupe-web-helper` on Railway: `POST /v1/flights/search` (Duffel), schema v1 | **Deployed** — https://loupe-web-helper-production.up.railway.app |
+| 5 | SwiftUI app shell — tabs Now, Judgments, Web, Sources, Me — with `LoupeKit` | Not started |
+| 6 | Web tab: Flights — key onboarding, search, results ranked on device, "Online" labels, off switch | Not started |
+| 7 | Later phases, each its own spec: hotels / trains / price watch; shopping compare and price-drop; link and site safety check; research (read and rank pages); concerts, festivals and sports events | Not specified |
+
+**Blocked on:** an **Apple developer account** (signing, a device build, TestFlight), a
+**physical iPhone** (child 3's latency — milestone 1's phone half — and anything on device), and a
+**Duffel test key** (child 6 end to end; the helper holds no key of its own).
 
 ### Proving milestones
 
@@ -879,6 +924,20 @@ Nothing below is deferred by choice; each needs something this environment does 
   machine — the script caches per-layer results and resumes. Tests: 427 → **428** (1 gated:
   `int8-partial` parity on both fixtures); `./gradlew check` green with `models/` present.
 
+- **2026-09-23 — Decisions: Loupe leads on iOS; online helper rules; a Web tab (epic #6).** On the
+  owner's "Go"; docs only, no code. **Platform:** iOS first, Android second — §0 rewritten with what
+  iOS does not allow and what that costs the spec (notification triage not possible, form filling
+  limited to Safari and the Credential Provider, impersonation on email and contacts only). The
+  engine and templates move to Kotlin Multiplatform behind an XCFramework `LoupeKit`; ONNX Runtime
+  iOS and the HF `tokenizers` crate built for iOS replace the JVM runtime on the phone; Vision,
+  PhotoKit, EventKit, Contacts and `BGProcessingTask` replace their Android counterparts.
+  **Online helper rules** are now `PRODUCT.md` §4a, and risk 14 points at them. **Web tab** (tabs:
+  Now, Judgments, Web, Sources, Me), flights first. **The helper is deployed:** `sambawy01/loupe-web-helper`
+  (private) on Railway at `https://loupe-web-helper-production.up.railway.app`, `POST
+  /v1/flights/search` via Duffel, schema v1 — fetch-only, no AI, the user's Duffel key sent per
+  request and never stored or logged. None of the iPhone app exists yet; iPhone latency is
+  unmeasured and the model is untuned.
+
 ---
 ## Hand-off
 
@@ -887,6 +946,15 @@ got here. Track-by-track status is in **Where the build stands** above; this is 
 and what will bite.
 
 ### What changed most recently
+
+**Loupe leads on iOS** (2026-09-23, epic #6). §0 now records what iOS does not allow and what that
+costs the spec; `PRODUCT.md` §4a holds the online helper rules; the Web tab starts with flights. The
+fetch-only helper is deployed (`sambawy01/loupe-web-helper`, Railway). **Next:** child 2, the Kotlin
+Multiplatform port of `engine` + `templates` — buildable here, no device needed. Children 3, 5 and 6
+need an Apple developer account and a physical iPhone; 6 also a Duffel test key. See *The iPhone
+app (epic #6)* above.
+
+The change before it:
 
 **The desktop app** (branch `desktop-app`): `:templates` (55 templates), `:sources-desktop`
 (read-only folders and mail exports, mime4j, PDFBox, metadata-extractor, a synthetic sample
@@ -968,7 +1036,8 @@ came from labelled fixtures.
 
 | Blocked | Needs |
 |---|---|
-| A1 on-device latency | A real mid-range device — the export and runtime path exist |
+| Epic #6 children 3, 5, 6 | An Apple developer account and a physical iPhone; child 6 also a Duffel test key |
+| A1 on-device latency | A real device — an iPhone first — the export and runtime path exist |
 | A1/F3 fine-tuning | A labelled corpus and a GPU |
 | A2's second backend | Qwen3-0.6B weights and its own export |
 | B1–B9 every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, contacts, notifications |

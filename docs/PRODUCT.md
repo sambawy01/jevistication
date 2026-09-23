@@ -52,7 +52,7 @@ which is precisely what an offline model is.
 
 ---
 
-> **Note (2026-09-23): Composio integrations do not work offline.** A Composio bridge for email, calendar and social media would run through a third-party cloud and need the network. It is not part of this spec; before any integration, decide how it fits "nothing leaves your device" (see `BUILD.md` risk 14).
+> **Note (2026-09-23): Composio integrations do not work offline.** A Composio bridge for email, calendar and social media would run through a third-party cloud and need the network. It is not part of this spec and is still undecided; if built, it is bound by the online helper rules in §4a (see `BUILD.md` risk 14).
 
 ## 3. Capabilities
 
@@ -102,15 +102,27 @@ action. Share anything from anywhere and it decides where it belongs.
 text readable"* before the shutter, not after.
 
 **Triage on arrival.** Notifications, unknown calls, and SMS get a judgment at delivery —
-interrupt, batch, or silence. Tens of milliseconds is imperceptible.
+interrupt, batch, or silence. Tens of milliseconds is imperceptible. *On iOS, which leads since
+2026-09-23 (§11), notification triage is not possible — no app may read another's notifications;
+it remains an Android capability.*
 
 **Search and compare.** Read many options across the web and rank them against your stated
 priorities. Judgment, not action.
 
+**The Web tab — online, opt-in.** *Added 2026-09-23.* The iPhone app's tabs are Now, Judgments,
+Web, Sources and Me. The Web tab is search and compare with an online source behind it: an
+optional helper fetches offers, and the model ranks them **on the device** against what you
+asked for — *"cheapest nonstop under £200, aisle, one bag."* **Flights first**, through Duffel,
+active only once you add your own Duffel key. Later phases, each with its own spec: hotels,
+trains and price watch; shopping compare and price-drop; a link and site safety check; research
+(read and rank pages); concerts, festivals and sports events. Every one is bound by §4a. It
+never books: the never list holds, and the last button is yours.
+
 **Form filling that can refuse.** Which of your four addresses, work or personal email,
 shipping or billing — decided from page context rather than from field names, which is why it
 works on the forms browser autofill breaks on. And it declines to fill when the form has no
-business asking.
+business asking. *On iOS it is limited to Safari and the Credential Provider; other apps' forms
+are out of reach.*
 
 **The watchers** — expiry radar, recurring-money census, term-change detection, person
 impersonation, site fraud. See §5.
@@ -180,6 +192,34 @@ photos, files and SMS. *"We never see it"* is what is true of Gmail and Sheets.
 
 ---
 
+## 4a. Online helper rules
+
+*Decided 2026-09-23.* Loupe is **offline by default**. Some things only exist online — today's
+flight prices — so a source may fetch them, under rules as fixed as the never list:
+
+- **Fetch-only, never judge.** An online source brings data back; every judgment runs on the
+  phone. There is no AI on any server — not ours, not a vendor's.
+- **Send the minimum** — the search itself. Nothing from your sources, ledger or corrections.
+- **Labelled every time.** Every result that came from the network says **"Online"**, names its
+  source, and shows when it was fetched.
+- **An off switch**, per source. Off means no request is made.
+- **Fully usable offline with them off.** No judgment, watcher or core flow depends on an online
+  source. Airplane mode still works (§3, *Verifiable privacy*); the online parts say they are
+  offline.
+- **Your keys stay yours.** A key you bring (BYOK — flights need your own Duffel key) lives in the
+  iOS Keychain (`WhenUnlockedThisDeviceOnly`) and is sent with each request. The helper never
+  stores or logs it, or the search.
+
+The flight helper is a separate private repository, `sambawy01/loupe-web-helper`, deployed on
+Railway at `https://loupe-web-helper-production.up.railway.app`: one endpoint, `POST
+/v1/flights/search`, through Duffel, schema v1. It is stateless and holds no key of its own.
+
+This is the one place *"never leaves your device"* is not the claim: the search does leave it. What
+stays true is that nothing *you own* does, and that we never see it — see risk 14 in
+[`BUILD.md`](BUILD.md), which also binds the undecided Composio bridge to these rules.
+
+---
+
 ## 5. What it notices
 
 The product is not a filing cabinet. It is an attentive one.
@@ -212,7 +252,8 @@ document. One catch pays for the app for years.
 ### Person impersonation
 
 The sibling of site fraud, and more important. *"This message from 'Mom' is from a number that
-isn't Mom's."* Contacts, message history and writing patterns in one place. No messaging app can
+isn't Mom's."* Contacts, message history and writing patterns in one place. *As decided (SMS not
+built, §11), it runs on email and contacts; on iOS that is also all the platform allows.* No messaging app can
 do this, because none of them sees your contacts' history *and* your other channels.
 
 ### Site fraud and identity mismatch
@@ -408,14 +449,27 @@ Order of work. Nothing here is cut, and nothing waits for a second release.
 11. MCP surface: UI testing, whose outcome signal — predict the click, observe the result — is
     the best in anything we surveyed
 
+*Added 2026-09-23 — the iPhone app, epic #6.* Where the list says Android, read iOS first (§11).
+The phone work starts with: record the decision (done) → the engine on Kotlin Multiplatform →
+Laya on iOS, and in parallel the fetch-only flight helper (deployed) → the SwiftUI shell → the Web
+tab's flights. Later Web phases each get their own spec. Blocked on an Apple developer account, a
+physical iPhone and a Duffel test key. Status lives in [`BUILD.md`](BUILD.md), *Where the build
+stands*.
+
 ---
 
 ## 11. Decisions
 
-Closed since locking (one reopened — the model, on 2026-09-23):
+Closed since locking (two reopened on 2026-09-23 — the model, and the platform):
 
-- **Platform** — Android. The spec needs known-sender message history, notification arrival,
-  broad filesystem access and cross-app form filling; iOS grants none of the first three.
+- **Platform** — **iOS leads; Android second.** *Reversed 2026-09-23 on the owner's decision; it
+  was Android, because the spec needs known-sender message history, notification arrival, broad
+  filesystem access and cross-app form filling, and iOS grants none of the first three.* That is
+  still true, and it is accepted: on iOS notification triage is not possible, form filling is
+  limited to Safari and the Credential Provider, files come through the picker, share sheet and
+  PhotoKit, and impersonation runs on email and contacts. What iOS allows is set out in
+  [`BUILD.md`](BUILD.md) §0.
+- **Online sources** — opt-in, fetch-only, never judge; rules in §4a (2026-09-23).
 - **Model** — `convaiinnovations/laya-multilingual` (Apache-2.0 weights), since 2026-09-23;
   it replaced `gliclass-modern-base-v2.0` on performance. A logit-scored `Qwen3-0.6B`
   (Apache-2.0) stays the second backend. No hosted backend. Three candidates were rejected on
@@ -425,7 +479,8 @@ Closed since locking (one reopened — the model, on 2026-09-23):
   it magnifies, it does not decide for you, and it names no vendor whose model we might one
   day replace. The mark is crowded — see risk 9 in [`BUILD.md`](BUILD.md).
 - **SMS** — not built. Person impersonation runs on email and contacts instead.
-- **Browser** — `AutofillService` plus an in-app WebView. No separate extension.
+- **Browser** — on Android, `AutofillService` plus an in-app WebView, no separate extension. On
+  iOS, a Safari web extension in the same bundle (§7).
 
 What remains is measured, not decided: every threshold, each judgment's risk–coverage curve,
 and whether each judgment beats its dumb baseline (§9).
