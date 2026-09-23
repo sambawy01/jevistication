@@ -57,7 +57,7 @@ class BuiltInJudgmentsTest {
     @Test
     fun `a built-in runs through the engine`() {
         val engine = DecisionEngine(
-            backend = Backend { _, _ -> mapOf("yes" to 0.93, "no" to 0.07) },
+            backend = Backend.ofMasses { _, _ -> mapOf("yes" to 0.93, "no" to 0.07) },
             threshold = Probability.of(0.8),
         )
         val outcome = engine.decide(

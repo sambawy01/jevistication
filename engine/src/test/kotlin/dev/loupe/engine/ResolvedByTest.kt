@@ -30,10 +30,10 @@ class ResolvedByTest {
 
     @Test
     fun `the engine records which path answered each row`() {
-        val engine = DecisionEngine(Backend { _, _ -> mapOf("yes" to 0.8, "no" to 0.2) }, Probability.of(0.5))
+        val engine = DecisionEngine(Backend.ofMasses { _, _ -> mapOf("yes" to 0.8, "no" to 0.2) }, Probability.of(0.5))
         val mech = engine.decide(receipt, Item("a", "x")) { Mechanical.Resolved("yes", "exact-duplicate") }
         val model = engine.decide(receipt, Item("b", "x"))
-        val broken = DecisionEngine(Backend { _, _ -> mapOf("maybe" to 1.0) }, Probability.of(0.5))
+        val broken = DecisionEngine(Backend.ofMasses { _, _ -> mapOf("maybe" to 1.0) }, Probability.of(0.5))
             .decide(receipt, Item("c", "x"))
 
         assertEquals(dup, mech.row.resolvedBy)
@@ -103,7 +103,7 @@ class ResolvedByTest {
 
     @Test
     fun `the harness keeps mechanical answers out of model and baseline figures`() {
-        val engine = DecisionEngine(Backend { _, _ -> mapOf("yes" to 0.2, "no" to 0.8) }, Probability.of(0.5))
+        val engine = DecisionEngine(Backend.ofMasses { _, _ -> mapOf("yes" to 0.2, "no" to 0.8) }, Probability.of(0.5))
         val fixtures = listOf(
             Fixture(Item("dup1", "copy"), "yes", "s"),
             Fixture(Item("dup2", "copy"), "yes", "s"),

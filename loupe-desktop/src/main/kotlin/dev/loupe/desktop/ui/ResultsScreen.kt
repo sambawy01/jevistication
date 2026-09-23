@@ -174,6 +174,7 @@ fun ItemDetail(c: LoupeController, j: UserJudgment, v: DecisionView, platform: P
             Muted("Answered by rule: ${v.mechanicalCheck}$copyOf; the model was not asked.")
         }
         v.row.failure?.let { Note("Unusable answer: $it", error = true) }
+        v.inputCutNote?.let { Muted(it) }
         H3("Your answer")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (label in j.shape.candidates) {
@@ -207,6 +208,7 @@ fun ItemDetail(c: LoupeController, j: UserJudgment, v: DecisionView, platform: P
 }
 
 private fun actionPreview(j: UserJudgment, v: DecisionView): String = when {
+    !v.acted && v.row.truncated && v.topMass >= j.threshold -> "The model read only part of this item, so it is not acted on; it waits for you."
     !v.acted -> "Unsure items are never acted on; this one waits for you."
     j.templateId in setOf("is-duplicate", "is-junk", "is-stale", "refetchable-download", "superseded-version") && v.topLabel == j.positiveLabel ->
         "The action would be: move to a review folder — and the phone build would ask you first."

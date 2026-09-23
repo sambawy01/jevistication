@@ -16,7 +16,7 @@ class PilotTest {
         Observation.of(world, Mechanics.legalActions(world))
 
     /** A backend that puts [mass] on one label and spreads the rest evenly. */
-    private fun favouring(label: String, mass: Double = 0.7) = Backend { judgment, _ ->
+    private fun favouring(label: String, mass: Double = 0.7) = Backend.ofMasses { judgment, _ ->
         val others = judgment.candidates.filter { it != label }
         judgment.candidates.associateWith { if (it == label) mass else (1 - mass) / others.size }
     }
@@ -25,11 +25,11 @@ class PilotTest {
     fun `the model is asked over exactly the legal actions, and its raw answer is kept`() {
         var offered: List<String>? = null
         var question: String? = null
-        val pilot = ModelPilot(Backend { judgment, state ->
+        val pilot = ModelPilot(Backend.ofMasses { judgment, state ->
             offered = judgment.candidates
             question = judgment.question
             assertTrue(state.isComplete, "the state must never be cut")
-            favouring("steer left and shoot").score(judgment, state)
+            favouring("steer left and shoot").score(judgment, state).masses
         })
         val o = observation()
         val decision = pilot.decide(o)
@@ -50,7 +50,7 @@ class PilotTest {
         world.clearEntities()
         val legal = LegalActions(listOf(Action.RIGHT), Action.entries.filter { it != Action.RIGHT }.associateWith { Exclusion.FATAL })
         var called = false
-        val decision = ModelPilot(Backend { _, _ -> called = true; emptyMap() }).decide(Observation.of(world, legal))
+        val decision = ModelPilot(Backend.ofMasses { _, _ -> called = true; emptyMap() }).decide(Observation.of(world, legal))
         assertEquals(DecisionSource.MECHANICAL, decision.source)
         assertEquals(Action.RIGHT, decision.action)
         assertNull(decision.raw)
@@ -61,13 +61,13 @@ class PilotTest {
     fun `a backend that throws or returns junk yields the null action, never an exception`() {
         val o = observation()
         val junk: List<Pair<String, Backend>> = listOf(
-            "throws" to Backend { _, _ -> error("model file truncated") },
-            "unknown label" to Backend { j, _ -> j.candidates.associateWith { 0.0 } + ("barrel roll" to 1.0) },
-            "missing label" to Backend { j, _ -> mapOf(j.candidates.first() to 1.0) },
-            "NaN" to Backend { j, _ -> j.candidates.associateWith { Double.NaN } },
-            "negative" to Backend { j, _ -> j.candidates.mapIndexed { i, c -> c to if (i == 0) -1.0 else 2.0 / (j.candidates.size - 1) }.toMap() },
-            "does not normalise" to Backend { j, _ -> j.candidates.associateWith { 0.9 } },
-            "empty" to Backend { _, _ -> emptyMap() },
+            "throws" to Backend.ofMasses { _, _ -> error("model file truncated") },
+            "unknown label" to Backend.ofMasses { j, _ -> j.candidates.associateWith { 0.0 } + ("barrel roll" to 1.0) },
+            "missing label" to Backend.ofMasses { j, _ -> mapOf(j.candidates.first() to 1.0) },
+            "NaN" to Backend.ofMasses { j, _ -> j.candidates.associateWith { Double.NaN } },
+            "negative" to Backend.ofMasses { j, _ -> j.candidates.mapIndexed { i, c -> c to if (i == 0) -1.0 else 2.0 / (j.candidates.size - 1) }.toMap() },
+            "does not normalise" to Backend.ofMasses { j, _ -> j.candidates.associateWith { 0.9 } },
+            "empty" to Backend.ofMasses { _, _ -> emptyMap() },
         )
         for ((name, backend) in junk) {
             val decision = ModelPilot(backend).decide(o)
@@ -81,9 +81,9 @@ class PilotTest {
     @Test
     fun `a whole game flown by a failing model keeps running, with every failure counted`() {
         var calls = 0
-        val flaky = Backend { j, s ->
+        val flaky = Backend.ofMasses { j, s ->
             calls++
-            if (calls % 3 == 0) error("intermittent") else favouring("hold course and shoot").score(j, s)
+            if (calls % 3 == 0) error("intermittent") else favouring("hold course and shoot").score(j, s).masses
         }
         val session = GameSession(4, Control.Piloted(LockstepDecider(ModelPilot(flaky), 3)))
         repeat(2_000) { session.tick() }
@@ -124,7 +124,7 @@ class PilotTest {
     @Test
     fun `below the threshold, control passes to the human for that decision`() {
         // An even split over the legal actions: the top raw mass is 1/n, well under 0.5.
-        val unsure = Backend { j, _ -> j.candidates.associateWith { 1.0 / j.candidates.size } }
+        val unsure = Backend.ofMasses { j, _ -> j.candidates.associateWith { 1.0 / j.candidates.size } }
         val session = GameSession(1, Control.Piloted(LockstepDecider(ModelPilot(unsure), 0)), threshold = 0.5, overrideEnabled = false)
         session.world.clearEntities()
         session.human = HumanInput(right = true)

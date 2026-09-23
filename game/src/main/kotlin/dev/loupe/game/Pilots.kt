@@ -162,7 +162,7 @@ class ModelPilot(
         )
         val state = TextState.build(listOf("river" to StateText.describe(observation)), STATE_BUDGET)
         val started = System.nanoTime()
-        val validated = runCatching { judgment.validate(backend.score(judgment, state)) }
+        val validated = runCatching { judgment.validate(backend.score(judgment, state).masses) }
         val latency = System.nanoTime() - started
         return validated.fold(
             onSuccess = { distribution ->

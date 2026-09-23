@@ -29,7 +29,7 @@ class BoolAndScoreTest {
     @Test
     fun `a bool judgment runs through the engine`() {
         val engine = DecisionEngine(
-            Backend { _, _ -> mapOf("yes" to 0.91, "no" to 0.09) },
+            Backend.ofMasses { _, _ -> mapOf("yes" to 0.91, "no" to 0.09) },
             threshold = Probability.of(0.8),
         )
         val outcome = engine.decide(urgent, Item("m1", "the server is on fire"))
@@ -90,7 +90,7 @@ class BoolAndScoreTest {
     @Test
     fun `a score judgment runs through the engine`() {
         val engine = DecisionEngine(
-            Backend { _, _ -> mapOf("1" to 0.0, "2" to 0.0, "3" to 0.05, "4" to 0.15, "5" to 0.8) },
+            Backend.ofMasses { _, _ -> mapOf("1" to 0.0, "2" to 0.0, "3" to 0.05, "4" to 0.15, "5" to 0.8) },
             threshold = Probability.of(0.7),
         )
         val outcome = engine.decide(priority, Item("t1", "tax deadline tomorrow"))
@@ -99,7 +99,7 @@ class BoolAndScoreTest {
 
     @Test
     fun `a malformed score response is contained like any other`() {
-        val engine = DecisionEngine(Backend { _, _ -> mapOf("3" to 2.0) }, Probability.of(0.5))
+        val engine = DecisionEngine(Backend.ofMasses { _, _ -> mapOf("3" to 2.0) }, Probability.of(0.5))
         assertIs<Decision.Unusable>(engine.decide(priority, Item("t1", "x")).decision)
     }
 }

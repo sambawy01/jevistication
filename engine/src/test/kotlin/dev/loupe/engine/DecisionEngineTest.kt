@@ -13,7 +13,7 @@ class DecisionEngineTest {
     private val receipt = Judgment.Choice("is-receipt", "Is this a receipt?", listOf("yes", "no"))
 
     private fun backendSaying(yes: Double) =
-        Backend { _, _ -> mapOf("yes" to yes, "no" to 1.0 - yes) }
+        Backend.ofMasses { _, _ -> mapOf("yes" to yes, "no" to 1.0 - yes) }
 
     @Test
     fun `decides end to end and writes a ledger row carrying a propensity`() {
@@ -46,7 +46,7 @@ class DecisionEngineTest {
     @Test
     fun `a mechanical answer never reaches the model`() {
         var consulted = false
-        val backend = Backend { _, _ -> consulted = true; mapOf("yes" to 0.5, "no" to 0.5) }
+        val backend = Backend.ofMasses { _, _ -> consulted = true; mapOf("yes" to 0.5, "no" to 0.5) }
         val engine = DecisionEngine(backend, threshold = Probability.of(0.5))
 
         val outcome = engine.decide(receipt, Item("dup-1", "anything")) {
@@ -86,7 +86,7 @@ class DecisionEngineTest {
         // A4 requires that a malformed response never throws: it is caught at the boundary and
         // becomes an unusable decision, so one bad answer cannot abort a sweep over a library.
         val engine = DecisionEngine(
-            Backend { _, _ -> mapOf("yes" to 0.5, "no" to 0.2) }, // does not normalise
+            Backend.ofMasses { _, _ -> mapOf("yes" to 0.5, "no" to 0.2) }, // does not normalise
             threshold = Probability.of(0.5),
         )
         assertIs<Decision.Unusable>(engine.decide(receipt, Item("a", "x")).decision)
@@ -95,7 +95,7 @@ class DecisionEngineTest {
     @Test
     fun `contains a backend naming an unknown candidate`() {
         val engine = DecisionEngine(
-            Backend { _, _ -> mapOf("yes" to 0.4, "no" to 0.3, "perhaps" to 0.3) },
+            Backend.ofMasses { _, _ -> mapOf("yes" to 0.4, "no" to 0.3, "perhaps" to 0.3) },
             threshold = Probability.of(0.5),
         )
         val decision = engine.decide(receipt, Item("a", "x")).decision
@@ -116,7 +116,7 @@ class DecisionEngineTest {
     @Test
     fun `the state budget truncates an oversized item rather than rewriting it`() {
         var seen: TextState? = null
-        val backend = Backend { _, state -> seen = state; mapOf("yes" to 0.9, "no" to 0.1) }
+        val backend = Backend.ofMasses { _, state -> seen = state; mapOf("yes" to 0.9, "no" to 0.1) }
         val engine = DecisionEngine(backend, threshold = Probability.of(0.5), stateBudget = 50)
 
         engine.decide(receipt, Item("big", "x".repeat(500)))

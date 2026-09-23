@@ -7,8 +7,17 @@ sealed interface Decision {
     /** Take [label] as the answer; [propensity] is the calibrated mass it was selected with. */
     data class Act(val label: String, val propensity: Probability) : Decision
 
-    /** Decline to act — the item goes to the uncertain queue (D1). */
-    data class Abstain(val topLabel: String, val topMass: Probability) : Decision
+    /**
+     * Decline to act — the item goes to the uncertain queue (D1).
+     *
+     * [inputCut] is set when the policy would have acted but the model read only part of the item
+     * and the judgment's posture does not allow acting on part of it (see [Policy.onCutInput]).
+     */
+    data class Abstain(
+        val topLabel: String,
+        val topMass: Probability,
+        val inputCut: Truncation? = null,
+    ) : Decision
 
     /**
      * The model's answer could not be used at all.
@@ -47,6 +56,26 @@ object Policy {
      * abstains, and the item queues. This is "never acts on something it is unsure about" (§4 of
      * the spec) expressed as a total function: every calibrated distribution yields a decision.
      */
+    /**
+     * The rule for a decision whose input was cut (§8: the judgment is told which). An answer the
+     * model gave about part of an item is not an answer about the item, so a judgment only acts on
+     * one when it declared that quiet misses are acceptable:
+     *
+     * - [FailurePosture.OPEN] — the decision stands; the cut is recorded and shown, nothing more.
+     * - [FailurePosture.NULL_ACTION] and [FailurePosture.LOUD] — an [Decision.Act] becomes an
+     *   [Decision.Abstain] carrying the cut, so the item queues for the user rather than being
+     *   acted on. An abstention stays one.
+     *
+     * An uncut input ([Truncation.isCut] false, or unknown) passes through untouched.
+     */
+    fun onCutInput(decision: Decision, truncation: Truncation?, posture: FailurePosture): Decision {
+        if (truncation?.isCut != true || posture == FailurePosture.OPEN) return decision
+        return when (decision) {
+            is Decision.Act -> Decision.Abstain(decision.label, decision.propensity, inputCut = truncation)
+            is Decision.Abstain, is Decision.Unusable -> decision
+        }
+    }
+
     fun decide(calibrated: CalibratedDistribution, threshold: Probability): Decision {
         val top = calibrated.argmax
         val mass = calibrated.getValue(top)

@@ -108,6 +108,27 @@ class LayaModelTest {
         }
     }
 
+    @Test
+    fun `a state longer than Laya's context reaches the ledger marked truncated`() {
+        val graph = graphOrSkip("int8")
+        tokenizerOrSkip().use { encoder ->
+            val tokenizer = LayaTokenizer(LayaPrompt(encoder, LayaSpecialTokens.MULTILINGUAL))
+            OnnxBackend.open(graph, tokenizer, TensorNames.LAYA).use { backend ->
+                val engine = DecisionEngine(backend, threshold = Probability.of(0.5))
+                val judgment = Judgment.Choice("receipt", "Is this a receipt?", listOf("receipt", "not a receipt"))
+                // Dense text: ~3,500 characters, inside TextState's 4,000 but far past ~760 tokens.
+                val dense = (1..300).joinToString(" ") { "SKU$it 9.99" }
+                val long = engine.decide(judgment, Item("long", dense))
+                val short = engine.decide(judgment, Item("short", "TOTAL 12.40 VAT 2.07"))
+
+                val cut = long.row.truncation?.modelContext
+                assertTrue(cut != null && cut.kept < cut.total, "expected a context cut, got ${long.row.truncation}")
+                assertEquals(null, long.row.truncation?.textBudget)
+                assertEquals(dev.loupe.engine.Truncation.NONE, short.row.truncation)
+            }
+        }
+    }
+
     private class Parity(val agreements: Int, val disagreed: List<String>, val maxAbsError: Double)
 
     private fun parity(graph: java.nio.file.Path): Parity {
@@ -122,7 +143,7 @@ class LayaModelTest {
                     val judgment = Judgment.Choice(case.id, case.question, case.candidates)
                     // A budget wide enough that TextState keeps the text verbatim; the model's own
                     // token budget is what this test exercises.
-                    val scores = backend.score(judgment, TextState.build(listOf(case.id to case.state), 1_000_000))
+                    val scores = backend.score(judgment, TextState.build(listOf(case.id to case.state), 1_000_000)).masses
                     val probs = case.candidates.map { scores.getValue(it) }
                     val argmax = probs.indices.maxBy { probs[it] }
                     if (argmax != case.referenceArgmax) disagreed += case.id

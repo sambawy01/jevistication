@@ -84,7 +84,7 @@ class JudgmentAuthorTest {
             JudgmentAuthor.compile("is-urgent", "Is this urgent?"),
         )
         val engine = DecisionEngine(
-            backend = Backend { _, _ -> mapOf("yes" to 0.9, "no" to 0.1) },
+            backend = Backend.ofMasses { _, _ -> mapOf("yes" to 0.9, "no" to 0.1) },
             threshold = Probability.of(0.7),
         )
         val outcome = engine.decide(compiled.judgment, Item("m1", "server is down"))

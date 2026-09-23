@@ -107,6 +107,15 @@ data class LedgerRow(
      * read as model rows (or unusable ones when they carry a [failure]).
      */
     val resolvedBy: ResolvedBy = ResolvedBy.legacy(failure),
+    /**
+     * Whether the model's input was cut (§8, A3), and where: by the text-state character budget,
+     * by the model's context, or both. [Truncation.NONE] when it read the item whole.
+     *
+     * Null means **unknown**: rows logged before this field existed, and rows where no model read
+     * anything (mechanical answers). Unknown reads as not truncated in [truncated]; a reader that
+     * must tell "known whole" from "never recorded" checks for null.
+     */
+    val truncation: Truncation? = null,
 ) {
     init {
         require((resolvedBy is ResolvedBy.Unusable) == (failure != null)) {
@@ -119,6 +128,9 @@ data class LedgerRow(
 
     /** True when a mechanical check answered and the model was never consulted. */
     val isMechanical: Boolean get() = resolvedBy is ResolvedBy.Mechanical
+
+    /** True when the model is known to have read less than the item's whole text. */
+    val truncated: Boolean get() = truncation?.isCut == true
 }
 
 /**

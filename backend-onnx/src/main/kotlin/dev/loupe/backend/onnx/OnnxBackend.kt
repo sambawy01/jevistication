@@ -4,7 +4,9 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import dev.loupe.engine.Backend
+import dev.loupe.engine.Extent
 import dev.loupe.engine.Judgment
+import dev.loupe.engine.Scored
 import dev.loupe.engine.TextState
 import java.nio.file.Path
 import kotlin.math.exp
@@ -19,6 +21,13 @@ class TokenizedInput(
      * order. Null for a model that emits one logit per candidate from the sequence as a whole.
      */
     val markerPositions: LongArray? = null,
+    /**
+     * How many tokens the state encoded to, and how many of them made it into [inputIds], when the
+     * tokenizer fits the state to a context (see `LayaSequence`). Null when it does not report it,
+     * which the backend reads as "read in full".
+     */
+    val stateTokens: Int? = null,
+    val stateTokensKept: Int? = null,
 ) {
     init {
         require(inputIds.isNotEmpty()) { "tokenizer produced no tokens" }
@@ -42,6 +51,14 @@ class TokenizedInput(
     }
 
     val length: Int get() = inputIds.size
+
+    /** The context's cut of the state, in tokens, or null when none was reported. */
+    val stateCut: Extent?
+        get() {
+            val total = stateTokens ?: return null
+            val kept = stateTokensKept ?: return null
+            return if (kept < total) Extent(kept, total, Extent.Measure.TOKENS) else null
+        }
 }
 
 /**
@@ -79,7 +96,8 @@ data class TensorNames(
 /**
  * A [Backend] backed by ONNX Runtime.
  *
- * It returns the **raw** label-to-mass map, never a validated `Distribution`. That is deliberate:
+ * It returns the **raw** label-to-mass map (plus the tokenizer's report of any state tokens the
+ * context cut), never a validated `Distribution`. That is deliberate:
  * the engine validating what a backend returns is the A4 boundary, and a backend that handed back
  * something already well-formed would quietly disable it. Everything this class produces is
  * treated as untrusted until the engine has checked it.
@@ -96,7 +114,7 @@ class OnnxBackend(
     private val environment: OrtEnvironment = OrtEnvironment.getEnvironment(),
 ) : Backend, AutoCloseable {
 
-    override fun score(judgment: Judgment.Choice, state: TextState): Map<String, Double> {
+    override fun score(judgment: Judgment.Choice, state: TextState): Scored {
         val encoded = tokenizer.encode(judgment.question, state.text, judgment.candidates)
         // A tokenizer and a graph that disagree about markers are a wiring mistake, not a model
         // answer: feeding markers to a graph that ignores them, or omitting them from one that
@@ -135,7 +153,7 @@ class OnnxBackend(
                     "model produced ${logits.size} logits but judgment '${judgment.id}' declares " +
                         "${judgment.candidates.size} candidates"
                 }
-                return softmax(logits, judgment.candidates)
+                return Scored(softmax(logits, judgment.candidates), modelContext = encoded.stateCut)
             }
         } finally {
             inputs.values.forEach { it.close() }

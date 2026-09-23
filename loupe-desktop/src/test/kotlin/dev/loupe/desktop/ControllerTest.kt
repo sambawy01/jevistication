@@ -5,6 +5,9 @@ import dev.loupe.desktop.core.LoupeController
 import dev.loupe.desktop.core.ModelState
 import dev.loupe.desktop.core.Store
 import dev.loupe.engine.Backend
+import dev.loupe.engine.Extent
+import dev.loupe.engine.FailurePosture
+import dev.loupe.engine.Scored
 import dev.loupe.engine.Policy
 import dev.loupe.engine.ResolvedBy
 import dev.loupe.engine.SelectionReason
@@ -30,7 +33,7 @@ import kotlin.test.assertTrue
  * A stub model with the shape of a real one: confident on clear keyword evidence, unsure in the
  * middle, so the queue, the slider and calibration have something to work with. Not Laya.
  */
-internal val stubBackend = Backend { judgment, state ->
+internal val stubBackend = Backend.ofMasses { judgment, state ->
     val text = state.text.lowercase()
     val c = judgment.candidates
     if (c.size == 2) {
@@ -193,9 +196,9 @@ class ControllerTest {
 
     @Test
     fun `a sweep can be cancelled, keeps what ran, and never blocks the caller`() {
-        val slow = Backend { judgment, state ->
+        val slow = Backend.ofMasses { judgment, state ->
             Thread.sleep(40)
-            stubBackend.score(judgment, state)
+            stubBackend.score(judgment, state).masses
         }
         val app = started(slow)
         runBlocking { app.loadSampleData().join() }
@@ -232,7 +235,7 @@ class ControllerTest {
     @Test
     fun `the duplicate template answers exact copies mechanically, without the model`() {
         var calls = 0
-        val counting = Backend { j, s -> calls++; stubBackend.score(j, s) }
+        val counting = Backend.ofMasses { j, s -> calls++; stubBackend.score(j, s).masses }
         val app = started(counting)
         runBlocking { app.loadSampleData().join() }
         app.useTemplate(TemplateLibrary.byId("is-duplicate")!!)
@@ -259,6 +262,38 @@ class ControllerTest {
         app.export(tmp.resolve("export"))
         val parsed = Files.readAllLines(tmp.resolve("export/loupe-ledger.jsonl")).filter { it.isNotBlank() }.map(Store::parseRow)
         assertEquals(app.ledger.map { it.resolvedBy }, parsed.map { it.resolvedBy })
+    }
+
+    @Test
+    fun `a cut input is marked on its decision view, never acted on, and exported`() {
+        // A model that reads only half of every other item, and says so. Masses are confident, so
+        // every item would act if it had been read whole.
+        val half = Backend { j, s ->
+            val n = s.text.length
+            val cut = n > 1 && Math.floorMod(s.items.single().id.hashCode(), 2) == 0
+            Scored(mapOf(j.candidates[0] to 0.95, j.candidates[1] to 0.05), if (cut) Extent(n / 2, n, Extent.Measure.TOKENS) else null)
+        }
+        val app = started(half)
+        runBlocking { app.loadSampleData().join() }
+        app.useTemplate(TemplateLibrary.byId("is-receipt")!!)
+        runBlocking { app.sweep(app.selectedJudgmentId!!)!!.join() }
+        val j = app.selectedJudgment!!
+        assertEquals(FailurePosture.NULL_ACTION, j.onFailure)
+        val views = Analysis.views(Analysis.effectiveRows(app.ledger, j, app.correctionIndex), j, app.itemsById)
+        val (cut, whole) = views.filter { !it.mechanical && !it.unusable }.partition { it.row.truncated }
+        assertTrue(cut.isNotEmpty() && whole.isNotEmpty(), "sample data should have both")
+        for (v in cut) {
+            assertFalse(v.acted, "a cut input must not act under NULL_ACTION")
+            assertEquals(
+                "Input was cut: read first ${v.row.truncation!!.modelContext!!.kept} of ${v.row.truncation!!.modelContext!!.total} tokens (model context).",
+                v.inputCutNote,
+            )
+        }
+        whole.forEach { assertNull(it.inputCutNote); assertTrue(it.acted, "an uncut input is decided as before") }
+
+        app.export(tmp.resolve("export"))
+        val parsed = Files.readAllLines(tmp.resolve("export/loupe-ledger.jsonl")).filter { it.isNotBlank() }.map(Store::parseRow)
+        assertEquals(app.ledger.map { it.truncation }, parsed.map { it.truncation })
     }
 
     @Test

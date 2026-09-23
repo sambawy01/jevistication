@@ -25,7 +25,17 @@ data class StateItem(
     /** The text contributed, which is always a prefix of the original (plus a marker if cut). */
     val text: String,
     val fit: Fit,
-)
+    /** Characters in the original text, before fitting. */
+    val sourceLength: Int = text.length,
+) {
+    /** Characters of the original text that survived (excluding any marker). */
+    val keptLength: Int
+        get() = when (fit) {
+            Fit.VERBATIM -> sourceLength
+            Fit.TRUNCATED -> text.length - TextState.TRUNCATION_MARKER.length
+            Fit.REMOVED -> 0
+        }
+}
 
 /**
  * An item's source content normalised to text, fitted to a character budget (A3).
@@ -46,6 +56,17 @@ class TextState private constructor(
 
     /** True when every item was included in full. */
     val isComplete: Boolean get() = items.all { it.fit == Fit.VERBATIM }
+
+    /**
+     * The budget's cut as an [Extent] in characters — kept of total across all items — or null
+     * when every item was included in full.
+     */
+    val budgetCut: Extent?
+        get() = if (isComplete) null else Extent(
+            kept = items.sumOf { it.keptLength },
+            total = items.sumOf { it.sourceLength },
+            unit = Extent.Measure.CHARACTERS,
+        )
 
     override fun toString(): String =
         "TextState(budget=$budget, items=${items.size}, complete=$isComplete)"
@@ -72,14 +93,14 @@ class TextState private constructor(
                 when {
                     text.length <= remaining -> {
                         used += text.length
-                        StateItem(id, text, Fit.VERBATIM)
+                        StateItem(id, text, Fit.VERBATIM, text.length)
                     }
                     remaining > TRUNCATION_MARKER.length -> {
                         val keep = remaining - TRUNCATION_MARKER.length
                         used += remaining
-                        StateItem(id, text.take(keep) + TRUNCATION_MARKER, Fit.TRUNCATED)
+                        StateItem(id, text.take(keep) + TRUNCATION_MARKER, Fit.TRUNCATED, text.length)
                     }
-                    else -> StateItem(id, "", Fit.REMOVED)
+                    else -> StateItem(id, "", Fit.REMOVED, text.length)
                 }
             }
             return TextState(items, budget)

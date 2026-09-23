@@ -14,7 +14,7 @@ class FailurePostureTest {
         Judgment.Choice("is-receipt", "Is this a receipt?", listOf("yes", "no"), posture)
 
     private fun engineReturning(response: Map<String, Double>, posture: FailurePosture) =
-        DecisionEngine(Backend { _, _ -> response }, Probability.of(0.5)) to judgment(posture)
+        DecisionEngine(Backend.ofMasses { _, _ -> response }, Probability.of(0.5)) to judgment(posture)
 
     @Test
     fun `a malformed response yields an unusable decision instead of throwing`() {
@@ -50,7 +50,7 @@ class FailurePostureTest {
     @Test
     fun `a backend that throws is contained rather than propagated`() {
         val engine = DecisionEngine(
-            Backend { _, _ -> throw IllegalStateException("model file truncated") },
+            Backend.ofMasses { _, _ -> throw IllegalStateException("model file truncated") },
             Probability.of(0.5),
         )
         val decision = engine.decide(judgment(), Item("a", "x")).decision
@@ -62,7 +62,7 @@ class FailurePostureTest {
         val random = Random(20260922)
         val labels = listOf("yes", "no", "maybe", "", "YES")
         val engine = DecisionEngine(
-            Backend { _, _ ->
+            Backend.ofMasses { _, _ ->
                 buildMap {
                     repeat(random.nextInt(0, 4)) {
                         val value = when (random.nextInt(5)) {
@@ -89,7 +89,7 @@ class FailurePostureTest {
 
     @Test
     fun `a well-formed response is unaffected by any of this`() {
-        val engine = DecisionEngine(Backend { _, _ -> mapOf("yes" to 0.9, "no" to 0.1) }, Probability.of(0.5))
+        val engine = DecisionEngine(Backend.ofMasses { _, _ -> mapOf("yes" to 0.9, "no" to 0.1) }, Probability.of(0.5))
         val outcome = engine.decide(judgment(), Item("a", "x"))
         assertEquals("yes", assertIs<Decision.Act>(outcome.decision).label)
         assertNull(engine.ledger.rows().single().failure)
@@ -103,7 +103,7 @@ class FailurePostureTest {
 
     @Test
     fun `the harness counts unusable responses as wrong without scoring them as opinions`() {
-        val engine = DecisionEngine(Backend { _, _ -> mapOf("yes" to 9.0) }, Probability.of(0.5))
+        val engine = DecisionEngine(Backend.ofMasses { _, _ -> mapOf("yes" to 9.0) }, Probability.of(0.5))
         val fixtures = (0 until 10).map {
             Fixture(Item("f$it", "x"), "yes", "g$it")
         }

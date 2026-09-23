@@ -19,7 +19,7 @@ class ExpiryRadarTest {
 
     /** Says "passport" for anything mentioning one, "none" otherwise. */
     private fun engineFor(confidence: Double = 0.95) = DecisionEngine(
-        backend = Backend { _, state ->
+        backend = Backend.ofMasses { _, state ->
             if (state.text.contains("PASSPORT")) {
                 mapOf("passport" to confidence, "insurance" to (1 - confidence) / 2, "none" to (1 - confidence) / 2)
             } else {

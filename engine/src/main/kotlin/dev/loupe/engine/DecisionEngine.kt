@@ -12,7 +12,10 @@ data class DecisionOutcome(
     val row: LedgerRow,
     /** True when a mechanical check answered and the model was never consulted. */
     val resolvedMechanically: Boolean,
-)
+) {
+    /** Whether the model's input was cut, as recorded on [row]; null when no model read it. */
+    val truncation: Truncation? get() = row.truncation
+}
 
 /**
  * The engine that composes the core into one decision (proving milestone 2, "It decides").
@@ -84,7 +87,12 @@ class DecisionEngine(
         // a response that fails validation must never escape as an exception. A backend is an
         // untrusted component -- a bad export, a truncated model file, a future implementation
         // with a bug -- and one malformed answer must not take down a sweep over a whole library.
-        val raw = runCatching { judgment.validate(backend.score(judgment, state)) }
+        var modelContext: Extent? = null
+        val raw = runCatching {
+            val scored = backend.score(judgment, state)
+            modelContext = scored.modelContext
+            judgment.validate(scored.masses)
+        }
             .getOrElse { failure ->
                 return record(
                     judgment = judgment,
@@ -97,10 +105,21 @@ class DecisionEngine(
                     propensity = Probability.of(1.0),
                     resolvedBy = ResolvedBy.Unusable,
                     failure = failure.message ?: "unusable response",
+                    truncation = Truncation(state.budgetCut, modelContext),
                 )
             }
+        val truncation = Truncation(state.budgetCut, modelContext)
         val calibrated = recalibrator.calibrate(raw)
         val greedy = Policy.decide(calibrated, threshold)
+        val guarded = Policy.onCutInput(greedy, truncation, judgment.onFailure)
+        if (guarded !== greedy) {
+            // The input was cut and the judgment may not act on part of an item: it queues,
+            // deterministically. Exploration is not allowed to act on it either.
+            return record(
+                judgment, item, calibrated.distribution, guarded, Probability.of(1.0),
+                resolvedBy = ResolvedBy.Model, truncation = truncation,
+            )
+        }
         val decision = explore(calibrated, greedy)
         val action = Policy.actionOf(decision)
 
@@ -111,6 +130,7 @@ class DecisionEngine(
             decision = decision,
             propensity = propensityOf(action, calibrated, Policy.actionOf(greedy)),
             resolvedBy = ResolvedBy.Model,
+            truncation = truncation,
         )
     }
 
@@ -173,6 +193,7 @@ class DecisionEngine(
         propensity: Probability,
         resolvedBy: ResolvedBy,
         failure: String? = null,
+        truncation: Truncation? = null,
     ): DecisionOutcome {
         val row = LedgerRow(
             judgmentId = judgment.id,
@@ -183,6 +204,7 @@ class DecisionEngine(
             failure = failure,
             itemId = item.id,
             resolvedBy = resolvedBy,
+            truncation = truncation,
         )
         ledger.append(row)
         return DecisionOutcome(decision, row, resolvedBy is ResolvedBy.Mechanical)

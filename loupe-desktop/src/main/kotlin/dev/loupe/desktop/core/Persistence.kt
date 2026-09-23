@@ -9,7 +9,9 @@ import dev.loupe.engine.Distribution
 import dev.loupe.engine.Export
 import dev.loupe.engine.FailurePosture
 import dev.loupe.engine.LedgerRow
+import dev.loupe.engine.Extent
 import dev.loupe.engine.ResolvedBy
+import dev.loupe.engine.Truncation
 import dev.loupe.engine.Probability
 import dev.loupe.sources.SourceSpec
 import dev.loupe.sources.SourceType
@@ -199,8 +201,17 @@ class Store(val home: Path) {
                 itemId = o.optStr("itemId"),
                 // Lines written before the field existed default per ResolvedBy.legacy.
                 resolvedBy = ResolvedBy.parse(o.optStr("resolvedBy"), failure),
+                // Absent on lines written before the field existed: unknown, which reads as not cut.
+                truncation = o.get("truncation")?.takeUnless { it.isJsonNull }?.asJsonObject?.let { t ->
+                    Truncation(t.optExtent("textBudget"), t.optExtent("modelContext"))
+                },
             )
         }
+
+        private fun JsonObject.optExtent(key: String): Extent? =
+            get(key)?.takeUnless { it.isJsonNull }?.asJsonObject?.let { e ->
+                Extent(e.get("kept").asInt, e.get("total").asInt, Extent.Measure.parse(e.str("unit")))
+            }
 
         private fun JsonObject.str(key: String): String =
             get(key)?.takeUnless { it.isJsonNull }?.asString ?: throw IllegalArgumentException("missing '$key'")

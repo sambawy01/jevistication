@@ -2,10 +2,12 @@ package dev.loupe.backend.onnx
 
 import dev.loupe.engine.Decision
 import dev.loupe.engine.DecisionEngine
+import dev.loupe.engine.Extent
 import dev.loupe.engine.Item
 import dev.loupe.engine.Judgment
 import dev.loupe.engine.Probability
 import dev.loupe.engine.TextState
+import dev.loupe.engine.Truncation
 import java.nio.file.Path
 import java.nio.file.Paths
 import kotlin.test.AfterTest
@@ -34,6 +36,12 @@ class OnnxBackendTest {
         TokenizedInput(safe, LongArray(safe.size) { 1L })
     }
 
+    /** [tokenizer], but reporting its 64-character cap as a context cut, as `LayaTokenizer` does. */
+    private val reporting = Tokenizer { q, text, c ->
+        val base = tokenizer.encode(q, text, c)
+        TokenizedInput(base.inputIds, base.attentionMask, stateTokens = text.length, stateTokensKept = minOf(text.length, 64))
+    }
+
     private fun modelPath(): Path =
         Paths.get(javaClass.getResource("/synthetic-classifier.onnx")!!.toURI())
 
@@ -52,7 +60,7 @@ class OnnxBackendTest {
 
     @Test
     fun `scores a judgment and returns a mass for every candidate`() {
-        val scores = open().score(receipt, state("TOTAL 12.40 VAT 2.07"))
+        val scores = open().score(receipt, state("TOTAL 12.40 VAT 2.07")).masses
 
         assertEquals(setOf("yes", "no"), scores.keys)
         assertTrue(scores.values.all { it in 0.0..1.0 }, "masses out of range: $scores")
@@ -62,8 +70,8 @@ class OnnxBackendTest {
     @Test
     fun `the output actually depends on the input`() {
         val b = open()
-        val short = b.score(receipt, state("a"))
-        val long = b.score(receipt, state("a much longer receipt with many more characters"))
+        val short = b.score(receipt, state("a")).masses
+        val long = b.score(receipt, state("a much longer receipt with many more characters")).masses
         assertTrue(
             short["yes"] != long["yes"],
             "the graph should respond to its input; got $short and $long",
@@ -73,8 +81,8 @@ class OnnxBackendTest {
     @Test
     fun `scoring the same text twice is deterministic`() {
         val b = open()
-        val first = b.score(receipt, state("TOTAL 12.40"))
-        val second = b.score(receipt, state("TOTAL 12.40"))
+        val first = b.score(receipt, state("TOTAL 12.40")).masses
+        val second = b.score(receipt, state("TOTAL 12.40")).masses
         assertEquals(first, second)
     }
 
@@ -155,5 +163,21 @@ class OnnxBackendTest {
         val input = TokenizedInput(longArrayOf(5, 6), longArrayOf(1, 1))
         assertEquals(2, input.length)
         assertContentEquals(longArrayOf(5, 6), input.inputIds)
+    }
+
+    @Test
+    fun `a state the context cut reaches the ledger marked truncated, a short one does not`() {
+        OnnxBackend.open(modelPath(), reporting).use { b ->
+            val engine = DecisionEngine(b, threshold = Probability.of(0.0))
+            val long = engine.decide(receipt, Item("long", "x".repeat(200)))
+            val short = engine.decide(receipt, Item("short", "TOTAL 12.40"))
+
+            assertEquals(Truncation(modelContext = Extent(64, 200, Extent.Measure.TOKENS)), long.row.truncation)
+            assertTrue(long.row.truncated)
+            // NULL_ACTION: an answer about part of the item is not acted on; it queues.
+            assertIs<Decision.Abstain>(long.decision)
+            assertEquals(Truncation.NONE, short.row.truncation)
+            assertIs<Decision.Act>(short.decision)
+        }
     }
 }

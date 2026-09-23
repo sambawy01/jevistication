@@ -1,6 +1,8 @@
 package dev.loupe.desktop.core
 
 import dev.loupe.engine.Backend
+import dev.loupe.engine.FailurePosture
+import dev.loupe.engine.Scored
 import dev.loupe.engine.Calibration
 import dev.loupe.engine.CalibrationExample
 import dev.loupe.engine.DecisionEngine
@@ -40,6 +42,21 @@ data class DecisionView(
 ) {
     /** The mechanical check that answered, from the row's `resolvedBy`; null for a model row. */
     val mechanicalCheck: String? get() = (row.resolvedBy as? ResolvedBy.Mechanical)?.check
+
+    /**
+     * "Input was cut: read first N of M …" when the model saw only part of the item, naming each
+     * cut (the text budget in characters, the model's context in tokens); null when it read the
+     * whole item or the row predates the record.
+     */
+    val inputCutNote: String?
+        get() {
+            val t = row.truncation?.takeIf { it.isCut } ?: return null
+            val parts = listOfNotNull(
+                t.textBudget?.let { "first ${it.kept} of ${it.total} characters (text budget)" },
+                t.modelContext?.let { "first ${it.kept} of ${it.total} tokens (model context)" },
+            )
+            return "Input was cut: read " + parts.joinToString(", then ") + "."
+        }
 
     /** What the engine says, in words: its answer, or that it declined. */
     val status: String
@@ -152,7 +169,9 @@ object Analysis {
                 item = row.itemId?.let(items::get),
                 topLabel = top,
                 topMass = mass,
-                acted = !unusable && mass >= judgment.threshold,
+                // Policy.onCutInput: a cut input only acts under an OPEN posture; otherwise it queues.
+                acted = !unusable && mass >= judgment.threshold &&
+                    !(row.truncated && judgment.onFailure != FailurePosture.OPEN),
                 unusable = unusable,
                 // Recorded on the row (A5 resolvedBy). Rows logged before the field read as model rows.
                 mechanical = row.isMechanical,
@@ -227,10 +246,15 @@ object Analysis {
         val rows = effectiveRows(all, judgment, corrections)
             .filter { it.correction != null && it.itemId in items && !it.isMechanical }
         if (rows.isEmpty()) return null
-        val logged = rows.associate { it.itemId!! to it.distribution }
+        val logged = rows.associateBy { it.itemId!! }
+        // Replays the logged answer and the logged context cut, so a replayed decision is held to
+        // the same cut-input rule the original was. The text-budget cut recomputes from the text.
         val replay = Backend { _, state ->
-            val id = state.items.single().id
-            logged.getValue(id).labels.associateWith { logged.getValue(id).getValue(it).value }
+            val row = logged.getValue(state.items.single().id)
+            Scored(
+                row.distribution.labels.associateWith { row.distribution.getValue(it).value },
+                modelContext = row.truncation?.modelContext,
+            )
         }
         val engine = DecisionEngine(replay, Probability.of(judgment.threshold))
         val fixtures = rows.map { row ->

@@ -9,7 +9,9 @@ import dev.loupe.engine.Distribution
 import dev.loupe.engine.ImpersonationReason
 import dev.loupe.engine.Export
 import dev.loupe.engine.LedgerRow
+import dev.loupe.engine.Extent
 import dev.loupe.engine.ResolvedBy
+import dev.loupe.engine.Truncation
 import dev.loupe.engine.Probability
 import dev.loupe.sources.SampleData
 import dev.loupe.sources.Scanner
@@ -88,6 +90,24 @@ class PersistenceTest {
         val (loaded, bad) = Store(tmp).loadLedger()
         assertEquals(0, bad)
         assertEquals(listOf(ResolvedBy.Model, ResolvedBy.Unusable), loaded.map { it.resolvedBy })
+    }
+
+    @Test
+    fun `truncation round-trips through the saved ledger and the export, and legacy lines load as unknown`() {
+        val store = Store(tmp)
+        val base = LedgerRow("j", "h", Distribution.of("yes" to 0.7, "no" to 0.3), "yes", Probability.of(1.0), itemId = "/m")
+        val rows = listOf(
+            base,
+            base.copy(itemId = "/w", truncation = Truncation.NONE),
+            base.copy(itemId = "/c", action = "__abstain__", truncation = Truncation(Extent(3986, 9000, Extent.Measure.CHARACTERS), Extent(760, 1400, Extent.Measure.TOKENS))),
+        )
+        store.appendLedger(rows)
+        val (loaded, bad) = Store(tmp).loadLedger()
+        assertEquals(0, bad)
+        assertEquals(rows, loaded)
+        assertEquals(Export.ledgerToJsonl(rows), Export.ledgerToJsonl(loaded))
+        assertEquals(listOf(null, Truncation.NONE), loaded.take(2).map { it.truncation })
+        assertEquals(listOf(false, false, true), loaded.map { it.truncated })
     }
 
     @Test

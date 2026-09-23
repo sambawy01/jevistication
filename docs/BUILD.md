@@ -733,6 +733,28 @@ Nothing below is deferred by choice; each needs something this environment does 
   exact-duplicate"; Calibration notes how many decisions a rule answered. Tests: 376 → **386**
   across the build, `./gradlew check` green.
 
+- **2026-09-23 — A2/A3: the judgment is told when its input was cut.** On the owner's "Go".
+  `Backend.score` now returns `Scored` — the raw masses plus `modelContext: Extent?`, the state
+  tokens the model read of how many the state encoded to, set only when it cut. `OnnxBackend` fills
+  it from `TokenizedInput.stateTokens`/`stateTokensKept`, which `LayaTokenizer` copies from
+  `LayaSequence`; `Backend.ofMasses` wraps a masses-only lambda for fakes and replays. `TextState`
+  reports its own character-budget cut as `budgetCut` (kept of total characters; `StateItem` now
+  records `sourceLength`). `DecisionEngine` combines the two into `Truncation(textBudget,
+  modelContext)` on every model and unusable row — cut by the text budget and cut by the model
+  context are recorded separately, since a dense 4,000-character state can pass the first and
+  still lose its tail to Laya's ~760 state tokens. **Policy** (`Policy.onCutInput`): an answer about
+  part of an item is not an answer about the item, so under `NULL_ACTION` and `LOUD` an `Act` on a
+  cut input becomes an `Abstain` carrying the cut — the item queues, with propensity 1 and no
+  exploration; under `OPEN` the decision stands and the cut is only recorded. Uncut inputs are
+  untouched. `Export` writes `"truncation"` when known (`{}` is known whole, each key a cut with
+  `kept`, `total`, `unit`); **legacy lines**, and mechanical rows, have none and load as unknown
+  (`truncation == null`), which `LedgerRow.truncated` reads as false. The desktop applies the same
+  rule to `DecisionView.acted` (so the queue, coverage and agreement agree with the engine), replays
+  the logged context cut in D4, and Results shows "Input was cut: read first N of M characters (text
+  budget), then first N of M tokens (model context)." Tests: 386 → **401** across the build,
+  including a gated Laya test that a dense ~3,500-character state reaches the ledger cut by the
+  model context and a short one does not; `./gradlew check` green.
+
 ---
 ## Hand-off
 
@@ -802,10 +824,8 @@ came from labelled fixtures.
 2. **A better INT8.** SmoothQuant-style rescaling or static per-channel activation calibration
    might let the 22 FP32 `mlp.Wo` matrices quantise too (~60 MB saved) without the damage the
    naive recipe did. The parity harness already measures it.
-3. **Surface token truncation.** `LayaSequence.stateTruncated` reports when the state's tail was
-   cut to fit 1,024 tokens, but `Backend.score` returns only masses, so the engine never hears
-   of it — a gap in the "the judgment is told when its input was cut" contract. `TextState`'s
-   4,000-character budget can exceed Laya's ~760 state tokens for dense text.
+3. ~~**Surface token truncation.**~~ Done 2026-09-23 — `Scored`, `Truncation` on `LedgerRow`; see
+   the Progress log.
 4. **A fixture corpus**, and **hardening** (property tests for calibration and off-policy maths).
    The desktop app now produces labels: every correction is one, keyed by item and criteria hash,
    exported losslessly. The owner's own files are the cheapest corpus there is.

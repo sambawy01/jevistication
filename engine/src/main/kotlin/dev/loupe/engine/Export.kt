@@ -76,6 +76,9 @@ object Export {
                     "failure" to Json.stringOrNull(row.failure),
                     // Always emitted since it was added; a line without it is a legacy row.
                     "resolvedBy" to Json.string(row.resolvedBy.code),
+                    // Emitted only when known; a line without it is unknown (legacy or mechanical).
+                    // `{}` is "known whole"; each present key is one cut, kept of total.
+                    row.truncation?.let { "truncation" to truncation(it) },
                     "distribution" to Json.obj(
                         row.distribution.labels.map { label ->
                             label to Json.number(row.distribution.getValue(label).value)
@@ -84,6 +87,23 @@ object Export {
                 ),
             )
         }
+
+    private fun truncation(t: Truncation): String =
+        Json.obj(
+            listOfNotNull(
+                t.textBudget?.let { "textBudget" to extent(it) },
+                t.modelContext?.let { "modelContext" to extent(it) },
+            ),
+        )
+
+    private fun extent(e: Extent): String =
+        Json.obj(
+            listOf(
+                "kept" to Json.number(e.kept),
+                "total" to Json.number(e.total),
+                "unit" to Json.string(e.unit.code),
+            ),
+        )
 
     /** The judgment library, including the three-part template text that defines each one. */
     fun judgmentsToJson(definitions: List<JudgmentDefinition>): String =

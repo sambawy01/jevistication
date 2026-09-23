@@ -173,6 +173,8 @@ class LayaTokenizer(private val prompt: LayaPrompt) : Tokenizer {
             inputIds = sequence.inputIds,
             attentionMask = LongArray(sequence.inputIds.size) { 1L },
             markerPositions = sequence.markerPositions,
+            stateTokens = sequence.stateTokens,
+            stateTokensKept = sequence.stateTokensKept,
         )
     }
 }

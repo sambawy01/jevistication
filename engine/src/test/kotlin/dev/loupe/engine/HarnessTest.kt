@@ -14,7 +14,7 @@ class HarnessTest {
      * A model that is confident and right on easy items, and confidently *wrong* on hard ones —
      * the §6 situation the whole abstention design exists for.
      */
-    private val backend = Backend { _, state ->
+    private val backend = Backend.ofMasses { _, state ->
         if (state.text.contains("EASY")) {
             mapOf("yes" to 0.95, "no" to 0.05)
         } else {
