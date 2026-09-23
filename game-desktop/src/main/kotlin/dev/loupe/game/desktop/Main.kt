@@ -66,7 +66,7 @@ fun main() {
             },
             title = "Riverflight (working name) — Loupe demo",
             state = rememberWindowState(width = 1240.dp, height = 940.dp),
-            onPreviewKeyEvent = { onKey(controller, it) },
+            onPreviewKeyEvent = { handleGameKey(controller, it) },
         ) {
             App(controller)
         }
@@ -95,8 +95,11 @@ fun App(controller: GameController) {
     }
 }
 
-/** Arrows and space are the plane's; they are taken before any control can consume them. */
-private fun onKey(controller: GameController, event: KeyEvent): Boolean {
+/**
+ * Arrows and space are the plane's; they are taken before any control can consume them. Public so
+ * another window hosting [App] (Loupe's "Watch it think") gets the same controls.
+ */
+fun handleGameKey(controller: GameController, event: KeyEvent): Boolean {
     val down = when (event.type) {
         KeyEventType.KeyDown -> true
         KeyEventType.KeyUp -> false
