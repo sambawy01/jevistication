@@ -26,6 +26,16 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>LoupeGoogleOAuthClientID</key>
+	<string></string>
+	<key>LoupeMicrosoftOAuthClientID</key>
+	<string></string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Loupe reads your calendar events on this iPhone (titles, times, attendees, repeats) so your judgments and watchers can use them. Nothing leaves the phone, and Loupe never changes an event.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Loupe reads names and email addresses on this iPhone so it can warn you when a message uses a contact's name from an address they do not use. Nothing leaves the phone.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Loupe reads your photos on this iPhone to find receipts and documents, including the text in screenshots. Nothing leaves the phone.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Rajdhani-SemiBold.ttf</string>

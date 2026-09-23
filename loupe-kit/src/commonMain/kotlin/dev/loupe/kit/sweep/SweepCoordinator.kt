@@ -9,6 +9,7 @@ import dev.loupe.kit.judgments.SweepPlan
 import dev.loupe.kit.judgments.SweepProgress
 import dev.loupe.kit.watchers.WatcherReport
 import dev.loupe.kit.watchers.WatcherRun
+import dev.loupe.sources.common.ItemKind
 import dev.loupe.sources.common.SourceItem
 import dev.loupe.templates.UserJudgment
 import kotlin.time.TimeSource
@@ -109,8 +110,11 @@ interface CoordinatorObserver {
 class SweepCoordinator(private val backend: Backend, private val lane: ModelLane) {
 
     /** The per-judgment plans for a run, skipping what is already decided under the current wording. */
-    fun plans(judgments: List<UserJudgment>, items: List<SourceItem>, ledger: List<LedgerRow>): List<Pair<UserJudgment, SweepPlan>> =
-        judgments.map { it to JudgmentResults.plan(ledger, it, items, rerunAll = false) }
+    fun plans(judgments: List<UserJudgment>, items: List<SourceItem>, ledger: List<LedgerRow>): List<Pair<UserJudgment, SweepPlan>> {
+        // Contact cards (epic #7 child 7) are facts for the impersonation watcher, not documents to judge.
+        val judgeable = items.filter { it.kind != ItemKind.CONTACT }
+        return judgments.map { it to JudgmentResults.plan(ledger, it, judgeable, rerunAll = false) }
+    }
 
     fun run(
         judgments: List<UserJudgment>,

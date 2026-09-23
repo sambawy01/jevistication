@@ -1,0 +1,8 @@
+# Recorded IMAP transcript (synthetic, no real mailbox). See PhoneSourcesTests.
+S: 25
+* OK Fixture IMAP ready
+
+C: L1 LOGIN "me@example.com" "wrong"
+S: 50
+L1 NO [AUTHENTICATIONFAILED] Invalid credentials
+

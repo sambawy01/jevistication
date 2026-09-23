@@ -5,7 +5,8 @@ import LoupeKit
 /// "Sample data — not from your phone" wherever it appears — read by LoupeKit's common scanner with
 /// PDFKit/ImageIO as its platform readers, off the main thread, with progress. Results are cached
 /// through LoupeKit's `SourceLibrary` (Application Support/Loupe/sources) so Judgments and the Now
-/// watchers read items without rescanning. Phone sources (Photos, Files, Mail, …) come in child 7.
+/// watchers read items without rescanning. The phone's own sources (Photos, Files, Calendar,
+/// Contacts, Mail — child 7) live in `SourcesService+Phone.swift` and store into the same cache.
 @MainActor
 final class SourcesService: ObservableObject {
     static let sampleId = "sample"
@@ -24,15 +25,28 @@ final class SourcesService: ObservableObject {
     @Published private(set) var sampleScan: CachedScan?
     @Published private(set) var progress: Progress?
     @Published private(set) var problem: String?
+    /// Each phone source's row: on/off, permission, count, last scan, error (child 7).
+    @Published var phone: [PhoneSource: PhoneSourceState] = [:]
+    /// Bumped whenever any source's items change (a scan lands, a source is switched), so Now re-runs
+    /// the watchers.
+    @Published var revision = 0
 
-    var scanning: Bool { progress != nil }
+    var scanning: Bool { progress != nil || phone.values.contains { $0.scanning } }
 
-    private let library: SourceLibrary?
+    let library: SourceLibrary?
+    let home: URL
+    let deps: PhoneDependencies
     private let sampleRoot: URL?
-    private let queue = DispatchQueue(label: "dev.loupe.sources", qos: .utility)
+    let queue = DispatchQueue(label: "dev.loupe.sources", qos: .utility)
     private var started = false
 
-    init(home: URL, sampleRoot: URL?) {
+    convenience init(home: URL, sampleRoot: URL?) {
+        self.init(home: home, sampleRoot: sampleRoot, deps: .live(home: home))
+    }
+
+    init(home: URL, sampleRoot: URL?, deps: PhoneDependencies) {
+        self.home = home
+        self.deps = deps
         self.sampleRoot = sampleRoot
         do {
             try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
@@ -45,6 +59,7 @@ final class SourcesService: ObservableObject {
             sampleEnabled = library.isEnabled(sourceId: Self.sampleId, default: true)
             sampleScan = library.cached(sourceId: Self.sampleId)
         }
+        loadPhoneStates()
     }
 
     /// The synthetic sample shipped in the app bundle (the desktop's sample resources, verbatim).
@@ -57,6 +72,7 @@ final class SourcesService: ObservableObject {
         guard !started else { return }
         started = true
         if sampleEnabled && sampleScan == nil { scanSample() }
+        refreshOnOpen()
     }
 
     /// The two roots of the sample: the documents folder and the mail export, with stable ids.
@@ -87,7 +103,7 @@ final class SourcesService: ObservableObject {
             Task { @MainActor in
                 self.progress = nil
                 switch outcome {
-                case .success(let scan): self.sampleScan = scan
+                case .success(let scan): self.sampleScan = scan; self.revision += 1
                 case .failure(let error): self.problem = "Scan failed: \(error.localizedDescription)"
                 }
             }
@@ -99,15 +115,30 @@ final class SourcesService: ObservableObject {
         do {
             try library.setEnabled(sourceId: Self.sampleId, enabled: on)
             sampleEnabled = on
+            revision += 1
             if on && sampleScan == nil { scanSample() }
         } catch {
             problem = "Could not save the setting: \(error.localizedDescription)"
         }
     }
 
-    /// Items of every source that is on — what Judgments and the Now watchers read.
+    /// Items of every source that is on — what the Now watchers and the sort read. Includes contact
+    /// cards (the impersonation watcher's address book; the sort does not judge them).
     func items() -> [SourceItem] {
-        library?.items(sourceIds: [Self.sampleId], defaultEnabled: true) ?? []
+        guard let library else { return [] }
+        let phoneIds = PhoneSource.allCases.filter { isPhoneEnabled($0) }.flatMap(\.cacheIds)
+        return library.items(sourceIds: [Self.sampleId], defaultEnabled: true)
+            + library.items(sourceIds: phoneIds, defaultEnabled: true)   // already filtered by each source's switch
+    }
+
+    /// Items a judgment reads: every source that is on, less contact cards (facts, not documents).
+    func judgeableItems() -> [SourceItem] {
+        items().filter { $0.kind != .contact }
+    }
+
+    /// How many sources are on, the sample included.
+    var enabledCount: Int {
+        (sampleEnabled ? 1 : 0) + PhoneSource.allCases.filter { isPhoneEnabled($0) }.count
     }
 
     /// Waits for a queued scan to finish on the background queue (tests).

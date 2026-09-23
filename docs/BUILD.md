@@ -174,11 +174,11 @@ Ordered by breadth of value per unit of work.
 
 | | Source | Notes |
 |---|---|---|
-| B1 | Files, Downloads, PDFs | SAF; text extraction; no vision stage needed |
-| B2 | Email | Gmail OAuth and IMAP; already text; richest outcome signal |
+| B1 | Files, Downloads, PDFs | SAF; text extraction; no vision stage needed. *iPhone (2026-09-23, child 7):* document picker + security-scoped bookmarks, share sheet "Send to Loupe" |
+| B2 | Email | Gmail OAuth and IMAP; already text; richest outcome signal. *iPhone (child 7):* read-only IMAP with an app password, labelled Online; OAuth built but gated on owner client IDs |
 | B3 | Spreadsheets and CSV | row plus column context |
-| B4 | Photos and screenshots | MediaStore + ML Kit OCR and labels |
-| B5 | Calendar and contacts | contacts also feed the impersonation watcher |
+| B4 | Photos and screenshots | MediaStore + ML Kit OCR and labels. *iPhone (child 7):* PhotoKit + Vision OCR on device (no scene labels yet) |
+| B5 | Calendar and contacts | contacts also feed the impersonation watcher. *iPhone (child 7):* EventKit + Contacts; the address book now feeds `WatcherRun` |
 | B6 | Voice memos | on-device transcription |
 | B7 | SMS | not built — see below |
 | B8 | Notifications | listener service |
@@ -564,6 +564,43 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-23 — iPhone phone sources (epic #7, child 7).** Five sources on the iPhone, each a
+  `SourceItem` producer into the same `SourceLibrary` cache the sample uses, so Judgments, the
+  watchers and the sort read them unchanged. Each is **off by default**; turning it on in Sources is
+  the only place its iOS permission is asked; off removes its items (and, for Mail, makes no request).
+  **Photos** — PhotoKit (limited-library aware, "Choose more photos"), ImageIO metadata from the
+  bytes, text by Vision `VNRecognizeTextRequest` (`.accurate`, language correction, on-device),
+  screenshots flagged; incremental: unread photos newest first (300 a scan, "scan again to
+  continue"), edits via the persistent change token, deletions dropped; iCloud-only originals are
+  not downloaded and are listed as skipped. **Files** — `UIDocumentPickerViewController` for files
+  and folders, security-scoped bookmarks persisted (`sources/bookmarks.json`), re-scanned on every
+  open through the common scanner; plus the **Share Extension "Send to Loupe"** (`LoupeShare`),
+  which copies shared files, links and text into the App Group `group.dev.loupe.app` inbox read as
+  the `shared` source. **Calendar** — EventKit read-only (iOS 17 full access): title, times,
+  attendees, organiser, recurrence, one item per occurrence, a year back to a year ahead.
+  **Contacts** — CNContactStore: names, emails, phones as CONTACT items; the shared `WatcherRun`
+  now merges the address book into the contacts it infers, so a known name from an unknown address
+  is flagged without any mail history (contacts are not judged: `SweepCoordinator` and
+  `judgeableItems()` leave them out). **Mail** — a small read-only IMAP client in Swift over
+  Network.framework TLS (993, no STARTTLS, no dependencies): EXAMINE, `UID SEARCH`, `UID FETCH …
+  BODY.PEEK[]<0.262144>`, a command allowlist (ported as spec from Loupe Station's `mail/imap.py`),
+  incremental by UIDVALIDITY/UID, the newest 200 on first sync; each message is kept as a `.eml`
+  and read by the common scanner and MIME parser, then labelled **Online** with host and fetch time
+  (§4a). App passwords live in the Keychain (`WhenUnlockedThisDeviceOnly`). Google/Microsoft OAuth
+  (ASWebAuthenticationSession, PKCE S256, `state`, XOAUTH2, refresh) is built but **gated**: the
+  client IDs are Info.plist keys that ship empty, and the screen says "Needs a Google/Microsoft
+  OAuth client ID" — owner-blocked. Loupe Station's classify/phishing logic was **not** ported:
+  this child is ingestion only (child 11 owns mail triage and phishing); its Composio connectors were
+  not touched (risk 14). Shared: `PhoneItems` (photo/event/contact builders, `labelOnline`, merge),
+  `ItemKind.EVENT`/`CONTACT` and `DateOrigin.PHOTO_CREATED`/`EVENT_START` appended (desktop kinds
+  still map by name). Tests: `PhoneItemsTest` (7, JVM + iOS sim), `AddressBookWatcherTest` (3),
+  XCTest `PhoneSourcesTests` (22: fakes for PhotoKit/EventKit/Contacts, bookmark persistence, IMAP
+  reader + client against recorded fixture transcripts, OAuth PKCE (RFC 7636 vector) and the gate,
+  Keychain), UI `SourcesUITests` (every row present and off, Mail labelled Online, sample still
+  48 items; Mail screen shows the OAuth gate). No test touches the network or a real service.
+  **Trap found:** `"\r\n"` is one Swift `Character`, so a `Character` check for CR/LF in an IMAP
+  quoted string misses it — check `unicodeScalars`.
+
 ---
 
 ## Where the build stands
@@ -613,7 +650,9 @@ Nothing below is deferred by choice; each needs something this environment does 
 |---|---|
 | **A1** model runtime, fine-tune, latency | A real mid-range device — its acceptance criterion is a measurement on hardware. The weights and the ONNX export now exist (desktop), fine-tuning needs a labelled corpus and a GPU |
 | **A2** the second backend | Qwen3-0.6B weights. Laya runs; the runtime and the interface exist |
-| **B1–B9** every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, calendar, contacts, notifications, WebView |
+| **B1–B9** every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, calendar, contacts, notifications, WebView. *On the iPhone (epic #7 child 7, simulator):* B1 files (picker, bookmarks, share sheet), B2 mail (IMAP with an app password), B4 photos (PhotoKit + Vision OCR) and B5 calendar and contacts are built; B3 spreadsheets are read as CSV files only; B6 voice memos, B8 notifications (iOS offers none) and B9 are not built |
+| **B2 OAuth mail** (Gmail API / Outlook) | **Owner:** a Google OAuth client ID (iOS type) and a Microsoft Entra app registration (public client, IMAP.AccessAsUser.All), put in `ios/project.yml` as `LoupeGoogleOAuthClientID` / `LoupeMicrosoftOAuthClientID`. Empty today, so the app offers IMAP with an app password instead |
+| **"Send to Loupe" on a device** | The App Group `group.dev.loupe.app` registered on the owner's Apple developer account (the simulator runs it unsigned) |
 | **D5** actions, preview, undo | Android. The desktop app shows **preview only** and never changes a file; undo exists for corrections |
 | **E1–E4** actuation | Android `AutofillService`, App Intents, accessibility, WebView |
 | **F1** passive mode | Android: WorkManager, charging and thermal constraints. iPhone: built on the simulator (epic #7 child 6); battery/thermal on a device needs a physical iPhone |
@@ -652,7 +691,8 @@ after 1, 6 needs 3, 4 and 5.
 | 4 | Unsure queue + measurement | **Done 2026-09-23 (simulator)** — shared `JudgmentMeasure` (queue across judgments with audit arm, corrections keyed by criteria hash, D2 gates 10/30, D3 preview, D4 via Harness, "use the baseline"); Unsure queue, Measure screen, Needs you on Now, Me agreement line |
 | 5 | Watchers on Now | **Done 2026-09-23 (simulator)** — orchestration moved to shared `dev.loupe.kit.watchers.WatcherRun` (desktop delegates, its tests unchanged; no rule or threshold changed); `WatcherFindings` (findings with evidence, verdicts as corrections, subscriptions census); Now hero shows the top finding, findings list with Confirm / Dismiss / Not relevant / Open item, census, mascot `found` on new findings, all sample findings labelled Sample |
 | 6 | Retroactive sweep + passive mode | **Done 2026-09-23 (simulator)** — shared `SweepCoordinator` + `ModelLane` (one model thread; foreground > game > sweep; preempt between items, resume); every judgment × every enabled source, skipping items judged under the current criteria hash, then the watchers; progress/items/s/median/cancel; BGProcessingTask "Sort while charging" (off by default, external power, no network, expiry checkpoints, thermal `.serious`+ and Low Power Mode stop it); Me → Run now; notification + Now card from real counts. **Battery/thermal on a device is owner-blocked** (needs an iPhone) |
-| 7–9 | Phone sources, mascot, model delivery | Not started |
+| 7 | Phone sources | **Done 2026-09-23 (simulator)** — Photos (PhotoKit, limited-aware, Vision OCR on device, screenshots, change tokens), Files (document picker + persisted security-scoped bookmarks, rescan on open) + Share Extension "Send to Loupe" (App Group inbox), Calendar (EventKit), Contacts (feed the impersonation watcher), Mail (read-only IMAP over TLS, app password in the Keychain, UIDVALIDITY/UID incremental, labelled Online); each off by default with its own permission prompt only on enable; Sources rows with permission state, counts, last scan, errors with recovery text. **Owner-blocked:** Google/Microsoft OAuth client IDs (flow built, gated on empty config); App Group on a device (needs the developer account) |
+| 8–9 | Mascot, model delivery | Not started |
 
 ### Proving milestones
 
@@ -1313,7 +1353,7 @@ came from labelled fixtures.
 | A1 on-device latency | A real device — an iPhone first — the export and runtime path exist |
 | A1/F3 fine-tuning | A labelled corpus and a GPU |
 | A2's second backend | Qwen3-0.6B weights and its own export |
-| B1–B9 every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, contacts, notifications |
+| B1–B9 every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, contacts, notifications. iPhone B1/B2 (IMAP)/B4/B5 built on the simulator (epic #7 child 7); OAuth mail needs the owner's client IDs |
 | D5, E1–E4, F1 | Android UI, autofill, accessibility, WorkManager |
 | F5 on a phone | An Android module and a device; the game logic (`:game`) needs no change |
 | F2 on a phone | Android sources, WorkManager (built on the desktop) |

@@ -18,9 +18,9 @@ struct NowView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(item: $openItem) { ItemTextView(item: $0) }
         }
-        // Re-run the watchers whenever the scanned items change (a scan finishes, the sample is
+        // Re-run the watchers whenever the scanned items change (a scan finishes, a source is
         // switched on or off). The first value arrives on subscribe, so this also runs on appear.
-        .onReceive(sources.$sampleScan.combineLatest(sources.$sampleEnabled)) { _ in
+        .onReceive(sources.$sampleScan.combineLatest(sources.$sampleEnabled, sources.$revision)) { _ in
             guard !sources.scanning else { return }
             Task { await watchers.run() }
         }
@@ -72,7 +72,7 @@ struct NowView: View {
                         HStack(spacing: 0) {
                             stat("Needs you", hasDecisions ? "\(service.needsYou)" : nil)
                             stat("Findings", watchers.summary.map { "\($0.findings.count)" })
-                            stat("Sources", sources.sampleEnabled ? "1" : nil)
+                            stat("Sources", sources.enabledCount > 0 ? "\(sources.enabledCount)" : nil)
                         }
                         if let top = watchers.top {
                             HeroFindingCard(finding: top, more: watchers.findings.count - 1)
@@ -157,7 +157,7 @@ struct NowView: View {
             } else {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text(sources.scanning ? "Reading the sample…" : "The watchers are reading your items…")
+                    Text(sources.scanning ? "Reading your sources…" : "The watchers are reading your items…")
                         .font(.subheadline).foregroundStyle(Palette.inkSoft)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)

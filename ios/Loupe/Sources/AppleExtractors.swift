@@ -35,7 +35,16 @@ final class AppleExtractors: NSObject, PlatformExtractors {
     }
 
     func readImage(path: String) -> ImageInfo {
-        guard let source = CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil),
+        readImage(source: CGImageSourceCreateWithURL(URL(fileURLWithPath: path) as CFURL, nil))
+    }
+
+    /// The same metadata from image bytes in memory: PhotoKit hands a photo over as data (child 7).
+    func readImage(data: Data) -> ImageInfo {
+        readImage(source: CGImageSourceCreateWithData(data as CFData, nil))
+    }
+
+    private func readImage(source: CGImageSource?) -> ImageInfo {
+        guard let source,
               let props = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any] else {
             return ImageInfo(facts: ["metadata": "unreadable (ImageIO could not read it)"], takenIso: nil)
         }

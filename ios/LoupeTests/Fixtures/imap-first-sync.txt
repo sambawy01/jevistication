@@ -1,0 +1,52 @@
+# Recorded IMAP transcript (synthetic, no real mailbox). See PhoneSourcesTests.
+S: 59
+* OK [CAPABILITY IMAP4rev1 AUTH=PLAIN] Fixture IMAP ready
+
+C: L1 LOGIN "me@example.com" "app pass \"q\""
+S: 23
+L1 OK LOGIN completed
+
+C: L2 EXAMINE "INBOX"
+S: 185
+* FLAGS (\Answered \Flagged \Deleted \Seen \Draft)
+* 2 EXISTS
+* 0 RECENT
+* OK [UIDVALIDITY 7] UIDs valid
+* OK [UIDNEXT 103] Predicted next UID
+L2 OK [READ-ONLY] EXAMINE completed
+
+C: L3 UID SEARCH UID 1:*
+S: 42
+* SEARCH 101 102
+L3 OK SEARCH completed
+
+C: L4 UID FETCH 101,102 (UID BODY.PEEK[]<0.262144>)
+S: 592
+* 1 FETCH (UID 101 BODY[]<0> {264}
+From: "CloudBox Billing" <billing@cloudbox.example>
+To: me@example.com
+Subject: Your receipt
+Date: Mon, 21 Sep 2026 09:00:00 +0000
+Message-ID: <101@example.com>
+Content-Type: text/plain; charset=utf-8
+
+You were charged £9.99 for CloudBox Plus. Thank you.
+)
+* 2 FETCH (UID 102 BODY[]<0> {227}
+From: "Mum" <mum@family.example>
+To: me@example.com
+Subject: Dinner
+Date: Tue, 22 Sep 2026 18:30:00 +0000
+Message-ID: <102@example.com>
+Content-Type: text/plain; charset=utf-8
+
+From the kitchen: dinner at 7?
+Love, Mum
+)
+L4 OK FETCH completed
+
+C: L5 LOGOUT
+S: 43
+* BYE Logging out
+L5 OK LOGOUT completed
+

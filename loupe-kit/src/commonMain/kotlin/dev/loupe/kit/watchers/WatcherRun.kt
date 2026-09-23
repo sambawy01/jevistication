@@ -67,8 +67,9 @@ data class WatcherReport(
  *   and from CSV files with merchant, date and amount columns. The merchant is the sender's name.
  * - **Term change** — two versions of one document: files whose names differ only by digits
  *   (`renewal-2025.pdf`, `renewal-2026.pdf`), or successive emails from one address.
- * - **Impersonation** — without an address book a contact is inferred from history: a display
- *   name used at least twice from the same address.
+ * - **Impersonation** — a contact is inferred from history (a display name used at least twice
+ *   from the same address), and, when the Contacts source is on, the address book's cards (their
+ *   names and email addresses) are known contacts too (epic #7 child 7).
  * - **Site fraud** — the links in emails, and each sender's own domain, against the brand the sender
  *   claims to be; origin facts only, never page content.
  */
@@ -88,7 +89,8 @@ object WatcherRun {
     private val INSTITUTIONAL_NAME = Regex("""\b(security|support|billing|account|team|bank|service)\b""", RegexOption.IGNORE_CASE)
 
     fun run(items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule = SIX_MONTHS): WatcherReport {
-        val texty = items.filter { it.hasText && it.duplicateOf == null }
+        val book = addressBook(items)
+        val texty = items.filter { it.hasText && it.duplicateOf == null && it.kind != ItemKind.CONTACT }
         val emails = texty.filter { it.kind == ItemKind.EMAIL && it.email?.fromAddress != null }
         val candidates = expiryCandidates(texty, today, rule)
         val charges = charges(texty)
@@ -100,7 +102,7 @@ object WatcherRun {
             recurring = RecurringMoney.census(charges.map { it.second }, today),
             chargesFound = charges.size,
             termChanges = termChanges(texty),
-            impersonation = impersonation(emails),
+            impersonation = impersonation(emails, book),
             fraud = fraud(emails),
             emailsChecked = emails.size,
             linksChecked = emails.sumOf { it.email!!.links.size },
@@ -208,17 +210,32 @@ object WatcherRun {
      * "first contact from this address" signal alone fires for every new sender, so it is reported
      * only beside a stronger one.
      */
-    fun impersonation(emails: List<SourceItem>): List<ImpersonationFinding> {
+    fun impersonation(emails: List<SourceItem>): List<ImpersonationFinding> = impersonation(emails, emptyList())
+
+    /**
+     * Known contacts from the address book: each contact card (kind CONTACT) with a name and at least
+     * one email address. Phone numbers are not used — nothing reads SMS on iOS.
+     */
+    fun addressBook(items: List<SourceItem>): List<Contact> =
+        items.filter { it.kind == ItemKind.CONTACT }.mapNotNull { item ->
+            val addresses = item.facts["emails"]?.split(',')?.map { it.trim().lowercase() }?.filter { '@' in it }?.toSet().orEmpty()
+            if (item.name.isBlank() || addresses.isEmpty()) null else Contact(item.name, addresses)
+        }
+
+    /** As [impersonation], with [book] (the address book) merged into the contacts inferred from history. */
+    fun impersonation(emails: List<SourceItem>, book: List<Contact>): List<ImpersonationFinding> {
         val messages = emails.map { it to Message(it.email!!.fromName ?: "", it.email!!.fromAddress!!, it.text) }
         return messages.mapNotNull { (item, message) ->
             if (message.displayName.isBlank()) return@mapNotNull null
             val others = messages.filter { it.first !== item }.map { it.second }
-            val contacts = others.filter { it.displayName.isNotBlank() }
+            val inferred = others.filter { it.displayName.isNotBlank() }
                 .groupBy { it.displayName.lowercase() }
                 .mapNotNull { (_, byName) ->
                     val trusted = byName.groupingBy { it.address.lowercase() }.eachCount().filterValues { it >= 2 }.keys
                     if (trusted.isEmpty()) null else Contact(byName.first().displayName, trusted)
                 }
+            val contacts = (inferred + book).groupBy { it.name.lowercase() }
+                .map { (_, same) -> Contact(same.first().name, same.flatMap { it.addresses }.map { it.lowercase() }.toSet()) }
             val signals = Impersonation.check(message, contacts, others)
             val domain = message.address.substringAfter('@').lowercase()
             val knownDomains = contacts.firstOrNull { it.name.equals(message.displayName, ignoreCase = true) }

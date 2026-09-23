@@ -3,7 +3,11 @@ package dev.loupe.sources.common
 import dev.loupe.engine.Item
 import kotlinx.datetime.LocalDate
 
-/** What an item was read as. Same names and order as :sources-desktop's `ItemKind`. */
+/**
+ * What an item was read as. The first eight are :sources-desktop's `ItemKind`, same names and order;
+ * EVENT and CONTACT are the phone's (epic #7 child 7: EventKit and the Contacts framework), appended
+ * so every desktop kind still maps by name.
+ */
 enum class ItemKind(val title: String) {
     TEXT("text"),
     MARKDOWN("markdown"),
@@ -13,6 +17,8 @@ enum class ItemKind(val title: String) {
     EMAIL("email"),
     PDF("PDF"),
     IMAGE("image"),
+    EVENT("calendar event"),
+    CONTACT("contact"),
 }
 
 /** A folder of files, or a mail export. */
@@ -58,6 +64,8 @@ enum class DateOrigin(val title: String) {
     EXIF("photo EXIF"),
     PDF_INFO("PDF creation date"),
     FILE_MODIFIED("file modified time"),
+    PHOTO_CREATED("photo library date"),
+    EVENT_START("event start"),
 }
 
 /**

@@ -27,7 +27,7 @@ extension LayaModel: JudgmentModelProvider {
 @MainActor
 final class JudgmentsService: ObservableObject {
     static let shared = JudgmentsService(ledger: LedgerService.shared,
-                                         items: { SourcesService.shared.items() },
+                                         items: { SourcesService.shared.judgeableItems() },
                                          model: LayaModel.shared)
 
     enum ModelGate: Equatable {

@@ -1,0 +1,38 @@
+# Recorded IMAP transcript (synthetic, no real mailbox). See PhoneSourcesTests.
+S: 25
+* OK Fixture IMAP ready
+
+C: L1 LOGIN "me@example.com" "app pass \"q\""
+S: 23
+L1 OK LOGIN completed
+
+C: L2 EXAMINE "INBOX"
+S: 82
+* 3 EXISTS
+* OK [UIDVALIDITY 7] UIDs valid
+L2 OK [READ-ONLY] EXAMINE completed
+
+C: L3 UID SEARCH UID 103:*
+S: 38
+* SEARCH 103
+L3 OK SEARCH completed
+
+C: L4 UID FETCH 103 (UID BODY.PEEK[]<0.262144>)
+S: 321
+* 3 FETCH (UID 103 BODY[]<0> {259}
+From: "CloudBox Billing" <billing@cloudbox.example>
+To: me@example.com
+Subject: Your receipt
+Date: Wed, 23 Sep 2026 09:00:00 +0000
+Message-ID: <103@example.com>
+Content-Type: text/plain; charset=utf-8
+
+You were charged £9.99 for CloudBox Plus again.
+)
+L4 OK FETCH completed
+
+C: L5 LOGOUT
+S: 31
+* BYE
+L5 OK LOGOUT completed
+

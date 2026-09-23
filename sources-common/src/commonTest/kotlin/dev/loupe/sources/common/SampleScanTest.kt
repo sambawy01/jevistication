@@ -29,7 +29,8 @@ class SampleScanTest {
     fun readsEverySupportedKind() {
         val result = scan()
         val kinds = result.countsByKind()
-        for (k in ItemKind.entries) assertTrue((kinds[k] ?: 0) > 0, "no $k: $kinds")
+        // Every kind a file can be read as (EVENT and CONTACT come only from the phone's frameworks).
+        for (k in ItemKind.entries - ItemKind.EVENT - ItemKind.CONTACT) assertTrue((kinds[k] ?: 0) > 0, "no $k: $kinds")
         assertEquals(24, kinds[ItemKind.EMAIL])
         assertEquals(3, result.skipped.size, result.skipped.toString())
         assertEquals(setOf("unsupported type", "extension lies"), result.skippedByReason().keys)
