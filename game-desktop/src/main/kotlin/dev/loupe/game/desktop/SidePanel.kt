@@ -96,6 +96,7 @@ fun SidePanel(controller: GameController, frame: Long, modifier: Modifier = Modi
         Mono("failures     ${stats.count(DecisionSource.FAILURE)}")
         Mono("hand-offs    ${stats.handOffs}")
         Mono("overrides    ${stats.overrides}")
+        Mono("speed        ${fmt(session.world.difficulty.scroll, 1)} rows/s  (section ${session.world.section})")
         if (controller.lanes.size > 1) {
             Section("Side by side")
             for (other in controller.lanes) {

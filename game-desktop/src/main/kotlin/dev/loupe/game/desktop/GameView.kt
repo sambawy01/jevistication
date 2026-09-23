@@ -59,6 +59,8 @@ fun GameView(lane: Lane, frame: Long, modifier: Modifier = Modifier) {
                 Hud("score ${world.score}")
                 Spacer(Modifier.width(12.dp))
                 Hud("rows ${world.cameraY.toInt()}")
+                Spacer(Modifier.width(12.dp))
+                Hud("section ${world.section}")
             }
             Spacer(Modifier.height(6.dp))
             FuelGauge(world.fuel / Rules.FUEL_MAX)
