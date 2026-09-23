@@ -44,6 +44,9 @@ fun main() {
     val controller = LoupeController(Store(home), modelLoader = ::loadLaya)
     controller.start()
     val exitAfter = System.getenv("LOUPE_EXIT_AFTER")?.toLongOrNull()
+    // The open game, if any: closed before the app frees the model it borrowed, so no decision is
+    // still inside the native session when that session is released.
+    var openGame: GameController? = null
 
     application {
         if (exitAfter != null) {
@@ -58,6 +61,7 @@ fun main() {
         }
         Window(
             onCloseRequest = {
+                openGame?.close()
                 controller.close()
                 exitApplication()
             },
@@ -68,7 +72,7 @@ fun main() {
         }
         if (controller.gameOpen) {
             // The game borrows the app's model and must not free it when its window closes.
-            val game = remember { GameController(ownsModel = false) }
+            val game = remember { GameController(ownsModel = false).also { openGame = it } }
             LaunchedEffect(controller.model) {
                 game.onModelStatus(
                     when (val m = controller.model) {
@@ -78,7 +82,12 @@ fun main() {
                     },
                 )
             }
-            DisposableEffect(Unit) { onDispose { game.close() } }
+            DisposableEffect(Unit) {
+                onDispose {
+                    game.close()
+                    openGame = null
+                }
+            }
             Window(
                 onCloseRequest = { controller.closeGame() },
                 title = "Riverflight (working name) — watch Loupe's model think",
