@@ -182,8 +182,12 @@ This is the spine. Each line is a promise, not a default.
 - **Never acts on something it is unsure about.** Uncertain items queue.
 - **Never blesses.** It warns; it never displays an all-clear implying safety.
 - **Never lets page content raise trust.** Content can only add suspicion.
-- **Never writes prose.** No generative model, no summaries. This is what keeps the offline
-  guarantee true.
+- **Never sends, posts or files what it writes without your approval.** Writing is opt-in:
+  judgments never depend on a generative model, and with no writing assistant configured Loupe
+  stays fully offline. If you turn one on (a local model, or a provider with your own key), it
+  may draft replies or summaries, labelled as drafts; every draft waits in the review queue and
+  nothing leaves as yours until you approve it. *(Changed 2026-09-23 on the owner's decision:
+  previously "Never writes prose". Loupe Station drafts replies this way.)*
 - **Never sends your data to our servers.** For local sources nothing leaves the device; for
   connected accounts traffic is device↔provider directly and we are not in the path.
 
@@ -399,8 +403,8 @@ upstream and went unnoticed.
 **State construction is three-way, never summarised.** An item too large for the state budget is
 kept verbatim, truncated with an explicit marker, or removed — and the judgment says which. It is
 never rewritten. A summary loses the exact path, error string or figure that made the item worth
-keeping, and an item that was summarised cannot be verified against later. This is the §4 rule
-about prose, applied to the pipeline rather than to the output.
+keeping, and an item that was summarised cannot be verified against later. Judgments never
+depend on generated text (§4), and this is that rule applied to the pipeline.
 
 Compressing against a known judgment is also a far easier problem than summarising in the
 abstract, which is why filtering works where generic compaction struggles.
