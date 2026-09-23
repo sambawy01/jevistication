@@ -125,4 +125,16 @@ its sources".
   come from the engine's pinned Mozilla PSL, not `psl.py`). Ported tests from `tests/email_cases.py`,
   `tests/test_phishing.py` and `tests/test_browser.py`. Mail triage wording follows
   `static/js/email*.js` / `i18n.js`. No Composio or model code is used.
-
+- **Also used in (epic #7 children 13 and 14):** `loupe-kit/src/commonMain/kotlin/dev/loupe/kit/review/`
+  — the review queue's statuses and state machine, the append-only decision log, approve-with-edits,
+  reject-needs-a-reason, retry, the limits (16-hex ids, 128 000-byte items, 1 000-character notes,
+  one-line 200-character titles, 2 000-character summaries masked with `redact_text`), event and actor
+  names and the kind / action registry of `laya_studio/review/{service,store,registry}.py`;
+  `loupe-kit/src/commonMain/kotlin/dev/loupe/kit/packs/` — the preset-pack format
+  (`laya-preset-pack` v1), every limit, the slug / preset-id / question-id patterns, `slugify`, the
+  namespace-stripping rule, the `translations` block and the error locations of `laya_studio/packs.py`,
+  with the question rules of `schemas.py` (`ChoiceQuestion`, `ScoreQuestion`, `NoulQuestion`,
+  `PredictRequest`). Ported tests from `tests/test_review.py` and `tests/test_packs.py`. The example
+  pack `examples/packs/bistro-cloud.json` is copied verbatim; it is the owner's own business rules
+  (Bistro Cloud) and the app labels it an example. Review / pack wording follows `static/js/review*.js`
+  and `static/js/packs.js`.

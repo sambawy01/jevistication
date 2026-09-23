@@ -37,6 +37,12 @@ struct RootView: View {
                 .environment(\.mascotTabSelected, selection == .me)
         }
         .environmentObject(launcher)
+        // "Open in Loupe" from the share sheet or Files: a preset pack goes to the Judgments preview.
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            selection = .judgments
+            PacksService.shared.open(url)
+        }
         .fullScreenCover(item: $launcher.mode) { mode in
             GameView(mode: mode, seed: launcher.seed)
         }

@@ -134,6 +134,9 @@ final class JudgmentsService: ObservableObject {
         corrections = next
     }
 
+    /// Replaces the whole list (a pack import, an approved Review proposal). False when it could not be saved.
+    func replaceAll(_ next: [UserJudgment]) -> Bool { save(next) }
+
     fileprivate func replace(_ j: UserJudgment) -> Bool { save(judgments.map { $0.id == j.id ? j : $0 }) }
 
     private func save(_ next: [UserJudgment]) -> Bool {

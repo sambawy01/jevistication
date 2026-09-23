@@ -7,6 +7,7 @@ struct JudgmentsView: View {
     enum Section: String, CaseIterable { case mine = "My judgments", library = "Library" }
 
     @ObservedObject var service: JudgmentsService
+    @ObservedObject var packs: PacksService = .shared
     @State private var section: Section = .mine
     @State private var path = NavigationPath()
     @State private var writing = false
@@ -21,6 +22,7 @@ struct JudgmentsView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal, 16).padding(.vertical, 8)
                 .accessibilityIdentifier("judgments.section")
+                PackProblemsView(packs: packs)
                 switch section {
                 case .mine: MyJudgmentsList(service: service, openLibrary: { section = .library })
                 case .library: LibraryView(service: service)
@@ -29,6 +31,7 @@ struct JudgmentsView: View {
             .background(Palette.ground.ignoresSafeArea())
             .navigationTitle("Judgments")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { PacksMenu(packs: packs) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { writing = true } label: { Label("Write your own", systemImage: "square.and.pencil") }
                         .accessibilityIdentifier("judgments.write")
@@ -42,6 +45,7 @@ struct JudgmentsView: View {
                 case .queue: UnsureQueueView(service: service)
                 }
             }
+            .sheet(item: $packs.preview) { PackPreviewView(packs: packs, preview: $0) }
             .sheet(isPresented: $writing) {
                 WriteJudgmentView(service: service) { id in
                     writing = false

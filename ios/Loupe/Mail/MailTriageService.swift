@@ -26,10 +26,16 @@ final class MailTriageService: ObservableObject {
 
     var rows: [MailRow] { summary?.rows ?? [] }
 
+    /// A run asked for while one is going: it runs again after, so new items are never missed.
+    private var rerun = false
+
     func run() async {
-        guard !running else { return }
+        guard !running else { rerun = true; return }
         running = true
-        defer { running = false }
+        defer {
+            running = false
+            if rerun { rerun = false; Task { await run() } }
+        }
         let all = items()
         let corrections = ledger.correctionIndex()
         summary = await ModelWork.run(.sweep) {

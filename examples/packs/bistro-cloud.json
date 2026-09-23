@@ -1,0 +1,326 @@
+{
+  "format": "laya-preset-pack",
+  "version": 1,
+  "name": "Bistro Cloud",
+  "slug": "bistro-cloud",
+  "description": "Example pack for a delivery-only cloud kitchen in Egypt: complaint and review triage, order notes, a social-post gate with its house rules (no prices, no dine-in), and inbox routing for delivery platforms.",
+  "presets": [
+    {
+      "id": "complaint-triage",
+      "name": "Complaint triage",
+      "description": "Route a delivery complaint to the team behind its main problem, gauge frustration, and flag refund, callback and packaging issues.",
+      "state_key": "message",
+      "sample_text": "الأوردر وصل متأخر ساعة كاملة والأكل كان بارد خالص، والعلبة كانت مفتوحة والصوص مدلوق على الكيس كله. بجد مش مقبول. عايز فلوسي ترجع، ولو سمحتوا حد يكلمني النهارده.",
+      "questions": {
+        "team": {
+          "type": "choice",
+          "instructions": "Which team caused the main problem the customer complains about in `message`?",
+          "criteria": {
+            "kitchen": "food taste, freshness, wrong or missing dish (الأكل، الطعم، صنف ناقص أو غلط)",
+            "delivery": "late order, food arrived cold, rider, address (تأخير، الأكل وصل بارد، الطيار)",
+            "packaging": "box or container open, leaking, spilled sauce, crushed bag (العلبة مفتوحة، الصوص مدلوق، الكيس)",
+            "app_or_payment": "app, promo code, payment or double charge (التطبيق، الدفع)",
+            "other": "none of the other teams fits"
+          }
+        },
+        "frustration": {
+          "type": "score",
+          "instructions": "How frustrated or angry does the customer sound in `message`?",
+          "criteria": [
+            "calm: neutral, factual (هادي)",
+            "concerned: disappointed but polite (زعلان بس بأدب)",
+            "annoyed: clearly unhappy, complains firmly (متضايق، مش مقبول)",
+            "furious: very angry, insults or shouting (غضبان جدا، شتيمة)"
+          ]
+        },
+        "refund_requested": {
+          "type": "noul",
+          "instructions": "Does the customer in `message` ask for their money back or a refund?",
+          "criteria": {
+            "true": "asks for money back or a refund (عايز فلوسي ترجع، استرجاع)",
+            "false": "no request for money back"
+          }
+        },
+        "wants_callback": {
+          "type": "noul",
+          "instructions": "Does the customer ask for a phone call back? (هل العميل طالب حد يكلمه أو يتصل بيه؟)",
+          "criteria": {
+            "true": "yes, wants someone to call or contact them (عايز حد يكلمه)",
+            "false": "no, does not ask for a call (مش طالب مكالمة)"
+          }
+        },
+        "packaging_issue": {
+          "type": "noul",
+          "instructions": "Does `message` mention a packaging problem such as an open box, leak or spill?",
+          "criteria": {
+            "true": "open, leaking, spilled or crushed packaging (العلبة مفتوحة، مدلوق)",
+            "false": "no packaging problem mentioned"
+          }
+        }
+      },
+      "translations": {
+        "ar": {
+          "name": "فرز الشكاوى",
+          "description": "وجّه شكوى التوصيل إلى الفريق المسؤول عن مشكلتها الرئيسية، وقدّر درجة الإحباط، ونبّه إلى طلبات الاسترداد ومعاودة الاتصال ومشكلات التغليف."
+        }
+      }
+    },
+    {
+      "id": "review-sentiment",
+      "name": "Review sentiment",
+      "description": "Read a delivery order review for overall sentiment and what it talks about.",
+      "state_key": "review",
+      "sample_text": "Ordered the chicken shawarma bowl and the lentil soup for dinner. The food was fresh and full of flavour, honestly the best bowl I've had in El Gouna. Delivery took a bit longer than the app said, but the rider was friendly and everything arrived hot. Will definitely order again.",
+      "questions": {
+        "sentiment": {
+          "type": "choice",
+          "instructions": "What is the overall sentiment of the customer's `review`?",
+          "criteria": {
+            "positive": "happy overall, praises the order",
+            "mixed": "both clear praise and clear complaints",
+            "negative": "unhappy overall, mostly complaints"
+          }
+        },
+        "mentions_food_quality": {
+          "type": "noul",
+          "instructions": "Does the `review` comment on the taste, freshness or quality of the food?"
+        },
+        "mentions_delivery_speed": {
+          "type": "noul",
+          "instructions": "Does the `review` comment on how fast or slow the delivery was?"
+        },
+        "would_order_again": {
+          "type": "noul",
+          "instructions": "Does the `review` say or clearly imply the customer will order again?"
+        }
+      },
+      "translations": {
+        "ar": {
+          "name": "انطباع المراجعات",
+          "description": "اقرأ مراجعة طلب توصيل لمعرفة الانطباع العام وما تتحدث عنه."
+        }
+      }
+    },
+    {
+      "id": "order-note-tags",
+      "name": "Order note tags",
+      "description": "Tag the customer's note on a delivery order and flag allergy-safety risks for the kitchen.",
+      "state_key": "note",
+      "sample_text": "My son has a severe sesame allergy, so please no tahini or sesame seeds anywhere in his wrap. Thank you!",
+      "questions": {
+        "tag": {
+          "type": "choice",
+          "instructions": "What is the main purpose of the customer's order `note`?",
+          "criteria": {
+            "allergy_or_dietary": "allergies, intolerances, vegetarian, vegan or other dietary needs",
+            "delivery_instructions": "directions, gate, building, floor or when to call on arrival",
+            "cooking_preference": "spice level, doneness, sauce on the side, remove an ingredient by taste",
+            "cutlery_or_extras": "cutlery, napkins, extra sauces or condiments",
+            "other": "anything else"
+          }
+        },
+        "is_allergy_safety_critical": {
+          "type": "noul",
+          "instructions": "Does the `note` describe an allergy where a mistake could harm someone's health?",
+          "criteria": {
+            "true": "a real allergy or medical restriction the kitchen must follow",
+            "false": "a preference, or no health risk mentioned"
+          }
+        }
+      },
+      "translations": {
+        "ar": {
+          "name": "وسوم ملاحظات الطلبات",
+          "description": "صنّف ملاحظة العميل على طلب التوصيل، ونبّه المطبخ إلى مخاطر الحساسية الغذائية."
+        }
+      }
+    },
+    {
+      "id": "review-triage",
+      "name": "Delivery review triage",
+      "description": "Triage a delivery order review: sentiment, main topic (food, delivery, packaging, app, price, staff), and whether it needs a reply, compensation or moderation.",
+      "state_key": "review",
+      "sample_text": "الأكل طعمه حلو بس الشوربة وصلت مدلوقة في الكيس والعلبة مكسورة. أول مرة يحصل كده، ياريت تهتموا بالتغليف أكتر.",
+      "questions": {
+        "sentiment": {
+          "type": "choice",
+          "instructions": "What is the overall sentiment of `review`?",
+          "criteria": {
+            "positive": "happy overall, praise (حلو، تحفة، ممتاز)",
+            "mixed": "clear praise and clear complaints together",
+            "negative": "unhappy overall, complaints (وحش، مش مقبول)",
+            "other": "no clear opinion"
+          }
+        },
+        "topic": {
+          "type": "choice",
+          "instructions": "What does `review` mainly talk about?",
+          "criteria": {
+            "food": "taste, freshness, portion or quality",
+            "delivery": "late, cold on arrival, rider",
+            "packaging": "spilled, leaking, broken box",
+            "app": "app, ordering, payment",
+            "price_value": "value for money, too expensive",
+            "staff": "customer service",
+            "other": "none of these"
+          }
+        },
+        "needs_reply": {
+          "type": "noul",
+          "instructions": "Does `review` complain about a problem?",
+          "criteria": {
+            "true": "a complaint or problem (مشكلة، وحش)",
+            "false": "praise only"
+          }
+        },
+        "wants_compensation": {
+          "type": "noul",
+          "instructions": "Does `review` ask for a refund, compensation or a free replacement?"
+        },
+        "toxic": {
+          "type": "noul",
+          "instructions": "Does `review` contain insults, swearing, threats or hate?",
+          "criteria": {
+            "true": "insults, swearing, threats or hate (شتيمة)",
+            "false": "polite or merely critical"
+          }
+        }
+      },
+      "translations": {
+        "ar": {
+          "name": "فرز مراجعات التوصيل",
+          "description": "فرز مراجعة توصيل لـ Bistro Cloud: الانطباع والموضوع الرئيسي، وهل تحتاج إلى رد أو تعويض أو إشراف."
+        }
+      }
+    },
+    {
+      "id": "dm-intent",
+      "name": "DM / comment intent (restaurant)",
+      "description": "Route an Instagram, Facebook or WhatsApp message to the kitchen: order status, complaint, menu question, catering, collaboration, job, spam; order problem and Franco-Arabic.",
+      "state_key": "message",
+      "sample_text": "salam, ana 3amel order men sa3a w lessa ma weselsh, el order rakamo 5521. momken te2olly howa fein?",
+      "questions": {
+        "intent": {
+          "type": "choice",
+          "instructions": "What does the sender of `message` want from Bistro Cloud?",
+          "criteria": {
+            "order_status": "where is my order",
+            "complaint": "problem with food or an order",
+            "menu_question": "question about dishes, allergens or hours",
+            "catering": "large or event order",
+            "collaboration": "influencer or partnership",
+            "job": "wants a job",
+            "spam_scam": "spam or scam",
+            "other": "none of these"
+          }
+        },
+        "order_problem": {
+          "type": "noul",
+          "instructions": "Does `message` report a problem with an order?"
+        },
+        "is_franco_arabic": {
+          "type": "noul",
+          "instructions": "Is `message` Arabic written in Latin letters, using digits like 3 and 7 for sounds?"
+        }
+      },
+      "translations": {
+        "ar": {
+          "name": "نية الرسائل والتعليقات (مطعم)",
+          "description": "وجّه رسالة إنستجرام أو فيسبوك أو واتساب إلى Bistro Cloud: النية، ومشكلات الطلبات، والكتابة بالفرانكو."
+        }
+      }
+    },
+    {
+      "id": "social-post-gate",
+      "name": "Social post gate (delivery only, no prices)",
+      "description": "Check an outbound post or reply before publishing against the house rules: no prices or discounts, no dine-in, tables or rooftop (delivery only), no promises, no health claims, no personal data; tone.",
+      "state_key": "draft",
+      "sample_text": "Our new rooftop terrace is open! Book a table tonight and enjoy 30% off every bowl. Guaranteed at your door in 20 minutes or it's free.",
+      "questions": {
+        "mentions_amount": {
+          "type": "noul",
+          "instructions": "Does `draft` mention a price, discount or percentage?"
+        },
+        "mentions_dine_in": {
+          "type": "noul",
+          "instructions": "Does `draft` mention dine-in, tables, seating, booking, a rooftop or a terrace?"
+        },
+        "makes_promise": {
+          "type": "noul",
+          "instructions": "Does `draft` guarantee something?"
+        },
+        "health_claim": {
+          "type": "noul",
+          "instructions": "Does `draft` make a medical or health claim about the food?"
+        },
+        "personal_data": {
+          "type": "noul",
+          "instructions": "Does `draft` contain a phone number or home address?"
+        },
+        "tone": {
+          "type": "score",
+          "instructions": "How well does `draft` fit a warm, friendly, confident food brand voice?",
+          "criteria": [
+            "off-brand: rude, aggressive, sarcastic or sloppy",
+            "weak: flat, pushy or overly salesy",
+            "on-brand: warm, friendly and confident"
+          ]
+        }
+      },
+      "translations": {
+        "ar": {
+          "name": "بوابة المنشورات (توصيل فقط، بدون أسعار)",
+          "description": "افحص منشورًا أو ردًا صادرًا قبل نشره وفق قواعد المطبخ: لا أسعار ولا خصومات، ولا أكل في المكان (توصيل فقط)، ولا وعود، ولا ادعاءات صحية، ولا بيانات شخصية؛ والنبرة."
+        }
+      }
+    },
+    {
+      "id": "gmail-triage",
+      "name": "Inbox triage (delivery platforms)",
+      "description": "Route the kitchen's inbox: suppliers, delivery platforms (Talabat, Breadfast, Instashop), customers, catering, jobs, tax, bank, spam and phishing; urgency and reply.",
+      "state_key": "email",
+      "sample_text": "Dear partner, your weekly payout statement for 15-21 September is ready. 3 orders were flagged as late and the adjustments are shown in the attached report. Please review them in the partner portal within 7 days. Talabat Partner Support",
+      "questions": {
+        "category": {
+          "type": "choice",
+          "instructions": "Which kind of email is `email`?",
+          "criteria": {
+            "supplier_invoice": "supplier bill or statement (فاتورة مورد)",
+            "delivery_platform": "Talabat, Breadfast, Instashop partner notice",
+            "customer_complaint": "a customer unhappy with an order",
+            "catering_request": "bulk, event or office order",
+            "job_application": "CV or asking for a job",
+            "government_tax": "tax authority, e-invoice, licence (الضرائب)",
+            "bank_payment": "bank, card, transfer or payout",
+            "marketing_spam": "newsletter, ads, cold offers",
+            "phishing": "fake login, prize or payment scam",
+            "other": "none of these"
+          }
+        },
+        "urgency": {
+          "type": "score",
+          "instructions": "How urgent is the request in `email`?",
+          "criteria": [
+            "no time pressure",
+            "needs attention soon",
+            "blocking issue or hard deadline"
+          ]
+        },
+        "needs_reply": {
+          "type": "noul",
+          "instructions": "Does `email` ask Bistro Cloud a question or request something?"
+        },
+        "is_phishing": {
+          "type": "noul",
+          "instructions": "Is `email` a phishing or scam attempt to steal money, logins or data?"
+        }
+      },
+      "translations": {
+        "ar": {
+          "name": "فرز البريد (منصات التوصيل)",
+          "description": "وجّه بريد Bistro Cloud: الموردون ومنصات التوصيل والعملاء والطلبيات والوظائف والضرائب والبنوك والرسائل المزعجة والتصيّد، مع الإلحاح والحاجة إلى رد."
+        }
+      }
+    }
+  ]
+}

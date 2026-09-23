@@ -35,7 +35,9 @@ struct PhoneDependencies {
     static func live(home: URL) -> PhoneDependencies {
         PhoneDependencies(
             photos: PhotoKitLibrary(), recognizer: VisionTextRecognizer(), events: EventKitReader(),
-            contacts: ContactsReader(), bookmarks: BookmarkStore(home: home), inbox: { SharedInbox.folder() },
+            contacts: ContactsReader(), bookmarks: BookmarkStore(home: home),
+            // Under -LoupeFixtures the inbox is a throwaway folder beside the throwaway ledger.
+            inbox: { LaunchOptions.current.fixtureMode ? fixtureInbox(home) : SharedInbox.folder() },
             mailAccounts: MailAccountStore(home: home), mailCache: home.appendingPathComponent("mail", isDirectory: true),
             keychain: { account in
                 #if DEBUG
@@ -48,7 +50,26 @@ struct PhoneDependencies {
     }
 }
 
+private func fixtureInbox(_ home: URL) -> URL {
+    let dir = home.appendingPathComponent("SharedInbox", isDirectory: true)
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    return dir
+}
+
 extension SourcesService {
+    #if DEBUG
+    /// `-LoupeReviewDemo` (with -LoupeFixtures): two identical files in the throwaway inbox and Files
+    /// on, so the privacy check finds a duplicate the app can really remove (and put back).
+    func seedReviewDemo() async {
+        let inbox = deps.inbox()
+        let text = "Fresh Basket receipt\nTotal 12.40\nThank you for shopping with us.\n"
+        for name in ["review-demo-receipt.txt", "review-demo-receipt copy.txt"] {
+            try? Data(text.utf8).write(to: inbox.appendingPathComponent(name), options: .atomic)
+        }
+        await setPhoneEnabled(.files, true)
+    }
+    #endif
+
     func isPhoneEnabled(_ s: PhoneSource) -> Bool {
         library?.isEnabled(sourceId: s.rawValue, default: false) ?? false
     }

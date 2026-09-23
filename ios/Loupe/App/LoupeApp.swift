@@ -46,6 +46,7 @@ struct LaunchOptions {
     var queueDemo = false        // -LoupeQueueDemo (DEBUG, with -LoupeFixtures): seed the queue with a stand-in scorer
     var openScreen: String?      // -LoupeOpen queue|measure: open Now's queue, or the first judgment's Measure
     var sortDemo = false         // -LoupeSortDemo (DEBUG, with -LoupeFixtures): passive sort with a stand-in scorer
+    var reviewDemo = false       // -LoupeReviewDemo (DEBUG, with -LoupeFixtures): a duplicate pair in the (throwaway) inbox, Files on
 
     static let current: LaunchOptions = {
         var o = LaunchOptions()
@@ -64,6 +65,7 @@ struct LaunchOptions {
         o.openLibrary = args.contains("-LoupeLibrary")
         o.queueDemo = args.contains("-LoupeQueueDemo") && o.fixtureMode
         o.sortDemo = args.contains("-LoupeSortDemo") && o.fixtureMode
+        o.reviewDemo = args.contains("-LoupeReviewDemo") && o.fixtureMode
         if let i = args.firstIndex(of: "-LoupeOpen"), i + 1 < args.count { o.openScreen = args[i + 1] }
         #endif
         return o

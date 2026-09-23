@@ -564,6 +564,64 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-24 — Epic #7 children 13 and 14: the Review queue (approve / reject / retry) and preset
+  packs.** On the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
+  - **Review queue, ported from Loupe Station** (`~/laya-studio` at `ea7697a`,
+    `review/{service,store,registry}.py`, `static/js/review*.js`): new `loupe-kit` package
+    `dev.loupe.kit.review` — `ReviewQueue` (pending → approved → applied | failed → retry → approved;
+    pending | failed → rejected with a required reason; every step one status change plus one row in
+    the append-only log; approve with edits, validated, `edited` when they differ; Station's limits,
+    event names, actor strings, attempts, newest-first listing with a cursor, per-status counts; 404 /
+    409 / 413 / 422 kept as refusal codes), `ReviewRegistry` (kinds as flat text fields with limits;
+    actions with their kinds, params, own `validate` and `reversible`), `ReviewProducers`, and
+    `ReviewCodec`. **Phone changes:** no agent keys, rate limits or HTTP routes (only the app's own
+    checks submit, as Station's in-process `submit_proposal`); a `source_key` per proposal, never
+    queued twice (the checks re-run on every scan; a rejected proposal does not come back); the app
+    runs the action between `approve` and `finish` / `fail`; a sixth status `undone` for reversible
+    actions; storage is `review-items.json` (atomic replace) + `review-log.jsonl` (appended, synced,
+    never rewritten) beside the decision ledger instead of SQLite. Verdict actions also append to the
+    ledger's corrections log.
+  - **What is proposed** (nothing runs until approved): privacy check → remove the extra copy of a
+    duplicate, only for copies the app can reach (picked Files, Send to Loupe; the sample, mail and
+    photos stay suggest-only), held for Undo; mail triage → confirm phishing for an undecided flagged
+    message (corrections `mail-phishing`, Undo = retraction); watchers → keep an unanswered finding on
+    Now as confirmed (Undo = retraction); judgments → add a pack question as a judgment
+    (`judgment.add`, Station's `save_preset`; the C2 lint runs again at approval, an edit that breaks
+    it is refused; an approval never replaces a judgment of yours). Retry re-runs the producing check,
+    then the action.
+  - **Preset packs, ported from Station** (`packs.py`, `schemas.py` question rules, `static/js/packs.js`):
+    new `dev.loupe.kit.packs` — `PackFormat` validates exactly as Station (whole pack refused, every
+    problem listed with Station's location, e.g. `presets.0.questions.q.score.criteria`; lengths in code
+    points as Python counts them), `PackJudgments` maps each question to a judgment through the C2
+    lint (noul → yes/no with the pack's true/false descriptions as options; choice → pick one; score →
+    score bands), ids `j-<preset>` / `j-<preset>-<question>`, conflicts by id (skip / replace / keep
+    both), and exports your judgments as a pack that imports back to the same ids.
+    `examples/packs/bistro-cloud.json` is copied verbatim and bundled, labelled "Example pack: a
+    delivery kitchen's own rules". Of its 29 questions, 14 become judgments; 15 are refused by the
+    lint (13 yes/no questions without descriptions would be bare yes/no; one asks for an explanation;
+    the social-post gate's questions ask the engine to produce text) — shown in the preview with the
+    reasons. Station allows a score of 20 levels; the lint keeps 10.
+  - **iOS:** `Loupe/Review/` — `ReviewService` (collects proposals whenever a check's summary
+    changes, runs the approved action, Undo), `ReviewView` (grouped by check; Approve / Reject with a
+    reason / Retry / Undo; select several and approve them at once; copy says it is actions, not the
+    Unsure queue's labels); Now card "To review: N". `Loupe/Judgments/PacksService.swift` +
+    `PackViews.swift` — Judgments → Packs: import from Files, "Open in Loupe" from the share sheet or
+    Files (`CFBundleDocumentTypes` public.json, `onOpenURL`), try the example, export my judgments
+    (share sheet); preview before adding (what will be added, what the lint refused and why, a
+    conflict choice); "Add N judgments" or "Send to Review, to approve one by one". Privacy and mail
+    runs requested while one is going now run again after it (a scan landing mid-run was missed).
+  - **Tests:** `ReviewQueueTest` (14: `test_review.py`'s lifecycle, validation, size cap, edits,
+    reason, fail → retry → applied, failed → rejected, filters and cursor; plus source keys, undo,
+    judgment lint at approval, reopen from files with the log only growing), `PackFormatTest` (9:
+    `test_packs.py`'s Bistro and validation cases, round-trip, code-point lengths),
+    `PackJudgmentsTest` (4: the lint per question, conflicts, export → import); JVM + iOS simulator.
+    XCTest `ReviewTests` (8: proposals from each check, approve privacy removes and Undo restores a
+    real file, mail verdict in the ledger with Undo, reject not proposed again, fail → retry after the
+    producer, batch approve, pack judgments approved one by one, relaunch) and `PacksTests` (4:
+    example preview, conflicts, invalid pack, export → import round-trip). UI `ReviewPacksUITests`:
+    approve a privacy-check proposal (a real duplicate pair in the throwaway inbox,
+    `-LoupeFixtures -LoupeReviewDemo`) and undo it; import the example pack and see its judgments.
+
 - **2026-09-23 — Epic #7 children 11 and 12: mail triage + phishing, and brand-lookalike site
   checks.** On the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
   - **Shared rules, ported from Loupe Station** (the owner's `~/laya-studio`, commit `ea7697a`):
@@ -843,6 +901,8 @@ after 1, 6 needs 3, 4 and 5.
 | 10 | Privacy check | **Done 2026-09-23 (simulator)** — Loupe Station's PII, secret and duplicate rules ported verbatim to shared `dev.loupe.kit.privacy` (rule ids, severities, masking, false-positive handling; duplicates on the engine's `ContentHash`); Now card + Sources link → findings by type with masked previews, Open, Mark safe (ledger correction, Undo), Delete / Move with Undo for reachable Files items, PhotoKit delete with the system prompt; everything else suggest-only |
 | 11 | Mail triage + phishing | **Done 2026-09-23 (simulator)** — Loupe Station's `mail/phishing.py` evidence and `mail/classify.py` labels ported verbatim to shared `dev.loupe.kit.mail` (weights, thresholds, tables, reason texts; the `wf-email-triage` keyword rules answer on the phone, no model, no Composio); Now card + Sources → Mail: sections (phishing suspected, spam, needs reply, urgent, by category), concrete signals, Mark safe / Confirm phishing (ledger corrections, Undo), Open; the sample's `phishing-paypal.eml` flagged with its signals |
 | 12 | Brand-lookalike site checks | **Done 2026-09-23 (simulator)** — Station's `browser/brands.py` list and `signals.py`/`scoring.py` weights in shared `dev.loupe.kit.site`, on the engine's pinned PSL, shown beside the engine's `SiteFraud` (thresholds unchanged; six differences recorded in the Progress log); on every mail link and on web links in other items |
+| 13 | Review queue | **Done 2026-09-24 (simulator)** — Loupe Station's review state machine, append-only log, limits and registry ported to shared `dev.loupe.kit.review` (files beside the ledger); proposals from the privacy check (remove a reachable duplicate copy), mail triage (confirm phishing), watchers (keep a finding) and pack judgments; Now card "To review: N"; approve (one or batch), reject with a reason, retry (re-runs the check), undo where reversible; nothing runs without approval; separate from the Unsure queue (labels) |
+| 14 | Preset packs | **Done 2026-09-24 (simulator)** — Station's `laya-preset-pack` format validated exactly as Station in shared `dev.loupe.kit.packs`, plus the C2 lint per question; import from Files / "Open in Loupe" / the bundled, labelled Bistro Cloud example; preview before adding; same-id conflicts skip / replace / keep both; export your judgments as a pack (round-trips) |
 
 ### Proving milestones
 

@@ -11,6 +11,8 @@ struct NowView: View {
     @State private var showPrivacy = false
     @ObservedObject var mail: MailTriageService = .shared
     @State private var showMail = false
+    @ObservedObject var review: ReviewService = .shared
+    @State private var showReview = false
     @State private var openItem: SourceItem?
     @State private var showQueue = false
     @State private var opened = false
@@ -21,6 +23,7 @@ struct NowView: View {
                 .navigationDestination(isPresented: $showQueue) { UnsureQueueView(service: service) }
                 .navigationDestination(isPresented: $showPrivacy) { PrivacyView(privacy: privacy) }
                 .navigationDestination(isPresented: $showMail) { MailTriageView(mail: mail) }
+                .navigationDestination(isPresented: $showReview) { ReviewView(review: review) }
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(item: $openItem) { ItemTextView(item: $0) }
         }
@@ -32,13 +35,20 @@ struct NowView: View {
             Task { await privacy.run() }
             Task { await mail.run() }
         }
+        // Whatever a check proposes goes to Review as soon as it has run (never run until approved).
+        // (@Published fires before the value is stored: hop once so collect reads the new one.)
+        .onReceive(privacy.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
+        .onReceive(mail.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
+        .onReceive(watchers.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .task {
             service.load()
             service.refreshLedger()
             #if DEBUG
             if LaunchOptions.current.queueDemo { await seedWhenScanned() }
+            if LaunchOptions.current.reviewDemo { await sources.seedReviewDemo() }
             #endif
             if !opened, LaunchOptions.current.openScreen == "queue" { opened = true; showQueue = true }
+            if !opened, LaunchOptions.current.openScreen == "review" { opened = true; showReview = true }
         }
     }
 
@@ -98,6 +108,10 @@ struct NowView: View {
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("now.sorted")
                 }
+                Button { showReview = true } label: { ReviewCard(review: review) }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("now.review")
                 Button { showPrivacy = true } label: { PrivacyCard(privacy: privacy) }
                     .buttonStyle(.plain)
                     .padding(.horizontal, 16)

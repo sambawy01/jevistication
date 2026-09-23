@@ -34,6 +34,11 @@ targets:
       - path: ../sources-desktop/src/main/resources/dev/loupe/sources/sample
         type: folder
         buildPhase: resources
+      # The example preset pack (epic #7 child 14), copied verbatim from Loupe Station and bundled as
+      # a folder named "packs". Business-specific (Bistro Cloud), so the app labels it an example.
+      - path: ../examples/packs
+        type: folder
+        buildPhase: resources
     dependencies:
       # The engine and Laya for iOS, consumed as the KMP-built XCFramework (static). It embeds ONNX
       # Runtime and the Rust tokenizer (cinterop static libraries), so their xcframeworks are not
@@ -77,6 +82,13 @@ targets:
           - Rajdhani-Bold.ttf
           - JetBrainsMono.ttf
         ITSAppUsesNonExemptEncryption: false
+        # "Open in Loupe" for preset packs (.json) from Files and the share sheet (epic #7 child 14).
+        CFBundleDocumentTypes:
+          - CFBundleTypeName: Preset pack
+            CFBundleTypeRole: Viewer
+            LSHandlerRank: Alternate
+            LSItemContentTypes: [public.json]
+        LSSupportsOpeningDocumentsInPlace: false
         # F1 passive mode (epic #7 child 6): one BGProcessingTask, external power, no network.
         BGTaskSchedulerPermittedIdentifiers: [dev.loupe.app.sort]
         UIBackgroundModes: [processing]

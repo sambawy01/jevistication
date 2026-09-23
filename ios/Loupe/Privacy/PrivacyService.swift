@@ -44,10 +44,16 @@ final class PrivacyService: ObservableObject {
 
     var findings: [PrivacyFinding] { summary?.findings ?? [] }
 
+    /// A run asked for while one is going: it runs again after, so new items are never missed.
+    private var rerun = false
+
     func run() async {
-        guard !running else { return }
+        guard !running else { rerun = true; return }
         running = true
-        defer { running = false }
+        defer {
+            running = false
+            if rerun { rerun = false; Task { await run() } }
+        }
         let all = items()
         let corrections = ledger.correctionIndex()
         summary = await ModelWork.run(.sweep) {
@@ -135,6 +141,12 @@ final class PrivacyService: ObservableObject {
     }
 
     func item(_ id: String) -> SourceItem? { items().first { $0.id == id } }
+
+    /// After an approved Review action changed a file: re-read the files, then re-check.
+    func rescanAfterReview() async {
+        await rescan()
+        await run()
+    }
 
     private func itemIdFor(_ u: PrivacyUndo) -> String {
         guard let f = lastRemoved[u.findingKey] else { return "" }

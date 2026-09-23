@@ -389,6 +389,15 @@ tables, brand lists, weights, thresholds, wording and tests from the same reposi
 `browser/{brands,signals,scoring,psl}.py`). Same owner, so no licence obligation; provenance is in
 each source header and in `THIRD_PARTY_NOTICES.md`. Composio and model code are not used. Adopted.
 
+## Loupe Station review queue and preset packs — checked 2026-09-24
+
+The Review queue (epic #7 child 13) and preset packs (child 14) port the state machine, limits,
+registry, pack format, validation rules and tests from the same repository and commit
+(`laya_studio/review/{service,store,registry}.py`, `laya_studio/packs.py`, `laya_studio/schemas.py`,
+`static/js/{review,review-kinds,packs}.js`), and copy `examples/packs/bistro-cloud.json` verbatim
+(the owner's own business example, labelled as such in the app). Same owner, so no licence
+obligation; provenance is in each source header and in `THIRD_PARTY_NOTICES.md`. Adopted.
+
 ## Rejected
 
 ### NanoJev — weights and dataset declare no licence
