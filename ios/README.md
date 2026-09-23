@@ -55,7 +55,7 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
 - Game fps and Laya latency on a real iPhone (simulator: 60 fps, ~9 decisions/s, p50 ~80 ms).
 - Model download host: `LayaModelSource.baseURL` is empty (no host recorded); the screen says so.
 - Laya is untuned: on the fixture it is unsure of every offer and ranks an over-cap fare first.
-- Mascot: static reference render with SwiftUI transforms for now. The rigged SceneKit/RealityKit robot comes later.
+- Mascot (epic #7 child 8): `Loupe/Design/Mascot/` — a rigged SceneKit robot ported from the web prototype, animated visor face, states idle/greeting/watching/scanning/thinking/found/happy/empty via `MascotView(state:size:lookAt:)`. Tap waves. Pauses offscreen/backgrounded; Reduce Motion gives a static pose per state; below 40 pt a cached still; no Metal → the reference PNG. DEBUG: `-LoupeMascotGallery` (all states), `-LoupeMascotFPS` (logs fps).
 - OAuth mail sign-in: owner-blocked on a Google OAuth client ID and a Microsoft app registration (then set the two keys in `project.yml`).
 - Send to Loupe and the App Group on a device need the Apple developer account (the simulator runs unsigned).
 - Photos: no object/scene labels yet (OCR and EXIF only); OCR speed on a real iPhone is unmeasured.

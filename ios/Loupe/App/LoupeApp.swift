@@ -12,9 +12,19 @@ struct LoupeApp: App {
 
     var body: some Scene {
         WindowGroup {
+            #if DEBUG
+            if ProcessInfo.processInfo.arguments.contains("-LoupeMascotGallery") {
+                MascotGallery()
+            } else {
+                RootView(initialTab: LaunchOptions.current.initialTab)
+                    .environmentObject(web)
+                    .tint(Palette.blue)
+            }
+            #else
             RootView(initialTab: LaunchOptions.current.initialTab)
                 .environmentObject(web)
                 .tint(Palette.blue)
+            #endif
         }
     }
 }

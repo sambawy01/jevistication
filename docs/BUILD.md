@@ -564,6 +564,21 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-23 — Epic #7 child 8: the 3D mascot.** `ios/Loupe/Design/Mascot/`: `MascotRig.swift`
+  (pure Swift: `MascotState` idle/greeting/watching/scanning/thinking/found/happy/empty, the
+  prototype's per-pose channel keyframes, frame-rate independent easing `1-e^(-dt·rate)`, blink,
+  idle glances and waves, one-shot greeting/found/happy that settle, tap → wave + happy),
+  `MascotScene.swift` (SceneKit node rig from primitives + custom supersphere helmet and lathe egg
+  torso; white clearcoat PBR, lavender bands, blue soles, near-black visor, cyan chest slot and
+  antenna tips, blob contact shadow, studio environment; template built once, cloned per view),
+  `MascotFace.swift` (CoreGraphics face texture, redrawn only when the quantised face changes),
+  `MascotView.swift` (the one `MascotView(state:size:lookAt:)`; SCNView paused when offscreen,
+  hidden, backgrounded or settled under Reduce Motion; cached still renders below 40 pt; reference
+  PNG fallback without Metal; accessibilityHidden). Every mascot site now uses it; the game HUD
+  gained one (scanning while Laya flies). Measured: 60.0 fps (`-LoupeMascotFPS`) on the iPhone 17
+  Pro Max simulator on Now and in the game HUD. Tests: `MascotRigTests` (mapping, keyframes,
+  blending, settle/tap, Reduce Motion). Contact sheet: designs/ios-v1/12-mascot-states.png.
+  Device fps/thermal unmeasured (needs an iPhone).
 - **2026-09-23 — iPhone phone sources (epic #7, child 7).** Five sources on the iPhone, each a
   `SourceItem` producer into the same `SourceLibrary` cache the sample uses, so Judgments, the
   watchers and the sort read them unchanged. Each is **off by default**; turning it on in Sources is
@@ -692,7 +707,8 @@ after 1, 6 needs 3, 4 and 5.
 | 5 | Watchers on Now | **Done 2026-09-23 (simulator)** — orchestration moved to shared `dev.loupe.kit.watchers.WatcherRun` (desktop delegates, its tests unchanged; no rule or threshold changed); `WatcherFindings` (findings with evidence, verdicts as corrections, subscriptions census); Now hero shows the top finding, findings list with Confirm / Dismiss / Not relevant / Open item, census, mascot `found` on new findings, all sample findings labelled Sample |
 | 6 | Retroactive sweep + passive mode | **Done 2026-09-23 (simulator)** — shared `SweepCoordinator` + `ModelLane` (one model thread; foreground > game > sweep; preempt between items, resume); every judgment × every enabled source, skipping items judged under the current criteria hash, then the watchers; progress/items/s/median/cancel; BGProcessingTask "Sort while charging" (off by default, external power, no network, expiry checkpoints, thermal `.serious`+ and Low Power Mode stop it); Me → Run now; notification + Now card from real counts. **Battery/thermal on a device is owner-blocked** (needs an iPhone) |
 | 7 | Phone sources | **Done 2026-09-23 (simulator)** — Photos (PhotoKit, limited-aware, Vision OCR on device, screenshots, change tokens), Files (document picker + persisted security-scoped bookmarks, rescan on open) + Share Extension "Send to Loupe" (App Group inbox), Calendar (EventKit), Contacts (feed the impersonation watcher), Mail (read-only IMAP over TLS, app password in the Keychain, UIDVALIDITY/UID incremental, labelled Online); each off by default with its own permission prompt only on enable; Sources rows with permission state, counts, last scan, errors with recovery text. **Owner-blocked:** Google/Microsoft OAuth client IDs (flow built, gated on empty config); App Group on a device (needs the developer account) |
-| 8–9 | Mascot, model delivery | Not started |
+| 8 | 3D mascot | **Done 2026-09-23 (simulator)** — native SceneKit rigged robot ported from the web prototype (geometry, PBR clearcoat materials, rig, pose keyframes); animated visor face texture; 8 states with eased blending; tap waves; pauses offscreen/background; Reduce Motion static poses; still renders under 40 pt; reference PNG if no Metal. 60 fps measured on the simulator (Now, game HUD) |
+| 9 | Model delivery | Not started |
 
 ### Proving milestones
 

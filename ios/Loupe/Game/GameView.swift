@@ -85,6 +85,9 @@ struct GameView: View {
             HStack(alignment: .firstTextBaseline) {
                 stat("SCORE", "\(game.hud.score)", id: "game.score")
                 Spacer()
+                MascotView(state: game.hud.over ? .empty : (game.mode == .watch ? .scanning : .watching), size: 44)
+                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 6 }
+                Spacer()
                 fuelGauge
                 Spacer()
                 stat("ROWS", "\(game.hud.rows)", id: "game.rows", alignment: .trailing)

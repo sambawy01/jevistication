@@ -18,18 +18,23 @@ struct RootView: View {
             NowView()
                 .tabItem { Label("Now", systemImage: "scope") }
                 .tag(AppTab.now)
+                .environment(\.mascotTabSelected, selection == .now)
             JudgmentsView(service: JudgmentsService.shared)
                 .tabItem { Label("Judgments", systemImage: "list.bullet.rectangle") }
                 .tag(AppTab.judgments)
+                .environment(\.mascotTabSelected, selection == .judgments)
             WebTabView()
                 .tabItem { Label("Web", systemImage: "globe") }
                 .tag(AppTab.web)
+                .environment(\.mascotTabSelected, selection == .web)
             SourcesView(sources: sources)
                 .tabItem { Label("Sources", systemImage: "externaldrive") }
                 .tag(AppTab.sources)
+                .environment(\.mascotTabSelected, selection == .sources)
             MeView()
                 .tabItem { Label("Me", systemImage: "person") }
                 .tag(AppTab.me)
+                .environment(\.mascotTabSelected, selection == .me)
         }
         .environmentObject(launcher)
         .fullScreenCover(item: $launcher.mode) { mode in
