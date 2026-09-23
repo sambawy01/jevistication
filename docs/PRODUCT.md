@@ -427,3 +427,47 @@ Closed since locking (one reopened — the model, on 2026-09-23):
 
 What remains is measured, not decided: every threshold, each judgment's risk–coverage curve,
 and whether each judgment beats its dumb baseline (§9).
+
+---
+
+## 12. The desktop app, a stepping stone
+
+*Added 2026-09-23.* The phone is still the product (§11). The desktop app is where the engine first
+met real files: it exists so the loop this spec describes — judge, queue, correct, measure, compare
+with the dumb version — can be used and measured on a person's own documents and mail exports now,
+with the real model, before an Android build exists. It is `./gradlew :loupe-desktop:run` on macOS.
+
+**What it does, for real:** reads folders (Documents, Downloads, photo folders) and mail exports
+(`.mbox`, `.eml`) read-only; runs the mechanical extractors first (hash, dedup, MIME by magic bytes,
+dates, sender, links); offers the template library (55 templates in ten categories) and plain-language
+authoring with the lint; sweeps a judgment across everything in the background (F2); shows every
+answer with its raw probability, labelled uncalibrated; queues what it is unsure about plus a random
+audit arm (D1); records corrections as ledger outcomes; reports calibration per judgment only (D2);
+previews a threshold change over logged decisions (D3); compares each judgment with its dumb
+baseline on the user's corrections and says plainly when the model loses (D4); counts (census); runs
+the five watchers' mechanical halves, and the expiry radar's model half when the model is loaded;
+exports judgments, calibration and the lossless ledger (F4); and opens the game.
+
+**What it cannot do that the phone will:**
+
+| | Desktop today | Phone (the product) |
+|---|---|---|
+| Photos | file name and EXIF only — **no OCR, no image labels**; a photo with no text is never sent to the model | ML Kit OCR and labels (B4) |
+| Email | exported `.mbox`/`.eml` files only | Gmail/IMAP with sender history (B2) |
+| Contacts | inferred from mail history (a name used twice from one address) | the address book (B5) |
+| Calendar, SMS, notifications, voice, web pages | not read | B5–B9 |
+| Actions | **preview only** — it never moves, renames or deletes a file | D5: preview, undo, opt-in execution |
+| Automation, passive mode, autofill, fraud check before typing | not built | §3, §5, §7 |
+| Personal fine-tune | not built | F3 |
+
+**Privacy, unchanged:** nothing leaves the machine — there is no network call in the app, and the
+tokenizer's offline mode is enforced. What it learns is kept in `~/Library/Application Support/Loupe`
+as the same portable files it exports.
+
+**What it has shown so far, stated as plainly as §6 asks.** On the 45 synthetic sample items, the
+untuned model loses to the keyword baselines on every judgment measured (for receipts, 64% against
+95% on 39 hand-labelled items); with bare yes/no options it largely ignored the question, which is
+why the templates now offer two options that say what they mean. That is a check on invented data,
+not an accuracy number — but it is exactly the result milestone 6 exists to surface, and the app
+surfaces it rather than hiding it. Fine-tuning (A1/F3) is the planned fix, and the app's corrections
+are the labelled data it needs.

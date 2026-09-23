@@ -34,6 +34,9 @@ filed as build risk 12. The tokenizer dependency it needs (DJL) is recorded unde
 | `ai.djl.huggingface:tokenizers:0.38.0` + 8 transitive | Apache-2.0 (JNA: Apache-2.0 OR LGPL-2.1+; SLF4J: MIT) in the resolved POMs | **Adopted** — tokenizer, 2026-09-23 |
 | `joaoneto/river-raid-2k` @ `5148ace` (code) | MIT — `LICENSE` file; GitHub reports SPDX `MIT` | **Ported in part** — the demo game's river generator, 2026-09-23. Notice kept |
 | Compose Multiplatform `1.7.3` (`org.jetbrains.compose.*`) + skiko `0.8.18` + 26 transitive | Apache-2.0 in every resolved POM | **Adopted** — `:game-desktop` only, 2026-09-23. Native Skia bundles BSD/MIT/ICU/IJG/zlib code, unattributed — risk 11 |
+| Apache James mime4j `0.8.15` (`core`, `dom`, `mbox-iterator`) + `commons-io` 2.19.0 | Apache-2.0 via `apache-mime4j-project` → `org.apache:apache:35`; `LICENSE` in each jar | **Adopted** — `:sources-desktop`, 2026-09-23 |
+| Apache PDFBox `3.0.8` (`pdfbox`, `pdfbox-io`, `fontbox`) + `commons-logging` 1.4.0 | Apache-2.0 via `pdfbox-parent` → `org.apache:apache:39`; bundles BSD, Adobe-permissive, OFL-1.1, CC-BY-4.0 and CC0 components | **Adopted** — `:sources-desktop`, 2026-09-23. Attribution owed — risk 11 |
+| `com.drewnoakes:metadata-extractor:2.21.0` + `com.adobe.xmp:xmpcore:6.1.11` | Apache-2.0; BSD-3-Clause | **Adopted** — `:sources-desktop`, 2026-09-23. No `LICENSE` in either jar — risk 11 |
 
 ---
 
@@ -209,6 +212,84 @@ build-time `compose-gradle-plugin` does), so this is the same attribution gap as
 
 **Android is not affected by this check.** An Android build would use Jetpack Compose (`androidx.*`,
 Apache-2.0) and the platform's own Skia; the desktop artifacts above would not ship in an APK.
+
+---
+
+## The desktop app and its sources — checked 2026-09-23
+
+Three new modules. **`:templates`** (the template question library) is pure Kotlin over `:engine`
+and adds no third-party code. **`:loupe-desktop`** (the Compose Desktop app) adds nothing beyond
+what `:game-desktop` already brought in — Compose Multiplatform 1.7.3, skiko, ONNX Runtime and DJL,
+all checked above — plus an explicit `com.google.code.gson:gson:2.13.1`, which was already on the
+runtime classpath through DJL and is recorded in the DJL table. **`:sources-desktop`** (folders and
+mail exports, read-only) brings the only new artifacts, below. `:engine` still resolves to the
+Kotlin standard library alone.
+
+**Why these and not hand-rolled code.** MIME is a standard with forty years of edge cases —
+encoded words, multipart nesting, charsets, transfer encodings — and a hand-rolled parser gets
+exactly the malformed mail wrong that phishing arrives in. PDF text extraction is a far larger
+problem again. Both are the reference Java implementations, both from the Apache Software
+Foundation, both Apache-2.0. Image metadata is read by the most widely used Java EXIF library; no
+pixels are decoded and there is no OCR.
+
+**SQLite was not adopted.** The app stores its ledger in the lossless JSON Lines `Export` already
+writes (read back with Gson), so no native database library entered the dependency set and there
+was no `sqlite-jdbc` to check.
+
+Licences read from the `<licenses>` block of every POM Gradle resolved for
+`:sources-desktop:runtimeClasspath`, following `<parent>` where a POM declares none — not from a
+badge — and from the `LICENSE` file inside each jar where one exists:
+
+| Artifact | Declared | Where it was read |
+|---|---|---|
+| `org.apache.james:apache-mime4j-core:0.8.15` | Apache-2.0 | no `<licenses>`; parent `apache-mime4j-project:0.8.15` (none) → `org.apache:apache:35`: Apache-2.0. Jar `META-INF/LICENSE` is the full 1,581-word Apache-2.0 text |
+| `org.apache.james:apache-mime4j-dom:0.8.15` | Apache-2.0 | same parent chain; `LICENSE` + `NOTICE` in the jar |
+| `org.apache.james:apache-mime4j-mbox-iterator:0.8.15` | Apache-2.0 | same parent chain; `LICENSE` + `NOTICE` in the jar |
+| `commons-io:commons-io:2.19.0` | Apache-2.0 | → `commons-parent:81` → `org.apache:apache:33`. (DJL's 2.16.1 is upgraded to 2.19.0 in the app by conflict resolution — same licence) |
+| `org.apache.pdfbox:pdfbox:3.0.8`, `pdfbox-io:3.0.8`, `fontbox:3.0.8` | Apache-2.0 | → `pdfbox-parent:3.0.8` → `org.apache:apache:39`; `LICENSE` + `NOTICE` in each jar |
+| `commons-logging:commons-logging:1.4.0` | Apache-2.0 | → `commons-parent:102` → `org.apache:apache:38`; `LICENSE.txt` in the jar (1,581 words) |
+| `com.drewnoakes:metadata-extractor:2.21.0` | The Apache Software License, Version 2.0 | its own POM; GitHub reports SPDX `Apache-2.0` for `drewnoakes/metadata-extractor`. **The jar ships no `LICENSE`** |
+| `com.adobe.xmp:xmpcore:6.1.11` | The BSD 3-Clause License | its own POM, and `Bundle-License: https://opensource.org/licenses/BSD-3-Clause` in the jar manifest. **The jar ships no `LICENSE`** |
+
+GitHub reports SPDX `Apache-2.0` for `apache/james-mime4j`, `apache/pdfbox`,
+`apache/commons-logging` and `apache/commons-io`. **No copyleft and no non-commercial term in the
+set. No native libraries**: every jar is pure Java bytecode and resources.
+
+**What PDFBox bundles.** Its `LICENSE` (8,279 words) is Apache-2.0 followed by an "EXTERNAL
+COMPONENTS" section, read in full. Each is permissive, with attribution:
+
+| Component inside PDFBox | Terms |
+|---|---|
+| Original pdfbox.org contributions | BSD-style (3-clause) |
+| Adobe Font Metrics for the 14 core fonts | Adobe's permissive notice (use, copy, distribute, keep the notice) |
+| Adobe CMaps | BSD-3-Clause-style |
+| Adobe Glyph List, Zapf Dingbats list | Adobe's permissive notice |
+| `LiberationSans-Regular.ttf` (bundled) | SIL Open Font License 1.1 |
+| Lohit and Noto Sans Devanagari fonts | SIL Open Font License 1.1 |
+| TwelveMonkeys ImageIO (parts) | BSD-3-Clause |
+| Font Awesome glyph shapes | **CC BY 4.0** — attribution required |
+| CMYK ICC profile | CC0 1.0 |
+| Unicode BidiMirroring data | Unicode licence |
+
+The **OFL-1.1** fonts are not copyleft for the software they ship in: OFL permits bundling and
+redistribution with any software and restricts only selling the fonts on their own and reusing the
+reserved font names. **CC BY 4.0** asks only for attribution. Both join build risk 11's list of
+notices that must travel with the binary.
+
+**Two behaviours that matter more than the licence, found by running it:**
+
+- **PDFBox writes a font cache to the home directory** (`~/.pdfbox.cache`) unless the system
+  property `pdfbox.fontcache` names an **existing** directory — it silently falls back to the home
+  directory when the folder is missing. The app sets it to its own `cache/` folder and creates it
+  first; the test tasks do the same inside `build/`. Writing to the home directory is not a
+  network leak, but it is a file written outside the app's own folder, which the desktop app
+  promises not to do.
+- **None of these libraries makes a network call** in the code paths used: mime4j parses bytes it
+  is given, PDFBox loads from a byte array, metadata-extractor reads an input stream. DJL's offline
+  mode (above) is unchanged and still enforced.
+
+**Android is not affected**: these artifacts ship only in the desktop app. The phone build reads
+email and files through platform APIs and would need its own check.
 
 ---
 
