@@ -43,7 +43,13 @@ class Lane(val label: String, val mode: PilotMode, val session: GameSession) {
  * ([modelExecutor], shared by every run so a restart never puts two threads in the model at once),
  * so a slow decision never stalls the picture.
  */
-class GameController : AutoCloseable {
+class GameController(
+    /**
+     * Whether [close] frees the model. True for the standalone game, which loads its own; false when
+     * another app (Loupe's desktop window) lends it a model it goes on using after the game closes.
+     */
+    private val ownsModel: Boolean = true,
+) : AutoCloseable {
     var modelStatus: ModelStatus by mutableStateOf(ModelStatus.Loading)
         private set
     var mode: PilotMode by mutableStateOf(PilotMode.BASELINE)
@@ -194,7 +200,7 @@ class GameController : AutoCloseable {
         modelExecutor.shutdownNow()
         // A decision may still be inside the native session; let it finish before freeing it.
         modelExecutor.awaitTermination(2, TimeUnit.SECONDS)
-        (modelStatus as? ModelStatus.Ready)?.model?.close()
+        if (ownsModel) (modelStatus as? ModelStatus.Ready)?.model?.close()
     }
 
     companion object {

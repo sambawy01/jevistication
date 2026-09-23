@@ -1,0 +1,18 @@
+From: SkyPort Airways <bookings@skyport.example>
+To: Alex Sample <alex@sample.example>
+Date: Wed, 02 Sep 2026 16:20:00 +0100
+Subject: Booking confirmed: QX7-4411
+Message-ID: <7618522230756213460@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Your booking is confirmed.
+
+Booking reference: QX7-4411
+Flight SP 1203, London Heathrow (LHR) to Lisbon (LIS)
+Departs 14 October 2026 at 08:05
+Passenger: Alex Sample
+Total paid: £212.40
+
+Manage your booking: https://skyport.example/manage/QX7-4411

@@ -65,8 +65,10 @@ object Export {
     fun ledgerToJsonl(rows: List<LedgerRow>): String =
         rows.joinToString("\n") { row ->
             Json.obj(
-                listOf(
+                listOfNotNull(
                     "judgmentId" to Json.string(row.judgmentId),
+                    // Emitted only when known, so rows logged without an item keep their old shape.
+                    row.itemId?.let { "itemId" to Json.string(it) },
                     "criteriaHash" to Json.string(row.criteriaHash),
                     "action" to Json.string(row.action),
                     "propensity" to Json.number(row.propensity.value),

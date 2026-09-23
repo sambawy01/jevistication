@@ -284,9 +284,9 @@ judgments is the difference between this product and a confident guess.
 | 8 | The second backend is weak zero-shot | Untuned Qwen3-0.6B scores poorly on decision tasks. Both backends are fine-tuned on our fixtures; its votes do not count until it is |
 | 9 | **Name collision.** `LOUPE` is a crowded mark. Registrations exist for jewellery-trade software (Atelier Technology), sports-card retail (Loupe Tech LLC) and a CRM (Apex); Mysk ships an iOS privacy app called Loupe | None is a consumer personal-data or fraud-detection app, but a crowded mark is a weak mark, and the Mysk app is adjacent on privacy and mobile. **Clear the mark in the target jurisdictions, and check Play Store and domain availability, before any spend on branding, the listing or the domain.** Decision taken with this known |
 | 10 | **Approximate public suffix list.** The engine ships a small built-in set of multi-label public suffixes, not the real Public Suffix List | Getting eTLD+1 wrong is a correctness bug in the fraud check, not a cosmetic one: it decides whether `paypal.secure-login.com` reads as PayPal or as `secure-login.com`. The suffix set is a parameter at every call site, so the real list drops in without touching callers. **Load the real PSL, with a refresh path, before the fraud check ships.** |
-| 11 | **Third-party attribution is unshipped.** The ONNX Runtime Android AAR bundles native libraries but contains no `LICENSE` and no `ThirdPartyNotices` at all; the desktop jar's notices cover ~85 components (MIT, BSD, ISC, Apache, Boost, zlib, MPL-2.0 Eigen, an Intel licence). **Since 2026-09-23 also DJL:** neither DJL jar ships a LICENSE or NOTICE, and nothing credits the Rust crates linked into `libtokenizers`. **Since 2026-09-23 also the desktop demo game:** no Compose, skiko or AndroidX runtime jar ships a LICENSE or NOTICE, and `libskiko` statically links Skia with ICU, HarfBuzz, libpng, expat, libjpeg-turbo, libwebp and zlib | All of those require the notice to travel with the binary, and the shipping artifact supplies none of it. No copyleft or non-commercial obligation was found, so this is a compliance task, not a licence blocker. **Bundle a notices screen sourced upstream, and never patch Eigen — its MPL-2.0 is file-level copyleft.** Verify the Android component set separately; it is a different native build from the jar |
+| 11 | **Third-party attribution is unshipped.** The ONNX Runtime Android AAR bundles native libraries but contains no `LICENSE` and no `ThirdPartyNotices` at all; the desktop jar's notices cover ~85 components (MIT, BSD, ISC, Apache, Boost, zlib, MPL-2.0 Eigen, an Intel licence). **Since 2026-09-23 also DJL:** neither DJL jar ships a LICENSE or NOTICE, and nothing credits the Rust crates linked into `libtokenizers`. **Since 2026-09-23 also the desktop demo game:** no Compose, skiko or AndroidX runtime jar ships a LICENSE or NOTICE, and `libskiko` statically links Skia with ICU, HarfBuzz, libpng, expat, libjpeg-turbo, libwebp and zlib. **Since 2026-09-23 also the desktop app's sources:** mime4j, PDFBox and Commons ship their notices, but PDFBox bundles OFL-1.1 fonts, CC BY 4.0 Font Awesome shapes and Adobe-licensed data whose attribution must travel too, and neither metadata-extractor nor XMPCore ships a LICENSE at all | All of those require the notice to travel with the binary, and the shipping artifact supplies none of it. No copyleft or non-commercial obligation was found, so this is a compliance task, not a licence blocker. **Bundle a notices screen sourced upstream, and never patch Eigen — its MPL-2.0 is file-level copyleft.** Verify the Android component set separately; it is a different native build from the jar |
 | 12 | **Laya's training data is only partly published, and the published part includes non-commercial sources.** The authors' own benchmark flags as "in training" `Tobi-Bueck/customer-support-tickets` (CC-BY-NC-4.0) and MS MARCO (Microsoft: non-commercial research only), plus LGPL-3.0, CC-BY-SA-3.0, `unknown` and undeclared sources; the full mix is not published. The tokenizer is Gemma 2's, whose Terms of Use may or may not reach it | Adopted for development on the owner's decision; **not cleared for shipping.** Close it by one of: the authors publishing a clean full mix, or confirming the NC sources are absent from the multilingual checkpoint; or training the head (or model) on data we can account for. Ask the authors first — it is the cheapest. Details in `LICENSING.md` |
-| 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8, 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" (**on a desktop M4 CPU the game now measures 10 decisions/s at ~62–66 ms P50, ~80 ms P95**, with ~106-token questions; a phone is still unmeasured) | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
+| 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8, 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" (**on a desktop M4 CPU the game now measures 10 decisions/s at ~62–66 ms P50, ~80 ms P95**, with ~106-token questions; a phone is still unmeasured). The desktop app's sweeps measured a median **73–99 ms per item** on the sample (a light machine) and **125–152 ms** with the machine's load average near 20 — desktop latency depends on what else is running, and a phone shares its CPU with everything | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
 
 ---
 
@@ -478,9 +478,11 @@ their acceptance criteria are met; entries here record increments toward them.
 
 ## Where the build stands
 
-As of 2026-09-23. Everything below was built headless: JVM Kotlin, no Android SDK, no device.
-CI runs the full suite on every push to `main`, **without model weights** — the six tests that
-need them skip there. The Laya weights exist only on the machine that ran the export spike.
+As of 2026-09-23. Everything below was built on JVM Kotlin: no Android SDK, no device. Since
+2026-09-23 there is also a **desktop app** (`:loupe-desktop`) that runs the engine over real folders
+and mail exports with the real model. CI runs the full suite on every push to `main`, **without
+model weights** — the tests that need them skip there. The Laya weights exist only on the machine
+that ran the export spike.
 
 ### Built and green
 
@@ -496,14 +498,16 @@ need them skip there. The Laya weights exist only on the machine that ran the ex
 | A6 Recalibrator | Complete — temperature scaling fitted by NLL; ECE, Brier, reliability bins |
 | A7 Policy runner | Complete — pure, total, calibrated-only by construction |
 | A8 Counterfactual engine | Complete — IPS, SNIPS, seeded bootstrap intervals, threshold replay |
-| C1 Judgment library | Complete — seven built-ins on the three-part template |
-| C2 Plain-language authoring | Complete — lint plus compilation to a typed judgment |
-| C3 The five watchers | **Mechanical halves complete** — expiry, recurring money, term change, impersonation, site fraud |
-| D1 Uncertain queue | Complete — margin ranking plus random audit arm |
-| D2 Visible calibration | Complete — per judgment, no aggregate possible |
-| D3 Threshold slider | Complete — counterfactual preview over logged rows |
-| D4 Baseline runner | Complete — inside `Harness` |
-| F4 Export | Complete — lossless ledger, judgments, calibration |
+| C1 Judgment library | Complete — seven built-ins on the three-part template, grown into a **template library of 55** in ten categories (`:templates`), browsable in the desktop app |
+| C2 Plain-language authoring | Complete — lint plus compilation to a typed judgment; **desktop UI with live lint** ("Write your own") |
+| C3 The five watchers | **Mechanical halves complete** — expiry, recurring money, term change, impersonation, site fraud. **Run over scanned items in the desktop app**; the expiry radar's model half runs when Laya is loaded |
+| D1 Uncertain queue | Complete — margin ranking plus random audit arm; **desktop UI**, one keystroke per answer |
+| D2 Visible calibration | Complete — per judgment, no aggregate possible; **desktop UI**, gated on correction counts |
+| D3 Threshold slider | Complete — counterfactual preview over logged rows; **desktop UI** |
+| D4 Baseline runner | Complete — inside `Harness`; **desktop UI** on the user's corrected items |
+| F2 Retroactive sweep | **Built on desktop** — background, single model thread, progress, items/s, median latency, cancel; skips items already judged under the current wording |
+| F4 Export | Complete — lossless ledger, judgments, calibration; **desktop UI** |
+| Desktop stand-ins for B1/B2 | `:sources-desktop`: folders and mail exports (`.mbox`/`.eml`), read-only; text from plain text, Markdown, CSV, JSON, HTML, email (mime4j) and PDF (PDFBox); images metadata only (no OCR) |
 | F5 The game | **Desktop half built** — `:game` + `:game-desktop` (Compose Desktop). Runs the real Laya on this CPU at 10 decisions/s; untuned it loses to the baseline. Needs a phone and a fine-tune |
 | §7 Measurement harness | Complete — group-wise splits, selective accuracy, coverage, ECE, Brier, baseline |
 | Engine wiring | `DecisionEngine` composes the §8 architecture end to end |
@@ -517,24 +521,24 @@ Nothing below is deferred by choice; each needs something this environment does 
 | **A1** model runtime, fine-tune, latency | A real mid-range device — its acceptance criterion is a measurement on hardware. The weights and the ONNX export now exist (desktop), fine-tuning needs a labelled corpus and a GPU |
 | **A2** the second backend | Qwen3-0.6B weights. Laya runs; the runtime and the interface exist |
 | **B1–B9** every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, calendar, contacts, notifications, WebView |
-| **D5** actions, preview, undo | UI |
+| **D5** actions, preview, undo | Android. The desktop app shows **preview only** and never changes a file; undo exists for corrections |
 | **E1–E4** actuation | Android `AutofillService`, App Intents, accessibility, WebView |
 | **F1** passive mode | WorkManager, charging and thermal constraints |
-| **F2** retroactive sweep | Sources to sweep |
+| **F2** on a phone | Android sources and WorkManager constraints (risk 3). Built on the desktop |
 | **F3** overnight fine-tune | Model weights and a GPU |
 | **F5** the game, on a phone | An Android build and a device. The desktop game runs (`:game-desktop`); the Compose UI is written to move |
-| Real measurement | **A labelled fixture corpus.** Every number the harness produces today comes from synthetic fixtures; the machinery is proven, the numbers are not real. The Laya parity numbers measure agreement with upstream, not accuracy |
+| Real measurement | **A labelled fixture corpus.** Every number the harness produces today comes from synthetic fixtures; the machinery is proven, the numbers are not real. The Laya parity numbers measure agreement with upstream, not accuracy. The desktop app now *collects* labels — every correction is one — so the corpus can start with the owner's own files |
 
 ### Proving milestones
 
 | | Milestone | State |
 |---|---|---|
 | 1 | It runs | **Half there** — the real model answers typed questions from Kotlin on a desktop; the milestone needs a phone and a measured latency |
-| 2 | It decides | **Wired and tested** end to end with a stub backend; needs a real source and model to count |
-| 3 | It learns | Machinery built (fit beats baseline on ECE in a test); needs real corrections |
-| 4 | It shows its work | Machinery built (`replayThreshold`, `ThresholdSlider`); needs real logged history |
-| 5 | It notices | Watchers' mechanical halves built; needs real personal data |
-| 6 | It is honest | **Runs as a test** — a judgment that ties its baseline is reported as not beating it |
+| 2 | It decides | **Met on the desktop** — real files and mail, the real model, a ledger row with a propensity per decision (desktop app). The phone half is pending |
+| 3 | It learns | Machinery built (fit beats baseline on ECE in a test). The desktop app shows a held-out temperature fit once a judgment has 60 corrections; needs real corrections |
+| 4 | It shows its work | **Runs on real logged history** in the desktop app's threshold screen; needs the owner's own history to count |
+| 5 | It notices | Watchers fire on the synthetic sample (passport, +23% premium, "Mum" on a new domain, fake PayPal); needs real personal data |
+| 6 | It is honest | **Shown in the app** — on the synthetic sample, untuned Laya loses to its keyword baseline and the Baseline screen says so; also runs as a test |
 | 7 | It is local | Structurally true of the engine: no network call exists anywhere in it |
 
 - **2026-09-22 — A4: failure postures and the never-throws guarantee.** A4's acceptance criterion
@@ -632,6 +636,64 @@ Nothing below is deferred by choice; each needs something this environment does 
   cheap and deterministic, so it can label thousands). Tests: `:game` 35 (3 gated on the weights);
   whole build 316, run with and without `models/`.
 
+- **2026-09-23 — The desktop app: a template library, desktop sources, and Loupe on real files.**
+  On the owner's "Go". Three modules. **`:templates`** (pure Kotlin over `:engine`, no third-party
+  code) grows the seven built-ins into **55 templates in ten categories** — money, documents and
+  deadlines, email, subscriptions, files, photos, work, travel, safety and fraud, personal — each
+  with a typed shape (two descriptive options, a choice with an explicit no-op, or an ordinal score
+  whose bands the question names), the three-part criteria, a failure posture (LOUD for expiry,
+  deadlines, bills and every safety judgment, which are also warn-only), source kinds, a declarative
+  dumb baseline (keyword, keyword map, pattern, date-before, sender, constant — `asFunction()` is the
+  `(Item) -> String` `Harness` already takes) and worked examples. Five are parameterised
+  ("Messages from {sender} that need a reply", "Documents that expire before {date}", …); values are
+  validated per kind and the substituted question is linted again, so a parameter cannot smuggle in a
+  second question, a `<mask>`, a placeholder or a prose request. Using a template creates a
+  `UserJudgment` through `JudgmentAuthor.compile`; rewording changes the criteria hash, and every
+  calibration number is computed only over decisions under the current hash, so it resets honestly.
+  **`:sources-desktop`** reads folders and mail exports **read-only** (links not followed, a test
+  checks every byte and timestamp afterwards), mechanical facts first (SHA-256 dedup, magic-bytes MIME
+  over the extension, dates with their origin, sender, links), text from plain text, Markdown, CSV,
+  JSON, HTML (tags stripped), email through **Apache James mime4j** (headers, multipart, charsets,
+  `.mbox` framing) and PDF text layers through **Apache PDFBox**; images give EXIF and dimensions
+  only through **metadata-extractor** — no OCR, and an item with no text is never sent to the model.
+  Every file not read is kept with its reason. It ships a **synthetic sample dataset** (48 items:
+  receipts and a byte-identical copy, SPECIMEN passport and licence, insurance renewals 450.00 →
+  553.50, a statement, subscription receipts in an mbox, a trial warning, a price rise, a phishing
+  email, a "new phone" impersonation, and files that must be skipped). **`:loupe-desktop`** is the
+  Compose Desktop app, `./gradlew :loupe-desktop:run`: Sources, Library (browse, search, detail,
+  write your own with live lint), Judgments (F2 sweep on one model thread with progress, items/s,
+  median latency, ETA and cancel), Results (raw probabilities labelled uncalibrated, filter, sort,
+  search, mechanical facts, open read-only, one-click corrections, actions **preview only**),
+  Uncertain queue (D1, keyboard: digits answer, Enter agrees, U undoes), Calibration (D2, per judgment
+  only; agreement from 10 corrections, ECE and reliability from 30, a held-out temperature fit from
+  60), Threshold (D3), Baseline (D4 through `Harness` with a replay backend on the user's corrected
+  items), Census, Watchers (the five mechanical halves over scanned items; the expiry radar's model
+  half when Laya is loaded), Export (F4) and Watch it think (the Riverflight window, borrowing the
+  loaded model). Persistence: plain files in `~/Library/Application Support/Loupe` — the ledger
+  **appended in `Export`'s own lossless JSON Lines**, corrections appended (undo is a retraction
+  record), judgments and sources written atomically; no SQLite. `LedgerRow` gained an `itemId`
+  (emitted by `Export` only when present) so a decision can be tied back to what it was about.
+  *What the real model did.* Swept over the sample (45 items with text) on five templates it ran at a
+  median **73–99 ms per item** on a lightly loaded M4 CPU and **125–152 ms** with the machine's load
+  average near 20; no answer was unusable, and the watchers' model half flagged the SPECIMEN passport
+  (expires 2027-01-14, 113 days, inside the six-month rule). **Its answers were poor, and the app
+  says so.** With bare yes/no options it largely ignored the question: two unrelated yes/no questions
+  gave near-identical answers, leaning "yes" on anything with money in it. Against labels written
+  for the synthetic items (a check on invented data, not an accuracy number), descriptive options
+  raised agreement on all three judgments tried — receipt 26 → 31, phishing 16 → 25, needs-reply
+  10 → 23 of 45 — and every one still lost to its keyword baseline (43–44 of 45, baselines written
+  knowing the data, which flatters them). So the templates now offer two options that say what they
+  mean (`Shape.Binary`); a warn-only template's negative option is what the model reads, never what
+  the user sees. In the app, with 39 receipt items corrected, the Baseline screen reads model 64.1%
+  against baseline 94.9% and says the model is not winning — milestone 6, on screen. The sample's
+  "SYNTHETIC SAMPLE DATA" banner moved from each file's first line to its last, because as an opening
+  line it made receipts read as newsletters. Fine-tuning (A1/F3) on corrections is the fix this
+  points at; the app now collects exactly those corrections. Tests: **371 across the build**, 10 of them gated on the weights —
+  `:templates` 20, `:sources-desktop` 16, `:loupe-desktop` 19 (1 gated: a real-Laya sweep of the
+  sample on five templates), `:engine` 254, `:backend-onnx` 27 (6 gated), `:game` 35 (3 gated).
+  `./gradlew clean build` passes with `models/` present (371 run) and with it moved aside (361 run,
+  10 skipped).
+
 ---
 ## Hand-off
 
@@ -640,6 +702,17 @@ got here. Track-by-track status is in **Where the build stands** above; this is 
 and what will bite.
 
 ### What changed most recently
+
+**The desktop app** (branch `desktop-app`): `:templates` (55 templates), `:sources-desktop`
+(read-only folders and mail exports, mime4j, PDFBox, metadata-extractor, a synthetic sample
+dataset) and `:loupe-desktop` (twelve screens over the real engine and Laya). Run it with
+`./gradlew :loupe-desktop:run` (JDK 21); `./gradlew :loupe-desktop:snapshot -Pout=<dir>` renders
+every screen to PNG over the sample in a throwaway home. It keeps what it learns in
+`~/Library/Application Support/Loupe`. **The finding that matters most:** untuned, Laya loses to
+dumb keyword baselines on every judgment measured on the sample, and ignored the question with bare
+yes/no options — see the progress log. The app is built to show exactly that, per judgment.
+
+The change before it:
 
 **The demo game (F5), desktop half**, on branch `game-riverflight`: `:game` and `:game-desktop`,
 an original river shooter flown by Laya with its raw probability bars, a safety override, a
@@ -695,6 +768,17 @@ came from labelled fixtures.
    of it — a gap in the "the judgment is told when its input was cut" contract. `TextState`'s
    4,000-character budget can exceed Laya's ~760 state tokens for dense text.
 4. **A fixture corpus**, and **hardening** (property tests for calibration and off-policy maths).
+   The desktop app now produces labels: every correction is one, keyed by item and criteria hash,
+   exported losslessly. The owner's own files are the cheapest corpus there is.
+5. **Put the criteria in front of the model.** The three-part criteria are shown and exported but
+   Laya reads only the question and the options. Upstream's descriptive-option criteria
+   (`{label: description}` in `build_sequence`) are the channel; it needs a `LayaPrompt` extension and
+   a parity case, then a measurement on corrected items of whether it helps.
+6. **Fine-tune on corrections** (A1/F3). The sample result says the untuned model does not beat
+   keywords; whether a head fine-tuned on a few hundred corrections does is the next real question.
+7. **Mark mechanical rows in the ledger.** A mechanically answered row is told apart from a model row
+   only by its item (an exact duplicate with all mass on one label). A `resolvedBy` field on
+   `LedgerRow` would make it explicit.
 
 ### Blocked, and on precisely what
 
@@ -706,11 +790,28 @@ came from labelled fixtures.
 | B1–B9 every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, contacts, notifications |
 | D5, E1–E4, F1 | Android UI, autofill, accessibility, WorkManager |
 | F5 on a phone | An Android module and a device; the game logic (`:game`) needs no change |
-| F2 | Sources to sweep |
+| F2 on a phone | Android sources, WorkManager (built on the desktop) |
 | Any real measurement | A labelled corpus **and** a model — the model half now exists |
 
 ### Traps — each of these was hit or narrowly avoided
 
+- **Bare yes/no options make Laya ignore the question.** On the sample, "is this a receipt?" and
+  "is this phishing?" got near-identical yes/no answers. Give a two-option judgment two options that
+  say what they mean (`Shape.Binary`); measure any change on corrected items.
+- **A banner on a document's first line colours the whole classification.** The sample's
+  "SYNTHETIC SAMPLE DATA" header made receipts read as newsletters; it now sits at the foot.
+- **PDFBox writes `~/.pdfbox.cache`** unless `pdfbox.fontcache` names a folder that **already
+  exists** — it silently falls back to the home directory otherwise. The app and the test tasks
+  create the folder first. A test run that leaves `~/.pdfbox.cache` behind means this regressed.
+- **`List<Path> + path` concatenates the path's name elements**, because `Path` is
+  `Iterable<Path>`. Export returned eleven "files" before this was caught; use `+ listOf(path)`.
+- **A body line starting "From " splits an mbox message.** The sample's price-rise email did, until
+  it was reworded; real exports escape it as `>From`, hand-made ones may not.
+- **An organisation's second address is not impersonation.** CloudBox writing from `support@` and
+  `receipts@` raised "known name, unknown address"; the app drops that signal when the new address
+  is on the contact's own non-webmail domain (on gmail.com it stands).
+- **Load averages move desktop latency a lot.** The same sweep measured 73–99 ms and 125–152 ms per
+  item on the same machine an hour apart. Quote a latency with the conditions it was taken under.
 - **Compose strong skipping hides live state.** Kotlin 2.x skips a composable whose arguments are
   the same instances, and the game mutates its session in place — so a panel that did not read the
   frame counter showed "waiting for the first decision" while the model was flying. Every composable

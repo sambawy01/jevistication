@@ -40,3 +40,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+---
+
+## Libraries the desktop app ships (not derived source)
+
+No source in this repository is derived from these; they are runtime dependencies of
+`:sources-desktop` and `:loupe-desktop`, listed here because their notices must travel with any
+binary built from them — and are not yet bundled (build risk 11). Licence checks, including the
+components PDFBox bundles, are in [`docs/LICENSING.md`](docs/LICENSING.md), "The desktop app and
+its sources".
+
+| Library | Licence | Notice owed |
+|---|---|---|
+| Apache James mime4j 0.8.15 (`core`, `dom`, `mbox-iterator`) | Apache-2.0 | its `NOTICE` ("Copyright 2004-2025 The Apache Software Foundation") |
+| Apache PDFBox 3.0.8 (`pdfbox`, `pdfbox-io`, `fontbox`) | Apache-2.0, with bundled BSD, Adobe-permissive, SIL OFL 1.1 (Liberation, Lohit, Noto fonts), CC BY 4.0 (Font Awesome shapes) and CC0 components | its `NOTICE` and the "EXTERNAL COMPONENTS" section of its `LICENSE` |
+| Apache Commons IO 2.19.0, Commons Logging 1.4.0 | Apache-2.0 | their `NOTICE` files |
+| metadata-extractor 2.21.0 (Drew Noakes) | Apache-2.0 | the Apache-2.0 text; the jar ships none |
+| Adobe XMPCore 6.1.11 | BSD-3-Clause | the BSD-3-Clause text with Adobe's copyright; the jar ships none |
+| Compose Multiplatform 1.7.3, skiko 0.8.18, ONNX Runtime 1.20.0, DJL 0.38.0, Gson 2.13.1 | see `docs/LICENSING.md` | already recorded under risk 11 |

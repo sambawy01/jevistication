@@ -28,6 +28,15 @@ data class LedgerRow(
      * run of genuinely uncertain ones.
      */
     val failure: String? = null,
+    /**
+     * The item this decision was about, when the caller knows it. Null for rows logged before
+     * items carried identities, and in tests that decide over anonymous text.
+     *
+     * Without it a ledger can answer "how sure was the engine" but not "about what", so the
+     * uncertain queue could not show the user the thing it wants corrected and a correction could
+     * not be tied back to the file or message it describes.
+     */
+    val itemId: String? = null,
 )
 
 /**

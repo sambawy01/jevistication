@@ -1,0 +1,13 @@
+[Text transcribed from a passport photo page — SPECIMEN]
+
+PASSPORT / PASSEPORT
+Type: P   Code: XXA   Passport No.: 000000000
+Surname: SAMPLE
+Given names: ALEX
+Nationality: UTOPIAN (SPECIMEN)
+Date of birth: 01 JAN 1990
+Date of issue: 14 JAN 2017
+Date of expiry: 14 JAN 2027
+Authority: SPECIMEN PASSPORT OFFICE
+
+— Synthetic sample for the Loupe demo: every name, number and address is invented.

@@ -41,14 +41,18 @@ object ModelLoader {
 
     fun graphPath(dir: Path = modelsDir()): Path = dir.resolve("laya-multilingual-onnx/laya-multilingual-choice.int8.onnx")
 
-    fun load(dir: Path = modelsDir()): ModelStatus {
+    /**
+     * @param fallback what happens without the model, appended to the reason it is unavailable —
+     *   the game flies its baseline; another caller says what it does instead.
+     */
+    fun load(dir: Path = modelsDir(), fallback: String = "Flying the baseline autopilot."): ModelStatus {
         val tokenizer = tokenizerPath(dir)
         val graph = graphPath(dir)
         val missing = listOf(tokenizer, graph).filterNot { Files.isRegularFile(it) }
         if (missing.isNotEmpty()) {
             return ModelStatus.Unavailable(
                 "Laya model not found (${missing.joinToString { dir.relativize(it).toString() }} missing under " +
-                    "$dir). Flying the baseline autopilot. Run tools/export-laya-onnx.py to produce the model.",
+                    "$dir). $fallback Run tools/export-laya-onnx.py to produce the model.",
             )
         }
         return try {
@@ -61,7 +65,7 @@ object ModelLoader {
                 throw e
             }
         } catch (e: Exception) {
-            ModelStatus.Unavailable("Laya model failed to load (${e.message ?: e::class.simpleName}). Flying the baseline autopilot.")
+            ModelStatus.Unavailable("Laya model failed to load (${e.message ?: e::class.simpleName}). $fallback")
         }
     }
 }

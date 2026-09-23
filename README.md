@@ -7,9 +7,10 @@ spreadsheets, calendar and the pages you browse. It shows you what it is unsure 
 learns you. Nothing it learns leaves your device.
 
 > Status: the engine core is built and tested headless (JVM Kotlin, CI on every push); the
-> decision model runs through ONNX Runtime on a desktop. No Android app yet, no device
-> measurements, no labelled data. Where it stands: [`docs/BUILD.md`](docs/BUILD.md).
-> The specification: [`docs/PRODUCT.md`](docs/PRODUCT.md).
+> decision model runs through ONNX Runtime on a desktop, and a **desktop app** runs it over your
+> own folders and mail exports. No Android app yet, no device measurements, no labelled corpus —
+> and untuned, the model loses to dumb keyword baselines on the sample data, which the app says.
+> Where it stands: [`docs/BUILD.md`](docs/BUILD.md). The specification: [`docs/PRODUCT.md`](docs/PRODUCT.md).
 
 ## The idea
 
@@ -62,6 +63,30 @@ Airplane mode: everything still works.
 Never spends money or presses the last button. Never fills a credential or a one-time code.
 Never acts on something it is unsure about. Never displays an all-clear implying safety. Never
 writes prose. Never sends your data to our servers.
+
+## Run it on a Mac
+
+The desktop app is the first usable Loupe: point it at folders and mail exports, pick a judgment
+from the template library (or write your own), run it across everything, correct what it is unsure
+about, and watch its calibration and its baseline comparison — per judgment, never as one number.
+It only reads your files, and nothing leaves the machine.
+
+```sh
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21   # JDK 21; Gradle 8.14.3 does not run on 25
+./gradlew :loupe-desktop:run
+```
+
+The model (Laya, ~400 MB) is not in git. Without it the app still opens, says why judgments
+cannot run, and the mechanical features (sources, census, the watchers' checks) still work. To
+produce it: `uv venv --python 3.12 tools/.venv`, install `tools/requirements-laya.txt`, then run
+`USE_TF=0 tools/.venv/bin/python tools/export-laya-onnx.py` (details in `docs/BUILD.md`).
+
+- **Load sample data** on the Sources screen tries everything on a synthetic, clearly fake dataset.
+- Everything it learns is kept in `~/Library/Application Support/Loupe` as plain files (the same
+  lossless formats Export writes).
+- `./gradlew :loupe-desktop:snapshot -Pout=<dir>` renders every screen to PNG off-screen, over the
+  sample data in a throwaway folder.
+- `./gradlew :game-desktop:run` is the demo game on its own ("Watch it think" opens it from the app).
 
 ## Documents
 

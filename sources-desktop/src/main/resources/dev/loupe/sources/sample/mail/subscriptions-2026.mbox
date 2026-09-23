@@ -1,0 +1,200 @@
+From billing@streamflix.example Fri Jun 05 09:00:00 2026
+From: Streamflix <billing@streamflix.example>
+To: Alex Sample <alex@sample.example>
+Date: Fri, 05 Jun 2026 09:00:00 +0000
+Subject: Your Streamflix receipt (Jun 2026)
+Message-ID: <3038416534202464348@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Thanks for watching. We charged £9.99 for your monthly plan on 5 Jun 2026.
+Card ending 1111.
+
+Manage your plan: https://streamflix.example/account
+
+From billing@streamflix.example Sun Jul 05 09:00:00 2026
+From: Streamflix <billing@streamflix.example>
+To: Alex Sample <alex@sample.example>
+Date: Sun, 05 Jul 2026 09:00:00 +0000
+Subject: Your Streamflix receipt (Jul 2026)
+Message-ID: <197105150389495197@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Thanks for watching. We charged £9.99 for your monthly plan on 5 Jul 2026.
+Card ending 1111.
+
+Manage your plan: https://streamflix.example/account
+
+From billing@streamflix.example Wed Aug 05 09:00:00 2026
+From: Streamflix <billing@streamflix.example>
+To: Alex Sample <alex@sample.example>
+Date: Wed, 05 Aug 2026 09:00:00 +0000
+Subject: Your Streamflix receipt (Aug 2026)
+Message-ID: <5760822396072341056@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Thanks for watching. We charged £9.99 for your monthly plan on 5 Aug 2026.
+Card ending 1111.
+
+Manage your plan: https://streamflix.example/account
+
+From billing@streamflix.example Sat Sep 05 09:00:00 2026
+From: Streamflix <billing@streamflix.example>
+To: Alex Sample <alex@sample.example>
+Date: Sat, 05 Sep 2026 09:00:00 +0000
+Subject: Your Streamflix receipt (Sep 2026)
+Message-ID: <6422734931189389923@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Thanks for watching. We charged £9.99 for your monthly plan on 5 Sep 2026.
+Card ending 1111.
+
+Manage your plan: https://streamflix.example/account
+
+From receipts@cloudbox.example Fri Jun 12 07:30:00 2026
+From: CloudBox <receipts@cloudbox.example>
+To: Alex Sample <alex@sample.example>
+Date: Fri, 12 Jun 2026 07:30:00 +0000
+Subject: CloudBox Plus — payment received
+Message-ID: <3489622730749831200@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Payment received: £2.49 for CloudBox Plus (monthly subscription), 12 Jun 2026.
+Next payment: 12 of next month.
+
+From receipts@cloudbox.example Sun Jul 12 07:30:00 2026
+From: CloudBox <receipts@cloudbox.example>
+To: Alex Sample <alex@sample.example>
+Date: Sun, 12 Jul 2026 07:30:00 +0000
+Subject: CloudBox Plus — payment received
+Message-ID: <4096092067401774403@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Payment received: £2.49 for CloudBox Plus (monthly subscription), 12 Jul 2026.
+Next payment: 12 of next month.
+
+From receipts@cloudbox.example Wed Aug 12 07:30:00 2026
+From: CloudBox <receipts@cloudbox.example>
+To: Alex Sample <alex@sample.example>
+Date: Wed, 12 Aug 2026 07:30:00 +0000
+Subject: CloudBox Plus — payment received
+Message-ID: <986389446571588346@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Payment received: £2.49 for CloudBox Plus (monthly subscription), 12 Aug 2026.
+Next payment: 12 of next month.
+
+From receipts@cloudbox.example Sat Sep 12 07:30:00 2026
+From: CloudBox <receipts@cloudbox.example>
+To: Alex Sample <alex@sample.example>
+Date: Sat, 12 Sep 2026 07:30:00 +0000
+Subject: CloudBox Plus — payment received
+Message-ID: <224201799885869784@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Payment received: £2.49 for CloudBox Plus (monthly subscription), 12 Sep 2026.
+Next payment: 12 of next month.
+
+From billing@streamflix.example Tue Sep 15 09:00:00 2026
+From: Streamflix <billing@streamflix.example>
+To: Alex Sample <alex@sample.example>
+Date: Tue, 15 Sep 2026 09:00:00 +0000
+Subject: Changes to your Streamflix plan
+Message-ID: <7485585075661389126@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Starting 1 November 2026 your monthly plan will cost £12.99 a month (currently £9.99). You don't need to do anything to keep watching.
+
+Monthly plan price: £12.99
+
+From hello@gympass.example Sun Sep 20 08:00:00 2026
+From: GymPass <hello@gympass.example>
+To: Alex Sample <alex@sample.example>
+Date: Sun, 20 Sep 2026 08:00:00 +0000
+Subject: Your free trial ends on 30 September
+Message-ID: <7670333880112186194@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Your GymPass free trial ends on 30 September 2026. You'll then be charged £29.99 a month unless you cancel before then.
+
+Cancel any time: https://gympass.example/cancel
+
+From news@gardenweekly.example Thu 10 Sep 06:00:00 2026
+From: Garden Weekly <news@gardenweekly.example>
+To: Alex Sample <alex@sample.example>
+Date: Thu, 10 Sep 2026 06:00:00 +0000
+Subject: This week: autumn bulbs
+Message-ID: <1117635328910900224@sample.example>
+MIME-Version: 1.0
+List-Unsubscribe: <https://gardenweekly.example/unsubscribe>
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+This week in the garden: plant your autumn bulbs, and what to do about slugs.
+
+View in browser: https://gardenweekly.example/issue
+Unsubscribe: https://gardenweekly.example/unsubscribe
+
+From news@gardenweekly.example Thu 17 Sep 06:00:00 2026
+From: Garden Weekly <news@gardenweekly.example>
+To: Alex Sample <alex@sample.example>
+Date: Thu, 17 Sep 2026 06:00:00 +0000
+Subject: This week: autumn bulbs
+Message-ID: <7900776085024329829@sample.example>
+MIME-Version: 1.0
+List-Unsubscribe: <https://gardenweekly.example/unsubscribe>
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+This week in the garden: plant your autumn bulbs, and what to do about slugs.
+
+View in browser: https://gardenweekly.example/issue
+Unsubscribe: https://gardenweekly.example/unsubscribe
+
+From offers@dealsdaily.example Mon Sep 21 06:30:00 2026
+From: Deals Daily <offers@dealsdaily.example>
+To: Alex Sample <alex@sample.example>
+Date: Mon, 21 Sep 2026 06:30:00 +0000
+Subject: Today only: 40% off
+Message-ID: <1386413676165306616@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Today only: 40% off everything. Congratulations — you have won an extra £10 voucher! Claim your prize at checkout.
+
+Unsubscribe | Manage preferences https://dealsdaily.example/prefs
+
+From support@cloudbox.example Tue Sep 22 10:00:00 2026
+From: CloudBox <support@cloudbox.example>
+To: Alex Sample <alex@sample.example>
+Date: Tue, 22 Sep 2026 10:00:00 +0000
+Subject: A new sign-in to your CloudBox account
+Message-ID: <3351443901480732465@sample.example>
+MIME-Version: 1.0
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+We noticed a new sign-in to your CloudBox account from a Mac in Sampletown. If this was you, there's nothing to do.
+
+Review your security settings: https://cloudbox.example/security
+

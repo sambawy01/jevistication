@@ -71,7 +71,7 @@ class DecisionEngine(
                     judgment.candidates.associateWith { if (it == outcome.value) 1.0 else 0.0 },
                 )
                 val decision = Decision.Act(outcome.value, Probability.of(1.0))
-                return record(judgment, certain, decision, Probability.of(1.0), mechanical = true)
+                return record(judgment, item, certain, decision, Probability.of(1.0), mechanical = true)
             }
 
             is Mechanical.Deferred -> Unit
@@ -85,6 +85,7 @@ class DecisionEngine(
             .getOrElse { failure ->
                 return record(
                     judgment = judgment,
+                    item = item,
                     distribution = judgment.noInformation(),
                     decision = Decision.Unusable(
                         reason = failure.message ?: failure::class.simpleName ?: "unusable response",
@@ -102,6 +103,7 @@ class DecisionEngine(
 
         return record(
             judgment = judgment,
+            item = item,
             distribution = calibrated.distribution,
             decision = decision,
             propensity = propensityOf(action, calibrated, Policy.actionOf(greedy)),
@@ -162,6 +164,7 @@ class DecisionEngine(
 
     private fun record(
         judgment: Judgment.Choice,
+        item: Item,
         distribution: Distribution,
         decision: Decision,
         propensity: Probability,
@@ -175,6 +178,7 @@ class DecisionEngine(
             action = Policy.actionOf(decision),
             propensity = propensity,
             failure = failure,
+            itemId = item.id,
         )
         ledger.append(row)
         return DecisionOutcome(decision, row, mechanical)
