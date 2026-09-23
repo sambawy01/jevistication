@@ -43,6 +43,29 @@ SOFTWARE.
 
 ---
 
+## Mozilla Public Suffix List
+
+- **Upstream:** https://publicsuffix.org/list/public_suffix_list.dat, snapshot `VERSION:
+  2026-09-21_18-50-07_UTC`, `COMMIT: 728555a30ef4d40e42a82d5678e5fbad2ad17b26` (fetched 2026-09-23)
+- **SHA-256:** `e81c6f5f11359a79a2479238e732e08bd8521071fd95ee47053471e3426d7b54`, recorded in
+  `public_suffix_list.dat.sha256` beside it and checked by a test
+- **Licence:** Mozilla Public License 2.0, stated in the file's own header, which travels with it
+- **Used in:** `engine/src/main/resources/dev/loupe/engine/public_suffix_list.dat`, bundled
+  **unmodified** and read by `PublicSuffix` for the registrable-domain (eTLD+1) check. Refreshed
+  only by `tools/update-psl.sh` at build time; the engine never fetches it. Source for the covered
+  file is the upstream URL above.
+- **Test vectors:** `engine/src/test/resources/dev/loupe/engine/psl_tests.txt` is `tests/tests.txt`
+  from https://github.com/publicsuffix/list, unmodified, dedicated to the public domain (CC0 1.0)
+  by its header.
+
+```
+This Source Code Form is subject to the terms of the Mozilla Public
+License, v. 2.0. If a copy of the MPL was not distributed with this
+file, You can obtain one at https://mozilla.org/MPL/2.0/.
+```
+
+---
+
 ## Libraries the desktop app ships (not derived source)
 
 No source in this repository is derived from these; they are runtime dependencies of

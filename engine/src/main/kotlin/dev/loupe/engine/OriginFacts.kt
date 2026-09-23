@@ -3,25 +3,6 @@ package dev.loupe.engine
 import java.net.URI
 
 /**
- * Public suffixes made of more than one label.
- *
- * **This is an approximation.** Production must load the real Public Suffix List: getting eTLD+1
- * wrong is a correctness bug in the fraud check, not a cosmetic one — it decides whether
- * `paypal.secure-login.com` reads as PayPal or as `secure-login.com`. The list is a parameter
- * everywhere it is used so the real one can be supplied without touching call sites.
- */
-object PublicSuffix {
-    val COMMON: Set<String> = setOf(
-        "co.uk", "org.uk", "ac.uk", "gov.uk", "me.uk", "net.uk",
-        "co.jp", "or.jp", "ne.jp",
-        "com.au", "net.au", "org.au", "edu.au", "gov.au",
-        "co.nz", "net.nz", "org.nz",
-        "com.br", "com.mx", "com.ar", "com.sg", "com.hk", "com.tr", "com.cn",
-        "co.za", "co.in", "co.kr", "co.il",
-    )
-}
-
-/**
  * Mechanical facts about a web origin (A3) — the layer that runs *before* the fraud judgment.
  *
  * These are exact, free, and unforgeable by page content: a page can claim whatever it likes in
@@ -85,22 +66,52 @@ object OriginFacts {
             scripts.size > 1
         }
 
+    private val IPV4 = Regex("""^\d{1,3}(\.\d{1,3}){3}$""")
+
     /**
-     * The registrable domain (eTLD+1) of [host], or null if [host] has too few labels to have one.
+     * The registrable domain (eTLD+1) of [host] under the Public Suffix List algorithm, or null
+     * when [host] has none: it is itself a public suffix, a bare single label (`localhost`), an
+     * IP literal, or malformed (empty labels, a leading dot).
      *
-     * @param publicSuffixes multi-label public suffixes; see [PublicSuffix] on why the real list
-     *   matters in production.
+     * Implements https://publicsuffix.org/list/ in full: normal rules, wildcards (`*.ck`),
+     * exceptions (`!www.ck`, which win over any wildcard), the implicit `*` rule for unlisted
+     * TLDs, one trailing dot, case folding and IDN — labels are matched in their IDNA ASCII form,
+     * and the answer is returned in the form the host was given (unicode in, unicode out).
+     *
+     * @param publicSuffixes PSL rules; defaults to the bundled list, both sections. See
+     *   [PublicSuffix] for why PRIVATE is included.
      */
     fun registrableDomain(
         host: String,
-        publicSuffixes: Set<String> = PublicSuffix.COMMON,
+        publicSuffixes: Set<String> = PublicSuffix.DEFAULT,
     ): String? {
-        val parts = labels(host)
-        if (parts.size < 2) return null
-        val lastTwo = parts.takeLast(2).joinToString(".")
-        val take = if (lastTwo in publicSuffixes) 3 else 2
-        if (parts.size < take) return null
-        return parts.takeLast(take).joinToString(".")
+        var h = host.trim().lowercase()
+        if (h.endsWith(".")) h = h.dropLast(1)
+        if (h.isEmpty() || h.startsWith("[") || ':' in h || IPV4.matches(h)) return null
+        val original = h.split('.')
+        if (original.any { it.isEmpty() }) return null
+        val ascii = original.map { PublicSuffix.toAsciiLabel(it) ?: return null }
+
+        val n = ascii.size
+        // Length, in labels, of the public suffix. The implicit "*" rule makes it at least 1.
+        var suffixLength = 1
+        for (i in 0 until n) {
+            val candidate = ascii.subList(i, n).joinToString(".")
+            if ("!$candidate" in publicSuffixes) {
+                // An exception rule: the suffix is the rule minus its leftmost label.
+                suffixLength = n - i - 1
+                break
+            }
+            val wildcard = if (i + 1 < n) "*." + ascii.subList(i + 1, n).joinToString(".") else "*"
+            if (candidate in publicSuffixes || (i + 1 < n && wildcard in publicSuffixes)) {
+                // Scanning from the longest candidate, the first match is the prevailing rule.
+                // A longer exception can only sit to the left of this point, already checked.
+                suffixLength = n - i
+                break
+            }
+        }
+        if (suffixLength >= n) return null
+        return original.takeLast(suffixLength + 1).joinToString(".")
     }
 
     /**
@@ -116,7 +127,7 @@ object OriginFacts {
     fun brandMatchesOrigin(
         brand: String,
         host: String,
-        publicSuffixes: Set<String> = PublicSuffix.COMMON,
+        publicSuffixes: Set<String> = PublicSuffix.DEFAULT,
     ): Boolean {
         val normalisedBrand = brand.lowercase().filter { it.isLetterOrDigit() }
         if (normalisedBrand.isEmpty()) return false
@@ -132,7 +143,7 @@ object OriginFacts {
     fun postsCrossOrigin(
         pageUrl: String,
         formActionUrl: String,
-        publicSuffixes: Set<String> = PublicSuffix.COMMON,
+        publicSuffixes: Set<String> = PublicSuffix.DEFAULT,
     ): Boolean {
         val pageHost = host(pageUrl) ?: return false
         val actionHost = host(formActionUrl) ?: return false

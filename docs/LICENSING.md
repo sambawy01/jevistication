@@ -293,6 +293,19 @@ email and files through platform APIs and would need its own check.
 
 ---
 
+## The Public Suffix List — checked 2026-09-23
+
+`public_suffix_list.dat` (snapshot `2026-09-21_18-50-07_UTC`, upstream commit `728555a3`, SHA-256
+`e81c6f5f…426d7b54`) is **MPL-2.0**, per the notice in its own header. It is bundled as an engine
+resource **unmodified**, with that header intact. MPL-2.0 is file-level copyleft: the obligation
+attaches to the file, not to the engine that reads it, and for an unmodified file it amounts to
+keeping the notice and pointing at the source — both done, and recorded in
+`THIRD_PARTY_NOTICES.md`. **Never edit the bundled file by hand**; local overrides belong in code as
+an extra rule set, and a refresh goes through `tools/update-psl.sh`. The upstream test vectors
+bundled for the test suite are CC0.
+
+---
+
 ## Rejected
 
 ### NanoJev — weights and dataset declare no licence

@@ -283,7 +283,7 @@ judgments is the difference between this product and a confident guess.
 | 7 | Prompt wording moving results as much as the algorithm | Wording is a controlled variable, and criteria text is hashed into every ledger row |
 | 8 | The second backend is weak zero-shot | Untuned Qwen3-0.6B scores poorly on decision tasks. Both backends are fine-tuned on our fixtures; its votes do not count until it is |
 | 9 | **Name collision.** `LOUPE` is a crowded mark. Registrations exist for jewellery-trade software (Atelier Technology), sports-card retail (Loupe Tech LLC) and a CRM (Apex); Mysk ships an iOS privacy app called Loupe | None is a consumer personal-data or fraud-detection app, but a crowded mark is a weak mark, and the Mysk app is adjacent on privacy and mobile. **Clear the mark in the target jurisdictions, and check Play Store and domain availability, before any spend on branding, the listing or the domain.** Decision taken with this known |
-| 10 | **Approximate public suffix list.** The engine ships a small built-in set of multi-label public suffixes, not the real Public Suffix List | Getting eTLD+1 wrong is a correctness bug in the fraud check, not a cosmetic one: it decides whether `paypal.secure-login.com` reads as PayPal or as `secure-login.com`. The suffix set is a parameter at every call site, so the real list drops in without touching callers. **Load the real PSL, with a refresh path, before the fraud check ships.** |
+| 10 | ~~Approximate public suffix list~~ | **Closed 2026-09-23.** The engine now bundles the real Mozilla PSL (snapshot `2026-09-21_18-50-07_UTC`, SHA-256 pinned and tested), implements the full algorithm — wildcards, exceptions, IDN, both sections — and passes the official test vectors. Refreshed at build time by `tools/update-psl.sh`; never fetched at runtime. Reopens if the snapshot goes stale before a release |
 | 11 | **Third-party attribution is unshipped.** The ONNX Runtime Android AAR bundles native libraries but contains no `LICENSE` and no `ThirdPartyNotices` at all; the desktop jar's notices cover ~85 components (MIT, BSD, ISC, Apache, Boost, zlib, MPL-2.0 Eigen, an Intel licence). **Since 2026-09-23 also DJL:** neither DJL jar ships a LICENSE or NOTICE, and nothing credits the Rust crates linked into `libtokenizers`. **Since 2026-09-23 also the desktop demo game:** no Compose, skiko or AndroidX runtime jar ships a LICENSE or NOTICE, and `libskiko` statically links Skia with ICU, HarfBuzz, libpng, expat, libjpeg-turbo, libwebp and zlib. **Since 2026-09-23 also the desktop app's sources:** mime4j, PDFBox and Commons ship their notices, but PDFBox bundles OFL-1.1 fonts, CC BY 4.0 Font Awesome shapes and Adobe-licensed data whose attribution must travel too, and neither metadata-extractor nor XMPCore ships a LICENSE at all | All of those require the notice to travel with the binary, and the shipping artifact supplies none of it. No copyleft or non-commercial obligation was found, so this is a compliance task, not a licence blocker. **Bundle a notices screen sourced upstream, and never patch Eigen — its MPL-2.0 is file-level copyleft.** Verify the Android component set separately; it is a different native build from the jar |
 | 12 | **Laya's training data is only partly published, and the published part includes non-commercial sources.** The authors' own benchmark flags as "in training" `Tobi-Bueck/customer-support-tickets` (CC-BY-NC-4.0) and MS MARCO (Microsoft: non-commercial research only), plus LGPL-3.0, CC-BY-SA-3.0, `unknown` and undeclared sources; the full mix is not published. The tokenizer is Gemma 2's, whose Terms of Use may or may not reach it | Adopted for development on the owner's decision; **not cleared for shipping.** Close it by one of: the authors publishing a clean full mix, or confirming the NC sources are absent from the multilingual checkpoint; or training the head (or model) on data we can account for. Ask the authors first — it is the cheapest. Details in `LICENSING.md` |
 | 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8, 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" (**on a desktop M4 CPU the game now measures 10 decisions/s at ~62–66 ms P50, ~80 ms P95**, with ~106-token questions; a phone is still unmeasured). The desktop app's sweeps measured a median **73–99 ms per item** on the sample (a light machine) and **125–152 ms** with the machine's load average near 20 — desktop latency depends on what else is running, and a phone shares its CPU with everything | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
@@ -475,6 +475,24 @@ their acceptance criteria are met; entries here record increments toward them.
   correct escaping plus locale-independent number formatting is a small thing to own outright.
   233 tests green.
 
+- **2026-09-23 — Risk 10 closed: the real Public Suffix List.** The built-in approximation — 28
+  two-label suffixes — is gone, and the engine now reads a pinned snapshot of Mozilla's list
+  (`public_suffix_list.dat`, VERSION `2026-09-21_18-50-07_UTC`) from its own resources, once, on
+  first use. `registrableDomain` implements the whole algorithm rather than "last two labels, or
+  three": normal rules, wildcards (`*.ck`), exceptions (`!www.ck`, which beat the wildcard), the
+  implicit `*` rule for an unlisted TLD, case, one trailing dot, IP literals and bare hosts
+  (no registrable domain), and IDN — labels are matched in their IDNA ASCII form and the answer is
+  returned in the form it was given, so a homograph host stays visibly itself. **Both sections are
+  used by default, deliberately:** the PRIVATE section is where `github.io` and `blogspot.com`
+  live, and `paypal.github.io` belongs to whoever owns that account, not to GitHub — treating it
+  as `github.io` would lend a tenant the host's name. `PublicSuffix.ICANN` exists for the rare
+  caller that wants registry semantics. The rule set is still a plain `Set<String>` parameter at
+  every call site, so no caller changed. **The engine stays offline:** the refresh path is
+  `tools/update-psl.sh`, a developer script that re-downloads, sanity-checks (section markers,
+  VERSION and COMMIT lines, rule count) and re-hashes; a test fails if the file and its recorded
+  SHA-256 disagree. The official upstream test vectors (CC0) run as a test, all 77 passing. MPL-2.0,
+  bundled unmodified; recorded in `THIRD_PARTY_NOTICES.md` and `LICENSING.md`. 376 tests green.
+
 ---
 
 ## Where the build stands
@@ -493,7 +511,7 @@ that ran the export spike.
 | A2 Backend interface | Done — `Backend` |
 | A2 **first implementation** | Done — `OnnxBackend` in `backend-onnx`, real ONNX Runtime inference. **Runs the real Laya graph** with `LayaPrompt` + the DJL tokenizer, matching upstream PyTorch (gated tests, local only). The second (Qwen) backend still needs weights |
 | A1 export half | **Proven on desktop** — Laya encoder + head as one ONNX graph, FP32 and INT8, parity recorded. Device latency not measured |
-| A3 Mechanical extractors, text state | **Complete** — hash, dedup, MIME, dates, origin facts, OCR-presence, `TextState` |
+| A3 Mechanical extractors, text state | **Complete** — hash, dedup, MIME, dates, origin facts (on the real Public Suffix List since 2026-09-23), OCR-presence, `TextState` |
 | A4 Judgment type and validation | **Complete** — Choice, Bool and Score; strict validation, failure postures, never throws |
 | A5 Ledger | Complete — append-only, propensity required, criteria hash |
 | A6 Recalibrator | Complete — temperature scaling fitted by NLL; ECE, Brier, reliability bins |

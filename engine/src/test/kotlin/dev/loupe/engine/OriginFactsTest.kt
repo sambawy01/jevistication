@@ -100,7 +100,7 @@ class OriginFactsTest {
     }
 
     @Test
-    fun `a supplied public suffix list overrides the built-in approximation`() {
+    fun `a supplied public suffix list overrides the bundled one`() {
         // With "example.com" treated as a public suffix, shop.example.com is the registrable name.
         assertEquals(
             "shop.example.com",

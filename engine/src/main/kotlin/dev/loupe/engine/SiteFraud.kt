@@ -47,7 +47,7 @@ object SiteFraud {
         claimedBrand: String? = null,
         formActionUrl: String? = null,
         knownBadHosts: Set<String> = emptySet(),
-        publicSuffixes: Set<String> = PublicSuffix.COMMON,
+        publicSuffixes: Set<String> = PublicSuffix.DEFAULT,
     ): FraudAssessment {
         val signals = mutableListOf<FraudSignal>()
         val host = OriginFacts.host(pageUrl)
