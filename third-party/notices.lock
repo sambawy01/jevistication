@@ -1,0 +1,442 @@
+# Manifest of THIRD_PARTY_NOTICES.txt. Generated; do not edit. Run ./gradlew :loupe-desktop:generateThirdPartyNotices and commit the result.
+# kind	fields... (maven: coordinate, licence, jar entries=text ids)
+notices	loupe-desktop/src/main/resources/THIRD_PARTY_NOTICES.txt	d13bd251a6ab39402bf9c9c6c3fdac7b007ae3b3e12d32010e45b03dd1617b7f
+maven	ai.djl.huggingface:tokenizers:0.38.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	ai.djl:api:0.38.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	androidx.annotation:annotation-jvm:1.8.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	androidx.arch.core:core-common:2.2.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	androidx.collection:collection-jvm:1.4.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	androidx.lifecycle:lifecycle-common-jvm:2.8.5	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	androidx.lifecycle:lifecycle-runtime-desktop:2.8.5	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	androidx.lifecycle:lifecycle-viewmodel-desktop:2.8.5	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	com.adobe.xmp:xmpcore:6.1.11	BSD-3-Clause	(no licence file in the jar; canonical text)=SPDX:BSD-3-Clause
+maven	com.drewnoakes:metadata-extractor:2.21.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	com.google.code.gson:gson:2.13.1	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	com.google.errorprone:error_prone_annotations:2.38.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	com.microsoft.onnxruntime:onnxruntime:1.20.0	MIT	ThirdPartyNotices.txt=cf7342f7ba482ef7,(no licence file in the jar; canonical text)=SPDX:MIT
+maven	commons-codec:commons-codec:1.17.1	Apache-2.0	META-INF/LICENSE.txt=cfc7749b96f63bd3,META-INF/NOTICE.txt=fc5bececcc4708ba
+maven	commons-io:commons-io:2.19.0	Apache-2.0	META-INF/LICENSE.txt=cfc7749b96f63bd3,META-INF/NOTICE.txt=b54b0db6c617273e
+maven	commons-logging:commons-logging:1.4.0	Apache-2.0	META-INF/LICENSE.txt=b1d2870f1a00e4d7,META-INF/NOTICE.txt=d649e220dd049719
+maven	net.java.dev.jna:jna:5.17.0	Apache-2.0	META-INF/LICENSE=07c938b23950ab7d
+maven	org.apache.commons:commons-compress:1.27.1	Apache-2.0	META-INF/LICENSE.txt=c71d239df91726fc,META-INF/NOTICE.txt=28a309fd415da6e8
+maven	org.apache.james:apache-mime4j-core:0.8.15	Apache-2.0	META-INF/LICENSE=cfc7749b96f63bd3,META-INF/NOTICE=eb35d16eeac2429a
+maven	org.apache.james:apache-mime4j-dom:0.8.15	Apache-2.0	META-INF/LICENSE=cfc7749b96f63bd3,META-INF/NOTICE=a3d3ecf4a6e7433c
+maven	org.apache.james:apache-mime4j-mbox-iterator:0.8.15	Apache-2.0	META-INF/LICENSE=cfc7749b96f63bd3,META-INF/NOTICE=bfefeea428127262
+maven	org.apache.pdfbox:fontbox:3.0.8	Apache-2.0	META-INF/LICENSE=f01ba19b3ca5d948,META-INF/NOTICE=51fd9b39da2a5836
+maven	org.apache.pdfbox:pdfbox-io:3.0.8	Apache-2.0	META-INF/LICENSE=cfc7749b96f63bd3,META-INF/NOTICE=cf428ffdb6d269bc
+maven	org.apache.pdfbox:pdfbox:3.0.8	Apache-2.0	META-INF/LICENSE=5bc4f4667cee9690,META-INF/NOTICE=d119a5d3575b6112
+maven	org.jetbrains.androidx.lifecycle:lifecycle-runtime-compose-desktop:2.8.4	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.animation:animation-core-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.animation:animation-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.desktop:desktop-jvm:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.foundation:foundation-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.foundation:foundation-layout-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.material:material-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.material:material-icons-core-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.material:material-ripple-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.runtime:runtime-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.runtime:runtime-saveable-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.ui:ui-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.ui:ui-geometry-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.ui:ui-graphics-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.ui:ui-text-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.ui:ui-tooling-preview-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.ui:ui-unit-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.compose.ui:ui-util-desktop:1.7.3	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.kotlin:kotlin-stdlib:2.1.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.kotlinx:atomicfu-jvm:0.23.2	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains.skiko:skiko-awt:0.8.18	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.jetbrains:annotations:23.0.0	Apache-2.0	(no licence file in the jar; canonical text)=SPDX:Apache-2.0
+maven	org.slf4j:slf4j-api:2.0.17	MIT	META-INF/LICENSE.txt=8e0d2e086db1da82
+native	ai.djl.huggingface:tokenizers:0.38.0	libtokenizers (DJL djl_tokenizer JNI library)	Apache-2.0
+native	ai.djl.huggingface:tokenizers:0.38.0	Rust standard library (std, core, alloc)	MIT OR Apache-2.0
+native	ai.djl.huggingface:tokenizers:0.38.0	libstdc++-6.dll, libgcc_s_seh-1.dll (Windows only)	GPL-3.0-only WITH GCC-exception-3.1
+native	ai.djl.huggingface:tokenizers:0.38.0	libwinpthread-1.dll (Windows only)	MIT AND BSD-3-Clause
+native	com.microsoft.onnxruntime:onnxruntime:1.20.0	libonnxruntime and its ~85 bundled components	-
+native	net.java.dev.jna:jna:5.17.0	libjnidispatch (JNA native stub)	Apache-2.0
+native	net.java.dev.jna:jna:5.17.0	libffi (statically linked into libjnidispatch)	MIT
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	Skia	BSD-3-Clause
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	ICU	Unicode-3.0
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	HarfBuzz	MIT-Modern-Variant
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	libpng	libpng-2.0
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	Expat	MIT
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	libjpeg-turbo 2.1.4	IJG AND BSD-3-Clause AND Zlib
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	libwebp	BSD-3-Clause
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	zlib	Zlib
+native	org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	Embedded symbol font	OFL-1.1
+crate	adler2	2.0.1	0BSD OR MIT OR Apache-2.0	861399f8c21c042b,8ada45cd9f843acf,23f18e03dc49df91
+crate	ahash	0.8.12	MIT OR Apache-2.0	a60eea8175145316,0444c6991eead682
+crate	aho-corasick	1.1.3	Unlicense OR MIT	01c266bced4a434d,0f96a83840e146e4,7e12e5df4bae12cb
+crate	base64	0.13.1	MIT/Apache-2.0	a60eea8175145316,0dd882e53de11566
+crate	base64	0.22.1	MIT OR Apache-2.0	a60eea8175145316,0dd882e53de11566
+crate	bit-set	0.5.3	MIT/Apache-2.0	8173d5c29b4f956d,c9a75f18b9ab2927
+crate	bit-vec	0.6.3	MIT/Apache-2.0	8173d5c29b4f956d,7b63ecd5f1902af1
+crate	bitflags	1.3.2	MIT/Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	bitflags	2.9.1	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	bytemuck	1.23.1	Zlib OR Apache-2.0 OR MIT	e3ba223bb1423f0a,9df9ba60a11af705,84b34dd7608f7fb9
+crate	bytemuck_derive	1.10.0	Zlib OR Apache-2.0 OR MIT	e3ba223bb1423f0a,9df9ba60a11af705,84b34dd7608f7fb9
+crate	byteorder	1.5.0	Unlicense OR MIT	01c266bced4a434d,0f96a83840e146e4,7e12e5df4bae12cb
+crate	bytes	1.10.1	MIT	45f522cacecb1023
+crate	candle-core	0.8.4	MIT OR Apache-2.0	c71d239df91726fc
+crate	candle-nn	0.8.4	MIT OR Apache-2.0	c71d239df91726fc,23f18e03dc49df91
+crate	candle-transformers	0.8.4	MIT OR Apache-2.0	c71d239df91726fc,23f18e03dc49df91
+crate	castaway	0.2.4	MIT	f98e09091d5ae02b
+crate	cesu8	1.1.0	Apache-2.0/MIT	5ca77347e58205d3
+crate	cfg-if	1.0.1	MIT OR Apache-2.0	a60eea8175145316,378f5840b258e277
+crate	combine	4.6.7	MIT	09f1f96437694942
+crate	compact_str	0.9.0	MIT	0d52feec79589df3
+crate	console	0.15.11	MIT	3e1de3c527ab2512
+crate	crc32fast	1.5.0	MIT OR Apache-2.0	b40930bbcf80744c,61d383b05b87d78f
+crate	crossbeam-deque	0.8.6	MIT OR Apache-2.0	a60eea8175145316,5734ed989dfca1f6
+crate	crossbeam-epoch	0.9.18	MIT OR Apache-2.0	a60eea8175145316,5734ed989dfca1f6
+crate	crossbeam-utils	0.8.21	MIT OR Apache-2.0	a60eea8175145316,5734ed989dfca1f6
+crate	darling	0.20.11	MIT	8ea93490d74a5a1b
+crate	darling_core	0.20.11	MIT	8ea93490d74a5a1b
+crate	darling_macro	0.20.11	MIT	8ea93490d74a5a1b
+crate	dary_heap	0.3.7	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	derive_builder	0.20.2	MIT OR Apache-2.0	b40930bbcf80744c,8c9612877aacfa1b
+crate	derive_builder_core	0.20.2	MIT OR Apache-2.0	b40930bbcf80744c,8c9612877aacfa1b
+crate	derive_builder_macro	0.20.2	MIT OR Apache-2.0	b40930bbcf80744c,8c9612877aacfa1b
+crate	dirs	6.0.0	MIT OR Apache-2.0	d3174ad63e721d4c,6a2e0ade09a7d5f8
+crate	dirs-sys	0.5.0	MIT OR Apache-2.0	d3174ad63e721d4c,6a2e0ade09a7d5f8
+crate	displaydoc	0.2.5	MIT OR Apache-2.0	a60eea8175145316,23f18e03dc49df91
+crate	dyn-stack	0.10.0	MIT	bf5a93d1014429b4
+crate	dyn-stack	0.13.0	MIT	bf5a93d1014429b4
+crate	either	1.15.0	MIT OR Apache-2.0	a60eea8175145316,7576269ea71f767b
+crate	encode_unicode	1.0.0	Apache-2.0 OR MIT	cfc7749b96f63bd3,da23be69ad3ccf7a
+crate	enum-as-inner	0.6.1	MIT/Apache-2.0	b40930bbcf80744c,10d73bf26900fa6d,b54db71f7d0b1f62
+crate	equivalent	1.0.2	Apache-2.0 OR MIT	a60eea8175145316,7365cc8878a1d7ce
+crate	esaxx-rs	0.1.10	Apache-2.0	c71d239df91726fc
+crate	fancy-regex	0.13.0	MIT	3bc70e239e912727
+crate	flate2	1.1.2	MIT OR Apache-2.0	a60eea8175145316,75d3bf11a47fed60
+crate	fnv	1.0.7	Apache-2.0 / MIT	a60eea8175145316,65fdb6c76cd61612
+crate	foreign-types	0.3.2	MIT/Apache-2.0	b40930bbcf80744c,333ea3aaa3cadb81
+crate	foreign-types-shared	0.1.1	MIT/Apache-2.0	b40930bbcf80744c,333ea3aaa3cadb81
+crate	form_urlencoded	1.2.1	MIT OR Apache-2.0	a60eea8175145316,20c7855c364d57ea
+crate	gemm	0.17.1	MIT	d64f878c89bd5f1e
+crate	gemm	0.18.2	MIT	d64f878c89bd5f1e
+crate	gemm-c32	0.17.1	MIT	d64f878c89bd5f1e
+crate	gemm-c32	0.18.2	MIT	d64f878c89bd5f1e
+crate	gemm-c64	0.17.1	MIT	d64f878c89bd5f1e
+crate	gemm-c64	0.18.2	MIT	d64f878c89bd5f1e
+crate	gemm-common	0.17.1	MIT	d64f878c89bd5f1e
+crate	gemm-common	0.18.2	MIT	d64f878c89bd5f1e
+crate	gemm-f16	0.17.1	MIT	d64f878c89bd5f1e
+crate	gemm-f16	0.18.2	MIT	d64f878c89bd5f1e
+crate	gemm-f32	0.17.1	MIT	d64f878c89bd5f1e
+crate	gemm-f32	0.18.2	MIT	d64f878c89bd5f1e
+crate	gemm-f64	0.17.1	MIT	d64f878c89bd5f1e
+crate	gemm-f64	0.18.2	MIT	d64f878c89bd5f1e
+crate	getrandom	0.2.16	MIT OR Apache-2.0	aaff376532ea30a0,42fa16951ce7f24b
+crate	getrandom	0.3.3	MIT OR Apache-2.0	aaff376532ea30a0,29e9fe5074bd27e0
+crate	half	2.6.0	MIT OR Apache-2.0	a6cba85bc92e0cff,508a77d2e7b51d98
+crate	hashbrown	0.15.4	MIT OR Apache-2.0	a60eea8175145316,ff8f68cb076caf8c
+crate	heck	0.5.0	MIT OR Apache-2.0	a60eea8175145316,7b63ecd5f1902af1
+crate	hf-hub	0.4.3	Apache-2.0	cfc7749b96f63bd3
+crate	http	1.3.1	MIT OR Apache-2.0	8bb1b50b0e5c9399,dc91f8200e4b2a1f
+crate	icu_collections	2.0.0	Unicode-3.0	f367c1b8e1aa2624
+crate	icu_locale_core	2.0.0	Unicode-3.0	f367c1b8e1aa2624
+crate	icu_normalizer	2.0.0	Unicode-3.0	f367c1b8e1aa2624
+crate	icu_normalizer_data	2.0.0	Unicode-3.0	f367c1b8e1aa2624
+crate	icu_properties	2.0.1	Unicode-3.0	f367c1b8e1aa2624
+crate	icu_properties_data	2.0.1	Unicode-3.0	f367c1b8e1aa2624
+crate	icu_provider	2.0.0	Unicode-3.0	f367c1b8e1aa2624
+crate	ident_case	1.0.1	MIT/Apache-2.0	508a77d2e7b51d98
+crate	idna	1.0.3	MIT OR Apache-2.0	a60eea8175145316,76e972ac0f4ddb11
+crate	idna_adapter	1.2.1	Apache-2.0 OR MIT	a60eea8175145316,8b43ce8accd61e9d
+crate	indexmap	2.10.0	Apache-2.0 OR MIT	a60eea8175145316,ecc269ef87fd38a1
+crate	indicatif	0.17.11	MIT	3e1de3c527ab2512
+crate	itertools	0.14.0	MIT OR Apache-2.0	a60eea8175145316,7576269ea71f767b
+crate	itoa	1.0.15	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	jni	0.21.1	MIT/Apache-2.0	a60eea8175145316,fea1d5bf3dd71605
+crate	jni-sys	0.3.0	MIT/Apache-2.0	b40930bbcf80744c,1d85bd754b04ceec
+crate	libc	0.2.174	MIT OR Apache-2.0	62c7a1e35f564068,a8d47ff51ca256f5
+crate	libloading	0.8.8	ISC	b29f8b01452350c2
+crate	libm	0.2.15	MIT	3823dda7cf046602
+crate	litemap	0.8.0	Unicode-3.0	f367c1b8e1aa2624
+crate	log	0.4.27	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	macro_rules_attribute	0.2.2	Apache-2.0 OR MIT OR Zlib	388e98b08de12ba8,603fb27ef3266ea5,1c41c0e19caa2c20
+crate	macro_rules_attribute-proc_macro	0.2.2	Apache-2.0 OR MIT OR Zlib	388e98b08de12ba8,603fb27ef3266ea5,1c41c0e19caa2c20
+crate	memchr	2.7.5	Unlicense OR MIT	01c266bced4a434d,0f96a83840e146e4,7e12e5df4bae12cb
+crate	memmap2	0.9.7	MIT OR Apache-2.0	04ea4849dba9dcae,0d25d03b5ab49576
+crate	minimal-lexical	0.2.1	MIT/Apache-2.0	8173d5c29b4f956d,23f18e03dc49df91,dbe1fff0fb1314b6
+crate	miniz_oxide	0.8.9	MIT OR Zlib OR Apache-2.0	4108245a1f2df9d4,0d542e0c8804e39a,799e9ca9d179295e,0a54e647fe541046
+crate	monostate	0.1.14	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	monostate-impl	0.1.14	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	nom	7.1.3	MIT	4dbda04344456f09
+crate	num	0.4.3	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	num-bigint	0.4.6	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	num-complex	0.4.6	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	num-integer	0.1.46	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	num-iter	0.1.45	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	num-rational	0.4.2	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	num-traits	0.2.19	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	num_cpus	1.17.0	MIT OR Apache-2.0	a60eea8175145316,1626f2c950cee975
+crate	num_enum	0.7.4	BSD-3-Clause OR MIT OR Apache-2.0	62c7a1e35f564068,0be96d891d00e0ae,23f18e03dc49df91
+crate	num_enum_derive	0.7.4	BSD-3-Clause OR MIT OR Apache-2.0	62c7a1e35f564068,0be96d891d00e0ae,23f18e03dc49df91
+crate	number_prefix	0.4.0	MIT	-
+crate	once_cell	1.21.3	MIT OR Apache-2.0	a60eea8175145316,23f18e03dc49df91
+crate	onig	6.5.1	MIT	e9c1238c5beb73c6
+crate	onig_sys	69.9.1	MIT	71f321038b088358,70ba5469ea0bab6e
+crate	openssl	0.10.78	Apache-2.0	f3d4287b4a21c517,b40930bbcf80744c
+crate	openssl-macros	0.1.1	MIT/Apache-2.0	b40930bbcf80744c,ea5ab440900ab271
+crate	openssl-sys	0.9.114	MIT	378f5840b258e277
+crate	option-ext	0.2.0	MPL-2.0	66a3107d5ad6a058
+crate	paste	1.0.15	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	percent-encoding	2.3.1	MIT OR Apache-2.0	a60eea8175145316,76e972ac0f4ddb11
+crate	pin-project-lite	0.2.16	Apache-2.0 OR MIT	0d542e0c8804e39a,23f18e03dc49df91
+crate	portable-atomic	1.11.1	Apache-2.0 OR MIT	0d542e0c8804e39a,23f18e03dc49df91
+crate	potential_utf	0.1.2	Unicode-3.0	f367c1b8e1aa2624
+crate	ppv-lite86	0.2.21	MIT OR Apache-2.0	0218327e7a480793,4cada0bd02ea3692
+crate	proc-macro-crate	3.3.0	MIT OR Apache-2.0	8ada45cd9f843acf,23f18e03dc49df91
+crate	proc-macro2	1.0.95	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	pulp	0.18.22	MIT	d64f878c89bd5f1e
+crate	pulp	0.21.5	MIT	d64f878c89bd5f1e
+crate	quote	1.0.40	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	rand	0.9.2	MIT OR Apache-2.0	90eb64f0279b0d94,35242e7a83f69875,209fbbe0ad52d923
+crate	rand_chacha	0.9.0	MIT OR Apache-2.0	90eb64f0279b0d94,35242e7a83f69875,209fbbe0ad52d923
+crate	rand_core	0.9.3	MIT OR Apache-2.0	90eb64f0279b0d94,6df43f6f4b5d4587,209fbbe0ad52d923
+crate	rand_distr	0.5.1	MIT OR Apache-2.0	90eb64f0279b0d94,6df43f6f4b5d4587,a771e4354f6b3ad4
+crate	raw-cpuid	10.7.0	MIT	5b10bf6c1bbe9e70
+crate	raw-cpuid	11.5.0	MIT	5b10bf6c1bbe9e70
+crate	rayon	1.10.0	MIT OR Apache-2.0	a60eea8175145316,0621878e61f0d0fd
+crate	rayon-cond	0.4.0	Apache-2.0/MIT	a60eea8175145316,27995d58ad5c1145
+crate	rayon-core	1.12.1	MIT OR Apache-2.0	a60eea8175145316,0621878e61f0d0fd
+crate	reborrow	0.5.5	MIT	bf5a93d1014429b4
+crate	regex	1.11.1	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	regex-automata	0.4.9	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	regex-syntax	0.8.5	MIT OR Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	ring	0.17.14	Apache-2.0 AND ISC	b3d734001a94efff,005fc765ddc5115d,f025ccfb7dfb6bdf
+crate	rustls	0.23.31	Apache-2.0 OR ISC OR MIT	a60eea8175145316,7cfafc877eccc46c,709e3175b4212f7b
+crate	rustls-pki-types	1.12.0	MIT OR Apache-2.0	45fd05c4865e7c35,9117d922e6671255
+crate	rustls-webpki	0.103.13	ISC	5b698ca13897be3a
+crate	rustversion	1.0.21	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	ryu	1.0.20	Apache-2.0 OR BSL-1.0	62c7a1e35f564068,c9bff75738922193
+crate	safetensors	0.4.5	Apache-2.0	c71d239df91726fc
+crate	seq-macro	0.3.6	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	serde	1.0.219	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	serde_derive	1.0.219	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	serde_json	1.0.142	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	serde_plain	1.0.2	MIT/Apache-2.0	a60eea8175145316,6485b8ed310d3f03
+crate	smallvec	1.15.1	MIT OR Apache-2.0	a60eea8175145316,0b28172679e0009b
+crate	socks	0.3.4	MIT/Apache-2.0	b40930bbcf80744c,b68cdf814c411806
+crate	spm_precompiled	0.1.4	Apache-2.0	c71d239df91726fc
+crate	stable_deref_trait	1.2.0	MIT/Apache-2.0	a60eea8175145316,3c125f249fc6fb19
+crate	static_assertions	1.1.0	MIT OR Apache-2.0	cfc7749b96f63bd3,ea084a2373ebc1f0
+crate	strsim	0.11.1	MIT	1e697ce8d21401fb
+crate	subtle	2.6.1	BSD-3-Clause	cc0332a88c2ea21d
+crate	syn	2.0.104	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	synstructure	0.13.2	MIT	219920e865eee70b
+crate	sysctl	0.5.5	MIT	65a65293f8b9a970
+crate	sysctl	0.6.0	MIT	65a65293f8b9a970
+crate	thiserror	1.0.69	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	thiserror	2.0.12	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	thiserror-impl	1.0.69	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	thiserror-impl	2.0.12	MIT OR Apache-2.0	62c7a1e35f564068,23f18e03dc49df91
+crate	tinystr	0.8.1	Unicode-3.0	f367c1b8e1aa2624
+crate	tokenizers	0.21.4	Apache-2.0	c71d239df91726fc
+crate	toml_datetime	0.6.11	MIT OR Apache-2.0	b40930bbcf80744c,6efb0476a1cc0850
+crate	toml_edit	0.22.27	MIT OR Apache-2.0	b40930bbcf80744c,6efb0476a1cc0850
+crate	tracing	0.1.41	MIT	898b1ae9821e98da
+crate	tracing-attributes	0.1.30	MIT	898b1ae9821e98da
+crate	tracing-core	0.1.34	MIT	898b1ae9821e98da
+crate	ug	0.1.0	MIT OR Apache-2.0	-
+crate	unicode-ident	1.0.18	(MIT OR Apache-2.0) AND Unicode-3.0	62c7a1e35f564068,23f18e03dc49df91,f7db81051789b729
+crate	unicode-normalization-alignments	0.1.12	MIT/Apache-2.0	23860c2a7b5d96b2,a60eea8175145316,7b63ecd5f1902af1
+crate	unicode-segmentation	1.12.0	MIT OR Apache-2.0	23860c2a7b5d96b2,a60eea8175145316,7b63ecd5f1902af1
+crate	unicode-width	0.2.1	MIT OR Apache-2.0	23860c2a7b5d96b2,a60eea8175145316,7b63ecd5f1902af1
+crate	unicode_categories	0.1.1	MIT OR Apache-2.0	b40930bbcf80744c,98a817e7b85e5fe4
+crate	untrusted	0.9.0	ISC	7abd9b6960dcf7d4
+crate	ureq	2.12.1	MIT OR Apache-2.0	c71d239df91726fc,7e5886959f67f8c7
+crate	url	2.5.4	MIT OR Apache-2.0	a60eea8175145316,76e972ac0f4ddb11
+crate	utf8_iter	1.0.4	Apache-2.0 OR MIT	c30152c94a6d75e0,cfc7749b96f63bd3,3fa4ca83dcc92378
+crate	webpki-roots	0.26.11	CDLA-Permissive-2.0	e271993808fec50a
+crate	webpki-roots	1.0.2	CDLA-Permissive-2.0	e271993808fec50a
+crate	winapi	0.3.9	MIT/Apache-2.0	b40930bbcf80744c,ce7bc3499fee93d5
+crate	winapi-x86_64-pc-windows-gnu	0.4.0	MIT/Apache-2.0	-
+crate	windows-sys	0.45.0	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	windows-sys	0.59.0	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	windows-sys	0.60.2	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	windows-targets	0.42.2	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	windows-targets	0.52.6	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	windows-targets	0.53.3	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	windows_x86_64_gnu	0.42.2	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	windows_x86_64_gnu	0.52.6	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	windows_x86_64_gnu	0.53.0	MIT OR Apache-2.0	c16f8dcf1a368b83,c2cfccb812fe4821
+crate	winnow	0.7.12	MIT	cb5aedb296c5246d
+crate	writeable	0.6.1	Unicode-3.0	f367c1b8e1aa2624
+crate	yoke	0.7.5	Unicode-3.0	f367c1b8e1aa2624
+crate	yoke	0.8.0	Unicode-3.0	f367c1b8e1aa2624
+crate	yoke-derive	0.7.5	Unicode-3.0	f367c1b8e1aa2624
+crate	yoke-derive	0.8.0	Unicode-3.0	f367c1b8e1aa2624
+crate	zerocopy	0.8.26	BSD-2-Clause OR Apache-2.0 OR MIT	1520f0253bb05bbf,83c1763356e822ad,24fa231567ace7e0
+crate	zerofrom	0.1.6	Unicode-3.0	f367c1b8e1aa2624
+crate	zerofrom-derive	0.1.6	Unicode-3.0	f367c1b8e1aa2624
+crate	zeroize	1.8.1	Apache-2.0 OR MIT	cfc7749b96f63bd3,0b04ee3ce0021a92
+crate	zerotrie	0.2.2	Unicode-3.0	f367c1b8e1aa2624
+crate	zerovec	0.11.2	Unicode-3.0	f367c1b8e1aa2624
+crate	zerovec-derive	0.11.1	Unicode-3.0	f367c1b8e1aa2624
+crate	zip	1.1.4	MIT	58545fed1565e42d
+asset	Mozilla Public Suffix List (snapshot 2026-09-21_18-50-07_UTC)	MPL-2.0
+asset	river-raid-2k (gradient noise, adapted)	MIT
+asset	Laya multilingual classifier weights (convaiinnovations/laya-multilingual @ 052592a1)	Apache-2.0
+asset	mmBERT-base backbone of the Laya weights (jhu-clsp/mmBERT-base @ c5955035)	MIT
+text	005fc765ddc5115d	005fc765ddc5115da796cca915baa9557abae13ff35e0a47c47affc56f6c414d
+text	01c266bced4a434d	01c266bced4a434da0051174d6bee16a4c82cf634e2679b6155d40d75012390f
+text	0218327e7a480793	0218327e7a480793ffdd4eb792379a9709e5c135c7ba267f709d6f6d4d70af0a
+text	0444c6991eead682	0444c6991eead6822f7b9102e654448d51624431119546492e8b231db42c48bb
+text	04ea4849dba9dcae	04ea4849dba9dcae07113850c6f1b1a69052c625210639914eee352023f750ad
+text	0621878e61f0d0fd	0621878e61f0d0fda054bcbe02df75192c28bde1ecc8289cbd86aeba2dd72720
+text	07c938b23950ab7d	07c938b23950ab7d47a24ef35f9f5da3a05ae164278dc959ad6994135ed59ff1
+text	09f1f96437694942	09f1f9643769494262b9cacec3852201242b9c819f7d5316c7530be1c9855f75
+text	0a54e647fe541046	0a54e647fe54104658b5e563c04c6f9edf251710e47bce692e0bd990a4ddaa39
+text	0b04ee3ce0021a92	0b04ee3ce0021a922f43f37a17fee09a5a1ee6d1f4e149d5bf75b72395a49c72
+text	0b28172679e0009b	0b28172679e0009b655da42797c03fd163a3379d5cfa67ba1f1655e974a2a1a9
+text	0be96d891d00e0ae	0be96d891d00e0ae0df75d7f3289b12871c000a1f5ac744f3b570768d4bb277c
+text	0d25d03b5ab49576	0d25d03b5ab49576178ad0cae7a2648d12c17ad0452fe49c07e55e4b59aa5257
+text	0d52feec79589df3	0d52feec79589df30138dad3800323fe5686b764b73347330a2dfef8ac83efe8
+text	0d542e0c8804e39a	0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594
+text	0dd882e53de11566	0dd882e53de11566d50f8e8e2d5a651bcf3fabee4987d70f306233cf39094ba7
+text	0f96a83840e146e4	0f96a83840e146e43c0ec96a22ec1f392e0680e6c1226e6f3ba87e0740af850f
+text	10d73bf26900fa6d	10d73bf26900fa6dd6f2613bb962b7bd8fa1e66618fcf0f9f899aa071a4ee200
+text	1520f0253bb05bbf	1520f0253bb05bbfc841b827fe6440172f0513b4a890f720c9de1665a07c21e8
+text	1626f2c950cee975	1626f2c950cee975b5809748e288468141d09aa420314c7c9b35e6e62b772b2d
+text	1c41c0e19caa2c20	1c41c0e19caa2c20b0adfeb8219b606b21b7c63914aa3ae74ae3e091d7ce09ca
+text	1d85bd754b04ceec	1d85bd754b04ceec93e98e890edd1fa3c6a22e81bcb32135806beeccefa51cd1
+text	1e697ce8d21401fb	1e697ce8d21401fbf1bddd9b5c3fd4c4c79ae1e3bdf51f81761c85e11d5a89cd
+text	209fbbe0ad52d923	209fbbe0ad52d9235e37badf9cadfe4dbdc87203179c0899e738b39ade42177b
+text	20c7855c364d57ea	20c7855c364d57ea4c97889a5e8d98470a9952dade37bd9248b9a54431670e5e
+text	219920e865eee70b	219920e865eee70b7dcfc948a86b099e7f4fe2de01bcca2ca9a20c0a033f2b59
+text	23860c2a7b5d96b2	23860c2a7b5d96b21569afedf033469bab9fe14a1b24a35068b8641c578ce24d
+text	23f18e03dc49df91	23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
+text	24fa231567ace7e0	24fa231567ace7e0cdd96e5b2e649b0445d280710f7018d01ba6411e06aa641e
+text	27995d58ad5c1145	27995d58ad5c1145c1a8cd86244ce844886958a35eb2b78c6b772748669999ac
+text	28a309fd415da6e8	28a309fd415da6e802ecf85061a451f7ac4353f3610f2982f7af29e9d1529289
+text	29e9fe5074bd27e0	29e9fe5074bd27e0e5d5d110394fbbcd841baee2651a3c4b4560a632702cede4
+text	333ea3aaa3cadb81	333ea3aaa3cadb819f4acd9f9153f9feee060a995ca8710f32bc5bd9a4b91734
+text	35242e7a83f69875	35242e7a83f69875e6edeff02291e688c97caafe2f8902e4e19b49d3e78b4cab
+text	378f5840b258e277	378f5840b258e2779c39418f3f2d7b2ba96f1c7917dd6be0713f88305dbda397
+text	3823dda7cf046602	3823dda7cf046602f4b4e77ec8e227863dc4736037cc85bb33d9f19febe16bb7
+text	388e98b08de12ba8	388e98b08de12ba8a9d4575883c8b0386c747cea188ed459380fc58d60da15c9
+text	3bc70e239e912727	3bc70e239e91272782006c638fc0452a714d384224f11f0923036b7be07cf9b5
+text	3c125f249fc6fb19	3c125f249fc6fb19f2415d027a0d9a170860583960ea53d08ea1d2b3f269d153
+text	3e1de3c527ab2512	3e1de3c527ab251278d3b7b88657aef7360b8499c5c3f25fefa4aa1bd948491b
+text	3fa4ca83dcc92378	3fa4ca83dcc9237839b1bdeb2e6d16bdfb5ec0c5ce42b24694d8bbf0dcbef72c
+text	4108245a1f2df9d4	4108245a1f2df9d4e94df8abed5b4ba0759bb2f9b40a6b939f1be141077ae50b
+text	42fa16951ce7f24b	42fa16951ce7f24b5a467a40e5b449a1d41e662f97ca779864f053f39e097737
+text	45f522cacecb1023	45f522cacecb1023856e46df79ca625dfc550c94910078bd8aec6e02880b3d42
+text	45fd05c4865e7c35	45fd05c4865e7c350b98ad7ac50e1b15462d49af4a91e9b0c9dd933dc9a69742
+text	4cada0bd02ea3692	4cada0bd02ea3692eee6f16400d86c6508bbd3bafb2b65fed0419f36d4f83e8f
+text	4dbda04344456f09	4dbda04344456f09a7a588140455413a9ac59b6b26a1ef7cdf9c800c012d87f0
+text	508a77d2e7b51d98	508a77d2e7b51d98adeed32648ad124b7b30241a8e70b2e72c99f92d8e5874d1
+text	51fd9b39da2a5836	51fd9b39da2a58365fd34637b3aeeb5d403a7c63a4d38cb8ec29b8035296e9e0
+text	5734ed989dfca1f6	5734ed989dfca1f625b40281ee9f4530f91b2411ec01cb748223e7eb87e201ab
+text	58545fed1565e42d	58545fed1565e42d687aecec6897d35c6d37ccb71479a137c0deb2203e125c79
+text	5b10bf6c1bbe9e70	5b10bf6c1bbe9e70487fe9c3198adfbf61e166d7e151719a646be9e1da7fd51b
+text	5b698ca13897be3a	5b698ca13897be3afdb7174256fa1574f8c6892b8bea1a66dd6469d3fe27885a
+text	5bc4f4667cee9690	5bc4f4667cee969006621f024b40fc49935c1c4506c80de0b14eebfad92469b4
+text	5ca77347e58205d3	5ca77347e58205d3b543c04a9c5bdd11d20a9f3108a7b246640edffa999b5f35
+text	603fb27ef3266ea5	603fb27ef3266ea516872eefd9ae587746b8c34614a35c0fb24e4e9e0c17e137
+text	61d383b05b87d78f	61d383b05b87d78f94d2937e2580cce47226d17823c0430fbcad09596537efcf
+text	62c7a1e35f564068	62c7a1e35f56406896d7aa7ca52d0cc0d272ac022b5d2796e7d6905db8a3636a
+text	6485b8ed310d3f03	6485b8ed310d3f0340bf1ad1f47645069ce4069dcc6bb46c7d5c6faf41de1fdb
+text	65a65293f8b9a970	65a65293f8b9a97048fdeecd1e98781ac6a6054bc43af9cb50a9656348aacd5d
+text	65fdb6c76cd61612	65fdb6c76cd61612070c066eec9ecdb30ee74fb27859d0d9af58b9f499fd0c3e
+text	66a3107d5ad6a058	66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172
+text	6a2e0ade09a7d5f8	6a2e0ade09a7d5f816f11566fee2b151b32235a7fad52b41d49cce96f833c1a9
+text	6df43f6f4b5d4587	6df43f6f4b5d4587f3d8d71e45532c688fd168afa5fe89d571cb32fa09c4ef51
+text	6efb0476a1cc0850	6efb0476a1cc085077ed49357026d8c173bf33017278ef440f222fb9cbcb66e6
+text	709e3175b4212f7b	709e3175b4212f7b13aa93971c9f62ff8c69ec45ad8c6532a7e0c41d7a7d6f8c
+text	70ba5469ea0bab6e	70ba5469ea0bab6e18a32d7009068f996503168d27be57747e08da34337ff26f
+text	71f321038b088358	71f321038b088358004bee991635ac09e4c703bec467d3c30c06992c0595f189
+text	7365cc8878a1d7ce	7365cc8878a1d7ce155a58c4ca09c3d7a6be413efa5334a80ea842912b669349
+text	7576269ea71f767b	7576269ea71f767b99297934c0b2367532690f8c4badc695edf8e04ab6a1e545
+text	75d3bf11a47fed60	75d3bf11a47fed60aee0a6cc56a97b896b470ee8fb52d6cd553bd8348337f422
+text	76e972ac0f4ddb11	76e972ac0f4ddb116e86e10100132a783931a596e7b9872eaa31be15cd4d751d
+text	799e9ca9d179295e	799e9ca9d179295ef372f25d3769cdda7d25bb2668add6a6a1e22d1e4c678b8d
+text	7abd9b6960dcf7d4	7abd9b6960dcf7d4d0a48606a5b71bfe37d472db68d70637f3a58a56785f1621
+text	7b63ecd5f1902af1	7b63ecd5f1902af1b63729947373683c32745c16a10e8e6292e2e2dcd7e90ae0
+text	7cfafc877eccc46c	7cfafc877eccc46c0e346ccbaa5c51bb6b894d2b818e617d970211e232785ad4
+text	7e12e5df4bae12cb	7e12e5df4bae12cb21581ba157ced20e1986a0508dd10d0e8a4ab9a4cf94e85c
+text	7e5886959f67f8c7	7e5886959f67f8c75063a9d55cd3cb08c5a8cbea9a944fa1df2d4ae038f53721
+text	8173d5c29b4f956d	8173d5c29b4f956d532781d2b86e4e30f83e6b7878dce18c919451d6ba707c90
+text	83c1763356e822ad	83c1763356e822adde0a2cae748d938a73fdc263849ccff6b27776dff213bd32
+text	84b34dd7608f7fb9	84b34dd7608f7fb9b17bd588a6bf392bf7de504e2716f024a77d89f1b145a151
+text	861399f8c21c042b	861399f8c21c042b110517e76dc6b63a2b334276c8cf17412fc3c8908ca8dc17
+text	898b1ae9821e98da	898b1ae9821e98daf8964c8d6c7f61641f5f5aa78ad500020771c0939ee0dea1
+text	8ada45cd9f843acf	8ada45cd9f843acf64e4722ae262c622a2b3b3007c7310ef36ac1061a30f6adb
+text	8b43ce8accd61e9d	8b43ce8accd61e9d370b5ca9e9c4f953279b5c239926c62315b40e24df51b726
+text	8bb1b50b0e5c9399	8bb1b50b0e5c9399ae33bd35fab2769010fa6c14e8860c729a52295d84896b7a
+text	8c9612877aacfa1b	8c9612877aacfa1b42f5e80b679e6c3c93a7ba2bb99dfaf6e87e200dca4b4e6c
+text	8e0d2e086db1da82	8e0d2e086db1da82238c27929308de11db7453a29bc0da50331379105e5da8fd
+text	8ea93490d74a5a1b	8ea93490d74a5a1b1af3ff71d786271b3f1e5f0bea79ac16e02ec533cef040d6
+text	90eb64f0279b0d94	90eb64f0279b0d9432accfa6023ff803bc4965212383697eee27a0f426d5f8d5
+text	9117d922e6671255	9117d922e667125508dde62b02c1f57ed22f5ad21eb536aa2e2d99e1c796e639
+text	98a817e7b85e5fe4	98a817e7b85e5fe4e79d165c656a4a139793b8b643d0f3d9cbcc3538ef82ec82
+text	9df9ba60a11af705	9df9ba60a11af705f2e451b53762686e615d86f76b169cf075c3237730dbd7e2
+text	SPDX:Apache-2.0	074e6e32c86a4c0ef8b3ed25b721ca23aca83df277cd88106ef7177c354615ff
+text	SPDX:BSD-3-Clause	5a93d5831e1297ab10fe643e1a631e83be392896da14ee2951285a79012df69d
+text	SPDX:GCC-exception-3.1	7103d4f7f7e2f8ce10d282a05e0689637f8d6d9ef7b399d808d1da313e69b960
+text	SPDX:GPL-3.0-only	fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0
+text	SPDX:IJG	7658542977bfdced9e1059a6c934ce4281de76d103b831007b825917dc62511a
+text	SPDX:MIT	b05785f9f18e6716bab63424b11454513b9943a222595b70411009202fc592b5
+text	SPDX:MIT-Modern-Variant	d7366190045ad81a5e612799b8f4eef242f9b389a0040836aad61bebe9849647
+text	SPDX:MPL-2.0	66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172
+text	SPDX:OFL-1.1	8eea8287e5876b539670cadb82e99f9a7afddec6f6730811be1daf25d2e9bcfd
+text	SPDX:Unicode-3.0	f7db81051789b729fea528a63ec4c938fdcb93d9d61d97dc8cc2e9df6d47f2a1
+text	SPDX:Zlib	bfb1112d49db5b1daecdfef24bd7e2f3ea0bafb33aa67aa0ab51e2bf8407c03d
+text	SPDX:libpng-2.0	f207d0f7375b977f76ce2437962c1c12a646f15cda3df48d5472ac95eb68e8ff
+text	a3d3ecf4a6e7433c	a3d3ecf4a6e7433c27aa0e2a8dbee50646fa1edcad9cf507adc9d4e08f1663a1
+text	a60eea8175145316	a60eea817514531668d7e00765731449fe14d059d3249e0bc93b36de45f759f2
+text	a6cba85bc92e0cff	a6cba85bc92e0cff7a450b1d873c0eaa2e9fc96bf472df0247a26bec77bf3ff9
+text	a771e4354f6b3ad4	a771e4354f6b3ad4c92da1a5c9a239b6c291527db869632ecea4f20e24ca1135
+text	a8d47ff51ca256f5	a8d47ff51ca256f56a8932dba07660672dbfe3004257ca8de708aac1415937a1
+text	aaff376532ea30a0	aaff376532ea30a0cd5330b9502ad4a4c8bf769c539c87ffe78819d188a18ebf
+text	b1d2870f1a00e4d7	b1d2870f1a00e4d7f56576e5f0870cba109e041f8af66866cf5b499478e654e7
+text	b29f8b01452350c2	b29f8b01452350c20dd1af16ef83b598fea3053578ccc1c7a0ef40e57be2620f
+text	b3d734001a94efff	b3d734001a94efff3579978d953391aa7115f877657d25eb54037a43875d078a
+text	b40930bbcf80744c	b40930bbcf80744c86c46a12bc9da056641d722716c378f5659b9e555ef833e1
+text	b54b0db6c617273e	b54b0db6c617273efff79ba193bb01b05eadcddfff55c24063b38b2acef714c3
+text	b54db71f7d0b1f62	b54db71f7d0b1f62c8c1b6b297347b81f7c217b4ce7e58223a20d2275535cd17
+text	b68cdf814c411806	b68cdf814c41180614110bb1ae36c58f7de5ed701683e2f7dad366e683493111
+text	bf5a93d1014429b4	bf5a93d1014429b43e01c57d45bea928748fbf37d059306145a1a0a91aec2014
+text	bfefeea428127262	bfefeea42812726223bac94df2e0358a727fe86d56b16f767df36b6a6451f13e
+text	c16f8dcf1a368b83	c16f8dcf1a368b83be78d826ea23de4079fe1b4469a0ab9ee20563f37ff3d44b
+text	c2cfccb812fe4821	c2cfccb812fe482101a8f04597dfc5a9991a6b2748266c47ac91b6a5aae15383
+text	c30152c94a6d75e0	c30152c94a6d75e021adbc52b3a52470366a46edb917e17deae3259251af244c
+text	c71d239df91726fc	c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4
+text	c9a75f18b9ab2927	c9a75f18b9ab2927829a208fc6aa2cf4e63b8420887ba29cdb265d6619ae82d5
+text	c9bff75738922193	c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566
+text	cb5aedb296c5246d	cb5aedb296c5246d1f22e9099f925a65146f9f0d6b4eebba97fd27a6cdbbab2d
+text	cc0332a88c2ea21d	cc0332a88c2ea21d5f3c1298f966120f4c95196871c3f6bb4fcf615508b93fa1
+text	ce7bc3499fee93d5	ce7bc3499fee93d5022ef430d5e4201e79a6d9154f3974e42f41349f0569e09b
+text	cf428ffdb6d269bc	cf428ffdb6d269bc864244b5ccf5f4c8e386df65e3131e4120663d383a84226d
+text	cf7342f7ba482ef7	cf7342f7ba482ef715ae58f5f497a8d3564fa255164175aea324cd293c5701a0
+text	cfc7749b96f63bd3	cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30
+text	d119a5d3575b6112	d119a5d3575b6112ecb5778ef5f6ae644b249c15ec8c55d6fb4a772ff67a4662
+text	d3174ad63e721d4c	d3174ad63e721d4c9dccb8ad4320848992d314369bc46319720b5802c9153fe9
+text	d649e220dd049719	d649e220dd0497197a266b7d7304a009d06bcefce3141fa6ff4f2ceddb438237
+text	d64f878c89bd5f1e	d64f878c89bd5f1e5ada7e4aad57690b122727cf5229b7b87ea1980c188da1d9
+text	da23be69ad3ccf7a	da23be69ad3ccf7a5823d62152efcd2b15de9482a5014fcb1b02844662d86abd
+text	dbe1fff0fb1314b6	dbe1fff0fb1314b6af94f161511406275cf01c5a32441fbf24528a57a051d599
+text	dc91f8200e4b2a1f	dc91f8200e4b2a1f9261035d4c18c33c246911a6c0f7b543d75347e61b249cff
+text	e271993808fec50a	e271993808fec50ab29350b39539cdec611a9103f827e0aa26d61da70e2d33f8
+text	e3ba223bb1423f0a	e3ba223bb1423f0aad8c3dfce0fe3148db48926d41e6fbc3afbbf5ff9e1c89cb
+text	e9c1238c5beb73c6	e9c1238c5beb73c6cc130160418968058b21d486a7a445f0ceff27d51fbfdc44
+text	ea084a2373ebc1f0	ea084a2373ebc1f0902c09266e7bf25a05ab3814c1805bb017ffa7308f90c061
+text	ea5ab440900ab271	ea5ab440900ab271811d5c2dc02a9de6e03a6956ac5727e85c11d76df5883d30
+text	eb35d16eeac2429a	eb35d16eeac2429a189f055087f88362295f25e12aec4c20551aae9abab1f6a7
+text	ecc269ef87fd38a1	ecc269ef87fd38a1d98e30bfac9ba964a9dbd9315c3770fed98d4d7cb5882055
+text	f01ba19b3ca5d948	f01ba19b3ca5d948d28e8d504c94ad4867ef2946153c6531d10874712e9d510c
+text	f025ccfb7dfb6bdf	f025ccfb7dfb6bdfedc75ca0f67acc69e6fb4998143d834f7c2f38a29989680f
+text	f367c1b8e1aa2624	f367c1b8e1aa262435251e442901da4607b4650e0e63a026f5044473ecfb90f2
+text	f3d4287b4a21c517	f3d4287b4a21c5176fea2f9bd4ae800696004e2fb8e05cbc818be513f188a941
+text	f7db81051789b729	f7db81051789b729fea528a63ec4c938fdcb93d9d61d97dc8cc2e9df6d47f2a1
+text	f98e09091d5ae02b	f98e09091d5ae02b2f2ec1ead4f7f28c4c44d1cb98b078739ba67091637e170c
+text	fc5bececcc4708ba	fc5bececcc4708ba23267644c1dbca212cfb015f21713f8080f99e441592d2e2
+text	fea1d5bf3dd71605	fea1d5bf3dd71605ce5d7d2ff695c1837e914c77195e523a86b5391716477960
+text	ff8f68cb076caf8c	ff8f68cb076caf8cefe7a6430d4ac086ce6af2ca8ce2c4e5a2004d4552ef52a2

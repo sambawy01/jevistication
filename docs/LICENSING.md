@@ -84,6 +84,61 @@ before its votes mean anything.
 
 ---
 
+## Shipped notices (build risk 11) — closed 2026-09-23
+
+Every attribution owed by the checks below now travels with the desktop app, in
+**`loupe-desktop/src/main/resources/THIRD_PARTY_NOTICES.txt`** (packaged at the root of the app
+jar). It is generated, never hand-edited:
+
+```
+./gradlew :loupe-desktop:generateThirdPartyNotices    # rewrite it and third-party/notices.lock
+./gradlew check                                       # fails if either is stale
+```
+
+**How it is built** (`gradle/third-party-notices.gradle.kts`). It walks
+`:loupe-desktop:runtimeClasspath`, which contains every shipping module (`:engine`, `:backend-onnx`,
+`:sources-desktop`, `:templates`, `:game-desktop`, `:loupe-desktop`); test configurations are never
+read. For each jar: the licence from its POM, following `<parent>` as the checks below did (an
+unrecognised licence name fails the build until someone reviews it), and every
+`LICENSE`/`NOTICE`/`COPYING`/`ThirdPartyNotices` entry in the jar reproduced verbatim; where a jar
+ships no licence file, the canonical SPDX text from `third-party/licenses/`. Then the reviewed
+tables in `third-party/`:
+
+| File | What it records | Where it came from |
+|---|---|---|
+| `maven-overrides.tsv` | JNA's licence choice (Apache-2.0); copyright lines for ONNX Runtime and XMPCore, whose jars ship none | The checks below |
+| `native-components.tsv` | Native code the jars' own notices miss — Skia and its ICU, HarfBuzz, libpng, expat, libjpeg-turbo, libwebp, zlib and OFL font in `libskiko`; libffi in JNA; the Rust standard library, GCC runtime and winpthreads DLLs in DJL. Keyed by exact version: a jar with native code and no row fails the build | The `strings` reviews below |
+| `tokenizers-crates.tsv` + `texts/` | The **213 Rust crates** linked into `libtokenizers`, each with its `Cargo.toml` licence and its own licence files | DJL ships no crate notices, so `tools/third-party/refresh-tokenizers-crates.py` derives them from DJL v0.38.0's own `extensions/tokenizers/rust/Cargo.lock` (normal dependencies, all four shipped targets) via `cargo tree`/`cargo metadata`. The one networked step; run by hand after a DJL bump |
+| `assets.tsv` | The PSL snapshot, river-raid-2k, the Laya and mmBERT weights | This file and `THIRD_PARTY_NOTICES.md` |
+| `licenses/` | Canonical texts by SPDX id | `spdx/license-list-data` v3.27.0 |
+
+**Staleness.** `third-party/notices.lock` records every coordinate, licence, text hash and the
+notices file's SHA-256. `checkThirdPartyNotices` (in `check`) regenerates both in memory and fails
+on any difference. `ThirdPartyNoticesTest` checks independently against the resolved jars:
+coverage both ways, unchanged licence files, reviewed native code, and that every crate whose
+source path is embedded in the four shipped `libtokenizers` binaries is pinned at that version,
+matching `native/lib/tokenizers.properties`. The generator is offline: jars and POMs come from
+Gradle's cache (a fresh machine fetches POMs once through normal resolution), and no model
+weights are needed. Platform suffixes are normalised, so the Mac and the Linux CI produce the same
+bytes.
+
+**Findings made while building it**, none of which changes a conclusion below:
+
+- `libtokenizers` also links Hugging Face `candle` (MIT OR Apache-2.0, from git at `6381023`), a
+  vendored Oniguruma (BSD-2-Clause, via `onig_sys`) and esaxx C++ code; all attributed from their
+  own licence files.
+- `option-ext` (a `dirs` dependency) is **MPL-2.0** — file-level, shipped unmodified, the same
+  position as Eigen. Do not patch it.
+- The Windows GCC runtime DLLs are attributed with the GPL-3.0 text plus the GCC Runtime Library
+  Exception, as the exception expects; this is not copyleft on our code (see *DJL tokenizers*).
+
+**Not sourced automatically:** copyright lines for jars that ship no licence file, the
+native-component rows and the asset rows are hand-reviewed; the OFL font inside `libskiko` is not
+yet named. **Android is not covered** — the AAR is a different native build and needs its own
+run when an Android module exists.
+
+---
+
 ## Laya — training-data provenance
 
 The check that caught NanoJev: weights, data and code are licensed separately, so an Apache-2.0
@@ -445,7 +500,8 @@ Android build's component set cannot be assumed identical to the desktop jar's �
 different native build.
 
 Recorded as **build risk 11**. It does not block adopting the dependency; it blocks *shipping*
-without a notices screen.
+without a notices screen. (Desktop half closed 2026-09-23 — see *Shipped notices*; Android still
+open.)
 
 ### DJL tokenizers — checked 2026-09-23
 

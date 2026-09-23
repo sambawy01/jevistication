@@ -85,3 +85,27 @@ tasks.register<JavaExec>("snapshot") {
         layout.buildDirectory.dir("snapshot-home").get().asFile.absolutePath,
     )
 }
+
+// Third-party notices (build risk 11): :generateThirdPartyNotices writes
+// src/main/resources/THIRD_PARTY_NOTICES.txt (shipped in the app jar) and third-party/notices.lock;
+// :checkThirdPartyNotices, part of `check`, fails when either is stale. See docs/LICENSING.md.
+apply(from = rootProject.file("gradle/third-party-notices.gradle.kts"))
+
+tasks.test {
+    // ThirdPartyNoticesTest re-derives the manifest from the jars that actually resolve.
+    val runtime = configurations.getByName("runtimeClasspath")
+    inputs.files(runtime).withPropertyName("thirdPartyRuntimeClasspath")
+    inputs.dir(rootProject.file("third-party")).withPropertyName("thirdPartyTables")
+    systemProperty("loupe.thirdParty.dir", rootProject.file("third-party").absolutePath)
+    jvmArgumentProviders.add(
+        CommandLineArgumentProvider {
+            val jars = runtime.incoming.artifactView { lenient(false) }.artifacts.artifacts
+                .mapNotNull { a ->
+                    (a.id.componentIdentifier as? org.gradle.api.artifacts.component.ModuleComponentIdentifier)
+                        ?.let { "${it.group}:${it.module}:${it.version}=${a.file.absolutePath}" }
+                }
+                .sorted()
+            listOf("-Dloupe.thirdParty.jars=" + jars.joinToString("|"))
+        },
+    )
+}

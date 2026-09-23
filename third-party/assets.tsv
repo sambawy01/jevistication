@@ -1,0 +1,6 @@
+# Models, data and derived source that are not Maven artifacts. Reviewed by hand; see docs/LICENSING.md.
+# Columns: item, licence (SPDX expression), copyright line, where it lives, note.
+Mozilla Public Suffix List (snapshot 2026-09-21_18-50-07_UTC)	MPL-2.0	Mozilla Foundation and contributors	engine: dev/loupe/engine/public_suffix_list.dat	Bundled unmodified; the MPL header travels in the file. Source: https://publicsuffix.org/list/public_suffix_list.dat
+river-raid-2k (gradient noise, adapted)	MIT	Copyright (c) 2017 João Neto	game: dev/loupe/game/Noise.kt, River.kt	https://github.com/joaoneto/river-raid-2k at 5148ace
+Laya multilingual classifier weights (convaiinnovations/laya-multilingual @ 052592a1)	Apache-2.0	Copyright convaiinnovations	models/ (not in the app jar; distributed separately)	Applies whenever the model files are distributed with the app
+mmBERT-base backbone of the Laya weights (jhu-clsp/mmBERT-base @ c5955035)	MIT	Copyright (c) the mmBERT authors, Johns Hopkins University CLSP	models/ (not in the app jar; distributed separately)	Applies whenever the model files are distributed with the app

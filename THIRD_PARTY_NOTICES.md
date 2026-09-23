@@ -1,9 +1,14 @@
 # Third-party notices
 
 Source code in this repository that is derived from third-party work, with the notice its licence
-requires. Licence checks for every dependency — including the runtime and native libraries whose
-attribution is still owed and not yet bundled (build risk 11) — are in
-[`docs/LICENSING.md`](docs/LICENSING.md).
+requires. Licence checks for every dependency are in [`docs/LICENSING.md`](docs/LICENSING.md).
+
+**The notices that ship with the app** — every runtime library, the native code inside them, the
+213 Rust crates in DJL's `libtokenizers`, and the items below — are generated into
+[`loupe-desktop/src/main/resources/THIRD_PARTY_NOTICES.txt`](loupe-desktop/src/main/resources/THIRD_PARTY_NOTICES.txt)
+and packaged in the app jar. Regenerate after any dependency change with
+`./gradlew :loupe-desktop:generateThirdPartyNotices`; `./gradlew check` fails while it is stale.
+Inputs and how to refresh them: `docs/LICENSING.md`, "Shipped notices".
 
 ---
 
@@ -70,7 +75,7 @@ file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 No source in this repository is derived from these; they are runtime dependencies of
 `:sources-desktop` and `:loupe-desktop`, listed here because their notices must travel with any
-binary built from them — and are not yet bundled (build risk 11). Licence checks, including the
+binary built from them. They do: all are in the generated `THIRD_PARTY_NOTICES.txt` above. Licence checks, including the
 components PDFBox bundles, are in [`docs/LICENSING.md`](docs/LICENSING.md), "The desktop app and
 its sources".
 
@@ -81,4 +86,4 @@ its sources".
 | Apache Commons IO 2.19.0, Commons Logging 1.4.0 | Apache-2.0 | their `NOTICE` files |
 | metadata-extractor 2.21.0 (Drew Noakes) | Apache-2.0 | the Apache-2.0 text; the jar ships none |
 | Adobe XMPCore 6.1.11 | BSD-3-Clause | the BSD-3-Clause text with Adobe's copyright; the jar ships none |
-| Compose Multiplatform 1.7.3, skiko 0.8.18, ONNX Runtime 1.20.0, DJL 0.38.0, Gson 2.13.1 | see `docs/LICENSING.md` | already recorded under risk 11 |
+| Compose Multiplatform 1.7.3, skiko 0.8.18, ONNX Runtime 1.20.0, DJL 0.38.0, Gson 2.13.1 | see `docs/LICENSING.md` | in the generated `THIRD_PARTY_NOTICES.txt` |

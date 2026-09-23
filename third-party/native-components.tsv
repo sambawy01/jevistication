@@ -1,0 +1,21 @@
+# Native code inside resolved jars that the jar's own notices do not cover. Every jar carrying a
+# native library (.so, .dylib, .dll, .jnilib) must have at least one row for its exact normalised
+# coordinate, or the generator fails: a version bump means re-reviewing what the new binary links.
+# Columns: coordinate (platform suffix normalised to -<platform>), component, licence (SPDX expression,
+# or - when the jar's own notice file covers it), copyright line, source of the finding.
+com.microsoft.onnxruntime:onnxruntime:1.20.0	libonnxruntime and its ~85 bundled components	-	-	Covered by ThirdPartyNotices.txt inside the jar, reproduced in section 5 (docs/LICENSING.md, "Native binaries")
+ai.djl.huggingface:tokenizers:0.38.0	libtokenizers (DJL djl_tokenizer JNI library)	Apache-2.0	Copyright Amazon.com, Inc. or its affiliates	DJL code; its Rust crates are listed in section 3
+ai.djl.huggingface:tokenizers:0.38.0	Rust standard library (std, core, alloc)	MIT OR Apache-2.0	Copyright (c) The Rust Project Contributors	Statically linked into every Rust cdylib; rustc paths in the binaries
+ai.djl.huggingface:tokenizers:0.38.0	libstdc++-6.dll, libgcc_s_seh-1.dll (Windows only)	GPL-3.0-only WITH GCC-exception-3.1	Copyright (C) Free Software Foundation, Inc.	GCC runtime libraries; the Runtime Library Exception permits binary redistribution (docs/LICENSING.md)
+ai.djl.huggingface:tokenizers:0.38.0	libwinpthread-1.dll (Windows only)	MIT AND BSD-3-Clause	Copyright (c) 2011 mingw-w64 project	mingw-w64 winpthreads COPYING
+net.java.dev.jna:jna:5.17.0	libjnidispatch (JNA native stub)	Apache-2.0	Copyright (c) 2007-2025 Timothy Wall and JNA contributors	Covered by the JNA licence choice in section 1
+net.java.dev.jna:jna:5.17.0	libffi (statically linked into libjnidispatch)	MIT	Copyright (c) 1996-2024 Anthony Green, Red Hat, Inc and others	JNA builds libjnidispatch against its bundled libffi
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	Skia	BSD-3-Clause	Copyright (c) 2011 Google Inc. All rights reserved.	google/skia LICENSE; docs/LICENSING.md, "Compose Multiplatform and skiko"
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	ICU	Unicode-3.0	Copyright (c) 2016-2024 Unicode, Inc.	Identified by strings in libskiko
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	HarfBuzz	MIT-Modern-Variant	Copyright (c) 2010-2022 Google, Inc. and the HarfBuzz authors	Identified by strings in libskiko
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	libpng	libpng-2.0	Copyright (c) 1995-2024 The PNG Reference Library Authors	Identified by strings in libskiko
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	Expat	MIT	Copyright (c) 1998-2000 Thai Open Source Software Center Ltd and Clark Cooper; Copyright (c) 2001-2022 Expat maintainers	Identified by strings in libskiko
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	libjpeg-turbo 2.1.4	IJG AND BSD-3-Clause AND Zlib	This software is based in part on the work of the Independent JPEG Group. Copyright (C) 2009-2022 D. R. Commander; Copyright (C) 2015 Viktor Szathmáry	Identified by strings in libskiko
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	libwebp	BSD-3-Clause	Copyright (c) 2010, Google Inc. All rights reserved.	Identified by strings in libskiko
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	zlib	Zlib	Copyright (C) 1995-2024 Jean-loup Gailly and Mark Adler	Identified by strings in libskiko
+org.jetbrains.skiko:skiko-awt-runtime-<platform>:0.8.18	Embedded symbol font	OFL-1.1	-	OFL-licensed font data in libskiko; the font name was not identified (docs/LICENSING.md)

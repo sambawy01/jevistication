@@ -1,0 +1,6 @@
+# Maven artifacts whose licence or copyright line cannot be read mechanically from the jar/POM.
+# Columns: group:artifact, licence (SPDX, or - to keep the POM's), copyright line (or -), reason.
+# Matched on group:artifact at any version; the POM is still read and must agree (see the generator).
+net.java.dev.jna:jna	Apache-2.0	-	Dual-licensed LGPL-2.1-or-later OR Apache-2.0, licensee's choice (its META-INF/LICENSE); we take Apache-2.0 (docs/LICENSING.md)
+com.microsoft.onnxruntime:onnxruntime	-	Copyright (c) Microsoft Corporation	MIT in the POM only; the jar ships no LICENSE of its own (docs/LICENSING.md)
+com.adobe.xmp:xmpcore	-	Copyright (c) Adobe Systems Incorporated. All rights reserved.	BSD-3-Clause in the POM and Bundle-License; the jar ships no LICENSE (docs/LICENSING.md)
