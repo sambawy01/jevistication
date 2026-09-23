@@ -13,7 +13,7 @@ Sixteen repositories and a competitive survey. Every design decision in
 | Per-task accuracy 55%–100%; **"no universal execution threshold was established"** | same | Calibration is per judgment, not global. |
 | Aggregate ECE 1.44% via a dedicated confidence head — but **hard tier 36.9% accurate at 11.8% ECE** | `Heman10x-NGU/openJev-verdict-2.0` | Model-level calibration works on the training distribution and still fails on hard cases. Hard cases are where every gate decision lives. |
 | 77.10% / 76.60% / 72.70% across three models, but the leader flips by task | same | No backend dominates. Default is chosen by measurement. |
-| 7.39 ms / 13.42 ms P50 end-to-end, 395 q/s | `mizorewww/laya-mlx` | Hot-loop judgment is only viable locally. Hosted is 150–500 ms. |
+| 7.39 ms / 13.42 ms P50 end-to-end, 395 q/s | `mizorewww/laya-mlx` | Hot-loop judgment is only viable locally. Hosted is 150–500 ms. *(An MLX port on Apple silicon — not our runtime and not a phone. Our own desktop-CPU ONNX numbers for Laya are in `BUILD.md`.)* |
 | ~20–25 ms, 149.6M params, Apache-2.0, in-browser WebGPU | `Heman10x-NGU/openJev-verdict-2.0` | Fits an app bundle; runs in the browser extension. |
 | Model-selected compaction 37.5% recall vs **48.1% for "keep the last 24k characters"** — they shipped the plain tail | `kerpopule/hermes-jev-skills` | Any judgment can lose to the dumb version. Baselines are a product feature, not an eval afterthought. |
 | Same arm, same text, **different prompt wording: 13 won / 5 lost** | same | Wording moves results as much as the algorithm. It is a controlled variable in every comparison. |

@@ -22,10 +22,12 @@ feature wearing different clothes.
 
 ### Why on-device is the whole product
 
-The decision model is ~150M parameters, answers in tens of milliseconds, emits zero output
-tokens, and is Apache-2.0. On a desktop those are conveniences. On a phone they are the only
-reason this can exist: your photos, messages and documents are not going to a cloud API, and a
-model that decodes no tokens costs almost no battery.
+The decision model is ~320M parameters, emits zero output tokens, and its weights are
+Apache-2.0. A short question takes tens of milliseconds on a desktop CPU; on a phone the latency
+is not yet measured, and it grows with how much text the question reads. On a desktop those are
+conveniences. On a phone they are the only reason this can exist: your photos, messages and
+documents are not going to a cloud API, and a model that decodes no tokens costs far less
+battery than one that does.
 
 ---
 
@@ -120,9 +122,10 @@ button.
 **Retroactive.** A judgment written today sweeps years of history in minutes, free, because the
 model is local and fast.
 
-**Personal fine-tune.** Overnight, on your own corrections. Roughly an 8-hour job on a laptop
-GPU at this model size, so an overnight on-device pass is realistic. The model becomes yours
-and stays on the device.
+**Personal fine-tune.** Overnight, on your own corrections. The 8-hour laptop-GPU figure this
+rested on was measured for a smaller model; at the current model's ~320M it is unmeasured, and
+whether a phone can do it overnight is an open question for A1/F3. The model becomes yours and
+stays on the device.
 
 **Portable.** Judgments, calibration and decision history export as files you own.
 
@@ -256,8 +259,9 @@ Five levers follow:
    unfamiliar. Your senders, your categories, your corrections. This is why the ledger matters.
 5. **Cross-architecture agreement, on uncertain items only.** An encoder scoring labels and a
    decoder scored by its logits are architecturally different, so their errors may decorrelate
-   where similar models' do not. Two small models is still tens of milliseconds, and only where
-   the first is unsure. Measure it; if the errors correlate, drop it.
+   where similar models' do not. The second model runs only where the first is unsure, so its
+   cost lands on a minority of items — but what that cost is on a phone is unmeasured. Measure
+   it; if the errors correlate, drop it.
 
 None of this makes hard judgments accurate. It makes the system honest about which ones are
 hard, shrinks their share, and abstains rather than guessing — the same discipline as warning
@@ -313,10 +317,13 @@ fine-tune. Every row carries the full distribution and the propensity, not just 
 propensity cannot be reconstructed afterwards, so it is logged from the first decision or the
 counterfactuals built on that history are biased forever.
 
-**The model is `knowledgator/gliclass-modern-base-v2.0`**, behind an interface — 151M,
-Apache-2.0, ModernBERT backbone, encoder, non-autoregressive, scoring candidate labels in a
-single forward pass. Fine-tuned on our fixtures, with calibration we fit ourselves rather than
-inherit. Second backend is a logit-scored `Qwen/Qwen3-0.6B` (Apache-2.0), architecturally
+**The model is `convaiinnovations/laya-multilingual`**, behind an interface — 322M, Apache-2.0
+weights, mmBERT-base backbone, encoder, non-autoregressive, scoring every candidate at its own
+marker in a single forward pass, across 100+ languages. It replaced
+`knowledgator/gliclass-modern-base-v2.0` on 2026-09-23, whose performance was not comparable.
+Its training data is only partly published and includes non-commercial sources; that is an open
+shipping risk, recorded in [`LICENSING.md`](LICENSING.md). Fine-tuned on our fixtures, with
+calibration we fit ourselves rather than inherit — it ships uncalibrated and over-confident. Second backend is a logit-scored `Qwen/Qwen3-0.6B` (Apache-2.0), architecturally
 different so that the agreement check in §6 means something. **There is no hosted backend**: a
 network call breaks the offline guarantee. Licence provenance for every candidate, including
 the ones rejected, is recorded in [`LICENSING.md`](LICENSING.md).
@@ -382,13 +389,15 @@ Order of work. Nothing here is cut, and nothing waits for a second release.
 
 ## 11. Decisions
 
-Nothing material. Closed since locking:
+Closed since locking (one reopened — the model, on 2026-09-23):
 
 - **Platform** — Android. The spec needs known-sender message history, notification arrival,
   broad filesystem access and cross-app form filling; iOS grants none of the first three.
-- **Model** — `gliclass-modern-base-v2.0` (Apache-2.0), with a logit-scored `Qwen3-0.6B`
-  (Apache-2.0) as the second backend. No hosted backend. Three candidates were rejected on
-  licence grounds; see [`LICENSING.md`](LICENSING.md).
+- **Model** — `convaiinnovations/laya-multilingual` (Apache-2.0 weights), since 2026-09-23;
+  it replaced `gliclass-modern-base-v2.0` on performance. A logit-scored `Qwen3-0.6B`
+  (Apache-2.0) stays the second backend. No hosted backend. Three candidates were rejected on
+  licence grounds, and Laya's training-data provenance is open; see [`LICENSING.md`](LICENSING.md)
+  and risk 12 in [`BUILD.md`](BUILD.md).
 - **Name** — **Loupe**. A loupe is the lens you hold up to something before you trust it:
   it magnifies, it does not decide for you, and it names no vendor whose model we might one
   day replace. The mark is crowded — see risk 9 in [`BUILD.md`](BUILD.md).

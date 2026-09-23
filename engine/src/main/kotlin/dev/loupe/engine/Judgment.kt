@@ -42,7 +42,8 @@ sealed interface Judgment {
 
     /**
      * Pick among a fixed set of candidate labels. The model's answer is a [Distribution] over
-     * exactly these candidates — the GLiClass primitive, labels scored in one forward pass.
+     * exactly these candidates — the decision model's primitive, every label scored in one
+     * forward pass (Laya scores each at its own marker and softmaxes over them).
      */
     data class Choice(
         override val id: String,

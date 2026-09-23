@@ -8,3 +8,11 @@ dist/
 .gradle/
 build/
 *.class
+
+# Laya export (tools/export-laya-onnx.py): the Python venv, the downloaded checkpoint and the
+# exported graphs. Weights never enter git; the golden fixture the tests read is committed.
+tools/.venv/
+models/
+*.onnx
+!backend-onnx/src/test/resources/synthetic-classifier.onnx
+__pycache__/
