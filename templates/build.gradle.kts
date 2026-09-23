@@ -1,34 +1,45 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-    kotlin("jvm")
+    kotlin("multiplatform")
 }
 
 repositories {
     mavenCentral()
 }
 
-dependencies {
-    // The template library is pure Kotlin over the engine's types and adds no third-party code:
-    // a template is data plus the authoring path every user judgment already goes through.
-    api(project(":engine"))
-
-    testImplementation(kotlin("test"))
-    testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
+// iOS targets only on macOS; see engine/build.gradle.kts.
+val appleHost = System.getProperty("os.name").startsWith("Mac")
 
 kotlin {
-    compilerOptions {
-        jvmTarget.set(JvmTarget.JVM_21)
+    jvm {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_21)
+        }
+    }
+    if (appleHost) {
+        iosArm64()
+        iosSimulatorArm64()
+    }
+
+    applyDefaultHierarchyTemplate()
+
+    sourceSets {
+        commonMain.dependencies {
+            // The template library is pure Kotlin over the engine's types and adds no third-party
+            // code: a template is data plus the authoring path every user judgment goes through.
+            api(project(":engine"))
+        }
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+        }
+        jvmTest.dependencies {
+            implementation("org.junit.jupiter:junit-jupiter:5.11.4")
+            runtimeOnly("org.junit.platform:junit-platform-launcher")
+        }
     }
 }
 
-java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
-}
-
-tasks.test {
+tasks.named<Test>("jvmTest") {
     useJUnitPlatform()
 }

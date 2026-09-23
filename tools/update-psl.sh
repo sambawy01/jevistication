@@ -9,8 +9,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-RES="$ROOT/engine/src/main/resources/dev/loupe/engine"
-TEST_RES="$ROOT/engine/src/test/resources/dev/loupe/engine"
+RES="$ROOT/engine/src/jvmMain/resources/dev/loupe/engine"
+TEST_RES="$ROOT/engine/src/jvmTest/resources/dev/loupe/engine"
 LIST_URL="https://publicsuffix.org/list/public_suffix_list.dat"
 TESTS_URL="https://raw.githubusercontent.com/publicsuffix/list/main/tests/tests.txt"
 

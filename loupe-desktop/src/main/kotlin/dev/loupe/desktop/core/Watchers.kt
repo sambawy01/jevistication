@@ -25,6 +25,8 @@ import dev.loupe.sources.SourceItem
 import dev.loupe.templates.Template
 import dev.loupe.templates.TemplateLibrary
 import java.time.LocalDate
+import kotlinx.datetime.toJavaLocalDate
+import kotlinx.datetime.toKotlinLocalDate
 
 /** A document with an expiry-like date, found mechanically. */
 data class ExpiryCandidate(val item: SourceItem, val expiry: LocalDate, val daysRemaining: Long, val ambiguous: Boolean, val breachesRule: Boolean)
@@ -97,7 +99,7 @@ object Watchers {
             rule = rule,
             expiryCandidates = candidates,
             expiryAlerts = backend?.let { expiryAlerts(candidates.map { it.item }, it, today, rule) },
-            recurring = RecurringMoney.census(charges.map { it.second }, today),
+            recurring = RecurringMoney.census(charges.map { it.second }, today.toKotlinLocalDate()),
             chargesFound = charges.size,
             termChanges = termChanges(texty),
             impersonation = impersonation(emails),
@@ -116,9 +118,10 @@ object Watchers {
             val latest = dates.maxBy { it.date }
             // As ExpiryRadar does: an ambiguous date on its earlier reading, the safe error.
             val expiry = listOfNotNull(latest.date, latest.alternate).min()
-            val days = DateFacts.daysUntil(expiry, today)
+            val days = DateFacts.daysUntil(expiry, today.toKotlinLocalDate())
             if (days > 366) return@mapNotNull null
-            ExpiryCandidate(item, expiry, days, latest.ambiguous, DateFacts.expiresWithin(expiry, today, rule.monthsRequired))
+            val breaches = DateFacts.expiresWithin(expiry, today.toKotlinLocalDate(), rule.monthsRequired)
+            ExpiryCandidate(item, expiry.toJavaLocalDate(), days, latest.ambiguous, breaches)
         }.sortedBy { it.daysRemaining }
 
     /**
@@ -131,7 +134,7 @@ object Watchers {
         val template = TemplateLibrary.byId("document-type")!!
         val judgment = (template.instantiate("watcher-document-type") as Template.InstantiateResult.Created).judgment.choice
         val engine = DecisionEngine(backend, Probability.of(0.5))
-        return ExpiryRadar.scan(candidates.map { it.toItem() }, judgment, engine, rule, today, judgment.candidates.toSet() - "none of these")
+        return ExpiryRadar.scan(candidates.map { it.toItem() }, judgment, engine, rule, today.toKotlinLocalDate(), judgment.candidates.toSet() - "none of these")
     }
 
     /** (item, charge) pairs from emails that record a payment and from money CSVs. */
@@ -145,7 +148,7 @@ object Watchers {
                 val amount = AMOUNT.find(body)?.groupValues?.get(1) ?: continue
                 val date = email.date ?: item.date ?: continue
                 val merchant = email.fromName ?: email.fromAddress?.substringAfter('@') ?: continue
-                out += item to Charge(merchant, date, minor(amount))
+                out += item to Charge(merchant, date.toKotlinLocalDate(), minor(amount))
             } else if (item.kind == ItemKind.CSV) {
                 out += csvCharges(item)
             }
@@ -166,7 +169,7 @@ object Watchers {
             val date = cells.getOrNull(d)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapNotNull null
             val amount = cells.getOrNull(a)?.removePrefix("-")?.takeIf { it.matches(Regex("""\d[\d]*(\.\d{1,2})?""")) } ?: return@mapNotNull null
             val merchant = cells.getOrNull(m)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            item to Charge(merchant, date, minor(amount))
+            item to Charge(merchant, date.toKotlinLocalDate(), minor(amount))
         }
     }
 

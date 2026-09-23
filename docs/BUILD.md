@@ -583,7 +583,7 @@ after 1, 6 needs 3, 4 and 5.
 | # | Child | State |
 |---|---|---|
 | 1 | Record the iOS decision and the online helper rules in `PRODUCT.md` / `BUILD.md` | Done 2026-09-23 (this) |
-| 2 | Port `engine` + `templates` to Kotlin Multiplatform (`jvm`, `iosArm64`, `iosSimulatorArm64`), XCFramework `LoupeKit` | Not started |
+| 2 | Port `engine` + `templates` to Kotlin Multiplatform (`jvm`, `iosArm64`, `iosSimulatorArm64`), XCFramework `LoupeKit` | **Done 2026-09-23** — see progress log |
 | 3 | Laya on iOS: ONNX Runtime iOS + HF `tokenizers` for iOS behind `Backend`; parity against the JVM fixtures; latency on a real iPhone | Not started |
 | 4 | Helper `sambawy01/loupe-web-helper` on Railway: `POST /v1/flights/search` (Duffel), schema v1 | **Deployed** — https://loupe-web-helper-production.up.railway.app |
 | 5 | SwiftUI app shell — tabs Now, Judgments, Web, Sources, Me — with `LoupeKit` | Not started |
@@ -939,6 +939,33 @@ after 1, 6 needs 3, 4 and 5.
   unmeasured and the model is untuned.
 
 ---
+- **2026-09-23 — Epic #6 child 2: `engine` and `templates` are Kotlin Multiplatform; `LoupeKit`
+  XCFramework builds.** On the owner's "Go". Targets `jvm`, `iosArm64`, `iosSimulatorArm64`;
+  sources in `commonMain`, JVM seams in `jvmMain`, iOS seams in `iosMain`; all former tests in
+  `commonTest`. New module `loupe-kit` (umbrella, exports both) —
+  `./gradlew :loupe-kit:assembleLoupeKitXCFramework` writes
+  `loupe-kit/build/XCFrameworks/{debug,release}/LoupeKit.xcframework` (static); a Swift file linked
+  against the simulator slice ran on a simulator and read the PSL version. Replacements, each
+  pinned: `java.time` → `kotlinx-datetime` 0.6.1 (engine's public date types are now
+  `kotlinx.datetime.LocalDate`; `loupe-desktop` converts at its boundary); SHA-256 → expect/actual
+  (`MessageDigest` / CommonCrypto `CC_SHA256`); `java.net.URI` → the manual host extraction alone
+  (it was already the fallback; a jvmTest checks it against the old URI code on 34 URLs);
+  `IDN.toASCII` stays on the JVM, iOS uses a common RFC 3492 punycode + nameprep approximation
+  (NFKC via Foundation) checked against the JDK on every non-ASCII PSL label; `Character.UnicodeScript`
+  stays on the JVM, iOS uses a table generated from JDK 21 by `tools/GenUnicodeScripts.java`,
+  checked on every code point; `String.format("%.Nf")` stays on the JVM, iOS uses a portable
+  HALF_UP formatter checked against `Formatter` on ~29k values. PSL on iOS: a Kotlin constant
+  generated at build time from the same `.dat` (no NSBundle — K/N frameworks carry no resources and
+  the app would have to ship the file separately); the SHA-256 test now runs on both targets over
+  the bytes each actually loads. Seeded randomness unchanged (`kotlin.random` everywhere);
+  `DeterminismPinTest` pins exploration, A8 bootstrap intervals, the audit arm and fixture splits
+  to values captured on the JVM before the port, and passes on iOS. Tests: JVM 440 (was 428; +12
+  new), iOS engine 288 + templates 22; the 5 `PlatformParityTest` cases are JVM-only because the
+  JDK is their oracle. CI: iOS targets are declared only on macOS hosts, so Linux CI runs every JVM
+  test and never touches Kotlin/Native; a manual-dispatch `ios` job on `macos-15` runs the iOS
+  tests and the XCFramework (10x Linux minute cost, hence not on every push). `kotlinx-datetime` is
+  Apache-2.0 and is in the regenerated third-party notices.
+
 ## Hand-off
 
 State as of 2026-09-23, for whoever picks this up — including a session with no memory of how it
@@ -1047,6 +1074,18 @@ came from labelled fixtures.
 | Any real measurement | A labelled corpus **and** a model — the model half now exists |
 
 ### Traps — each of these was hit or narrowly avoided
+
+- **Kotlin/Native regex has no `\p{N}`.** It throws "No such character class" at class init
+  (surfacing as `FileFailedToInitializeException`). Write `\p{Nd}\p{Nl}\p{No}`; `\p{L}` works.
+- **Test names with `,` or `()` do not compile for iOS.** Backticked names are fine on the JVM but
+  Kotlin/Native rejects those characters; the port rewrote 26 names (`, ` → ` - `).
+- **`YES` / `NO` are Objective-C macros.** A Kotlin `const val YES` breaks the LoupeKit header for
+  every Swift importer; `Judgment.Bool.YES/NO` carry `@ObjCName("yesLabel"/"noLabel")`. Proving
+  the XCFramework *links* means compiling Swift against it, not just assembling it.
+- **KMP modules have `jvmTest`, not `test`.** `./gradlew :engine:test` no longer exists; use
+  `:engine:jvmTest` or `check`. Keep `kotlinx-datetime` at 0.6.1 while Kotlin is 2.1.0.
+- **iOS targets are gated on the host OS** in `engine`, `templates` and `loupe-kit` build files;
+  on Linux those tasks simply do not exist.
 
 - **Bare yes/no options make Laya ignore the question.** On the sample, "is this a receipt?" and
   "is this phishing?" got near-identical yes/no answers. Give a two-option judgment two options that
