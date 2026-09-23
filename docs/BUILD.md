@@ -650,7 +650,8 @@ after 1, 6 needs 3, 4 and 5.
 | 2 | Sample source + extractors on iOS | **Done 2026-09-23 (simulator)** — `:sources-common` (common model, text/HTML/MIME/mbox extractors, scanner, cache), PDFKit/ImageIO actuals, parity with the desktop scanner on every sample item; Sources tab with the labelled sample (48 items) |
 | 3 | Judgments tab | **Done 2026-09-23 (simulator)** — shared `dev.loupe.kit.judgments` (JudgmentBook, JudgmentSweep, JudgmentResults); Library (55 templates, 10 categories, search, detail, Use this), Write your own (live lint, yes/no · score · pick, bare yes/no refused, criteria-in-prompt off by default), My judgments with counts, per-judgment Results over the sample with Laya (off main, cancellable) or "Model not installed" |
 | 4 | Unsure queue + measurement | **Done 2026-09-23 (simulator)** — shared `JudgmentMeasure` (queue across judgments with audit arm, corrections keyed by criteria hash, D2 gates 10/30, D3 preview, D4 via Harness, "use the baseline"); Unsure queue, Measure screen, Needs you on Now, Me agreement line |
-| 5–9 | Watchers, sweep, phone sources, mascot, model delivery | Not started |
+| 5 | Watchers on Now | **Done 2026-09-23 (simulator)** — orchestration moved to shared `dev.loupe.kit.watchers.WatcherRun` (desktop delegates, its tests unchanged; no rule or threshold changed); `WatcherFindings` (findings with evidence, verdicts as corrections, subscriptions census); Now hero shows the top finding, findings list with Confirm / Dismiss / Not relevant / Open item, census, mascot `found` on new findings, all sample findings labelled Sample |
+| 6–9 | Sweep, phone sources, mascot, model delivery | Not started |
 
 ### Proving milestones
 
@@ -1291,6 +1292,20 @@ came from labelled fixtures.
 
 ### Traps — each of these was hit or narrowly avoided
 
+
+- **2026-09-23 — Epic #7 child 5: the watchers on Now.** The desktop's watcher orchestration
+  (`loupe-desktop` `core/Watchers.kt`) moved verbatim to loupe-kit common as
+  `dev.loupe.kit.watchers.WatcherRun` over `:sources-common` items; the desktop now adapts its items
+  and delegates (new dependency `loupe-desktop` → `:loupe-kit`; its `WatchersTest` unchanged and
+  green). No watcher rule or threshold changed (Loupe Station mirrors these). New `WatcherFindings`
+  (presentation only): one finding per impersonated sender, per fraud-flagged email, per breaching
+  expiry candidate (LOUD: shown even when the model calls it something else), per moved term, per
+  monthly merchant silent >45 days; evidence is the items' own lines ("Annual premium: £450.00 →
+  £553.50 (+23%)", "Date of expiry: 14 JAN 2027"); verdicts are `CorrectionRecord`s under
+  `watcher:<id>` / `watcher-v1`, keyed by finding; census with a monthly total. iOS: `Loupe/Now/`
+  (`WatchersService`, finding/census/item views); the expiry model half runs when Laya is installed.
+  Tests: `WatcherRunTest` (5, JVM with PDFBox + iOS simulator with PDFKit), `WatchersTests` (5
+  XCTests), `NowFindingsUITests` (1). Note the sample's real numbers are £450 → £553.50.
 - **Kotlin/Native regex has no `\p{N}`.** It throws "No such character class" at class init
   (surfacing as `FileFailedToInitializeException`). Write `\p{Nd}\p{Nl}\p{No}`; `\p{L}` works.
 - **Test names with `,` or `()` do not compile for iOS.** Backticked names are fine on the JVM but

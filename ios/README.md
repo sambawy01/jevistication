@@ -32,12 +32,14 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
 
 - Unsure queue + measurement (epic #7 child 4): `Loupe/Judgments/UnsureQueueView.swift` and `MeasureView.swift` over LoupeKit's `JudgmentMeasure`. Now and My judgments show "Needs you: N" (the queue across all judgments: most torn first plus a random fifth of confident answers); one tap per option, Skip, Undo; answers go to the corrections log keyed by item + criteria hash. Results → Measure: counts, agreement (from 10 corrections), ECE/Brier/reliability bins (from 30, otherwise how many more), the baseline vs the model on your corrected items (says so when the baseline wins, with "Use the baseline"), and the threshold slider with its counterfactual over logged rows; Use writes the threshold. Me: "Agrees with you X% over N corrections" from 10, otherwise how many more. DEBUG: `-LoupeQueueDemo` (with `-LoupeFixtures`; stand-in scorer, throwaway ledger), `-LoupeOpen queue` (Now's queue) or `measure` (with `-LoupeJudgmentDemo`).
 
+- Watchers on Now (epic #7 child 5): `Loupe/Now/` over LoupeKit's shared `WatcherRun` + `WatcherFindings`. Runs the five watchers whenever the scanned items change (expiry's model half when Laya is installed); the hero shows the top finding, then every finding with its watcher, evidence lines, why, Confirm / Dismiss / Not relevant (corrections log, Undo) and Open item; the subscriptions census with a monthly total. Loading and empty states say what is true; sample findings carry a Sample pill; the mascot shows `found` for findings not seen before.
+
 ## Pending
 - Game fps and Laya latency on a real iPhone (simulator: 60 fps, ~9 decisions/s, p50 ~80 ms).
 - Model download host: `LayaModelSource.baseURL` is empty (no host recorded); the screen says so.
 - Laya is untuned: on the fixture it is unsure of every offer and ranks an over-cap fare first.
 - Mascot: static reference render with SwiftUI transforms for now. The rigged SceneKit/RealityKit robot comes later.
-- Now's remaining content (child 5, watchers) over the cached sample items; phone sources in child 7.
+- Watchers over phone sources (child 7).
 - Release builds exclude the fixture JSON (`EXCLUDED_SOURCE_FILE_NAMES`); launch arguments are `#if DEBUG`.
 
 ## Third-party notices (in THIRD_PARTY_NOTICES.md; bundled, shown under Me → Licences)

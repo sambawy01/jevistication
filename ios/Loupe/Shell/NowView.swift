@@ -1,8 +1,12 @@
 import SwiftUI
+import LoupeKit
 
 struct NowView: View {
     @EnvironmentObject private var launcher: GameLauncher
     @ObservedObject var service: JudgmentsService = .shared
+    @ObservedObject var watchers: WatchersService = .shared
+    @ObservedObject var sources: SourcesService = .shared
+    @State private var openItem: SourceItem?
     @State private var showQueue = false
     @State private var opened = false
 
@@ -11,6 +15,13 @@ struct NowView: View {
             content
                 .navigationDestination(isPresented: $showQueue) { UnsureQueueView(service: service) }
                 .toolbar(.hidden, for: .navigationBar)
+                .sheet(item: $openItem) { ItemTextView(item: $0) }
+        }
+        // Re-run the watchers whenever the scanned items change (a scan finishes, the sample is
+        // switched on or off). The first value arrives on subscribe, so this also runs on appear.
+        .onReceive(sources.$sampleScan.combineLatest(sources.$sampleEnabled)) { _ in
+            guard !sources.scanning else { return }
+            Task { await watchers.run() }
         }
         .task {
             service.load()
@@ -43,7 +54,7 @@ struct NowView: View {
                                 .frame(height: 34)
                                 .accessibilityLabel("Loupe")
                             Spacer()
-                            MascotView(state: .idle, size: 92)
+                            MascotView(state: mascotState, size: 92)
                         }
                         .padding(.top, 16)
                         HStack {
@@ -59,8 +70,11 @@ struct NowView: View {
                         Divider().overlay(.white.opacity(0.15))
                         HStack(spacing: 0) {
                             stat("Needs you", hasDecisions ? "\(service.needsYou)" : nil)
-                            stat("Matches today")
-                            stat("Sources")
+                            stat("Findings", watchers.summary.map { "\($0.findings.count)" })
+                            stat("Sources", sources.sampleEnabled ? "1" : nil)
+                        }
+                        if let top = watchers.top {
+                            HeroFindingCard(finding: top, more: watchers.findings.count - 1)
                         }
                     }
                 }
@@ -70,18 +84,82 @@ struct NowView: View {
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("now.needsYou")
                 }
+                findingsSection
                 PlayCard { launcher.open($0) }
-                if !hasDecisions {
-                HonestEmptyState(
-                    title: "Nothing to judge yet",
-                    message: "Now fills in once Loupe can read the photos, mail and files on this phone. Until then there is nothing to count, so it shows nothing.",
-                    symbol: "photo.on.rectangle")
-                }
             }
             .padding(.bottom, 24)
         }
         .background(Palette.ground.ignoresSafeArea())
         .scrollBounceBehavior(.basedOnSize)
+    }
+
+    private var mascotState: MascotState {
+        if sources.scanning || watchers.running { return .scanning }
+        if watchers.newCount > 0 && !watchers.findings.isEmpty { return .found }
+        return .idle
+    }
+
+    @ViewBuilder
+    private var findingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if let notice = watchers.notice {
+                HStack {
+                    Text(notice).font(.caption).foregroundStyle(Palette.inkSoft)
+                    Spacer()
+                    if watchers.lastSetAside != nil {
+                        Button("Undo") { watchers.undoSetAside() }.font(.caption.weight(.semibold))
+                            .accessibilityIdentifier("findings.undo")
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
+            if let summary = watchers.summary, !(sources.scanning || watchers.running) || !summary.findings.isEmpty {
+                if summary.findings.isEmpty {
+                    if summary.itemsChecked == 0 {
+                        HonestEmptyState(
+                            title: "Nothing to watch yet",
+                            message: "The watchers read what your sources hold. No source is on, so there is nothing to check and nothing is shown. Turn on the sample in Sources to see them work.",
+                            symbol: "photo.on.rectangle")
+                            .padding(.horizontal, -16)
+                    } else {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Nothing raised").font(.headline).foregroundStyle(Palette.ink)
+                            Text("The five watchers checked \(summary.itemsChecked) item(s) and raised nothing\(summary.setAside > 0 ? " you have not set aside (\(summary.setAside))" : ""). That is not an all-clear: these checks cover only what they look for.")
+                                .font(.caption).foregroundStyle(Palette.inkSoft)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .card()
+                        .accessibilityIdentifier("findings.none")
+                    }
+                } else {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Findings").font(Typeface.display(24)).foregroundStyle(Palette.ink)
+                        Spacer()
+                        Text(summary.modelRan ? "Laya + arithmetic" : "Mechanical only · model not installed")
+                            .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+                    }
+                    .padding(.horizontal, 4)
+                    ForEach(Array(summary.findings.enumerated()), id: \.element.key) { i, f in
+                        FindingCard(finding: f, index: i,
+                                    onVerdict: { watchers.answer(f, $0) },
+                                    onOpen: { openItem = watchers.item(f.itemId) })
+                    }
+                    Text("Warnings only. \(summary.itemsChecked) item(s), \(summary.emailsChecked) email(s) and \(summary.linksChecked) link(s) checked on \(summary.todayIso). An item with nothing raised is not cleared.")
+                        .font(.caption).foregroundStyle(Palette.inkSoft).padding(.horizontal, 4)
+                }
+                if summary.itemsChecked > 0 { CensusCard(census: summary.census) }
+            } else {
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text(sources.scanning ? "Reading the sample…" : "The watchers are reading your items…")
+                        .font(.subheadline).foregroundStyle(Palette.inkSoft)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .card()
+                .accessibilityIdentifier("findings.loading")
+            }
+        }
+        .padding(.horizontal, 16)
     }
 
     private func stat(_ label: String, _ value: String? = nil) -> some View {

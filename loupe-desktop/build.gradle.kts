@@ -13,6 +13,8 @@ repositories {
 
 dependencies {
     implementation(project(":templates"))
+    // The watchers' orchestration (C3), shared with the iPhone: `dev.loupe.kit.watchers.WatcherRun`.
+    implementation(project(":loupe-kit"))
     // The ledger, corrections and judgments file formats and the F4 export, shared with the iPhone.
     implementation(project(":persistence"))
     implementation(project(":sources-desktop"))
