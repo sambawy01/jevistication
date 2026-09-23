@@ -587,8 +587,8 @@ after 1, 6 needs 3, 4 and 5.
 | 2 | Port `engine` + `templates` to Kotlin Multiplatform (`jvm`, `iosArm64`, `iosSimulatorArm64`), XCFramework `LoupeKit` | **Done 2026-09-23** — see progress log |
 | 3 | Laya on iOS: ONNX Runtime iOS + HF `tokenizers` for iOS behind `Backend`; parity against the JVM fixtures; latency on a real iPhone | **Done 2026-09-23 except device latency** — simulator parity 34/34 + 8/8 identical to JVM INT8; phone latency needs a physical iPhone. See progress log |
 | 4 | Helper `sambawy01/loupe-web-helper` on Railway: `POST /v1/flights/search` (Duffel), schema v1 | **Deployed** — https://loupe-web-helper-production.up.railway.app |
-| 5 | SwiftUI app shell — tabs Now, Judgments, Web, Sources, Me — with `LoupeKit` | Not started |
-| 6 | Web tab: Flights — key onboarding, search, results ranked on device, "Online" labels, off switch | Not started |
+| 5 | SwiftUI app shell — tabs Now, Judgments, Web, Sources, Me — with `LoupeKit` | **Done 2026-09-23** (simulator) |
+| 6 | Web tab: Flights — key onboarding, search, results ranked on device, "Online" labels, off switch | **Done on the simulator 2026-09-23, Laya wired in** — ranked by Laya with the rule baseline alongside; model download host not configured (side-load for dev); Duffel end to end needs a test key |
 | 7 | Later phases, each its own spec: hotels / trains / price watch; shopping compare and price-drop; link and site safety check; research (read and rank pages); concerts, festivals and sports events | Not specified |
 
 **Blocked on:** an **Apple developer account** (signing, a device build, TestFlight), a
@@ -1017,6 +1017,43 @@ after 1, 6 needs 3, 4 and 5.
   done: `LoupeKit` does not export `backend-onnx-ios` (the app shell, child 5, decides how it links
   it); the app must bundle the iOS notices file.
 
+- **2026-09-23 — Epic #6: Laya wired into the iPhone app.** On the owner's "yes". Uncommitted
+  pending review.
+  - **Linking.** `LoupeKit` now exports `backend-onnx-ios` and `backend-laya-common` when
+    `settings.gradle.kts` included them (i.e. after `ios-native/build.sh`). The static framework
+    already **embeds** ORT and the Rust tokenizer (cinterop `-staticLibrary`), so the app links
+    `LoupeKit.xcframework` alone — linking the two native xcframeworks again would duplicate
+    symbols. `loupe-kit/src/iosLaya` holds `LayaOnPhone`, a Swift-safe door (Kotlin exceptions
+    must never cross into Swift) to find, verify and open the model.
+  - **Ranking.** Common Kotlin `dev.loupe.kit.flights`: `FlightState` (offer → compact
+    `TextState`, 480-char budget, price/airline/legs/bags/terms in that order so a cut drops terms
+    first), `FlightPriorities` (the user's text through `JudgmentAuthor` as a two-option Choice,
+    "fits" / "does not fit" with descriptions — the bare yes/no trap), `FlightJudge` (validate →
+    identity recalibration → `Policy.decide` at the two-option default threshold 0.80 →
+    `Policy.onCutInput`; not acting = **unsure**, the uncertain queue's rule; a broken backend is
+    unusable and sorts last, never throws). Swift `LayaRanker: OfferRanker` runs it off the main
+    thread with progress and cancellation between offers; `RuleBasedRanker` always runs as the
+    baseline. Results say "Ranked by: Laya (on this phone)", with a toggle to the rule ranking, a
+    line when the two disagree on #1, and a rules-only note linking to the model screen when Laya
+    is missing, fails or refuses the text. Mascot: scanning while ranking, found when done,
+    thinking beside unsure offers.
+  - **Model on the phone.** Me → Laya model → "Get the on-device model": ~418 MB (384 MB INT8 +
+    34 MB tokenizer), one download then offline, SHA-256 checked before use, nothing until the user
+    taps. **`LayaModelSource.baseURL` is empty** — the repo records no host for the export — so the
+    screen says "Model URL not configured" and points at `ios-native/sideload-models.sh`.
+    Downloads go to a temp file, are hashed against the pin, excluded from backup.
+  - **Notices / Release.** The app bundles `THIRD_PARTY_NOTICES-ios.txt` and both font OFL texts,
+    shown under Me → Licences; fonts added to `THIRD_PARTY_NOTICES.md` and `LICENSING.md`. Release
+    excludes `flights-lis-lhr.json` (`EXCLUDED_SOURCE_FILE_NAMES`); a Release build's bundle was
+    checked to lack it and the launch-argument strings.
+  - **Real model on the fixture** (simulator, side-loaded, priorities "nonstop, under £200, not
+    before 7am, 1 checked bag"): Laya `05` 0.73, `02` 0.69, `03` 0.55, `01` 0.52, `04` 0.39, `06`
+    0.36 — **all six unsure** (none reaches 0.80); rules `02 03 04 06 05 01`. Laya's #1 is the
+    £241.80 BA offer the price cap rules out; the untuned model does not read "under £200" against
+    a price. The screen says so (disagreement line). 0.59 s for 6 offers on the simulator.
+  - Tests: JVM 450 (+10 `FlightJudgeTest`), iOS simulator Kotlin 331; Xcode 33 unit (1 gated,
+    skips without the model) + 2 UI, green.
+
 ## Hand-off
 
 State as of 2026-09-23, for whoever picks this up — including a session with no memory of how it
@@ -1171,6 +1208,11 @@ came from labelled fixtures.
   the override and the model-vs-baseline comparison at once. Draw it from the river's seed, in row
   order, or not at all.
 
+- **The Rust `onig` C objects in the simulator slice claim iOS 26.2** despite
+  `IPHONEOS_DEPLOYMENT_TARGET=14.0` (the sim target reads another variable); ld warns when the app
+  links. Harmless on this simulator, to fix in `build.sh`.
+- **LoupeKit has no x86_64 simulator slice.** A Release simulator build fails to link unless
+  `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64` (set in `ios/project.yml`).
 - **Kotlin/Native links cinterop static libraries only as `lib*.a`.** ORT's iOS framework binary
   (`onnxruntime`, no extension) embedded fine and then left `_OrtGetApiBase` undefined at link.
   `ios-native/build.sh` copies it to `onnxruntime-lib/<slice>/libonnxruntime.a` (arm64-thinned).

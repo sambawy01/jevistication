@@ -1,11 +1,21 @@
 import Foundation
 import SwiftUI
 import Combine
+import LoupeKit
 
 @MainActor
 final class WebModel: ObservableObject {
     enum KeyCheck: Equatable { case idle, checking, failed(HelperError), malformed }
     enum SearchState: Equatable { case idle, searching, failed(HelperError), results }
+    enum Ranking: Equatable {
+        case idle
+        case running(done: Int, total: Int)
+        case laya
+        /// Rules only, and why: the model is not on this phone, could not be opened, or refused the text.
+        case rulesOnly(RulesReason)
+        case cancelled
+    }
+    enum RulesReason: Equatable { case modelNotInstalled, modelFailed(String), prioritiesRefused([String]) }
 
     // Settings (persisted, local only)
     @Published var helperEnabled: Bool { didSet { defaults.set(helperEnabled, forKey: "web.helperEnabled") } }
@@ -16,7 +26,14 @@ final class WebModel: ObservableObject {
     @Published var keyCheck: KeyCheck = .idle
     @Published var searchState: SearchState = .idle
     @Published private(set) var response: SearchResponse?
+    /// What the results screen shows: Laya's ranking when it ran, else the rules'.
     @Published private(set) var ranked: [RankedOffer] = []
+    /// The rule ranking, always computed: the honest baseline shown beside Laya's.
+    @Published private(set) var ruleRanked: [RankedOffer] = []
+    @Published private(set) var layaRanked: [RankedOffer]?
+    @Published private(set) var ranking: Ranking = .idle
+    /// The user chose to view the rule ranking instead of Laya's.
+    @Published var showRules = false
     @Published private(set) var priorities = Priorities()
     @Published var form = SearchForm()
 
@@ -25,12 +42,16 @@ final class WebModel: ObservableObject {
     let autoSearch: Bool
     private let helper: FlightsHelper
     private let keys: KeyStore
-    private let ranker: OfferRanker
+    private let baseline: OfferRanker
+    private let laya: () async -> Backend?
+    private var rankTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private var bag: Set<AnyCancellable> = []
 
     init(helper: FlightsHelper, keys: KeyStore, connectivity: Connectivity,
-         ranker: OfferRanker = Rankers.primary(), fixtureMode: Bool = false, autoSearch: Bool = false,
+         baseline: OfferRanker = Rankers.baseline,
+         laya: @escaping () async -> Backend? = { await LayaModel.shared.backend() },
+         fixtureMode: Bool = false, autoSearch: Bool = false,
          defaults: UserDefaults = .standard) {
         self.defaults = defaults
         self.helperEnabled = defaults.object(forKey: "web.helperEnabled") as? Bool ?? true
@@ -39,7 +60,8 @@ final class WebModel: ObservableObject {
         self.helper = helper
         self.keys = keys
         self.connectivity = connectivity
-        self.ranker = ranker
+        self.baseline = baseline
+        self.laya = laya
         self.isFixtureMode = fixtureMode
         self.autoSearch = autoSearch
         self.hasKey = keys.read() != nil
@@ -111,8 +133,12 @@ final class WebModel: ObservableObject {
             let r = try await helper.search(request, key: key)
             if r.offers.isEmpty { searchState = .failed(.noResults); return }
             response = r
-            ranked = ranker.rank(r.offers, by: priorities)
+            ruleRanked = baseline.rank(r.offers, by: priorities)
+            ranked = ruleRanked
+            layaRanked = nil
+            showRules = false
             searchState = .results
+            startLayaRanking(r.offers)
         } catch let e as HelperError {
             if e == .invalidKey { keyCheck = .failed(.invalidKey) }
             searchState = .failed(e)
@@ -121,7 +147,73 @@ final class WebModel: ObservableObject {
         }
     }
 
-    var rankerName: String { ranker.name }
+    // MARK: Laya ranking (off the main thread, cancellable)
+
+    private func startLayaRanking(_ offers: [Offer]) {
+        rankTask?.cancel()
+        let priorities = self.priorities
+        ranking = .running(done: 0, total: offers.count)
+        rankTask = Task { [weak self, laya] in
+            guard let backend = await laya() else {
+                let failed: String? = await MainActor.run {
+                    if case let .failed(m) = LayaModel.shared.status { return m } else { return nil }
+                }
+                self?.finishRules(failed.map { .modelFailed($0) } ?? .modelNotInstalled)
+                return
+            }
+            let ranker = LayaRanker(backend: backend)
+            let work = Task.detached(priority: .userInitiated) { () -> Result<[RankedOffer], Error> in
+                Result(catching: {
+                    try ranker.rank(offers, by: priorities) { done, total in
+                        Task { @MainActor [weak self] in
+                            if case .running = self?.ranking { self?.ranking = .running(done: done, total: total) }
+                        }
+                    }
+                })
+            }
+            let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+            guard let self, !Task.isCancelled else { return }
+            switch result {
+            case .success(let r):
+                self.layaRanked = r
+                self.ranked = r
+                self.ranking = .laya
+            case .failure(LayaRanker.Failure.refused(let reasons)):
+                self.finishRules(.prioritiesRefused(reasons))
+            case .failure(is CancellationError):
+                self.ranking = .cancelled
+            case .failure(let e):
+                self.finishRules(.modelFailed(e.localizedDescription))
+            }
+        }
+    }
+
+    private func finishRules(_ why: RulesReason) {
+        ranking = .rulesOnly(why)
+        ranked = ruleRanked
+    }
+
+    func cancelRanking() {
+        rankTask?.cancel()
+        rankTask = nil
+        if case .running = ranking { ranking = .cancelled; ranked = ruleRanked }
+    }
+
+    /// Re-runs Laya over the current offers (after the model was installed, or a cancel).
+    func rerank() {
+        guard let r = response else { return }
+        startLayaRanking(r.offers)
+    }
+
+    /// The list on screen: the rules when the user toggled to them or Laya did not run.
+    var shown: [RankedOffer] { showRules || layaRanked == nil ? ruleRanked : (layaRanked ?? ruleRanked) }
+    var rankerName: String { showRules || layaRanked == nil ? "Rules" : "Laya (on this phone)" }
+
+    /// Set when Laya and the rules put different offers first.
+    var topDisagreement: (laya: RankedOffer, rules: RankedOffer)? {
+        guard let l = layaRanked?.first, let r = ruleRanked.first, l.id != r.id else { return nil }
+        return (l, r)
+    }
 }
 
 enum InstallID {

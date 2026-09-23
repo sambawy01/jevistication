@@ -4,7 +4,7 @@ import SwiftUI
 /// animated with SwiftUI transforms. The rigged SceneKit/RealityKit robot (states with real
 /// limb motion) is a later task; see ios/README.md.
 enum MascotState: Equatable {
-    case idle, greeting, thinking, found, empty, shrug
+    case idle, greeting, scanning, thinking, found, empty, shrug
 }
 
 struct MascotView: View {
@@ -23,6 +23,7 @@ struct MascotView: View {
             .rotationEffect(.degrees(tilt), anchor: .bottom)
             .offset(y: reduceMotion ? 0 : (bob ? -3 : 3) + hop)
             .scaleEffect(state == .found && pulse ? 1.06 : 1.0)
+            .offset(x: state == .scanning && !reduceMotion ? (pulse ? -4 : 4) : 0)
             .background(alignment: .bottom) {
                 Ellipse()
                     .fill(Palette.cyan.opacity(0.25))
@@ -44,6 +45,7 @@ struct MascotView: View {
     private var tilt: Double {
         switch state {
         case .thinking: return -8
+        case .scanning: return pulse ? -5 : 5
         case .shrug: return 6
         case .empty: return -4
         default: return 0

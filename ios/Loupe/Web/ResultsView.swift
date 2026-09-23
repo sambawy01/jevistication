@@ -10,7 +10,7 @@ struct ResultsView: View {
                     header(r)
                     if !r.live { testBanner }
                     prioritiesCard
-                    ForEach(web.ranked) { OfferCard(item: $0) }
+                    ForEach(web.shown) { OfferCard(item: $0) }
                     Text("Loupe never books or pays. Copy the offer and finish on Duffel or the airline's site.")
                         .font(.footnote).foregroundStyle(Palette.inkSoft).padding(.top, 4)
                 }
@@ -33,8 +33,14 @@ struct ResultsView: View {
             Pill(text: "Online · \(r.source.capitalized) · fetched \(Self.fetchedTime(r.fetchedAt))", color: Palette.cyan, symbol: "globe")
                 .accessibilityIdentifier("results.onlineBadge")
             Spacer()
-            MascotView(state: .found, size: 44)
+            MascotView(state: mascot, size: 44)
+                .accessibilityIdentifier("results.mascot.\(String(describing: mascot))")
         }
+    }
+
+    private var mascot: MascotState {
+        if case .running = web.ranking { return .scanning }
+        return .found
     }
 
     private var testBanner: some View {
@@ -51,26 +57,90 @@ struct ResultsView: View {
     }
 
     private var prioritiesCard: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Caption(text: "Ranked on this phone · \(web.rankerName)")
+                Caption(text: "Ranked by: \(web.rankerName)")
+                    .accessibilityIdentifier("results.rankedBy")
                 Spacer()
-                Text("\(web.ranked.filter(\.fitsAll).count) of \(web.ranked.count) fit")
+                Text("\(web.shown.filter(\.fitsAll).count) of \(web.shown.count) fit the rules")
                     .font(Typeface.mono(12, weight: .medium)).foregroundStyle(Palette.mint)
             }
             if web.priorities.isEmpty {
-                Text("No priorities given, so offers are in price order.").font(.footnote).foregroundStyle(Palette.inkSoft)
+                Text("No priorities given, so the rules keep price order.").font(.footnote).foregroundStyle(Palette.inkSoft)
             } else {
                 Text(web.form.priorities).font(.subheadline).foregroundStyle(Palette.ink)
             }
             if !web.priorities.unrecognised.isEmpty {
-                Text("Not understood, ignored: \(web.priorities.unrecognised.joined(separator: ", "))")
+                Text("The rules did not understand, and ignored: \(web.priorities.unrecognised.joined(separator: ", "))")
                     .font(.footnote).foregroundStyle(Palette.amber)
             }
-            Text("Laya ranking arrives with the on-device model; this is the rule baseline.")
-                .font(.caption).foregroundStyle(Palette.inkSoft)
+            rankingStatus
         }
         .card()
+    }
+
+    @ViewBuilder private var rankingStatus: some View {
+        switch web.ranking {
+        case .idle:
+            EmptyView()
+        case let .running(done, total):
+            VStack(alignment: .leading, spacing: 4) {
+                ProgressView(value: Double(done), total: Double(max(total, 1))).tint(Palette.blue)
+                HStack {
+                    Text(done == 0 ? "Laya is checking the model on this phone…" : "Laya is reading offer \(min(done + 1, total)) of \(total), on this phone")
+                        .font(.caption).foregroundStyle(Palette.inkSoft)
+                    Spacer()
+                    Button("Cancel") { web.cancelRanking() }.font(.caption.weight(.semibold))
+                        .accessibilityIdentifier("results.cancelRanking")
+                }
+                Text("Showing the rule ranking until Laya is done.").font(.caption2).foregroundStyle(Palette.inkSoft)
+            }
+            .accessibilityIdentifier("results.rankingProgress")
+        case .laya:
+            Toggle(isOn: $web.showRules) {
+                Text("View the rule ranking").font(.footnote)
+            }
+            .accessibilityIdentifier("results.showRules")
+            if let d = web.topDisagreement {
+                Label("Laya and the rules disagree on #1: Laya picks \(d.laya.offer.owner) \(d.laya.offer.currency) \(d.laya.offer.totalAmount), the rules pick \(d.rules.offer.owner) \(d.rules.offer.currency) \(d.rules.offer.totalAmount).",
+                      systemImage: "arrow.left.arrow.right")
+                    .font(.footnote).foregroundStyle(Palette.amber)
+                    .accessibilityIdentifier("results.disagreement")
+            } else {
+                Text("Laya and the rules agree on #1.").font(.footnote).foregroundStyle(Palette.inkSoft)
+            }
+            let unsure = (web.layaRanked ?? []).filter(\.unsure).count
+            Text(unsure == 0 ? "Laya is sure of every answer here. Its percentages are not yet calibrated to your corrections."
+                             : "Laya is unsure about \(unsure) offer\(unsure == 1 ? "" : "s"), marked below. Its percentages are not yet calibrated to your corrections.")
+                .font(.caption).foregroundStyle(Palette.inkSoft)
+        case let .rulesOnly(why):
+            VStack(alignment: .leading, spacing: 4) {
+                Text(rulesText(why)).font(.footnote).foregroundStyle(Palette.ink)
+                    .accessibilityIdentifier("results.rulesOnly")
+                if case .prioritiesRefused = why {} else {
+                    NavigationLink("Get the on-device model") { LayaModelView() }
+                        .font(.footnote.weight(.semibold))
+                        .accessibilityIdentifier("results.getModel")
+                }
+            }
+        case .cancelled:
+            HStack {
+                Text("Laya ranking cancelled; showing the rules.").font(.footnote).foregroundStyle(Palette.inkSoft)
+                Spacer()
+                Button("Rank with Laya") { web.rerank() }.font(.footnote.weight(.semibold))
+            }
+        }
+    }
+
+    private func rulesText(_ why: WebModel.RulesReason) -> String {
+        switch why {
+        case .modelNotInstalled:
+            return "Ranked by the rules only: the on-device model is not on this phone yet."
+        case .modelFailed(let m):
+            return "Ranked by the rules only: the on-device model could not be used (\(m))."
+        case .prioritiesRefused(let reasons):
+            return "Ranked by the rules only: Laya cannot use these priorities (\(reasons.joined(separator: "; ")))."
+        }
     }
 
     static func fetchedTime(_ iso: String) -> String {
@@ -120,9 +190,16 @@ struct OfferCard: View {
                     }
                 }
             }
+            if let note = item.note {
+                Label(note, systemImage: "scissors").font(.caption2).foregroundStyle(Palette.amber)
+            }
             HStack {
-                if item.unsure { Pill(text: "unsure", color: Palette.amber, symbol: "questionmark") }
-                Pill(text: "fits \(Int((item.score * 100).rounded()))% of rules", color: item.fitsAll ? Palette.mint : Palette.inkSoft)
+                if item.unsure {
+                    if item.scoreKind == .model { MascotView(state: .thinking, size: 26) }
+                    Pill(text: "unsure", color: Palette.amber, symbol: "questionmark")
+                        .accessibilityIdentifier("offer.unsure")
+                }
+                Pill(text: scoreText, color: item.fitsAll ? Palette.mint : Palette.inkSoft)
                 Spacer()
                 Button("Open in Duffel/airline") { showHandOff.toggle() }.font(.caption.weight(.semibold))
             }
@@ -138,6 +215,11 @@ struct OfferCard: View {
         }
         .card()
         .accessibilityElement(children: .contain)
+    }
+
+    private var scoreText: String {
+        let pct = Int((item.score * 100).rounded())
+        return item.scoreKind == .model ? "Laya: \(pct)% fits" : "fits \(pct)% of rules"
     }
 
     private func icon(_ o: RuleCheck.Outcome) -> String {

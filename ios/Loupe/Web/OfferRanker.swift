@@ -8,13 +8,19 @@ struct RuleCheck: Equatable {
 }
 
 struct RankedOffer: Identifiable, Equatable {
+    enum ScoreKind: Equatable { case rules, model }
     var offer: Offer
     var rank: Int
     var checks: [RuleCheck]
-    /// 0...1. For the rule ranker this is the share of rules met, not a model probability.
+    /// 0...1. For the rule ranker this is the share of rules met; for Laya, the calibrated
+    /// probability that the offer fits the priorities.
     var score: Double
-    /// True when the ranker cannot tell (e.g. price in another currency than the cap).
+    /// True when the ranker cannot tell (rules: e.g. price in another currency than the cap;
+    /// Laya: the engine's policy would not act on its answer).
     var unsure: Bool
+    var scoreKind: ScoreKind = .rules
+    /// A fact about how the offer was read (e.g. the model saw only part of it).
+    var note: String? = nil
     var id: String { offer.id }
     var fitsAll: Bool { checks.allSatisfy { $0.outcome == .pass } }
 }
@@ -103,15 +109,8 @@ struct RuleBasedRanker: OfferRanker {
     }
 }
 
-// MARK: - LAYA HOOK ---------------------------------------------------------------------------
-// When the iOS Laya backend lands (epic #6 child #3, built in parallel in engine/backend and
-// ios-native/), add `LayaOfferRanker: OfferRanker` here. It should:
-//   1. compile the priority text to a judgment via LoupeKit (C2 authoring),
-//   2. turn each Offer into an item and let Laya score it (set selection over all offers),
-//   3. return RankedOffer with `score` = calibrated confidence and `unsure` = abstentions.
-// Keep RuleBasedRanker running alongside it: the honest-baseline principle says the results
-// screen must show the rule ranking next to Laya's, and say so when Laya does not beat it.
+/// Laya (`LayaRanker`, when the model is on the phone) is the primary ranker; the rules always run
+/// alongside it as the honest baseline, and the results screen says when the two disagree on #1.
 enum Rankers {
-    static func primary() -> OfferRanker { RuleBasedRanker() }
     static let baseline: OfferRanker = RuleBasedRanker()
 }

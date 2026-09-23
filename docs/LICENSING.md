@@ -361,6 +361,15 @@ bundled for the test suite are CC0.
 
 ---
 
+## The iPhone app's fonts — checked 2026-09-23
+
+Rajdhani (Indian Type Foundry, 2014) and JetBrains Mono (The JetBrains Mono Project Authors,
+2020) are both SIL OFL 1.1, the licence texts shipped beside the `.ttf` files in
+`ios/Loupe/Resources/Fonts/`. OFL 1.1 permits embedding in an application; conditions: do not sell
+the fonts by themselves, keep the copyright and licence with them, and do not use a Reserved Font
+Name for a modified version. The fonts are unmodified, and both licence texts are bundled in the
+app and shown under Me → Licences (with `ios-native/THIRD_PARTY_NOTICES-ios.txt`). Adopted.
+
 ## Rejected
 
 ### NanoJev — weights and dataset declare no licence

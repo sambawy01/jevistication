@@ -13,6 +13,8 @@ struct Priorities: Equatable {
     var preferShortest: Bool = false
     /// Clauses the parser could not read. Shown to the user, never silently dropped.
     var unrecognised: [String] = []
+    /// The text as the user wrote it; Laya reads this, not the parsed rules.
+    var text: String = ""
 
     var isEmpty: Bool {
         maxStops == nil && priceCap == nil && earliestDeparture == nil && latestDeparture == nil
@@ -23,6 +25,7 @@ struct Priorities: Equatable {
 enum PriorityParser {
     static func parse(_ text: String) -> Priorities {
         var p = Priorities()
+        p.text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         let clauses = text.lowercased()
             .replacingOccurrences(of: ";", with: ",")
             .replacingOccurrences(of: " and ", with: ",")

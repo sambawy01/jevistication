@@ -71,6 +71,22 @@ file, You can obtain one at https://mozilla.org/MPL/2.0/.
 
 ---
 
+## Fonts the iPhone app ships
+
+- **Rajdhani** (SemiBold, Bold), © 2014 Indian Type Foundry — SIL Open Font License 1.1.
+  `ios/Loupe/Resources/Fonts/Rajdhani-*.ttf`, unmodified; licence text
+  `ios/Loupe/Resources/Fonts/OFL-Rajdhani.txt`, bundled in the app and shown under Me → Licences.
+- **JetBrains Mono**, © 2020 The JetBrains Mono Project Authors — SIL Open Font License 1.1.
+  `ios/Loupe/Resources/Fonts/JetBrainsMono.ttf`, unmodified; licence text
+  `ios/Loupe/Resources/Fonts/OFL-JetBrainsMono.txt`, bundled and shown the same way.
+
+The OFL allows bundling in an app provided the fonts are not sold on their own and the licence
+travels with them; neither is renamed, so the Reserved Font Name clause is not engaged. The app
+also bundles `ios-native/THIRD_PARTY_NOTICES-ios.txt` (ONNX Runtime iOS, the tokenizers crates)
+under Me → Licences.
+
+---
+
 ## Libraries the desktop app ships (not derived source)
 
 No source in this repository is derived from these; they are runtime dependencies of
