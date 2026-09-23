@@ -120,9 +120,16 @@ object OffPolicy {
         require(bootstrapSamples > 0) { "bootstrapSamples must be positive" }
         require(confidence > 0.0 && confidence < 1.0) { "confidence must be in (0,1)" }
 
+        // Only a model row's action depends on the threshold. A mechanical row acts whatever the
+        // slider says and an unusable row has no answer to threshold, so the candidate takes the
+        // logged action for both — they contribute support, never a counterfactual difference.
         val candidateAction: (LedgerRow) -> String = { row ->
             val top = row.distribution.argmax
-            if (row.distribution.getValue(top).value >= threshold.value) top else Policy.ABSTAIN
+            when {
+                !row.isModelPrediction -> row.action
+                row.distribution.getValue(top).value >= threshold.value -> top
+                else -> Policy.ABSTAIN
+            }
         }
 
         val point = estimate(rows, reward, candidateAction)

@@ -9,6 +9,7 @@ import dev.loupe.engine.Harness
 import dev.loupe.engine.JudgmentCalibrationView
 import dev.loupe.engine.JudgmentReport
 import dev.loupe.engine.LedgerRow
+import dev.loupe.engine.ResolvedBy
 import dev.loupe.engine.Policy
 import dev.loupe.engine.Probability
 import dev.loupe.engine.QueueEntry
@@ -37,6 +38,9 @@ data class DecisionView(
     val mechanical: Boolean,
     val correction: String?,
 ) {
+    /** The mechanical check that answered, from the row's `resolvedBy`; null for a model row. */
+    val mechanicalCheck: String? get() = (row.resolvedBy as? ResolvedBy.Mechanical)?.check
+
     /** What the engine says, in words: its answer, or that it declined. */
     val status: String
         get() = when {
@@ -53,6 +57,8 @@ data class CalibrationSummary(
     val earlierWording: Int,
     val corrections: Int,
     val unusable: Int,
+    /** Decisions a mechanical check answered: counted in [decisions], never in a model figure. */
+    val mechanical: Int,
     val coverage: Double,
     val declined: Double,
     /** Correct among corrected items the engine acted on; null below [Analysis.MIN_FOR_AGREEMENT]. */
@@ -148,8 +154,8 @@ object Analysis {
                 topMass = mass,
                 acted = !unusable && mass >= judgment.threshold,
                 unusable = unusable,
-                // Answered by the judgment's mechanical check (an exact duplicate by hash), not the model.
-                mechanical = judgment.mechanical != null && mass == 1.0 && row.itemId?.let(items::get)?.duplicateOf != null,
+                // Recorded on the row (A5 resolvedBy). Rows logged before the field read as model rows.
+                mechanical = row.isMechanical,
                 correction = row.correction,
             )
         }
@@ -157,7 +163,8 @@ object Analysis {
     fun calibration(all: List<LedgerRow>, judgment: UserJudgment, corrections: Map<CorrectionKey, String>): CalibrationSummary {
         val rows = effectiveRows(all, judgment, corrections)
         val views = views(rows, judgment, emptyMap())
-        val corrected = views.filter { it.correction != null && !it.unusable }
+        // Model figures count model answers only: not unusable placeholders, not mechanical answers.
+        val corrected = views.filter { it.correction != null && !it.unusable && !it.mechanical }
         val actedCorrected = corrected.filter { it.acted }
         val n = views.size
         val enough = corrected.size >= MIN_FOR_AGREEMENT
@@ -166,6 +173,7 @@ object Analysis {
             earlierWording = earlierWording(all, judgment),
             corrections = corrected.size,
             unusable = views.count { it.unusable },
+            mechanical = views.count { it.mechanical },
             coverage = if (n == 0) 0.0 else views.count { it.acted }.toDouble() / n,
             declined = if (n == 0) 0.0 else views.count { !it.acted && !it.unusable }.toDouble() / n,
             selectiveAccuracy = if (enough && actedCorrected.isNotEmpty()) actedCorrected.count { it.topLabel == it.correction }.toDouble() / actedCorrected.size else null,
@@ -214,7 +222,10 @@ object Analysis {
         items: Map<String, SourceItem>,
     ): BaselineComparison? {
         val baseline = judgment.baseline ?: return null
-        val rows = effectiveRows(all, judgment, corrections).filter { it.correction != null && it.itemId in items }
+        // Mechanical rows are not model predictions: replaying their certain distribution would
+        // credit the model with the hash check's answers.
+        val rows = effectiveRows(all, judgment, corrections)
+            .filter { it.correction != null && it.itemId in items && !it.isMechanical }
         if (rows.isEmpty()) return null
         val logged = rows.associate { it.itemId!! to it.distribution }
         val replay = Backend { _, state ->

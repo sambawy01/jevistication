@@ -50,7 +50,8 @@ object UncertainQueue {
         require(size >= 0) { "size must not be negative, was $size" }
         require(auditShare in 0.0..1.0) { "auditShare must be in [0,1], was $auditShare" }
 
-        val unreviewed = rows.filter { it.correction == null }
+        // A mechanical answer has nothing to teach the model and cannot drift, so it is never queued.
+        val unreviewed = rows.filter { it.correction == null && !it.isMechanical }
         if (size == 0 || unreviewed.isEmpty()) return emptyList()
 
         val ranked = unreviewed.sortedWith(

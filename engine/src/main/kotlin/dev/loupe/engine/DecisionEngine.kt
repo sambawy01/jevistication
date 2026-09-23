@@ -71,7 +71,10 @@ class DecisionEngine(
                     judgment.candidates.associateWith { if (it == outcome.value) 1.0 else 0.0 },
                 )
                 val decision = Decision.Act(outcome.value, Probability.of(1.0))
-                return record(judgment, item, certain, decision, Probability.of(1.0), mechanical = true)
+                return record(
+                    judgment, item, certain, decision, Probability.of(1.0),
+                    resolvedBy = ResolvedBy.Mechanical(outcome.by),
+                )
             }
 
             is Mechanical.Deferred -> Unit
@@ -92,7 +95,7 @@ class DecisionEngine(
                         posture = judgment.onFailure,
                     ),
                     propensity = Probability.of(1.0),
-                    mechanical = false,
+                    resolvedBy = ResolvedBy.Unusable,
                     failure = failure.message ?: "unusable response",
                 )
             }
@@ -107,7 +110,7 @@ class DecisionEngine(
             distribution = calibrated.distribution,
             decision = decision,
             propensity = propensityOf(action, calibrated, Policy.actionOf(greedy)),
-            mechanical = false,
+            resolvedBy = ResolvedBy.Model,
         )
     }
 
@@ -168,7 +171,7 @@ class DecisionEngine(
         distribution: Distribution,
         decision: Decision,
         propensity: Probability,
-        mechanical: Boolean,
+        resolvedBy: ResolvedBy,
         failure: String? = null,
     ): DecisionOutcome {
         val row = LedgerRow(
@@ -179,9 +182,10 @@ class DecisionEngine(
             propensity = propensity,
             failure = failure,
             itemId = item.id,
+            resolvedBy = resolvedBy,
         )
         ledger.append(row)
-        return DecisionOutcome(decision, row, mechanical)
+        return DecisionOutcome(decision, row, resolvedBy is ResolvedBy.Mechanical)
     }
 
     private operator fun CalibratedDistribution.get(label: String): Probability? =

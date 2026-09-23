@@ -57,7 +57,9 @@ object ThresholdSlider {
         var mistakes = 0
         var consulted = 0
 
-        for (row in rows) {
+        // Rows the threshold does not govern — mechanical answers, unusable ones — are not counted.
+        val governed = rows.filter { it.isModelPrediction }
+        for (row in governed) {
             val top = row.distribution.getValue(row.distribution.argmax).value
             val actsNow = top >= current.value
             val actsThen = top >= candidate.value
@@ -79,7 +81,7 @@ object ThresholdSlider {
             fewerActions = fewer,
             mistakesIntroduced = if (consulted == 0) null else mistakes,
             correctionsConsulted = consulted,
-            rowsConsidered = rows.size,
+            rowsConsidered = governed.size,
         )
     }
 }

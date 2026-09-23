@@ -6,6 +6,7 @@ import dev.loupe.desktop.core.ModelState
 import dev.loupe.desktop.core.Store
 import dev.loupe.engine.Backend
 import dev.loupe.engine.Policy
+import dev.loupe.engine.ResolvedBy
 import dev.loupe.engine.SelectionReason
 import dev.loupe.sources.Scanner
 import dev.loupe.templates.JudgmentDraft
@@ -242,7 +243,22 @@ class ControllerTest {
         val copy = app.scan.items.single { it.duplicateOf != null }
         val view = Analysis.views(Analysis.effectiveRows(app.ledger, j, app.correctionIndex), j, app.itemsById).single { it.item?.id == copy.id }
         assertTrue(view.mechanical)
+        assertEquals("exact-duplicate", view.mechanicalCheck)
+        assertEquals(ResolvedBy.Mechanical("exact-duplicate"), view.row.resolvedBy)
         assertEquals(j.positiveLabel, view.status)
+        assertEquals(1, app.ledger.count { it.isMechanical })
+        assertTrue(app.ledger.filterNot { it.isMechanical }.all { it.resolvedBy == ResolvedBy.Model })
+
+        // Correcting the mechanical row counts as a decision but not as a model correction.
+        app.correct(j.id, copy.id, j.positiveLabel!!, confirmed = true)
+        val summary = Analysis.calibration(app.ledger, j, app.correctionIndex)
+        assertEquals(1, summary.mechanical)
+        assertEquals(0, summary.corrections)
+
+        // The export carries the resolver losslessly.
+        app.export(tmp.resolve("export"))
+        val parsed = Files.readAllLines(tmp.resolve("export/loupe-ledger.jsonl")).filter { it.isNotBlank() }.map(Store::parseRow)
+        assertEquals(app.ledger.map { it.resolvedBy }, parsed.map { it.resolvedBy })
     }
 
     @Test

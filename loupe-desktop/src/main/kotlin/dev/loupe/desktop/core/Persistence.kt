@@ -9,6 +9,7 @@ import dev.loupe.engine.Distribution
 import dev.loupe.engine.Export
 import dev.loupe.engine.FailurePosture
 import dev.loupe.engine.LedgerRow
+import dev.loupe.engine.ResolvedBy
 import dev.loupe.engine.Probability
 import dev.loupe.sources.SourceSpec
 import dev.loupe.sources.SourceType
@@ -186,6 +187,7 @@ class Store(val home: Path) {
             val dist = o.getAsJsonObject("distribution")
             val masses = LinkedHashMap<String, Double>()
             for ((label, mass) in dist.entrySet()) masses[label] = mass.asDouble
+            val failure = o.optStr("failure")
             return LedgerRow(
                 judgmentId = o.str("judgmentId"),
                 criteriaHash = o.str("criteriaHash"),
@@ -193,8 +195,10 @@ class Store(val home: Path) {
                 action = o.str("action"),
                 propensity = Probability.of(o.get("propensity").asDouble),
                 correction = o.optStr("correction"),
-                failure = o.optStr("failure"),
+                failure = failure,
                 itemId = o.optStr("itemId"),
+                // Lines written before the field existed default per ResolvedBy.legacy.
+                resolvedBy = ResolvedBy.parse(o.optStr("resolvedBy"), failure),
             )
         }
 

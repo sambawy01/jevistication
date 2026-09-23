@@ -169,7 +169,10 @@ fun ItemDetail(c: LoupeController, j: UserJudgment, v: DecisionView, platform: P
                 ProbabilityBar(v.row.distribution.getValue(label).value, width = 140)
             }
         }
-        if (v.mechanical) Muted("Answered mechanically — a byte-identical copy of ${item.duplicateOf}; the model was not asked.")
+        if (v.mechanical) {
+            val copyOf = item.duplicateOf?.let { " — a byte-identical copy of $it" } ?: ""
+            Muted("Answered by rule: ${v.mechanicalCheck}$copyOf; the model was not asked.")
+        }
         v.row.failure?.let { Note("Unusable answer: $it", error = true) }
         H3("Your answer")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {

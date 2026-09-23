@@ -18,6 +18,11 @@ data class JudgmentCalibrationView(
     val reliability: List<ReliabilityBin>,
     /** Bins claiming more confidence than they earned — where the engine overstates itself. */
     val overconfidentBins: List<ReliabilityBin>,
+    /**
+     * Of [decisions], how many a mechanical check answered. They are counted as decisions but
+     * never as model predictions: [agreement], [ece] and [corrections] cover model rows only.
+     */
+    val mechanical: Int = 0,
 ) {
     fun summary(): String =
         if (agreement == null) {
@@ -58,7 +63,10 @@ object VisibleCalibration {
         judgmentRows: List<LedgerRow>,
         bins: Int,
     ): JudgmentCalibrationView {
-        val corrected = judgmentRows.mapNotNull { row ->
+        // Only the model's own answers are calibration evidence. A mechanical row is certain by
+        // construction and an unusable row's distribution is a placeholder; scoring either would
+        // flatter (or smear) the model's numbers with answers it never gave.
+        val corrected = judgmentRows.filter { it.isModelPrediction }.mapNotNull { row ->
             row.correction?.let { row.distribution to it }
         }
         val reliability =
@@ -76,6 +84,7 @@ object VisibleCalibration {
             ece = if (corrected.isEmpty()) null else Calibration.ece(corrected, bins),
             reliability = reliability,
             overconfidentBins = reliability.filter { it.count > 0 && it.meanConfidence > it.accuracy },
+            mechanical = judgmentRows.count { it.isMechanical },
         )
     }
 }

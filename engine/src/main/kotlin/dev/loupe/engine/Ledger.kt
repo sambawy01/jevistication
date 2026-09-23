@@ -1,6 +1,71 @@
 package dev.loupe.engine
 
 /**
+ * What produced a ledger row's answer (A5).
+ *
+ * Before this field existed a mechanically answered row was told apart from a model row only by
+ * its shape (all mass on one label, propensity 1) — which a sure model answer can also have. The
+ * harness, calibration and counterfactuals must not count a hash match as a model prediction, so
+ * the distinction is recorded, not inferred.
+ *
+ * A user's correction is not a resolver: it is a label *about* a row, kept in
+ * [LedgerRow.correction] (and, on desktop, in its own append-only file), and never changes what
+ * answered it.
+ *
+ * Serialised by [code]: `model`, `unusable`, or `mechanical:<check>`.
+ */
+sealed interface ResolvedBy {
+    /** The stable string written to the ledger and exports. */
+    val code: String
+
+    /** The model was consulted and its answer validated. Calibration and A8 count these rows. */
+    data object Model : ResolvedBy {
+        override val code: String = "model"
+    }
+
+    /**
+     * A mechanical check answered and the model was never consulted (A3). [check] names it, as in
+     * [Mechanical.Resolved.by] — e.g. `exact-duplicate`.
+     */
+    data class Mechanical(val check: String) : ResolvedBy {
+        init {
+            require(check.isNotBlank()) { "a mechanical resolver must name its check" }
+        }
+
+        override val code: String get() = "$MECHANICAL_PREFIX$check"
+    }
+
+    /**
+     * The model was consulted but its answer failed validation (A4). The row's distribution is a
+     * flat placeholder, not an opinion; [LedgerRow.failure] says why.
+     */
+    data object Unusable : ResolvedBy {
+        override val code: String = "unusable"
+    }
+
+    companion object {
+        private const val MECHANICAL_PREFIX = "mechanical:"
+
+        /**
+         * The resolver for a row written before this field existed: [Unusable] when it carries a
+         * failure, otherwise [Model]. A legacy mechanical row cannot be told from a sure model row
+         * by its contents alone, so it reads as [Model] — the conservative choice, since it only
+         * ever *adds* a certain, correct-by-construction row to the model's side.
+         */
+        fun legacy(failure: String?): ResolvedBy = if (failure != null) Unusable else Model
+
+        /** Parses [code]; a missing code falls back to [legacy]. */
+        fun parse(code: String?, failure: String?): ResolvedBy = when {
+            code == null -> legacy(failure)
+            code == Model.code -> Model
+            code == Unusable.code -> Unusable
+            code.startsWith(MECHANICAL_PREFIX) -> Mechanical(code.removePrefix(MECHANICAL_PREFIX))
+            else -> throw IllegalArgumentException("unknown resolvedBy '$code'")
+        }
+    }
+}
+
+/**
  * One append-only ledger row (A5): the full record of a single decision.
  *
  * The [distribution] and [propensity] are recorded in full because A8's counterfactuals cannot
@@ -37,7 +102,24 @@ data class LedgerRow(
      * not be tied back to the file or message it describes.
      */
     val itemId: String? = null,
-)
+    /**
+     * What answered this row. Defaults to [ResolvedBy.legacy], so rows built or loaded without it
+     * read as model rows (or unusable ones when they carry a [failure]).
+     */
+    val resolvedBy: ResolvedBy = ResolvedBy.legacy(failure),
+) {
+    init {
+        require((resolvedBy is ResolvedBy.Unusable) == (failure != null)) {
+            "resolvedBy=${resolvedBy.code} is inconsistent with failure=${failure != null}"
+        }
+    }
+
+    /** True when the model's answer is what this row records — the rows model metrics may count. */
+    val isModelPrediction: Boolean get() = resolvedBy is ResolvedBy.Model
+
+    /** True when a mechanical check answered and the model was never consulted. */
+    val isMechanical: Boolean get() = resolvedBy is ResolvedBy.Mechanical
+}
 
 /**
  * An append-only log of decisions (A5). Rows can be added and read; there is no API to mutate or

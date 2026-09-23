@@ -47,6 +47,7 @@ fun CalibrationScreen(c: LoupeController) = NeedsJudgment(c) { j ->
             Stat(pct(s.declined), "declined: left unsure")
             Stat(s.unusable.toString(), "could not judge", color = if (s.unusable > 0) loupe.error else loupe.ink)
         }
+        if (s.mechanical > 0) Muted("${s.mechanical} of these were answered by rule, not the model, and are left out of every model figure below.")
         Card {
             H3("Agreement with you")
             if (s.agreement == null) {

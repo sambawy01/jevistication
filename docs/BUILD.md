@@ -513,7 +513,7 @@ that ran the export spike.
 | A1 export half | **Proven on desktop** — Laya encoder + head as one ONNX graph, FP32 and INT8, parity recorded. Device latency not measured |
 | A3 Mechanical extractors, text state | **Complete** — hash, dedup, MIME, dates, origin facts (on the real Public Suffix List since 2026-09-23), OCR-presence, `TextState` |
 | A4 Judgment type and validation | **Complete** — Choice, Bool and Score; strict validation, failure postures, never throws |
-| A5 Ledger | Complete — append-only, propensity required, criteria hash |
+| A5 Ledger | Complete — append-only, propensity required, criteria hash, `resolvedBy` (model / mechanical:&lt;check&gt; / unusable) |
 | A6 Recalibrator | Complete — temperature scaling fitted by NLL; ECE, Brier, reliability bins |
 | A7 Policy runner | Complete — pure, total, calibrated-only by construction |
 | A8 Counterfactual engine | Complete — IPS, SNIPS, seeded bootstrap intervals, threshold replay |
@@ -713,6 +713,26 @@ Nothing below is deferred by choice; each needs something this environment does 
   `./gradlew clean build` passes with `models/` present (371 run) and with it moved aside (361 run,
   10 skipped).
 
+- **2026-09-23 — A5: mechanical rows are marked in the ledger.** On the owner's "Go". `LedgerRow`
+  gained `resolvedBy`, a sealed `ResolvedBy`: `Model`, `Mechanical(check)` (the check's name from
+  `Mechanical.Resolved.by`, e.g. `exact-duplicate`) or `Unusable` (the model was asked and its answer
+  failed validation). A row must agree with itself — `Unusable` if and only if it carries a `failure`.
+  A correction is not a resolver: it is a label about a row and changes nothing about what answered
+  it. `DecisionEngine` sets it on every path. `Export` writes it on every line as `"model"`,
+  `"unusable"` or `"mechanical:<check>"`; the desktop ledger file is that same format, so it
+  round-trips there and through F4. **Legacy lines** (no field) load as `Unusable` when they carry a
+  failure and otherwise as `Model` — a mechanical row written before today cannot be told from a
+  sure model row by its contents, so the desktop no longer guesses from the item's `duplicateOf`.
+  Where it matters, model figures now say explicitly that they count model rows only: D2
+  calibration (`VisibleCalibration`, desktop agreement, selective accuracy, ECE, the held-out fit)
+  counts mechanical rows as decisions and reports them, never as corrections; the §7 `Harness`
+  takes an optional mechanical check and keeps mechanically answered fixtures out of `n`, every model
+  figure and the baseline (reported as `mechanical`); D4 on desktop drops them before the replay; the
+  D3 slider and A8 threshold replay treat them as ungoverned (the replay takes the logged action for
+  every non-model row); the D1 queue never queues them. Results says "Answered by rule:
+  exact-duplicate"; Calibration notes how many decisions a rule answered. Tests: 376 → **386**
+  across the build, `./gradlew check` green.
+
 ---
 ## Hand-off
 
@@ -795,9 +815,8 @@ came from labelled fixtures.
    a parity case, then a measurement on corrected items of whether it helps.
 6. **Fine-tune on corrections** (A1/F3). The sample result says the untuned model does not beat
    keywords; whether a head fine-tuned on a few hundred corrections does is the next real question.
-7. **Mark mechanical rows in the ledger.** A mechanically answered row is told apart from a model row
-   only by its item (an exact duplicate with all mass on one label). A `resolvedBy` field on
-   `LedgerRow` would make it explicit.
+7. ~~**Mark mechanical rows in the ledger.**~~ Done 2026-09-23 — `LedgerRow.resolvedBy`; see the
+   Progress log.
 
 ### Blocked, and on precisely what
 

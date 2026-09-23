@@ -74,6 +74,8 @@ object Export {
                     "propensity" to Json.number(row.propensity.value),
                     "correction" to Json.stringOrNull(row.correction),
                     "failure" to Json.stringOrNull(row.failure),
+                    // Always emitted since it was added; a line without it is a legacy row.
+                    "resolvedBy" to Json.string(row.resolvedBy.code),
                     "distribution" to Json.obj(
                         row.distribution.labels.map { label ->
                             label to Json.number(row.distribution.getValue(label).value)
@@ -110,6 +112,7 @@ object Export {
                         "judgmentId" to Json.string(view.judgmentId),
                         "decisions" to Json.number(view.decisions),
                         "corrections" to Json.number(view.corrections),
+                        "mechanical" to Json.number(view.mechanical),
                         "agreement" to Json.number(view.agreement),
                         "ece" to Json.number(view.ece),
                         "reliability" to Json.array(

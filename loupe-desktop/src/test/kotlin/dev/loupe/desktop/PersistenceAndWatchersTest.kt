@@ -7,7 +7,9 @@ import dev.loupe.desktop.core.Watchers
 import dev.loupe.engine.Cadence
 import dev.loupe.engine.Distribution
 import dev.loupe.engine.ImpersonationReason
+import dev.loupe.engine.Export
 import dev.loupe.engine.LedgerRow
+import dev.loupe.engine.ResolvedBy
 import dev.loupe.engine.Probability
 import dev.loupe.sources.SampleData
 import dev.loupe.sources.Scanner
@@ -59,6 +61,33 @@ class PersistenceTest {
         val (loaded, bad) = Store(tmp).loadLedger()
         assertEquals(rows, loaded)
         assertEquals(1, bad)
+    }
+
+    @Test
+    fun `resolvedBy round-trips through the saved ledger and the export`() {
+        val store = Store(tmp)
+        val rows = listOf(
+            LedgerRow("j", "h", Distribution.of("yes" to 1.0, "no" to 0.0), "yes", Probability.of(1.0), itemId = "/d", resolvedBy = ResolvedBy.Mechanical("exact-duplicate")),
+            LedgerRow("j", "h", Distribution.of("yes" to 0.7, "no" to 0.3), "yes", Probability.of(0.9), itemId = "/m", resolvedBy = ResolvedBy.Model),
+            LedgerRow("j", "h", Distribution.of("yes" to 0.5, "no" to 0.5), "__unusable__", Probability.of(1.0), failure = "bad", itemId = "/u", resolvedBy = ResolvedBy.Unusable),
+        )
+        store.appendLedger(rows)
+        val (loaded, bad) = Store(tmp).loadLedger()
+        assertEquals(rows, loaded)
+        assertEquals(0, bad)
+        assertEquals(Export.ledgerToJsonl(rows), Export.ledgerToJsonl(loaded))
+    }
+
+    @Test
+    fun `a ledger line written before resolvedBy existed still loads, as a model or unusable row`() {
+        Files.writeString(
+            tmp.resolve("ledger.jsonl"),
+            """{"judgmentId":"j","itemId":"/a","criteriaHash":"h","action":"yes","propensity":1.0,"correction":null,"failure":null,"distribution":{"yes":1.0,"no":0.0}}""" + "\n" +
+                """{"judgmentId":"j","itemId":"/b","criteriaHash":"h","action":"__unusable__","propensity":1.0,"correction":null,"failure":"bad","distribution":{"yes":0.5,"no":0.5}}""" + "\n",
+        )
+        val (loaded, bad) = Store(tmp).loadLedger()
+        assertEquals(0, bad)
+        assertEquals(listOf(ResolvedBy.Model, ResolvedBy.Unusable), loaded.map { it.resolvedBy })
     }
 
     @Test

@@ -31,6 +31,12 @@ data class JudgmentReport(
     val baselineAccuracy: Double,
     /** False when the model does not beat its dumb baseline — and the app says so. */
     val beatsBaseline: Boolean,
+    /**
+     * Fixtures a mechanical check answered. They are excluded from [n] and from every model and
+     * baseline figure: a hash match is not a model prediction, and counting it would credit the
+     * model with answers it was never asked for.
+     */
+    val mechanical: Int = 0,
 ) {
     /** A one-line summary in the form the app shows it. */
     fun summary(): String = buildString {
@@ -64,6 +70,7 @@ object Harness {
         engine: DecisionEngine,
         baseline: (Item) -> String,
         bins: Int = Calibration.DEFAULT_BINS,
+        mechanical: (Item) -> Mechanical<String> = { Mechanical.Deferred },
     ): JudgmentReport {
         require(fixtures.isNotEmpty()) { "cannot evaluate '${judgment.id}' on no fixtures" }
 
@@ -73,9 +80,14 @@ object Harness {
         var correctAtFullCoverage = 0
         var baselineCorrect = 0
         var unusable = 0
+        var mechanicallyResolved = 0
 
         for (fixture in fixtures) {
-            val outcome = engine.decide(judgment, fixture.item)
+            val outcome = engine.decide(judgment, fixture.item, mechanical)
+            if (outcome.row.isMechanical) {
+                mechanicallyResolved++
+                continue
+            }
             if (baseline(fixture.item) == fixture.trueLabel) baselineCorrect++
 
             when (val decision = outcome.decision) {
@@ -98,7 +110,8 @@ object Harness {
             if (distribution.argmax == fixture.trueLabel) correctAtFullCoverage++
         }
 
-        val n = fixtures.size
+        val n = fixtures.size - mechanicallyResolved
+        require(n > 0) { "every fixture for '${judgment.id}' was answered mechanically; nothing measures the model" }
         val accuracyAtFullCoverage = correctAtFullCoverage.toDouble() / n
         val baselineAccuracy = baselineCorrect.toDouble() / n
 
@@ -117,6 +130,7 @@ object Harness {
             // Compared at equal coverage: forcing the model to answer everything, as the
             // baseline does, is the only honest comparison.
             beatsBaseline = accuracyAtFullCoverage > baselineAccuracy,
+            mechanical = mechanicallyResolved,
         )
     }
 }
