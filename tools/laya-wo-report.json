@@ -1,0 +1,624 @@
+{
+  "fp32": {
+    "path": "laya-multilingual-choice.fp32.onnx",
+    "sha256": "eeeea35db721442e68d6ac90b1b827d4db195835909b7b401c4c85b22581882e"
+  },
+  "seed": 0,
+  "calibration": {
+    "sequences": 163,
+    "sampleTexts": [
+      "INDEX.txt",
+      "README.txt",
+      "birthday-card-from-grandma.txt",
+      "boiler-service-certificate.txt",
+      "brightside-plumbing-invoice-INV-2207.txt",
+      "brightside-reminder.eml",
+      "cafe-luna-2026-09-02.txt",
+      "casa-azul-booking.html",
+      "council-tax-bill.eml",
+      "driving-licence-SPECIMEN.txt",
+      "expenses-2026-q3.csv",
+      "fresh-basket-2026-08-14 (copy).txt",
+      "fresh-basket-2026-08-14.txt",
+      "homeware-direct-invoice-kettle.txt",
+      "insurer-renewal.eml",
+      "itinerary-lisbon.json",
+      "meeting-notes-2026-09-12.md",
+      "mum-new-number.eml",
+      "mum-photos.eml",
+      "mum-sunday-lunch.eml",
+      "northline-flight-booking.eml",
+      "passport-scan-SPECIMEN.txt",
+      "phishing-paypal.eml",
+      "priya-handover.eml",
+      "project-plan-FINAL.md",
+      "project-plan-v1.md",
+      "riverside-surgery-appointment.txt",
+      "skyport-schedule-change.eml",
+      "subscriptions-2026.mbox:A new sign-in to your CloudBox account",
+      "subscriptions-2026.mbox:Changes to your Streamflix plan",
+      "subscriptions-2026.mbox:CloudBox Plus ��� payment received",
+      "subscriptions-2026.mbox:This week: autumn bulbs",
+      "subscriptions-2026.mbox:Today only: 40% off",
+      "subscriptions-2026.mbox:Your Streamflix receipt (Aug 2026)",
+      "subscriptions-2026.mbox:Your Streamflix receipt (Jul 2026)",
+      "subscriptions-2026.mbox:Your Streamflix receipt (Jun 2026)",
+      "subscriptions-2026.mbox:Your Streamflix receipt (Sep 2026)",
+      "subscriptions-2026.mbox:Your free trial ends on 30 September",
+      "tenancy-agreement-signed.md"
+    ],
+    "questions": [
+      [
+        "Is this a receipt or proof of purchase?",
+        [
+          "a receipt or proof of purchase",
+          "not a receipt"
+        ]
+      ],
+      [
+        "Does this need a reply from me?",
+        [
+          "needs a reply",
+          "no reply needed"
+        ]
+      ],
+      [
+        "Is this a phishing attempt?",
+        [
+          "phishing",
+          "legitimate"
+        ]
+      ]
+    ],
+    "plus": "the 34 golden.json parity sequences"
+  },
+  "versions": {
+    "onnx": "1.18.0",
+    "onnxruntime": "1.20.1",
+    "numpy": "2.2.6",
+    "python": "3.12.13"
+  },
+  "machine": "macOS-26.5.1-arm64-arm-64bit (10 cores), ORT CPU, batch 1, short (<=128 tok) golden cases",
+  "results": {
+    "baseline (shipped int8)": {
+      "golden": {
+        "agree": "33/34",
+        "flips": [
+          [
+            "en-sentiment-5",
+            0.0075
+          ]
+        ],
+        "maxDiff": 0.0929,
+        "meanMaxDiff": 0.0187
+      },
+      "criteria": {
+        "agree": "8/8",
+        "flips": [],
+        "maxDiff": 0.1144,
+        "meanMaxDiff": 0.0333
+      },
+      "flips": 1,
+      "maxDiff": 0.1144,
+      "sizeBytes": 383883281,
+      "latencyShort": {
+        "p50_ms": 43.9,
+        "p95_ms": 84.3,
+        "loadavg": [
+          3.41,
+          7.1,
+          7.59
+        ]
+      },
+      "sha256": "8b994315135dd7684331bb58fe3a769e3ca1145a5c421a2a41e2b3c85397b2fa"
+    },
+    "smooth a=0.5 + dynamic": {
+      "golden": {
+        "agree": "31/34",
+        "flips": [
+          [
+            "en-sentiment-5",
+            0.0075
+          ],
+          [
+            "es-urgent-3",
+            0.285
+          ],
+          [
+            "pt-receipt-2",
+            0.236
+          ]
+        ],
+        "maxDiff": 0.2969,
+        "meanMaxDiff": 0.0486
+      },
+      "criteria": {
+        "agree": "7/8",
+        "flips": [
+          [
+            "crit-ordinal-4",
+            0.1343
+          ]
+        ],
+        "maxDiff": 0.1791,
+        "meanMaxDiff": 0.0531
+      },
+      "flips": 4,
+      "maxDiff": 0.2969,
+      "sizeBytes": 325536056,
+      "latencyShort": {
+        "p50_ms": 42.5,
+        "p95_ms": 82.9,
+        "loadavg": [
+          4.38,
+          6.72,
+          7.41
+        ]
+      },
+      "sha256": "52986267a0762cdb7328f48fd1417a440f6ed5a54e656258d3876ff795df90b7",
+      "alpha": 0.5,
+      "woQuantised": 22
+    },
+    "smooth a=0.5 + static Wo": {
+      "golden": {
+        "agree": "30/34",
+        "flips": [
+          [
+            "en-oneword-2",
+            0.204
+          ],
+          [
+            "en-masklit-2",
+            0.9689
+          ],
+          [
+            "nl-intent-3",
+            0.9417
+          ],
+          [
+            "ja-2",
+            0.3406
+          ]
+        ],
+        "maxDiff": 0.6425,
+        "meanMaxDiff": 0.1217
+      },
+      "criteria": {
+        "agree": "7/8",
+        "flips": [
+          [
+            "crit-ordinal-4",
+            0.1343
+          ]
+        ],
+        "maxDiff": 0.3225,
+        "meanMaxDiff": 0.1113
+      },
+      "flips": 5,
+      "maxDiff": 0.6425,
+      "sizeBytes": 325603037,
+      "latencyShort": {
+        "p50_ms": 43.9,
+        "p95_ms": 82.8,
+        "loadavg": [
+          5.24,
+          5.89,
+          6.94
+        ]
+      },
+      "sha256": "3c904ddc7169b6b7b6a097cf7657cc5d9eb6fec464a4adce382e60cbd83160b3",
+      "alpha": 0.5,
+      "woQuantised": 22
+    },
+    "smooth a=0.65 + dynamic": {
+      "golden": {
+        "agree": "34/34",
+        "flips": [],
+        "maxDiff": 0.259,
+        "meanMaxDiff": 0.0446
+      },
+      "criteria": {
+        "agree": "7/8",
+        "flips": [
+          [
+            "crit-shrink-12",
+            0.0412
+          ]
+        ],
+        "maxDiff": 0.1726,
+        "meanMaxDiff": 0.0582
+      },
+      "flips": 1,
+      "maxDiff": 0.259,
+      "sizeBytes": 325536056,
+      "latencyShort": {
+        "p50_ms": 44.9,
+        "p95_ms": 87.6,
+        "loadavg": [
+          5.32,
+          5.59,
+          6.67
+        ]
+      },
+      "sha256": "80800fa9f328f043ab1e8009c85f8bcb836e687200e1e80597fb8d52b648457b",
+      "alpha": 0.65,
+      "woQuantised": 22
+    },
+    "smooth a=0.65 + static Wo": {
+      "golden": {
+        "agree": "28/34",
+        "flips": [
+          [
+            "en-oneword-2",
+            0.204
+          ],
+          [
+            "en-masklit-2",
+            0.9689
+          ],
+          [
+            "en-reply-3",
+            0.9789
+          ],
+          [
+            "es-urgent-3",
+            0.285
+          ],
+          [
+            "nl-intent-3",
+            0.9417
+          ],
+          [
+            "ja-2",
+            0.3406
+          ]
+        ],
+        "maxDiff": 0.8184,
+        "meanMaxDiff": 0.1281
+      },
+      "criteria": {
+        "agree": "7/8",
+        "flips": [
+          [
+            "crit-ordinal-4",
+            0.1343
+          ]
+        ],
+        "maxDiff": 0.2434,
+        "meanMaxDiff": 0.0709
+      },
+      "flips": 7,
+      "maxDiff": 0.8184,
+      "sizeBytes": 325603037,
+      "latencyShort": {
+        "p50_ms": 53.3,
+        "p95_ms": 111.4,
+        "loadavg": [
+          5.65,
+          5.38,
+          6.41
+        ]
+      },
+      "sha256": "c85d84fee3489d2ca47295a049d197de826e6031163e1eb71dcef1818fb0eb31",
+      "alpha": 0.65,
+      "woQuantised": 22
+    },
+    "smooth a=0.8 + dynamic": {
+      "golden": {
+        "agree": "32/34",
+        "flips": [
+          [
+            "en-sentiment-5",
+            0.0075
+          ],
+          [
+            "en-longopts-3",
+            0.0944
+          ]
+        ],
+        "maxDiff": 0.1701,
+        "meanMaxDiff": 0.0275
+      },
+      "criteria": {
+        "agree": "8/8",
+        "flips": [],
+        "maxDiff": 0.1295,
+        "meanMaxDiff": 0.0296
+      },
+      "flips": 2,
+      "maxDiff": 0.1701,
+      "sizeBytes": 325536056,
+      "latencyShort": {
+        "p50_ms": 41.0,
+        "p95_ms": 76.4,
+        "loadavg": [
+          4.26,
+          4.95,
+          6.13
+        ]
+      },
+      "sha256": "4ff047aaaa3d90fe183e48c8518bb7ec873056444d0a0cbf47c3bf33033816ad",
+      "alpha": 0.8,
+      "woQuantised": 22
+    },
+    "smooth a=0.8 + static Wo": {
+      "golden": {
+        "agree": "29/34",
+        "flips": [
+          [
+            "en-oneword-2",
+            0.204
+          ],
+          [
+            "en-reply-3",
+            0.9789
+          ],
+          [
+            "es-urgent-3",
+            0.285
+          ],
+          [
+            "pt-receipt-2",
+            0.236
+          ],
+          [
+            "ja-2",
+            0.3406
+          ]
+        ],
+        "maxDiff": 0.6786,
+        "meanMaxDiff": 0.1328
+      },
+      "criteria": {
+        "agree": "8/8",
+        "flips": [],
+        "maxDiff": 0.1593,
+        "meanMaxDiff": 0.0564
+      },
+      "flips": 5,
+      "maxDiff": 0.6786,
+      "sizeBytes": 325603037,
+      "latencyShort": {
+        "p50_ms": 44.0,
+        "p95_ms": 83.2,
+        "loadavg": [
+          4.25,
+          4.56,
+          5.67
+        ]
+      },
+      "sha256": "8d92c3e6c0c183081e9a7d9548af965d2bb9550002b6837550eac1d168f5e237",
+      "alpha": 0.8,
+      "woQuantised": 22
+    },
+    "static Wo (no smoothing)": {
+      "golden": {
+        "agree": "28/34",
+        "flips": [
+          [
+            "en-reply-3",
+            0.9789
+          ],
+          [
+            "pt-receipt-2",
+            0.236
+          ],
+          [
+            "nl-intent-3",
+            0.9417
+          ],
+          [
+            "ru-billing-3",
+            0.6382
+          ],
+          [
+            "ja-2",
+            0.3406
+          ],
+          [
+            "en-json-4",
+            0.9644
+          ]
+        ],
+        "maxDiff": 0.9629,
+        "meanMaxDiff": 0.1983
+      },
+      "criteria": {
+        "agree": "6/8",
+        "flips": [
+          [
+            "crit-ordinal-4",
+            0.1343
+          ],
+          [
+            "crit-shrink-12",
+            0.0412
+          ]
+        ],
+        "maxDiff": 0.2976,
+        "meanMaxDiff": 0.0978
+      },
+      "flips": 8,
+      "maxDiff": 0.9629,
+      "sizeBytes": 325603037,
+      "latencyShort": {
+        "p50_ms": 44.6,
+        "p95_ms": 86.6,
+        "loadavg": [
+          4.29,
+          6.37,
+          6.92
+        ]
+      },
+      "sha256": "843a2a2483efaa58eb07f4fa9a0cb616b818a31743d35da730aa2e248f3ec457",
+      "woQuantised": 22
+    },
+    "sweep_single_layer": {
+      "0": {
+        "flips": 1,
+        "maxDiff": 0.1492
+      },
+      "1": {
+        "flips": 1,
+        "maxDiff": 0.151
+      },
+      "2": {
+        "flips": 1,
+        "maxDiff": 0.1833
+      },
+      "3": {
+        "flips": 2,
+        "maxDiff": 0.2843
+      },
+      "4": {
+        "flips": 1,
+        "maxDiff": 0.264
+      },
+      "5": {
+        "flips": 1,
+        "maxDiff": 0.1889
+      },
+      "6": {
+        "flips": 0,
+        "maxDiff": 0.1083
+      },
+      "7": {
+        "flips": 1,
+        "maxDiff": 0.1273
+      },
+      "8": {
+        "flips": 1,
+        "maxDiff": 0.1293
+      },
+      "9": {
+        "flips": 2,
+        "maxDiff": 0.1883
+      },
+      "10": {
+        "flips": 2,
+        "maxDiff": 0.1395
+      },
+      "11": {
+        "flips": 5,
+        "maxDiff": 0.5802
+      },
+      "12": {
+        "flips": 0,
+        "maxDiff": 0.5498
+      },
+      "13": {
+        "flips": 0,
+        "maxDiff": 0.0986
+      },
+      "14": {
+        "flips": 1,
+        "maxDiff": 0.1146
+      },
+      "15": {
+        "flips": 1,
+        "maxDiff": 0.1175
+      },
+      "16": {
+        "flips": 1,
+        "maxDiff": 0.1357
+      },
+      "17": {
+        "flips": 1,
+        "maxDiff": 0.1149
+      },
+      "18": {
+        "flips": 1,
+        "maxDiff": 0.108
+      },
+      "19": {
+        "flips": 1,
+        "maxDiff": 0.111
+      },
+      "20": {
+        "flips": 1,
+        "maxDiff": 0.111
+      },
+      "21": {
+        "flips": 1,
+        "maxDiff": 0.1159
+      }
+    },
+    "partial (greedy Wo subset)": {
+      "golden": {
+        "agree": "33/34",
+        "flips": [
+          [
+            "en-sentiment-5",
+            0.0075
+          ]
+        ],
+        "maxDiff": 0.1112,
+        "meanMaxDiff": 0.0238
+      },
+      "criteria": {
+        "agree": "8/8",
+        "flips": [],
+        "maxDiff": 0.1105,
+        "meanMaxDiff": 0.0386
+      },
+      "flips": 1,
+      "maxDiff": 0.1112,
+      "sizeBytes": 357361791,
+      "latencyShort": {
+        "p50_ms": 43.4,
+        "p95_ms": 85.5,
+        "loadavg": [
+          4.06,
+          4.4,
+          4.6
+        ]
+      },
+      "sha256": "03d732c31f7da991c6d5b1b816032431de67cc7e0080b17ed63a9053e41be973",
+      "woQuantised": 10,
+      "layers": [
+        10,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21
+      ]
+    },
+    "baseline (shipped int8), sweep run": {
+      "golden": {
+        "agree": "33/34",
+        "flips": [
+          [
+            "en-sentiment-5",
+            0.0075
+          ]
+        ],
+        "maxDiff": 0.0929,
+        "meanMaxDiff": 0.0187
+      },
+      "criteria": {
+        "agree": "8/8",
+        "flips": [],
+        "maxDiff": 0.1144,
+        "meanMaxDiff": 0.0333
+      },
+      "flips": 1,
+      "maxDiff": 0.1144,
+      "sizeBytes": 383883281,
+      "latencyShort": {
+        "p50_ms": 45.2,
+        "p95_ms": 102.3,
+        "loadavg": [
+          3.63,
+          3.3,
+          4.77
+        ]
+      },
+      "sha256": "8b994315135dd7684331bb58fe3a769e3ca1145a5c421a2a41e2b3c85397b2fa"
+    }
+  }
+}

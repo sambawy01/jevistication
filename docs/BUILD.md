@@ -109,6 +109,7 @@ across precisions, and repeated calls show no memory growth.
 *Note (2026-09-23):* Laya's INT8 graph does **not** strictly meet "identical selected answers
 across precisions" — it flips one of 34 parity questions, a near-tie. Whether a near-tie flip
 counts against the criterion is a decision to make with real fixtures, not by redefining it.
+The opt-in `int8-partial` graph (2026-09-23) has the same one near-tie flip.
 
 **A3 · Mechanical extractors and the text-state pipeline.** Hash, MIME, EXIF, dedup, regex,
 dates, domain and certificate facts, OCR presence. Every source is normalised to text state.
@@ -286,7 +287,7 @@ judgments is the difference between this product and a confident guess.
 | 10 | ~~Approximate public suffix list~~ | **Closed 2026-09-23.** The engine now bundles the real Mozilla PSL (snapshot `2026-09-21_18-50-07_UTC`, SHA-256 pinned and tested), implements the full algorithm — wildcards, exceptions, IDN, both sections — and passes the official test vectors. Refreshed at build time by `tools/update-psl.sh`; never fetched at runtime. Reopens if the snapshot goes stale before a release |
 | 11 | ~~Third-party attribution is unshipped~~ (ONNX Runtime, DJL and the Rust crates in `libtokenizers`, Compose/skiko/Skia, the desktop sources, PDFBox's bundled fonts and data) | **Closed 2026-09-23.** `./gradlew :loupe-desktop:generateThirdPartyNotices` writes `loupe-desktop/src/main/resources/THIRD_PARTY_NOTICES.txt`, packaged in the app jar, from the resolved runtime jars and POMs, 213 pinned Rust crates and the reviewed tables in `third-party/`; `check` and `ThirdPartyNoticesTest` fail when it is stale. Never patch Eigen (MPL-2.0, file-level). **The Android component set is still unverified** — the AAR is a different native build and needs its own run when an Android module exists |
 | 12 | **Laya's training data is only partly published, and the published part includes non-commercial sources.** The authors' own benchmark flags as "in training" `Tobi-Bueck/customer-support-tickets` (CC-BY-NC-4.0) and MS MARCO (Microsoft: non-commercial research only), plus LGPL-3.0, CC-BY-SA-3.0, `unknown` and undeclared sources; the full mix is not published. The tokenizer is Gemma 2's, whose Terms of Use may or may not reach it | Adopted for development on the owner's decision; **not cleared for shipping.** Close it by one of: the authors publishing a clean full mix, or confirming the NC sources are absent from the multilingual checkpoint; or training the head (or model) on data we can account for. Ask the authors first — it is the cheapest. Details in `LICENSING.md` |
-| 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8, 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" (**on a desktop M4 CPU the game now measures 10 decisions/s at ~62–66 ms P50, ~80 ms P95**, with ~106-token questions; a phone is still unmeasured). The desktop app's sweeps measured a median **73–99 ms per item** on the sample (a light machine) and **125–152 ms** with the machine's load average near 20 — desktop latency depends on what else is running, and a phone shares its CPU with everything | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
+| 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8 (357 MB opt-in `int8-partial`; SmoothQuant and static calibration tried 2026-09-23 and rejected — the full 58 MB saving costs answers), 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" (**on a desktop M4 CPU the game now measures 10 decisions/s at ~62–66 ms P50, ~80 ms P95**, with ~106-token questions; a phone is still unmeasured). The desktop app's sweeps measured a median **73–99 ms per item** on the sample (a light machine) and **125–152 ms** with the machine's load average near 20 — desktop latency depends on what else is running, and a phone shares its CPU with everything | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
 | 14 | **Composio integrations do not work offline.** A proposed Composio bridge (email, calendar, social media) runs through Composio's cloud and needs the network and third-party OAuth. It cannot work in airplane mode and sends data off the device, which conflicts with §1 and the never list in `PRODUCT.md`. | **Decide before integrating.** If built, it is an opt-in, clearly labelled online source, never a dependency of any judgment, watcher or core flow; everything must keep working with it off and the device offline, and the app must say when a result used online data. Not in the build order until the owner decides. |
 
 ---
@@ -510,7 +511,7 @@ that ran the export spike.
 | A0 Licence verification | Done (2026-09-22, see `LICENSING.md`) |
 | A2 Backend interface | Done — `Backend` |
 | A2 **first implementation** | Done — `OnnxBackend` in `backend-onnx`, real ONNX Runtime inference. **Runs the real Laya graph** with `LayaPrompt` + the DJL tokenizer, matching upstream PyTorch (gated tests, local only). The second (Qwen) backend still needs weights |
-| A1 export half | **Proven on desktop** — Laya encoder + head as one ONNX graph, FP32 and INT8, parity recorded. Device latency not measured |
+| A1 export half | **Proven on desktop** — Laya encoder + head as one ONNX graph, FP32 and INT8 (384 MB; opt-in 357 MB `int8-partial` since 2026-09-23 — SmoothQuant/static calibration tried, negative), parity recorded. Device latency not measured |
 | A3 Mechanical extractors, text state | **Complete** — hash, dedup, MIME, dates, origin facts (on the real Public Suffix List since 2026-09-23), OCR-presence, `TextState` |
 | A4 Judgment type and validation | **Complete** — Choice, Bool and Score; strict validation, failure postures, never throws |
 | A5 Ledger | Complete — append-only, propensity required, criteria hash, `resolvedBy` (model / mechanical:&lt;check&gt; / unusable) |
@@ -837,6 +838,47 @@ Nothing below is deferred by choice; each needs something this environment does 
   (4 new: DJL/prompt and FP32/INT8 parity on `criteria.json`, and the sample measurement); `./gradlew
   check` green with `models/` present, and the gated ones skip cleanly with it moved aside.
 
+- **2026-09-23 — A better INT8 (hand-off item 2): SmoothQuant and static calibration fail; a
+  partial-Wo INT8 passes, opt-in.** On the owner's "Go". `tools/quantise-laya-wo.py` (new, beside
+  the export script) starts from the existing FP32 graph and measures every variant against both
+  committed fixtures (`golden.json` 34 + `criteria.json` 8 questions; "flips" = selected answer
+  differs from the FP32 graph, "max Δp" = largest per-option probability difference). Calibration
+  set, fixed order, seed 0: 39 sample-data texts (`.eml`, the `.mbox` messages, `.md`, `.csv`,
+  `.html`, `.json`) × 3 app questions (receipt / needs a reply / phishing), plus the 34 parity
+  sequences — 163 sequences. ORT 1.20.1, onnx 1.18.0, numpy 2.2.6. Latency: short questions
+  (≤128 tokens), batch 1, Apple M4 CPU, 60 runs, load average at the time in brackets.
+
+  | Recipe | Wo quantised | Size | Flips (golden + criteria) | Max Δp | P50 / P95 short |
+  |---|---|---|---|---|---|
+  | **Shipped INT8** (Wo FP32) | 0/22 | 383.9 MB | 1 + 0 (en-sentiment-5, margin 0.008) | 0.114 | 43.9 / 84.3 ms (3.4) |
+  | SmoothQuant α=0.5 + dynamic | 22 | 325.5 MB | 3 + 1 | 0.297 | 42.5 / 82.9 ms (4.4) |
+  | SmoothQuant α=0.65 + dynamic | 22 | 325.5 MB | 0 + 1 (crit-shrink-12, margin 0.04) | 0.259 | 44.9 / 87.6 ms (5.3) |
+  | SmoothQuant α=0.8 + dynamic | 22 | 325.5 MB | 2 + 0 | 0.170 | 41.0 / 76.4 ms (4.3) |
+  | Static QDQ Wo, no smoothing | 22 | 325.6 MB | 6 + 2 | 0.963 | 44.6 / 86.6 ms (4.3) |
+  | Static QDQ Wo + smooth α=0.5 / 0.65 / 0.8 | 22 | 325.6 MB | 5 / 7 / 5 | 0.643 / 0.818 / 0.679 | 43.9–53.3 ms P50 (4.3–5.7) |
+  | **Partial: greedy Wo subset** | 11 (layers 10, 13–21) | **357.4 MB** | **1 + 0** (the same near-tie) | **0.111** | 43.4 / 85.5 ms (4.1) |
+
+  **SmoothQuant** (scales folded exactly into the gate half of each `Wi`, checked: FP32 output
+  unchanged to <1e-4, then per-channel dynamic INT8 of everything) saves the full 58 MB but at best
+  doubles the max error; α=0.65 keeps every golden answer yet flips a criteria case. **Static
+  calibration is worse**: ORT's static quantiser has no per-channel *activation* scales, so a
+  calibrated per-tensor scale is fixed on every input instead of fitted per input, and confident
+  answers flip (margins up to 0.98). **Per-layer sweep**: quantising any one of layers 0–5, 9, 11
+  or 12 alone already exceeds today's error (layer 11 alone: 5 flips); the late layers are
+  tolerant. Greedily adding layers in order of least damage while flips ≤ 1 and max Δp ≤ 0.1144
+  kept 11. **Acceptance met, by the letter:** same flips, max Δp 0.111 vs 0.114, 26.5 MB (7%)
+  smaller, same latency. **Caveat that decides the default:** the 11 layers were *chosen on these
+  same parity questions*, so the parity result is in-sample and flatters it; the 0.003 error margin
+  is noise. So the new file ships **alongside, opt-in**, and the default stays the INT8 it was:
+  `-Dloupe.laya.variant=int8-partial` (a fixed set of names; `./gradlew run -PlayaVariant=int8-partial`
+  in both desktop apps). Switch the default only after it holds on held-out labelled items.
+  `laya-multilingual-choice.int8-partial.onnx`: 357,361,791 bytes, SHA-256
+  `03d732c31f7da991c6d5b1b816032431de67cc7e0080b17ed63a9053e41be973` (not byte-reproducible —
+  pin by parity). Full numbers in `tools/laya-wo-report.json`. Quantising one variant takes
+  ~20 s; the 22-layer sweep plus greedy pass ~20 min, and was once killed for memory on this 16 GB
+  machine — the script caches per-layer results and resumes. Tests: 427 → **428** (1 gated:
+  `int8-partial` parity on both fixtures); `./gradlew check` green with `models/` present.
+
 ---
 ## Hand-off
 
@@ -902,9 +944,11 @@ came from labelled fixtures.
 
 1. ~~**Close risk 11** — now including DJL and the Rust crates in `libtokenizers`.~~ Done
    2026-09-23 — `:loupe-desktop:generateThirdPartyNotices`; see the Progress log.
-2. **A better INT8.** SmoothQuant-style rescaling or static per-channel activation calibration
-   might let the 22 FP32 `mlp.Wo` matrices quantise too (~60 MB saved) without the damage the
-   naive recipe did. The parity harness already measures it.
+2. ~~**A better INT8.**~~ Done 2026-09-23, **partly**: SmoothQuant and static calibration tried,
+   negative (every variant flips more answers or doubles the error). A partial recipe — 11 of the
+   22 `mlp.Wo` quantised — holds parity and saves 26.5 MB, shipped **opt-in**
+   (`loupe.laya.variant=int8-partial`) because its layers were picked on the parity set. Next step,
+   if wanted: validate it on held-out labelled items, then flip the default. See the Progress log.
 3. ~~**Surface token truncation.**~~ Done 2026-09-23 — `Scored`, `Truncation` on `LedgerRow`; see
    the Progress log.
 4. **A fixture corpus**, and **hardening** (property tests for calibration and off-policy maths).
@@ -988,6 +1032,9 @@ came from labelled fixtures.
   the script clears them on a copy first.
 - **Naive INT8 changes answers.** ORT's default recipe flipped 4/34 questions. The damage is in
   the 22 `mlp.Wo` matrices; keep them FP32 (the script does, and asserts it found 22).
+- **SmoothQuant and static calibration do not rescue `mlp.Wo`.** Tried 2026-09-23: 2–8 flips or
+  2–8× the error. Only the late layers (10, 13–21) quantise safely. ORT's static quantiser has no
+  per-channel activation scales — do not expect "static per-channel" from it.
 - **The ONNX files are not byte-reproducible.** Two exports of the same checkpoint gave identical
   outputs and different SHA-256s. Pin an export by its parity result, and record the hash of the
   file you actually ship.

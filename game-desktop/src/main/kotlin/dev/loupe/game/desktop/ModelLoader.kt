@@ -39,7 +39,24 @@ object ModelLoader {
 
     fun tokenizerPath(dir: Path = modelsDir()): Path = dir.resolve("laya-multilingual/tokenizer/tokenizer.json")
 
-    fun graphPath(dir: Path = modelsDir()): Path = dir.resolve("laya-multilingual-onnx/laya-multilingual-choice.int8.onnx")
+    /**
+     * The graph variants a caller may pick with `-Dloupe.laya.variant=`. `int8` is the default;
+     * `int8-partial` (tools/quantise-laya-wo.py) also quantises 11 of the 22 `mlp.Wo` matrices,
+     * 27 MB smaller with the same parity result — opt-in, see docs/BUILD.md (2026-09-23, INT8).
+     * A fixed set, so the property can never name an arbitrary file.
+     */
+    val VARIANTS = setOf("int8", "int8-partial")
+
+    fun variant(): String {
+        val v = System.getProperty("loupe.laya.variant") ?: "int8"
+        require(v in VARIANTS) { "loupe.laya.variant must be one of $VARIANTS, got \"$v\"" }
+        return v
+    }
+
+    fun graphPath(dir: Path = modelsDir(), variant: String = variant()): Path {
+        require(variant in VARIANTS) { "unknown Laya graph variant \"$variant\"; expected one of $VARIANTS" }
+        return dir.resolve("laya-multilingual-onnx/laya-multilingual-choice.$variant.onnx")
+    }
 
     /**
      * @param fallback what happens without the model, appended to the reason it is unavailable —

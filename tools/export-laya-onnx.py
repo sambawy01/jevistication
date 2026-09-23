@@ -260,8 +260,9 @@ def quantise(fp32_path: Path, paths: dict, encoder_cfg) -> float:
     shipped INT8 is per-channel and keeps those 22 matrices in FP32 (~78 MB)
     and quantises everything else, including the 256k x 768 embedding that is most of the size.
 
-    SmoothQuant-style rescaling or static per-channel activation calibration would likely let
-    Wo be quantised too; not attempted in this spike.
+    SmoothQuant-style rescaling and static activation calibration were tried afterwards
+    (tools/quantise-laya-wo.py, docs/BUILD.md 2026-09-23) and made things worse; quantising only
+    layers 10 and 13-21 of Wo holds parity and is the opt-in "int8-partial" variant.
     """
     import onnx
     from onnxruntime.quantization import QuantType, quantize_dynamic

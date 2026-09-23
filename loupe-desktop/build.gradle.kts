@@ -47,6 +47,8 @@ compose.desktop {
         mainClass = "dev.loupe.desktop.MainKt"
         // Where the app looks for the gitignored Laya weights; absent, model features are disabled.
         jvmArgs += listOf("-Dloupe.models.dir=$modelsDir", "-Xmx1g")
+        // Opt-in graph variant (int8 | int8-partial): ./gradlew run -PlayaVariant=int8-partial
+        (project.findProperty("layaVariant") as String?)?.let { jvmArgs += "-Dloupe.laya.variant=$it" }
     }
 }
 

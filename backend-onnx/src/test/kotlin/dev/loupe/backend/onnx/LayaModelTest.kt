@@ -123,6 +123,25 @@ class LayaModelTest {
         assertTrue(report.maxAbsError < 0.15, "max |p - p_torch| = ${report.maxAbsError}")
     }
 
+    /**
+     * The opt-in `int8-partial` graph (tools/quantise-laya-wo.py): 11 of 22 `mlp.Wo` quantised.
+     * Its layers were chosen on these very fixtures, so this pins the recorded result rather than
+     * proving generalisation — same bar as the shipped INT8, plus its measured max error.
+     */
+    @Test
+    fun `partial-Wo INT8 graph holds the shipped INT8's parity on both fixtures`() {
+        val graph = graphOrSkip("int8-partial")
+        val criteria = LayaFixture.loadCriteria()
+        for ((cases, report) in listOf(fixture.cases.map { it.id to it.referenceMargin } to parity(graph),
+            criteria.cases.map { it.id to it.referenceMargin } to parity(graph, criteria))) {
+            val margins = cases.toMap()
+            val confident = report.disagreed.filter { margins.getValue(it) >= NEAR_TIE }
+            assertTrue(confident.isEmpty(), "int8-partial flipped confident answers: $confident")
+            assertTrue(report.disagreed.size <= 1, "int8-partial flipped ${report.disagreed}")
+            assertTrue(report.maxAbsError < 0.12, "max |p - p_torch| = ${report.maxAbsError}")
+        }
+    }
+
     @Test
     fun `a real Laya decision runs through the engine and writes a ledger row`() {
         val graph = graphOrSkip("int8")
