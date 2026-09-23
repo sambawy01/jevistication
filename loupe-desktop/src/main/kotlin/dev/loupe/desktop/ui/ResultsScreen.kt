@@ -175,6 +175,7 @@ fun ItemDetail(c: LoupeController, j: UserJudgment, v: DecisionView, platform: P
         }
         v.row.failure?.let { Note("Unusable answer: $it", error = true) }
         v.inputCutNote?.let { Muted(it) }
+        v.criteriaCutNote?.let { Muted(it) }
         H3("Your answer")
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             for (label in j.shape.candidates) {

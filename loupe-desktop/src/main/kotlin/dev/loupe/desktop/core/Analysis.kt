@@ -58,6 +58,13 @@ data class DecisionView(
             return "Input was cut: read " + parts.joinToString(", then ") + "."
         }
 
+    /** "Criteria were shortened: …" when the options' descriptions were cut to fit; null otherwise. */
+    val criteriaCutNote: String?
+        get() {
+            val c = row.truncation?.optionCriteria ?: return null
+            return "Criteria were shortened to fit: the model read ${c.kept} of ${c.total} option tokens."
+        }
+
     /** What the engine says, in words: its answer, or that it declined. */
     val status: String
         get() = when {
@@ -96,6 +103,19 @@ data class HeldOutFit(val temperature: Double, val fitN: Int, val testN: Int, va
 
 /** Model against the dumb baseline on the user's own corrected items (D4). */
 data class BaselineComparison(val report: JudgmentReport, val baselineDescription: String)
+
+/**
+ * The same judgment run twice over the same labelled items — once as the model reads it today
+ * (bare options) and once with its criteria shown beside the options — through `Harness.evaluate`.
+ * [criteriaCut] counts the items on which the options' descriptions were shortened to fit.
+ */
+data class CriteriaComparison(
+    val without: JudgmentReport,
+    val with: JudgmentReport,
+    val criteriaCut: Int,
+    /** False when the judgment has no per-option criteria to show (a multi-way pick). */
+    val applicable: Boolean,
+)
 
 /** Counts for the census screen. */
 data class Census(
@@ -254,6 +274,7 @@ object Analysis {
             Scored(
                 row.distribution.labels.associateWith { row.distribution.getValue(it).value },
                 modelContext = row.truncation?.modelContext,
+                optionCriteria = row.truncation?.optionCriteria,
             )
         }
         val engine = DecisionEngine(replay, Probability.of(judgment.threshold))
@@ -263,6 +284,36 @@ object Analysis {
         }
         return BaselineComparison(Harness.evaluate(judgment.choice, fixtures, engine, baseline.asFunction()), baseline.description)
     }
+
+    /**
+     * Runs [judgment] over [fixtures] through [backend] with and without its criteria in the
+     * prompt. Unlike [baseline] this re-runs the model — twice — because the "with" arm is an input
+     * the model never saw. Both arms use the judgment's own threshold and the same baseline.
+     */
+    fun compareCriteria(backend: Backend, judgment: UserJudgment, fixtures: List<Fixture>): CriteriaComparison? {
+        if (fixtures.isEmpty()) return null
+        val baseline = judgment.baseline?.asFunction() ?: { _ -> "" }
+        fun run(on: Boolean): Pair<JudgmentReport, Int> {
+            var cut = 0
+            val counting = Backend { j, state -> backend.score(j, state).also { if (it.optionCriteria != null) cut++ } }
+            val engine = DecisionEngine(counting, Probability.of(judgment.threshold))
+            return Harness.evaluate(judgment.choiceWithCriteria(on), fixtures, engine, baseline) to cut
+        }
+        val (without, _) = run(false)
+        val (with, cut) = run(true)
+        return CriteriaComparison(without, with, cut, applicable = judgment.optionCriteria().isNotEmpty())
+    }
+
+    /** The user's corrected, model-answered items under [judgment]'s current wording, as fixtures. */
+    fun correctedFixtures(
+        all: List<LedgerRow>,
+        judgment: UserJudgment,
+        corrections: Map<CorrectionKey, String>,
+        items: Map<String, SourceItem>,
+    ): List<Fixture> = effectiveRows(all, judgment, corrections)
+        .filter { it.correction != null && it.itemId in items && !it.isMechanical }
+        .distinctBy { it.itemId }
+        .map { row -> items.getValue(row.itemId!!).let { Fixture(it.toItem(), row.correction!!, it.sourceId) } }
 
     fun census(views: List<DecisionView>, sourceNames: Map<String, String>): Census {
         fun <K> count(key: (DecisionView) -> K): List<Pair<K, Int>> =

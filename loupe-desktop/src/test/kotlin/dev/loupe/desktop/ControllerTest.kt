@@ -324,4 +324,51 @@ class ControllerTest {
         assertTrue(Files.readString(tmp.resolve("export/loupe-judgments.json")).contains("\"invariant\""))
         assertTrue(parsed.none { it.action == Policy.UNUSABLE })
     }
+
+    @Test
+    fun `criteria in the prompt is off by default, opt-in per judgment, and compared on corrected items`() {
+        val app = started()
+        runBlocking { app.loadSampleData().join() }
+        app.useTemplate(TemplateLibrary.byId("is-receipt")!!)
+        val j = app.selectedJudgment!!
+        assertFalse(j.criteriaInPrompt)
+        assertTrue(j.choice.descriptions.isEmpty(), "default judgments read bare options")
+        assertEquals(setOf("a receipt or proof of purchase", "not a receipt"), j.optionCriteria().keys)
+
+        // Nothing corrected yet: the comparison refuses rather than measuring nothing.
+        assertNull(app.compareCriteria(j.id))
+        runBlocking { app.sweep(j.id)!!.join() }
+        Analysis.effectiveRows(app.ledger, j, app.correctionIndex).take(6).forEach { row ->
+            app.correct(j.id, row.itemId!!, row.distribution.argmax, confirmed = true)
+        }
+        runBlocking { app.compareCriteria(j.id)!!.join() }
+        val (id, result) = app.criteriaComparison!!
+        assertEquals(j.id, id)
+        assertEquals(6, result.without.n)
+        assertEquals(6, result.with.n)
+        assertTrue(result.applicable)
+
+        app.setCriteriaInPrompt(j.id, true)
+        val on = app.judgment(j.id)!!
+        assertTrue(on.criteriaInPrompt)
+        assertEquals(on.optionCriteria(), on.choice.descriptions)
+        assertNotEquals(j.criteriaHash, on.criteriaHash, "what the model reads changed, so calibration restarts")
+        app.setCriteriaInPrompt(j.id, false)
+        assertEquals(j.criteriaHash, app.judgment(j.id)!!.criteriaHash)
+    }
+
+    @Test
+    fun `the comparison sends descriptions only on the with-criteria arm`() {
+        val seen = mutableListOf<Map<String, String>>()
+        val recording = Backend { judgment, state -> seen += judgment.descriptions; stubBackend.score(judgment, state) }
+        val judgment = (TemplateLibrary.byId("needs-reply")!!.instantiate("nr") as dev.loupe.templates.Template.InstantiateResult.Created).judgment
+        val fixtures = listOf(dev.loupe.engine.Fixture(dev.loupe.engine.Item("a", "Can you reply by Friday?"), judgment.shape.candidates[0], "s"))
+        val result = Analysis.compareCriteria(recording, judgment, fixtures)!!
+        assertEquals(listOf(emptyMap(), judgment.optionCriteria()), seen)
+        assertEquals(1, result.with.n)
+        // A multi-way pick has no per-option criteria: the comparison says it is not applicable.
+        val pick = (TemplateLibrary.byId("receipt-kind")!!.instantiate("rk") as dev.loupe.templates.Template.InstantiateResult.Created).judgment
+        assertTrue(pick.optionCriteria().isEmpty())
+        assertFalse(Analysis.compareCriteria(stubBackend, pick, listOf(dev.loupe.engine.Fixture(dev.loupe.engine.Item("b", "x"), pick.shape.candidates[0], "s")))!!.applicable)
+    }
 }

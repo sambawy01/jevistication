@@ -17,6 +17,8 @@ class LayaFixture private constructor(root: JsonObject) {
         val state: String,
         val question: String,
         val candidates: List<String>,
+        /** Per-candidate descriptions (null = bare label); empty in golden.json, set in criteria.json. */
+        val descriptions: List<String?>,
         /** Each exact string upstream encoded, and the ids its tokenizer produced for it. */
         val segments: Map<String, LongArray>,
         val inputIds: LongArray,
@@ -24,6 +26,12 @@ class LayaFixture private constructor(root: JsonObject) {
         /** Upstream PyTorch probabilities: the reference. */
         val torch: DoubleArray,
     ) {
+        /** The descriptions as `Judgment.Choice` takes them: non-empty ones only, by label. */
+        val descriptionMap: Map<String, String>
+            get() = candidates.indices.mapNotNull { i ->
+                descriptions.getOrNull(i)?.takeIf { it.isNotEmpty() }?.let { candidates[i] to it }
+            }.toMap()
+
         /** Top-1 minus top-2 in the reference; small means a near-tie. */
         val referenceMargin: Double
             get() = torch.sortedDescending().let { it[0] - it[1] }
@@ -43,6 +51,7 @@ class LayaFixture private constructor(root: JsonObject) {
             state = c["state"].asString,
             question = c["question"].asString,
             candidates = c["candidates"].asJsonArray.map { it.asString },
+            descriptions = c["descriptions"]?.asJsonArray?.map { if (it.isJsonNull) null else it.asString } ?: emptyList(),
             segments = c["segments"].asJsonArray.associate { s ->
                 val o = s.asJsonObject
                 o["text"].asString to o["ids"].asJsonArray.map { it.asLong }.toLongArray()
@@ -65,13 +74,17 @@ class LayaFixture private constructor(root: JsonObject) {
     }
 
     companion object {
-        fun load(): LayaFixture {
-            val stream = LayaFixture::class.java.getResourceAsStream("/laya/golden.json")
-                ?: error("golden fixture missing from test resources")
+        /** golden.json (bare labels, tools/export-laya-onnx.py) or criteria.json (descriptive options). */
+        fun load(resource: String = "/laya/golden.json"): LayaFixture {
+            val stream = LayaFixture::class.java.getResourceAsStream(resource)
+                ?: error("fixture $resource missing from test resources")
             return stream.bufferedReader(Charsets.UTF_8).use { LayaFixture(JsonParser.parseReader(it).asJsonObject) }
         }
 
         /** The gitignored models directory; see backend-onnx/build.gradle.kts. */
+        /** Descriptive-option cases, from tools/make-laya-criteria-fixture.py. */
+        fun loadCriteria(): LayaFixture = load("/laya/criteria.json")
+
         fun modelsDir(): Path = Paths.get(System.getProperty("loupe.models.dir") ?: "../models")
 
         fun tokenizerJson(): Path = modelsDir().resolve("laya-multilingual/tokenizer/tokenizer.json")

@@ -1,0 +1,49 @@
+# Hand labels for the SYNTHETIC sample dataset, written by the author of the criteria-in-prompt
+# measurement (2026-09-23) against each template's three-part criteria. Invented data: these make
+# the with/without comparison runnable, they are not an accuracy corpus. + = the positive option.
+# item (path under the sample root)	is-receipt	phishing	needs-reply
+documents/bank/northbank-statement-2026-08.pdf	-	-	-
+documents/bills/brightside-plumbing-invoice-INV-2207.txt	-	-	-
+documents/downloads/kettle-kx200-manual.pdf	-	-	-
+documents/health/riverside-surgery-appointment.txt	-	-	-
+documents/home/boiler-service-certificate.txt	-	-	-
+documents/home/tenancy-agreement-signed.md	-	-	-
+documents/identity/driving-licence-SPECIMEN.txt	-	-	-
+documents/identity/passport-scan-SPECIMEN.txt	-	-	-
+documents/insurance/home-insurance-renewal-2025.pdf	-	-	-
+documents/insurance/home-insurance-renewal-2026.pdf	-	-	-
+documents/personal/birthday-card-from-grandma.txt	-	-	-
+documents/receipts/cafe-luna-2026-09-02.txt	+	-	-
+documents/receipts/fresh-basket-2026-08-14 (copy).txt	+	-	-
+documents/receipts/fresh-basket-2026-08-14.txt	+	-	-
+documents/receipts/homeware-direct-invoice-kettle.txt	+	-	-
+documents/travel/casa-azul-booking.html	+	-	-
+documents/travel/itinerary-lisbon.json	-	-	-
+documents/work/expenses-2026-q3.csv	-	-	-
+documents/work/meeting-notes-2026-09-12.md	-	-	-
+documents/work/project-plan-FINAL.md	-	-	-
+documents/work/project-plan-v1.md	-	-	-
+mail/inbox/brightside-reminder.eml	-	-	+
+mail/inbox/council-tax-bill.eml	-	-	-
+mail/inbox/insurer-renewal.eml	-	-	-
+mail/inbox/mum-new-number.eml	-	+	+
+mail/inbox/mum-photos.eml	-	-	-
+mail/inbox/mum-sunday-lunch.eml	-	-	+
+mail/inbox/northline-flight-booking.eml	+	-	-
+mail/inbox/phishing-paypal.eml	-	+	-
+mail/inbox/priya-handover.eml	-	-	+
+mail/inbox/skyport-schedule-change.eml	-	-	-
+mail/subscriptions-2026.mbox#1	+	-	-
+mail/subscriptions-2026.mbox#2	+	-	-
+mail/subscriptions-2026.mbox#3	+	-	-
+mail/subscriptions-2026.mbox#4	+	-	-
+mail/subscriptions-2026.mbox#5	+	-	-
+mail/subscriptions-2026.mbox#6	+	-	-
+mail/subscriptions-2026.mbox#7	+	-	-
+mail/subscriptions-2026.mbox#8	+	-	-
+mail/subscriptions-2026.mbox#9	-	-	-
+mail/subscriptions-2026.mbox#10	-	-	-
+mail/subscriptions-2026.mbox#11	-	-	-
+mail/subscriptions-2026.mbox#12	-	-	-
+mail/subscriptions-2026.mbox#13	-	-	-
+mail/subscriptions-2026.mbox#14	-	-	-

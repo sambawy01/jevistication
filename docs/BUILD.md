@@ -787,6 +787,56 @@ Nothing below is deferred by choice; each needs something this environment does 
   unnamed. `option-ext` (a `dirs` dependency in `libtokenizers`) is MPL-2.0 — file-level, shipped
   unmodified, the Eigen rule. Tests: 401 → **406** across the build; `./gradlew check` green.
 
+- **2026-09-23 — Criteria in the prompt: built, default off, pending real corrections.** On the
+  owner's "Go" (hand-off item 5). **Channel:** upstream's descriptive options. `Judgment.Choice`
+  gained `descriptions` (label → text, default empty); `LayaPrompt.build` takes one per option and
+  renders it exactly as upstream `render_options` does for `{label: description}` —
+  `"label: description"`, `None`/`""` meaning bare. **Budget, mirrored not improved:** upstream gives
+  a description no budget of its own; it is part of the option text, so the whole
+  `" label: description"` is capped at 48 tokens and shrinks with the other options to
+  `max(4, (256 − 16) / k)` when they overflow the 256-token head. What was cut is no longer silent:
+  `LayaSequence.optionTokens/optionTokensKept` → `TokenizedInput.optionCut` → `Scored.optionCriteria`
+  → `Truncation.optionCriteria` on the ledger row, exported as `"optionCriteria"` and shown in
+  Results. It is **not** an input cut (`isCut`/`truncated` unchanged, the cut-input policy does not
+  fire): the item was read whole; the criteria were shortened. `Tokenizer.encodeDescribed` refuses
+  descriptions in any tokenizer that cannot show them rather than dropping them. Descriptions enter
+  the criteria hash only when present, so every existing judgment keeps its hash and its answers.
+  **Derivation** (`UserJudgment.optionCriteria`): a two-option judgment's positive option reads the
+  invariant and its negative option what breaks it; a score's values read their bands; a multi-way
+  pick has no per-option criteria and gets none; an unwritten `(not written yet)` is never sent.
+  **Opt-in per judgment** (`UserJudgment.criteriaInPrompt`, persisted only when on, **default off**);
+  turning it on changes the hash, so calibration restarts, and the app says so. **Parity:**
+  `tools/make-laya-criteria-fixture.py` (run `USE_TF=0 tools/.venv/bin/python
+  tools/make-laya-criteria-fixture.py`; needs the checkpoint and the exported graphs, exports
+  nothing) writes `backend-onnx/src/test/resources/laya/criteria.json` — 8 descriptive-option
+  questions through upstream's own `Agent._to_internal` → `build_sequence` → forward pass, checked
+  against `Agent.predict`: two- to twelve-option, mixed bare/described/`""`, a score with bands, a
+  description past the 48-token cap, twelve described options forcing the head shrink, and a
+  description forging `<mask>`. The ungated `LayaCriteriaPromptTest` rebuilds all 8 token for token
+  from recorded segments; gated, DJL reproduces every segment, the Kotlin prompt every sequence, and
+  the graphs match upstream PyTorch — **FP32 8/8 argmax, max |Δp| 1.1e-6; INT8 8/8, max |Δp| 0.114**
+  (the forged-mask near-tie; same tolerance as the bare-label cases). **Measurement hook:**
+  `Analysis.compareCriteria` re-runs the model both ways over labelled items through `Harness`
+  (accuracy at full coverage, ECE, Brier, coverage, baseline, and how many items had their criteria
+  cut); the Baseline screen runs it on the user's corrected items ("Compare with vs without") beside
+  the on/off switch. **On the synthetic sample** (gated `CriteriaMeasurementTest`, real INT8 Laya,
+  45 text items, hand labels in `loupe-desktop/src/test/resources/sample-labels.tsv` written by the
+  person measuring — invented data, not an accuracy number):
+
+  | judgment | accuracy without → with | ECE | Brier (multi-class, 0–2) | keyword baseline |
+  |---|---|---|---|---|
+  | is-receipt | 31/45 → 31/45 (68.9%) | 0.187 → 0.226 | 0.443 → 0.494 | 95.6% |
+  | phishing | 21/45 → **6/45** (46.7% → 13.3%) | 0.435 → 0.811 | 0.901 → 1.590 | 97.8% |
+  | needs-reply | 23/45 → **39/45** (51.1% → 86.7%) | 0.278 → 0.127 | 0.716 → 0.248 | 95.6% |
+
+  No criteria were cut on any item. One judgment unchanged (and slightly worse calibrated), one much
+  better, one much worse — phishing with its invariant attached calls almost everything a scam. Every
+  arm still loses to its keyword baseline. That is why the default stays **off**: the effect is
+  large and judgment-specific, so it is a per-judgment switch to be decided by that judgment's own
+  corrections, not a global change. Tests: 406 → **427** across the build, 14 of them gated on the weights
+  (4 new: DJL/prompt and FP32/INT8 parity on `criteria.json`, and the sample measurement); `./gradlew
+  check` green with `models/` present, and the gated ones skip cleanly with it moved aside.
+
 ---
 ## Hand-off
 
@@ -860,10 +910,11 @@ came from labelled fixtures.
 4. **A fixture corpus**, and **hardening** (property tests for calibration and off-policy maths).
    The desktop app now produces labels: every correction is one, keyed by item and criteria hash,
    exported losslessly. The owner's own files are the cheapest corpus there is.
-5. **Put the criteria in front of the model.** The three-part criteria are shown and exported but
-   Laya reads only the question and the options. Upstream's descriptive-option criteria
-   (`{label: description}` in `build_sequence`) are the channel; it needs a `LayaPrompt` extension and
-   a parity case, then a measurement on corrected items of whether it helps.
+5. ~~**Put the criteria in front of the model.**~~ Built 2026-09-23, **default off, pending real
+   corrections** — `UserJudgment.criteriaInPrompt`, parity case in `criteria.json`, and the
+   Baseline screen's "Compare with vs without". On the synthetic sample it moved needs-reply
+   51% → 87%, phishing 47% → 13%, receipt unchanged; see the Progress log. What remains is the
+   owner's corrections deciding it judgment by judgment.
 6. **Fine-tune on corrections** (A1/F3). The sample result says the untuned model does not beat
    keywords; whether a head fine-tuned on a few hundred corrections does is the next real question.
 7. ~~**Mark mechanical rows in the ledger.**~~ Done 2026-09-23 — `LedgerRow.resolvedBy`; see the
@@ -887,6 +938,9 @@ came from labelled fixtures.
 - **Bare yes/no options make Laya ignore the question.** On the sample, "is this a receipt?" and
   "is this phishing?" got near-identical yes/no answers. Give a two-option judgment two options that
   say what they mean (`Shape.Binary`); measure any change on corrected items.
+- **Showing Laya the criteria is not uniformly better.** On the sample the same mechanism took
+  needs-reply from 51% to 87% and phishing from 47% to 13%. Never flip `criteriaInPrompt` on for
+  every judgment at once; measure each on its own corrections ("Compare with vs without").
 - **A banner on a document's first line colours the whole classification.** The sample's
   "SYNTHETIC SAMPLE DATA" header made receipts read as newsletters; it now sits at the foot.
 - **PDFBox writes `~/.pdfbox.cache`** unless `pdfbox.fontcache` names a folder that **already

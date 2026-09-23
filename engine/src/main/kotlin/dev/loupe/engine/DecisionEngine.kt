@@ -88,9 +88,11 @@ class DecisionEngine(
         // untrusted component -- a bad export, a truncated model file, a future implementation
         // with a bug -- and one malformed answer must not take down a sweep over a whole library.
         var modelContext: Extent? = null
+        var optionCriteria: Extent? = null
         val raw = runCatching {
             val scored = backend.score(judgment, state)
             modelContext = scored.modelContext
+            optionCriteria = scored.optionCriteria
             judgment.validate(scored.masses)
         }
             .getOrElse { failure ->
@@ -105,10 +107,10 @@ class DecisionEngine(
                     propensity = Probability.of(1.0),
                     resolvedBy = ResolvedBy.Unusable,
                     failure = failure.message ?: "unusable response",
-                    truncation = Truncation(state.budgetCut, modelContext),
+                    truncation = Truncation(state.budgetCut, modelContext, optionCriteria),
                 )
             }
-        val truncation = Truncation(state.budgetCut, modelContext)
+        val truncation = Truncation(state.budgetCut, modelContext, optionCriteria)
         val calibrated = recalibrator.calibrate(raw)
         val greedy = Policy.decide(calibrated, threshold)
         val guarded = Policy.onCutInput(greedy, truncation, judgment.onFailure)

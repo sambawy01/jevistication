@@ -28,6 +28,12 @@ class TokenizedInput(
      */
     val stateTokens: Int? = null,
     val stateTokensKept: Int? = null,
+    /**
+     * How many tokens the options' text (labels and any descriptions) encoded to, and how many
+     * survived the model's option budget. Null when the tokenizer does not report it.
+     */
+    val optionTokens: Int? = null,
+    val optionTokensKept: Int? = null,
 ) {
     init {
         require(inputIds.isNotEmpty()) { "tokenizer produced no tokens" }
@@ -59,6 +65,14 @@ class TokenizedInput(
             val kept = stateTokensKept ?: return null
             return if (kept < total) Extent(kept, total, Extent.Measure.TOKENS) else null
         }
+
+    /** The option budget's cut of the options' text, in tokens, or null when none was reported. */
+    val optionCut: Extent?
+        get() {
+            val total = optionTokens ?: return null
+            val kept = optionTokensKept ?: return null
+            return if (kept < total) Extent(kept, total, Extent.Measure.TOKENS) else null
+        }
 }
 
 /**
@@ -73,6 +87,23 @@ class TokenizedInput(
  */
 fun interface Tokenizer {
     fun encode(question: String, text: String, candidates: List<String>): TokenizedInput
+
+    /**
+     * As [encode], with a description per candidate (null = bare label) for a model that can read
+     * them. A tokenizer that cannot must refuse rather than silently drop them — the judgment's
+     * criteria hash says the model read them. The default accepts only all-null.
+     */
+    fun encodeDescribed(
+        question: String,
+        text: String,
+        candidates: List<String>,
+        descriptions: List<String?>,
+    ): TokenizedInput {
+        if (descriptions.any { it != null }) {
+            throw UnsupportedOperationException("this tokenizer cannot show option descriptions to its model")
+        }
+        return encode(question, text, candidates)
+    }
 }
 
 /** The tensor names a particular exported model uses. */
@@ -115,7 +146,11 @@ class OnnxBackend(
 ) : Backend, AutoCloseable {
 
     override fun score(judgment: Judgment.Choice, state: TextState): Scored {
-        val encoded = tokenizer.encode(judgment.question, state.text, judgment.candidates)
+        val encoded = if (judgment.descriptions.isEmpty()) {
+            tokenizer.encode(judgment.question, state.text, judgment.candidates)
+        } else {
+            tokenizer.encodeDescribed(judgment.question, state.text, judgment.candidates, judgment.descriptionList)
+        }
         // A tokenizer and a graph that disagree about markers are a wiring mistake, not a model
         // answer: feeding markers to a graph that ignores them, or omitting them from one that
         // needs them, would still produce numbers. Refuse before running anything.
@@ -153,7 +188,11 @@ class OnnxBackend(
                     "model produced ${logits.size} logits but judgment '${judgment.id}' declares " +
                         "${judgment.candidates.size} candidates"
                 }
-                return Scored(softmax(logits, judgment.candidates), modelContext = encoded.stateCut)
+                return Scored(
+                    softmax(logits, judgment.candidates),
+                    modelContext = encoded.stateCut,
+                    optionCriteria = encoded.optionCut,
+                )
             }
         } finally {
             inputs.values.forEach { it.close() }

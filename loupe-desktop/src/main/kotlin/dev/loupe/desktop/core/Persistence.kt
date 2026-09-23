@@ -203,7 +203,7 @@ class Store(val home: Path) {
                 resolvedBy = ResolvedBy.parse(o.optStr("resolvedBy"), failure),
                 // Absent on lines written before the field existed: unknown, which reads as not cut.
                 truncation = o.get("truncation")?.takeUnless { it.isJsonNull }?.asJsonObject?.let { t ->
-                    Truncation(t.optExtent("textBudget"), t.optExtent("modelContext"))
+                    Truncation(t.optExtent("textBudget"), t.optExtent("modelContext"), t.optExtent("optionCriteria"))
                 },
             )
         }
@@ -239,6 +239,8 @@ object JudgmentCodec {
         j.mechanical?.let { addProperty("mechanical", it.name) }
         j.desktopNote?.let { addProperty("desktopNote", it) }
         addProperty("threshold", j.threshold)
+        // Written only when on, so a file from before the option existed reads the same.
+        if (j.criteriaInPrompt) addProperty("criteriaInPrompt", true)
         // Written for a reader of the file; recomputed from the wording on load, never trusted.
         addProperty("criteriaHash", j.criteriaHash)
     }
@@ -260,6 +262,7 @@ object JudgmentCodec {
         mechanical = o.get("mechanical")?.takeUnless { it.isJsonNull }?.let { MechanicalCheck.valueOf(it.asString) },
         desktopNote = o.get("desktopNote")?.takeUnless { it.isJsonNull }?.asString,
         threshold = o.get("threshold").asDouble,
+        criteriaInPrompt = o.get("criteriaInPrompt")?.takeUnless { it.isJsonNull }?.asBoolean ?: false,
     ).also { it.choice } // validates the id and options now, so a bad file fails on load, not mid-sweep
 
     private fun encodeShape(s: Shape): JsonObject = JsonObject().apply {

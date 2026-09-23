@@ -41,6 +41,12 @@ data class Scored(
      * state encoded to. Null when it read all of it.
      */
     val modelContext: Extent? = null,
+    /**
+     * Set when the model's option budget cut the options' text — the descriptions shown beside
+     * the labels (see [Judgment.Choice.descriptions]): tokens kept of tokens the options encoded
+     * to, summed over the options. Null when every option reached the model whole.
+     */
+    val optionCriteria: Extent? = null,
 )
 
 /** How much of an input survived a cut, in [unit]s. */
@@ -70,14 +76,28 @@ data class Extent(val kept: Int, val total: Int, val unit: Measure) {
  * be set. A row with no truncation record at all (logged before this existed) is *unknown*, which
  * is `LedgerRow.truncation == null`, not [NONE].
  */
-data class Truncation(val textBudget: Extent? = null, val modelContext: Extent? = null) {
+data class Truncation(
+    val textBudget: Extent? = null,
+    val modelContext: Extent? = null,
+    /**
+     * The judgment's own option text (label plus description) cut by the model's option budget.
+     * This is not a cut of the *item*: the item was read as [textBudget]/[modelContext] say, so
+     * it does not count toward [isCut] or the cut-input policy. It is recorded so a reader can
+     * see that the criteria the model read were shorter than the ones written.
+     */
+    val optionCriteria: Extent? = null,
+) {
     init {
         textBudget?.let { require(it.unit == Extent.Measure.CHARACTERS) { "text budget is counted in characters" } }
         modelContext?.let { require(it.unit == Extent.Measure.TOKENS) { "model context is counted in tokens" } }
+        optionCriteria?.let { require(it.unit == Extent.Measure.TOKENS) { "option criteria are counted in tokens" } }
     }
 
     /** True when the model saw less than the item's whole text. */
     val isCut: Boolean get() = textBudget != null || modelContext != null
+
+    /** True when the options' descriptions reached the model shortened. */
+    val criteriaCut: Boolean get() = optionCriteria != null
 
     companion object {
         /** Known to be whole: nothing was cut. */

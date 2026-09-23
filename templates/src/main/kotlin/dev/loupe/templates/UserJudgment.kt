@@ -15,8 +15,9 @@ import dev.loupe.engine.LintFinding
  * options. Editing either produces a different hash, and every calibration number the app shows is
  * computed only over decisions made under the **current** hash — so a reworded judgment starts its
  * calibration again rather than borrowing numbers earned by different wording. The invariant, what
- * breaks it and the lookalikes are not in the hash, because the model does not read them (see
- * [Template]); editing them changes no answer.
+ * breaks it and the lookalikes are not in the hash while the model does not read them — the default
+ * (see [Template]), when editing them changes no answer. With [criteriaInPrompt] on, the option
+ * criteria derived from them are read, are in the hash, and editing them restarts calibration.
  */
 data class UserJudgment(
     val id: String,
@@ -43,13 +44,41 @@ data class UserJudgment(
      * corrections, is how it gets validated.
      */
     val threshold: Double = defaultThreshold(shape),
+    /**
+     * Whether the model is shown [optionCriteria] beside the options (upstream Laya's
+     * descriptive-option channel). **Off by default** until measured on real corrections: turning
+     * it on changes what the model reads, so it changes the criteria hash and calibration restarts.
+     */
+    val criteriaInPrompt: Boolean = false,
 ) {
     init {
         require(threshold in 0.0..1.0) { "threshold must be in [0,1], was $threshold" }
     }
 
     /** What the engine runs. Construction validates the id and options. */
-    val choice: Judgment.Choice by lazy { Judgment.Choice(id, question, shape.candidates, onFailure) }
+    val choice: Judgment.Choice by lazy { choiceWithCriteria(criteriaInPrompt) }
+
+    /** The judgment as the engine would run it with the criteria shown ([on]) or not. */
+    fun choiceWithCriteria(on: Boolean): Judgment.Choice =
+        Judgment.Choice(id, question, shape.candidates, onFailure, if (on) optionCriteria() else emptyMap())
+
+    /**
+     * Per-option descriptions derived from the three-part criteria, for [criteriaInPrompt]:
+     * a two-option judgment's positive option reads the invariant and its negative option what
+     * breaks it; a score's values read their bands. A multi-way pick has no per-option criteria
+     * and gets none. Placeholders ("(not written yet)") are never sent.
+     */
+    fun optionCriteria(): Map<String, String> {
+        fun usable(text: String): String? = text.trim().takeIf { it.isNotEmpty() && it != UNWRITTEN }
+        return when (val s = shape) {
+            Shape.YesNo, is Shape.Binary -> {
+                val (pos, neg) = s.candidates
+                listOfNotNull(usable(invariant)?.let { pos to it }, usable(breaks)?.let { neg to it }).toMap()
+            }
+            is Shape.Ordinal -> s.candidates.zip(s.bands).mapNotNull { (c, b) -> usable(b)?.let { c to it } }.toMap()
+            is Shape.Pick -> emptyMap()
+        }
+    }
 
     val criteriaHash: String get() = choice.criteriaHash
 
@@ -117,6 +146,9 @@ data class UserJudgment(
     }
 
     companion object {
+        /** What an unwritten criterion is saved as; never shown to the model. */
+        const val UNWRITTEN: String = "(not written yet)"
+
         /** Starting thresholds on the raw top mass; unvalidated until the user's corrections say. */
         fun defaultThreshold(shape: Shape): Double = when (shape) {
             Shape.YesNo, is Shape.Binary -> 0.80
@@ -185,9 +217,9 @@ data class JudgmentDraft(
                 title = title.ifBlank { judgment.question },
                 question = judgment.question,
                 shape = shape,
-                invariant = invariant.ifBlank { "(not written yet)" },
-                breaks = breaks.ifBlank { "(not written yet)" },
-                lookalikes = lookalikes.ifBlank { "(not written yet)" },
+                invariant = invariant.ifBlank { UserJudgment.UNWRITTEN },
+                breaks = breaks.ifBlank { UserJudgment.UNWRITTEN },
+                lookalikes = lookalikes.ifBlank { UserJudgment.UNWRITTEN },
                 onFailure = onFailure,
                 sources = SourceKind.entries.toSet(),
                 baseline = baseline,

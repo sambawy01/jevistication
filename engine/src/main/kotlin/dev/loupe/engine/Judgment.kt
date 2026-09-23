@@ -50,9 +50,23 @@ sealed interface Judgment {
         override val question: String,
         val candidates: List<String>,
         override val onFailure: FailurePosture = FailurePosture.NULL_ACTION,
+        /**
+         * Optional per-option descriptions the model reads beside each label — upstream Laya's
+         * descriptive-option criteria (`{label: description}`, rendered `"label: description"`).
+         * Empty (the default) means bare labels, exactly the prompt every existing judgment has.
+         * A label absent from the map is shown bare. Descriptions change what the model reads, so
+         * a non-empty map is part of [criteriaHash]; an empty one leaves the hash as it was.
+         */
+        val descriptions: Map<String, String> = emptyMap(),
     ) : Judgment {
         init {
             require(id.isNotBlank()) { "judgment id must not be blank" }
+            require(descriptions.keys.all { it in candidates }) {
+                "descriptions name non-candidate label(s): ${descriptions.keys - candidates.toSet()}"
+            }
+            require(descriptions.values.all { it.isNotBlank() }) {
+                "a description must not be blank; omit the label to show it bare"
+            }
             require(candidates.size >= 2) {
                 "a Choice needs at least two candidates, had ${candidates.size}"
             }
@@ -62,7 +76,18 @@ sealed interface Judgment {
         }
 
         override val criteriaHash: String
-            get() = Hashing.sha256Hex(question + "\u0000" + candidates.joinToString("\u0000"))
+            get() = Hashing.sha256Hex(
+                question + "\u0000" + candidates.joinToString("\u0000") +
+                    // Only when set, so every judgment without descriptions keeps its old hash.
+                    if (descriptions.isEmpty()) {
+                        ""
+                    } else {
+                        "\u0001" + candidates.joinToString("\u0000") { descriptions[it].orEmpty() }
+                    },
+            )
+
+        /** Each candidate's description, in candidate order; null where the label is shown bare. */
+        val descriptionList: List<String?> get() = candidates.map { descriptions[it] }
 
         /**
          * A flat distribution over this Choice's candidates: maximum entropy, which is the honest

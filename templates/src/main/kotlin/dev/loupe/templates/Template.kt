@@ -189,10 +189,13 @@ enum class MechanicalCheck(val description: String) {
  * and may edit; editing the wording changes the judgment's criteria hash, so calibration fitted to
  * the old wording is honestly reset rather than silently reused.
  *
- * **What the model reads.** Today the model is given the question and the options only. The
+ * **What the model reads.** By default the model is given the question and the options only. The
  * invariant, what breaks it and the lookalikes are shown to the user, exported with the judgment,
- * and are what a corrector checks an answer against — but Laya's prompt (`LayaPrompt`) has no slot
- * for them yet. Upstream's descriptive-option criteria are the planned channel; see `BUILD.md`.
+ * and are what a corrector checks an answer against. A judgment can opt in
+ * (`UserJudgment.criteriaInPrompt`, off by default) to show the invariant and what breaks it beside
+ * its two options — or a score's bands beside its values — through upstream Laya's descriptive-option
+ * channel (`LayaPrompt`). On the synthetic sample it helped one judgment and badly hurt another, so it
+ * stays off until measured on real corrections; see `BUILD.md`.
  */
 data class Template(
     val id: String,

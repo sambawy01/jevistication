@@ -30,6 +30,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class PersistenceTest {
@@ -108,6 +109,31 @@ class PersistenceTest {
         assertEquals(Export.ledgerToJsonl(rows), Export.ledgerToJsonl(loaded))
         assertEquals(listOf(null, Truncation.NONE), loaded.take(2).map { it.truncation })
         assertEquals(listOf(false, false, true), loaded.map { it.truncated })
+    }
+
+    @Test
+    fun `an option-criteria cut round-trips and is not an input cut`() {
+        val store = Store(tmp)
+        val row = LedgerRow(
+            "j", "h", Distribution.of("yes" to 0.7, "no" to 0.3), "yes", Probability.of(1.0), itemId = "/o",
+            truncation = Truncation(optionCriteria = Extent(40, 52, Extent.Measure.TOKENS)),
+        )
+        store.appendLedger(listOf(row))
+        val loaded = Store(tmp).loadLedger().first.single()
+        assertEquals(row, loaded)
+        assertTrue("\"optionCriteria\":{\"kept\":40,\"total\":52,\"unit\":\"tokens\"}" in Export.ledgerToJsonl(listOf(loaded)))
+        assertEquals(false, loaded.truncated)
+    }
+
+    @Test
+    fun `criteria-in-prompt round-trips, and a file without it loads as off`() {
+        val store = Store(tmp)
+        val base = TemplateLibrary.byId("is-receipt")!!.let { (it.instantiate("r", emptyMap()) as Template.InstantiateResult.Created).judgment }
+        store.saveJudgments(listOf(base, base.copy(id = "r2", criteriaInPrompt = true)))
+        val loaded = Store(tmp).loadJudgments()
+        assertEquals(listOf(false, true), loaded.map { it.criteriaInPrompt })
+        assertEquals(base.criteriaHash, loaded[0].criteriaHash)
+        assertNotEquals(loaded[0].criteriaHash, loaded[1].copy(id = "r").criteriaHash)
     }
 
     @Test

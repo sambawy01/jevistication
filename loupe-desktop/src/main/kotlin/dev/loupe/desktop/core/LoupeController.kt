@@ -312,6 +312,50 @@ class LoupeController(
         }
     }
 
+    /**
+     * Shows (or stops showing) the judgment's criteria to the model beside its options. This
+     * changes what the model reads, so the criteria hash changes and calibration starts again.
+     */
+    fun setCriteriaInPrompt(id: String, on: Boolean) {
+        val current = judgment(id) ?: return
+        if (current.criteriaInPrompt == on) return
+        replace(current.copy(criteriaInPrompt = on))
+        notice = if (on) {
+            "The model now reads this judgment's criteria. Its calibration starts again: earlier decisions were made without them."
+        } else {
+            "The model no longer reads this judgment's criteria. Calibration starts again under the bare options."
+        }
+    }
+
+    /** The last "with criteria vs without" run, for the judgment it was run on. */
+    var criteriaComparison: Pair<String, CriteriaComparison>? by mutableStateOf(null)
+    var criteriaComparing: Boolean by mutableStateOf(false)
+
+    /**
+     * Re-runs the model on [judgmentId]'s corrected items twice — bare options and with criteria —
+     * and stores the two reports in [criteriaComparison]. Null (with a [notice]) when it cannot run.
+     */
+    fun compareCriteria(judgmentId: String): Job? {
+        val judgment = judgment(judgmentId) ?: return null
+        val backend = backend ?: run {
+            notice = "The model is not loaded, so the comparison cannot run."
+            return null
+        }
+        val fixtures = Analysis.correctedFixtures(ledger, judgment, correctionIndex, itemsById)
+        if (fixtures.isEmpty()) {
+            notice = "Correct some items first: the comparison runs on your corrections."
+            return null
+        }
+        criteriaComparing = true
+        return scope.launch(modelDispatcher) {
+            try {
+                Analysis.compareCriteria(backend, judgment, fixtures)?.let { criteriaComparison = judgmentId to it }
+            } finally {
+                criteriaComparing = false
+            }
+        }
+    }
+
     fun setThreshold(id: String, value: Double) {
         val current = judgment(id) ?: return
         replace(current.copy(threshold = value.coerceIn(0.0, 1.0)))

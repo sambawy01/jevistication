@@ -8,6 +8,7 @@ import dev.loupe.engine.JudgmentAuthor
 import dev.loupe.engine.JudgmentLint
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
@@ -239,5 +240,33 @@ class UserJudgmentTest {
         ).judgment
         assertEquals(Shape.Binary("from my landlord", "not from my landlord"), two.shape)
         assertEquals("from my landlord", two.positiveLabel)
+    }
+
+    @Test
+    fun `option criteria derive from the three-part criteria and are off by default`() {
+        for (t in TemplateLibrary.ALL) {
+            val j = (t.instantiate("x-${t.id}", t.parameters.associate { it.name to it.example }) as Template.InstantiateResult.Created).judgment
+            assertFalse(j.criteriaInPrompt)
+            assertTrue(j.choice.descriptions.isEmpty(), "${t.id} must read bare options by default")
+            val c = j.optionCriteria()
+            when (val s = j.shape) {
+                is Shape.Binary, Shape.YesNo -> assertEquals(mapOf(s.candidates[0] to j.invariant, s.candidates[1] to j.breaks), c, t.id)
+                is Shape.Ordinal -> assertEquals(s.candidates.zip(s.bands).toMap(), c, t.id)
+                is Shape.Pick -> assertTrue(c.isEmpty(), t.id)
+            }
+            // Turning it on changes the hash; the descriptions are exactly what the model reads.
+            val on = j.copy(criteriaInPrompt = true)
+            if (c.isNotEmpty()) assertTrue(on.criteriaHash != j.criteriaHash, t.id)
+            assertEquals(c, on.choice.descriptions)
+        }
+    }
+
+    @Test
+    fun `an unwritten criterion is never shown to the model`() {
+        val draft = JudgmentDraft(question = "Is this about the garden?", options = listOf("about the garden", "not about the garden"))
+        val j = (draft.compile("g") as UserJudgment.EditResult.Edited).judgment
+        assertEquals(UserJudgment.UNWRITTEN, j.invariant)
+        assertTrue(j.optionCriteria().isEmpty())
+        assertEquals(j.criteriaHash, j.copy(criteriaInPrompt = true).criteriaHash)
     }
 }

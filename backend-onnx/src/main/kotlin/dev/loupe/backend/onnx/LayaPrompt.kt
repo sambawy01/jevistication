@@ -49,7 +49,17 @@ class LayaSequence(
     val stateTokens: Int,
     /** How many of those survived into [inputIds]; fewer than [stateTokens] means the tail was cut. */
     val stateTokensKept: Int,
+    /** Tokens the rendered options (label, or `label: description`) encoded to, summed, markers excluded. */
+    val optionTokens: Int = 0,
+    /** How many of those survived the per-option cap and the head budget. */
+    val optionTokensKept: Int = optionTokens,
 ) {
+    /**
+     * True when an option's text was cut to fit — upstream's 48-token per-option cap, or the
+     * shrink every option takes when they overflow the head budget. Upstream does this silently.
+     */
+    val optionsTruncated: Boolean get() = optionTokensKept < optionTokens
+
     /**
      * True when the state's tail was dropped to fit the context. Upstream does this silently; it is
      * surfaced here so a caller can see it, because Loupe's text-state contract is that a judgment
@@ -85,9 +95,14 @@ class LayaSequence(
  * [maxLen], and so does this, by exception, which `DecisionEngine` turns into the judgment's
  * declared failure posture. A dropped candidate would otherwise be scored as if it did not exist.
  *
- * Loupe's candidates are bare labels, so each option is rendered as the label alone — upstream's
- * `{label: None}` case. Upstream's descriptive criteria (`"label: description"`) have no
- * counterpart in `Judgment.Choice` yet.
+ * **Descriptive options.** With no descriptions each option is the label alone — upstream's
+ * `{label: None}` case, and what every judgment gets by default. Given a description, an option is
+ * rendered exactly as upstream's `render_options` does for `{label: description}`:
+ * `"label: description"`, with `None` and `""` meaning "no description". The description is part of
+ * the option's text, so it shares the option's budget: the whole `" label: description"` is capped
+ * at 48 tokens, and shrinks with the rest when the options overflow [headMaxLen]. Upstream gives a
+ * description no budget of its own and neither does this. What was cut is reported as
+ * [LayaSequence.optionTokens]/[LayaSequence.optionTokensKept] rather than hidden.
  */
 class LayaPrompt(
     private val encoder: SubwordEncoder,
@@ -102,13 +117,24 @@ class LayaPrompt(
         require(maxLen > headMaxLen + 3) { "maxLen ($maxLen) must leave room beyond headMaxLen ($headMaxLen)" }
     }
 
-    fun build(question: String, state: String, candidates: List<String>): LayaSequence {
+    fun build(
+        question: String,
+        state: String,
+        candidates: List<String>,
+        /** One per candidate, or empty for none; null or `""` shows that label bare (upstream's rule). */
+        descriptions: List<String?> = emptyList(),
+    ): LayaSequence {
         require(candidates.isNotEmpty()) { "a Laya question needs at least one option" }
+        require(descriptions.isEmpty() || descriptions.size == candidates.size) {
+            "${descriptions.size} descriptions for ${candidates.size} options"
+        }
         val mask = special.maskText
 
         val headIds = encoder.encode("choice question: " + question.replace(mask, " "))
-        var optionIds: List<LongArray> = candidates.map { option ->
-            longArrayOf(special.mask) + encoder.encode(" " + option.replace(mask, " ")).take(OPTION_CAP)
+        val rendered = candidates.mapIndexed { i, label -> renderOption(label, descriptions.getOrNull(i)) }
+        val encodedOptions = rendered.map { option -> encoder.encode(" " + option.replace(mask, " ")) }
+        var optionIds: List<LongArray> = encodedOptions.map { encoded ->
+            longArrayOf(special.mask) + encoded.take(OPTION_CAP)
         }
         var optionBudget = headMaxLen - optionIds.sumOf { it.size }
         if (optionBudget < QUESTION_FLOOR) {
@@ -147,12 +173,22 @@ class LayaPrompt(
             markerPositions = inRange.toLongArray(),
             stateTokens = stateIds.size,
             stateTokensKept = kept,
+            optionTokens = encodedOptions.sumOf { it.size },
+            // Each option kept its ids minus its one marker; upstream's cuts never drop the marker.
+            optionTokensKept = optionIds.sumOf { it.size - 1 },
         )
     }
 
     private fun LongArray.take(n: Int): LongArray = if (size <= n) this else copyOf(n)
 
     companion object {
+        /**
+         * Upstream `render_options` for a choice option: the label alone when there is no
+         * description (`None` or `""`), otherwise `"label: description"`.
+         */
+        fun renderOption(label: String, description: String?): String =
+            if (description.isNullOrEmpty()) label else "$label: $description"
+
         /** Upstream's per-option token cap (`[:48]`), not counting the marker. */
         const val OPTION_CAP: Int = 48
 
@@ -167,14 +203,24 @@ class LayaPrompt(
  * Pair it with [TensorNames.LAYA].
  */
 class LayaTokenizer(private val prompt: LayaPrompt) : Tokenizer {
-    override fun encode(question: String, text: String, candidates: List<String>): TokenizedInput {
-        val sequence = prompt.build(question, text, candidates)
+    override fun encode(question: String, text: String, candidates: List<String>): TokenizedInput =
+        encodeDescribed(question, text, candidates, emptyList())
+
+    override fun encodeDescribed(
+        question: String,
+        text: String,
+        candidates: List<String>,
+        descriptions: List<String?>,
+    ): TokenizedInput {
+        val sequence = prompt.build(question, text, candidates, descriptions)
         return TokenizedInput(
             inputIds = sequence.inputIds,
             attentionMask = LongArray(sequence.inputIds.size) { 1L },
             markerPositions = sequence.markerPositions,
             stateTokens = sequence.stateTokens,
             stateTokensKept = sequence.stateTokensKept,
+            optionTokens = sequence.optionTokens,
+            optionTokensKept = sequence.optionTokensKept,
         )
     }
 }

@@ -65,6 +65,38 @@ class LayaModelTest {
     }
 
     @Test
+    fun `descriptive options - DJL and the Kotlin prompt rebuild upstream's sequences`() {
+        val criteria = LayaFixture.loadCriteria()
+        tokenizerOrSkip().use { encoder ->
+            for (case in criteria.cases) {
+                for ((text, ids) in case.segments) assertContentEquals(ids, encoder.encode(text), "${case.id}: \"${text.take(60)}\"")
+            }
+            val prompt = LayaPrompt(encoder, LayaSpecialTokens.MULTILINGUAL, criteria.maxLen, criteria.headMaxLen)
+            for (case in criteria.cases) {
+                val built = prompt.build(case.question, case.state, case.candidates, case.descriptions)
+                assertContentEquals(case.inputIds, built.inputIds, case.id)
+                assertContentEquals(case.markerPositions, built.markerPositions, case.id)
+            }
+        }
+    }
+
+    @Test
+    fun `descriptive options - FP32 graph matches upstream PyTorch`() {
+        val report = parity(graphOrSkip("fp32"), LayaFixture.loadCriteria())
+        assertEquals(0, report.disagreed.size, "argmax disagreements: ${report.disagreed}")
+        assertTrue(report.maxAbsError < 1e-4, "max |p - p_torch| = ${report.maxAbsError}")
+    }
+
+    @Test
+    fun `descriptive options - INT8 graph agrees wherever the reference is not a near-tie`() {
+        val criteria = LayaFixture.loadCriteria()
+        val report = parity(graphOrSkip("int8"), criteria)
+        val confidentFlips = report.disagreed.filter { id -> criteria.cases.single { it.id == id }.referenceMargin >= NEAR_TIE }
+        assertTrue(confidentFlips.isEmpty(), "INT8 flipped confident answers: $confidentFlips")
+        assertTrue(report.maxAbsError < 0.15, "max |p - p_torch| = ${report.maxAbsError}")
+    }
+
+    @Test
     fun `the tokenizer is loaded with DJL offline, and a mismatched vocabulary is refused`() {
         tokenizerOrSkip().use { encoder ->
             assertTrue(ai.djl.util.Utils.isOfflineMode(), "DJL must be offline once a tokenizer is open")
@@ -131,7 +163,7 @@ class LayaModelTest {
 
     private class Parity(val agreements: Int, val disagreed: List<String>, val maxAbsError: Double)
 
-    private fun parity(graph: java.nio.file.Path): Parity {
+    private fun parity(graph: java.nio.file.Path, fixture: LayaFixture = this.fixture): Parity {
         tokenizerOrSkip().use { encoder ->
             val tokenizer = LayaTokenizer(
                 LayaPrompt(encoder, LayaSpecialTokens.MULTILINGUAL, fixture.maxLen, fixture.headMaxLen),
@@ -140,7 +172,7 @@ class LayaModelTest {
                 var worst = 0.0
                 val disagreed = mutableListOf<String>()
                 for (case in fixture.cases) {
-                    val judgment = Judgment.Choice(case.id, case.question, case.candidates)
+                    val judgment = Judgment.Choice(case.id, case.question, case.candidates, descriptions = case.descriptionMap)
                     // A budget wide enough that TextState keeps the text verbatim; the model's own
                     // token budget is what this test exercises.
                     val scores = backend.score(judgment, TextState.build(listOf(case.id to case.state), 1_000_000)).masses

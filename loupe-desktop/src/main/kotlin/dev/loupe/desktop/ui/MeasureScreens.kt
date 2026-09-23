@@ -185,5 +185,35 @@ fun BaselineScreen(c: LoupeController) = NeedsJudgment(c) { j ->
             else -> Note("The model is NOT beating the dumb baseline on your ${r.n} corrected items. Until it does, the baseline is the honest choice for this judgment.", warn = true)
         }
         Muted("Compared at equal coverage — both forced to answer every item — through the engine's own Harness, replaying exactly what the model logged rather than re-running it.")
+        CriteriaCard(c, j)
+    }
+}
+
+/** Criteria in the prompt: off by default; the switch and the measurement that should decide it. */
+@Composable
+private fun CriteriaCard(c: LoupeController, j: dev.loupe.templates.UserJudgment) {
+    Card {
+        H3("Show the criteria to the model")
+        if (j.optionCriteria().isEmpty()) {
+            Muted("This judgment has no per-option criteria to show (a multi-way choice), so this makes no difference.")
+            return@Card
+        }
+        Muted(
+            "Off by default. When on, each option is shown with its criterion — what makes it true, what breaks it — " +
+                "the way the model's authors describe options. Unmeasured on real data; switching changes the wording " +
+                "the model reads, so calibration starts again.",
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SecondaryButton(if (j.criteriaInPrompt) "Stop showing criteria" else "Show criteria") { c.setCriteriaInPrompt(j.id, !j.criteriaInPrompt) }
+            SecondaryButton(if (c.criteriaComparing) "Comparing…" else "Compare with vs without", enabled = !c.criteriaComparing && c.backend != null) { c.compareCriteria(j.id) }
+        }
+        val result = c.criteriaComparison?.takeIf { it.first == j.id }?.second ?: return@Card
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Stat(pct(result.without.accuracyAtFullCoverage, 1), "without criteria")
+            Stat(pct(result.with.accuracyAtFullCoverage, 1), "with criteria")
+            Stat("${fmt(result.without.ece)} → ${fmt(result.with.ece)}", "ECE")
+            Stat("${fmt(result.without.brier)} → ${fmt(result.with.brier)}", "Brier")
+        }
+        Muted("On ${result.with.n} corrected item(s), the model re-run both ways. Criteria were shortened to fit on ${result.criteriaCut}.")
     }
 }

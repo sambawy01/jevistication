@@ -93,6 +93,7 @@ object Export {
             listOfNotNull(
                 t.textBudget?.let { "textBudget" to extent(it) },
                 t.modelContext?.let { "modelContext" to extent(it) },
+                t.optionCriteria?.let { "optionCriteria" to extent(it) },
             ),
         )
 
@@ -110,7 +111,7 @@ object Export {
         Json.array(
             definitions.map { definition ->
                 Json.obj(
-                    listOf(
+                    listOfNotNull(
                         "id" to Json.string(definition.judgment.id),
                         "question" to Json.string(definition.judgment.question),
                         "candidates" to Json.array(definition.judgment.candidates.map(Json::string)),
@@ -118,6 +119,13 @@ object Export {
                         "invariant" to Json.string(definition.invariant),
                         "breaks" to Json.string(definition.breaks),
                         "lookalikes" to Json.string(definition.lookalikes),
+                        // Only when the model is shown per-option criteria, so existing exports
+                        // keep their bytes.
+                        definition.judgment.descriptions.takeIf { it.isNotEmpty() }?.let { d ->
+                            "optionCriteria" to Json.obj(
+                                definition.judgment.candidates.filter { it in d }.map { it to Json.string(d.getValue(it)) },
+                            )
+                        },
                     ),
                 )
             },
