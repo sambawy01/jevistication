@@ -381,6 +381,14 @@ Station repository (`~/laya-studio`, commit `ea7697a4f78e9a648ba49fc8bf9d13226c2
 owner, so no licence obligation; provenance is recorded in each source header and in
 `THIRD_PARTY_NOTICES.md`. Adopted.
 
+## Loupe Station mail and site-protection rules — checked 2026-09-23
+
+Mail triage and phishing (epic #7 child 11) and the brand-lookalike site checks (child 12) port rule
+tables, brand lists, weights, thresholds, wording and tests from the same repository and commit
+(`laya_studio/mail/{classify,phishing,triage,provider}.py`, `measure/baseline.py`,
+`browser/{brands,signals,scoring,psl}.py`). Same owner, so no licence obligation; provenance is in
+each source header and in `THIRD_PARTY_NOTICES.md`. Composio and model code are not used. Adopted.
+
 ## Rejected
 
 ### NanoJev — weights and dataset declare no licence

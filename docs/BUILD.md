@@ -564,6 +564,67 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-23 — Epic #7 children 11 and 12: mail triage + phishing, and brand-lookalike site
+  checks.** On the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
+  - **Shared rules, ported from Loupe Station** (the owner's `~/laya-studio`, commit `ea7697a`):
+    new `loupe-kit` packages `dev.loupe.kit.site` — `Brands` (`browser/brands.py`: 45 brands,
+    shorteners, suspicious TLDs; Station's shared-hosting list from `psl.py`), `SiteSignals`
+    (`browser/signals.py`: WEIGHTS, RISK_CODES, PHISHY_WORDS, confusables, skeleton, OSA look-alike
+    rule, host/url/form/branding checks), `SiteScoring` (`browser/scoring.py`: 30/60 levels, Laya
+    caps and gates as data, impostor/pressure login) and `SiteCheck` (Station's verdict **beside**
+    the engine's `SiteFraud.assess`, neither changing the other); and `dev.loupe.kit.mail` —
+    `Phishing` (`mail/phishing.py`: every weight, threshold 50/25/25, MAIL_BRANDS, freemail,
+    trackers, service words, reason texts), `MailClassify` (`mail/classify.py` `triage_flags` /
+    `label_plan` / label naming / transactional pattern, `mail/provider.py` categories, and the
+    `wf-email-triage` keyword rules of `measure/baseline.py` declared as the engine's `Baseline`s),
+    `MailTriage` (rows, sections, `sort_rows`, corrections `mail-phishing` / `mail-phishing-v1`:
+    `safe` / `phishing`, Undo = retraction). Registrable domains come from the engine's pinned PSL
+    (`OriginFacts.registrableDomain`), never Station's `psl.py`. No Composio, no model call.
+  - **Phone deviation:** Station's classifier reads Laya's answers; on the phone the keyword rules
+    answer every question (Station's "baseline answers" path), and the phishing-wording rule fills
+    Laya's advisory slot (at most +20, only next to deterministic evidence; alone it never flags).
+    Weak questions (category, urgency, is_phishing) keep Station's `weak` marking. The keyword rules
+    run through a lookbehind-free matcher (0.5 s → <5 ms per email on the simulator), pinned to
+    `Baseline.answer` by `MailClassifyParityTest` on every case and sample email.
+  - **Station vs engine, both results kept visible, no engine threshold changed:**
+    (1) brand ownership — the engine's `brandMatchesOrigin` compares the registrable domain's first
+    label with the brand's name, Station uses the brand's domain list (+ country domains), so e.g.
+    "Microsoft" on `live.com` or "Google" on `youtube.com` is an engine `brand-origin-mismatch` but
+    Station known-good; (2) punycode — the engine warns on any `xn--` host, Station scores a
+    single-script IDN (`مثال.مصر`) 10 = safe and a homograph 60; (3) mixed scripts — Station named
+    scripts by Unicode character names, the port uses the engine's script property (digits of another
+    script no longer count as a script); (4) forms — the engine flags any cross-domain form action,
+    Station only password forms (plus an https→http post); (5) PSL — `googleapis.com` and
+    `withgoogle.com` are PRIVATE suffixes in the Mozilla list, so hosts under them are no longer
+    Google's known-good, and 12 of Station's shared-hosting names (`wordpress.com`, `weebly.com`,
+    `glitch.me`, `railway.app`, `loca.lt`, `serveo.net`, `godaddysites.com`, `000webhostapp.com`,
+    `jimdosite.com`, `site123.me`, `strikingly.com`, `tilda.ws`) are not suffixes there — a customer
+    site reads as a subdomain (`paypal.wordpress.com`: `brand_in_subdomain` 30, Station
+    `brand_other_tld` 20); shared-hosting logins are still matched by name; (6) the engine's
+    `Impersonation` look-alike (Levenshtein 1–2 against a contact's domains) and Station's brand
+    look-alike (OSA, indels only for 5–7-letter tokens, ≤4 letters never) answer different questions
+    and are not merged.
+  - **iOS:** `Loupe/Mail/` — `MailTriageService` (runs `MailTriage` on `ModelWork` at sweep priority;
+    re-reads each `.eml` for Reply-To, the topmost Authentication-Results and HTML link text; mbox
+    messages fall back to the item's facts), `MailTriageView` (sections Phishing suspected / Spam /
+    Needs reply / Urgent / By category; category, labels with "weak rule", the concrete signals,
+    evidence score, link site checks; Open, Mark safe / Confirm phishing with Undo; "Links in your
+    items" = site checks on web links in non-mail items such as links sent to Loupe). Now card "Mail
+    triage: N possible phishing · M need a reply"; Sources → Mail section.
+  - **Tests:** `SiteSignalsTest` (22: `test_browser.py`'s PSL, private host, homograph, look-alike,
+    subdomain, IP, form, URL, brand-claim, shared-hosting, weight and scoring cases; the merge with
+    `SiteFraud`; punycode), `PhishingTest` (10: `email_cases.py` verbatim + `test_phishing.py`'s
+    evidence, reply-to, link, auth, trusted-sender, reason-text and provider-category cases),
+    `MailTriageTest` (8: rows follow the evidence, labels, sort, the sample PayPal phishing with its
+    signals, corrections, web-link items), `MailClassifyParityTest`; JVM + iOS simulator. XCTest
+    `MailTriageTests` (5); UI `MailTriageUITests` (Now → Mail triage shows the PayPal phishing with
+    its look-alike, display-name, link and urgent-language signals).
+  - On the sample inbox: 1 phishing (`phishing-paypal.eml`: `sender_lookalike_brand` paypa1-secure →
+    PayPal 45, `display_brand_mismatch` 40, `link_brand_in_subdomain` 30 → 100; urgent "within 24
+    hours"; its link's site check `brand_in_subdomain`). Not ported: Station's trusted-senders
+    setting (the rule is ported and tested, no UI yet), two-pass `is_important`, label writing to
+    the mailbox.
+
 - **2026-09-23 — Epic #7 child 10: privacy check (personal data, secrets, duplicate files).** On
   the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
   - **Shared rules, ported from Loupe Station** (the owner's `~/laya-studio`, commit `ea7697a`):
@@ -780,6 +841,8 @@ after 1, 6 needs 3, 4 and 5.
 | 8 | 3D mascot | **Done 2026-09-23 (simulator)** — native SceneKit rigged robot ported from the web prototype (geometry, PBR clearcoat materials, rig, pose keyframes); animated visor face texture; 8 states with eased blending; tap waves; pauses offscreen/background; Reduce Motion static poses; still renders under 40 pt; reference PNG if no Metal. 60 fps measured on the simulator (Now, game HUD) |
 | 9 | Model delivery + device verification | **Built to owner blockers 2026-09-23 (simulator)** — `models.json` manifest (int8 default, int8-partial opt-in, sizes + SHA-256 pinned, host EMPTY → "not configured"); consent screen; background URLSession download (Wi-Fi unless mobile data allowed, pause/resume with resume data, disk-space precheck, streaming SHA-256, atomic move, no backup, remove); Me → Diagnostics (42 parity questions on device vs JVM INT8, p50/p95 by tokens, peak phys_footprint, thermal, battery, JSON export); `Config/Signing.xcconfig` + git-ignored local Team ID; `ios/scripts/device-build.sh`. **Owner-blocked:** model host, Apple developer account (Team ID, App Group), an iPhone to run Diagnostics |
 | 10 | Privacy check | **Done 2026-09-23 (simulator)** — Loupe Station's PII, secret and duplicate rules ported verbatim to shared `dev.loupe.kit.privacy` (rule ids, severities, masking, false-positive handling; duplicates on the engine's `ContentHash`); Now card + Sources link → findings by type with masked previews, Open, Mark safe (ledger correction, Undo), Delete / Move with Undo for reachable Files items, PhotoKit delete with the system prompt; everything else suggest-only |
+| 11 | Mail triage + phishing | **Done 2026-09-23 (simulator)** — Loupe Station's `mail/phishing.py` evidence and `mail/classify.py` labels ported verbatim to shared `dev.loupe.kit.mail` (weights, thresholds, tables, reason texts; the `wf-email-triage` keyword rules answer on the phone, no model, no Composio); Now card + Sources → Mail: sections (phishing suspected, spam, needs reply, urgent, by category), concrete signals, Mark safe / Confirm phishing (ledger corrections, Undo), Open; the sample's `phishing-paypal.eml` flagged with its signals |
+| 12 | Brand-lookalike site checks | **Done 2026-09-23 (simulator)** — Station's `browser/brands.py` list and `signals.py`/`scoring.py` weights in shared `dev.loupe.kit.site`, on the engine's pinned PSL, shown beside the engine's `SiteFraud` (thresholds unchanged; six differences recorded in the Progress log); on every mail link and on web links in other items |
 
 ### Proving milestones
 

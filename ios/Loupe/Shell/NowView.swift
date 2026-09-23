@@ -9,6 +9,8 @@ struct NowView: View {
     @ObservedObject var sort: SortService = .shared
     @ObservedObject var privacy: PrivacyService = .shared
     @State private var showPrivacy = false
+    @ObservedObject var mail: MailTriageService = .shared
+    @State private var showMail = false
     @State private var openItem: SourceItem?
     @State private var showQueue = false
     @State private var opened = false
@@ -18,6 +20,7 @@ struct NowView: View {
             content
                 .navigationDestination(isPresented: $showQueue) { UnsureQueueView(service: service) }
                 .navigationDestination(isPresented: $showPrivacy) { PrivacyView(privacy: privacy) }
+                .navigationDestination(isPresented: $showMail) { MailTriageView(mail: mail) }
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(item: $openItem) { ItemTextView(item: $0) }
         }
@@ -27,6 +30,7 @@ struct NowView: View {
             guard !sources.scanning else { return }
             Task { await watchers.run() }
             Task { await privacy.run() }
+            Task { await mail.run() }
         }
         .task {
             service.load()
@@ -98,6 +102,10 @@ struct NowView: View {
                     .buttonStyle(.plain)
                     .padding(.horizontal, 16)
                     .accessibilityIdentifier("now.privacy")
+                Button { showMail = true } label: { MailTriageCard(mail: mail) }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("now.mail")
                 findingsSection
                 PlayCard { launcher.open($0) }
             }

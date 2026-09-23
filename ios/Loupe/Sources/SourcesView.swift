@@ -36,6 +36,18 @@ struct SourcesView: View {
                 } footer: {
                     Text("Checks every source that is on for ID and card numbers, IBANs, contact lists, keys and tokens, and duplicate files. Mechanical, on this iPhone.")
                 }
+                Section {
+                    NavigationLink {
+                        MailTriageView(mail: MailTriageService.shared)
+                    } label: {
+                        MailTriageCard(mail: MailTriageService.shared)
+                    }
+                    .accessibilityIdentifier("sources.mail")
+                } header: {
+                    Text("Mail")
+                } footer: {
+                    Text("Sorts every email from the sources that are on (the sample now, your IMAP mailbox when it is on) into Loupe Station's categories and checks it for phishing: sender, reply address, mail-server checks and links. Mechanical, on this iPhone.")
+                }
                 if let problem = sources.problem {
                     Section { Text(problem).font(.footnote).foregroundStyle(Palette.red) }
                 }

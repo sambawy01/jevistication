@@ -115,4 +115,14 @@ its sources".
   expressions, severities and masking from `laya_studio/scan/{pii_rules,secret_rules,dupes,planner,rules}.py`,
   and the ported test cases in `loupe-kit/src/commonTest/kotlin/dev/loupe/kit/privacy/` from
   `tests/test_scan.py`. Wording on the iOS Privacy screen follows its `static/js/scan-*.js` / `i18n.js`.
+- **Also used in (epic #7 children 11 and 12):** `loupe-kit/src/commonMain/kotlin/dev/loupe/kit/mail/`
+  — the phishing evidence rules, weights, thresholds, brand/freemail/tracker/service-word tables and
+  reason wording of `laya_studio/mail/phishing.py`, the label rules of `mail/classify.py`,
+  `mail/triage.py` and `mail/provider.py`, and the `wf-email-triage` keyword rules of
+  `measure/baseline.py`; `loupe-kit/src/commonMain/kotlin/dev/loupe/kit/site/` — the brand list,
+  shorteners, suspicious TLDs and shared-hosting list of `browser/brands.py` / `browser/psl.py`, and
+  the signal weights, confusables and scoring of `browser/{signals,scoring}.py` (registrable domains
+  come from the engine's pinned Mozilla PSL, not `psl.py`). Ported tests from `tests/email_cases.py`,
+  `tests/test_phishing.py` and `tests/test_browser.py`. Mail triage wording follows
+  `static/js/email*.js` / `i18n.js`. No Composio or model code is used.
 
