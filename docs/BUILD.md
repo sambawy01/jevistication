@@ -564,6 +564,28 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-24 — Epic #7 child 17: the drone mascot, an alternate to the robot.** On the owner's
+  "Go" for epic #7 children 10–17. Uncommitted pending review.
+  - **Ported from Loupe Station** (`~/laya-studio` `laya_studio/static/js/mascot.js` + `static/mascot.css`
+    at `ea7697a`): the SVG orb-drone's geometry (18-unit orb, 30×13 visor, pill eyes, beacon, seam,
+    27×7.5 orbit ring tilted −9°), colours (`--m-*`, light and dark), timings (4.8 s float, 1.4 s
+    thinking, .7 s hop, .9 s flash, 2.6–6.8 s blinks, 30% glances, EYE_X/Y) and the reduced-motion stills.
+  - `ios/Loupe/Design/Mascot/`: `MascotKind.swift` (setting, key `mascot.kind`, default robot),
+    `DroneRig.swift` (pure: `DroneLook.of` mapping, `DroneRig` state machine), `DroneScene.swift`
+    (SceneKit model + visor face renderer). `MascotView` reads the setting; `MascotSCNView` now drives
+    a `MascotDriver` (RobotDriver / DroneDriver), so the pause rule is shared. Stills and the no-Metal
+    PNG (`MascotDrone`, rendered from the app by `DroneRigTests`) cover the drone.
+  - Mapping: idle→idle; greeting→booting then happy ("powered up"); watching→idle with eyes and body
+    following `lookAt`; scanning→thinking plus booting's visor scan line; thinking→thinking; found→happy
+    with flash; happy→happy (smaller hop); empty→unsure; tap→happy reaction 2.2 s. Station's `error`
+    has no Loupe state and is unused.
+  - Tests: `DroneRigTests` (mapping, colours, hop/bob keyframes, Reduce Motion stills, blinks and
+    tap, face key, kind setting default/persist/unknown, pause rule with the drone, view built for
+    both kinds, VoiceOver hidden); `MascotKindUITests` (switch to Drone in Me, persists across relaunch).
+  - Performance: `-LoupeMascotGallery -LoupeMascotKind drone -LoupeMascotFPS` holds 60.0 fps with
+    eight live drones at 170 pt (iPhone 17 Pro Max simulator). Contact sheet beside Station's
+    browser-rendered moods: `~/.gstack/projects/sambawy01-jevistication/designs/ios-v1/13-drone-states.png`.
+
 - **2026-09-24 — Epic #7 child 16: Workflows — reply drafts and a second opinion (opt-in writing
   assistant).** On the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
   - **Ported from Loupe Station** (`~/laya-studio` at `ea7697a`): `workflows/email_reply.py` (BASE_RULES,
@@ -991,6 +1013,9 @@ after 1, 6 needs 3, 4 and 5.
 | 14 | Preset packs | **Done 2026-09-24 (simulator)** — Station's `laya-preset-pack` format validated exactly as Station in shared `dev.loupe.kit.packs`, plus the C2 lint per question; import from Files / "Open in Loupe" / the bundled, labelled Bistro Cloud example; preview before adding; same-id conflicts skip / replace / keep both; export your judgments as a pack (round-trips) |
 | 15 | Items inbox | **Done 2026-09-24 (simulator)** — Station's `items/csvimport.py` rules in shared `CsvRows` (sniffing, header detection, English/Arabic names, amounts); Sources → Inbox: import CSV (a row per item with column context), `.eml` / `.mbox`, ZIP (pure-Kotlin reader with Station's bomb limits plus traversal / symlink / nested refusals), pasted or shared text and links; each batch listed with counts and removable; items labelled "Imported · origin · name · date" and read by judgments, sweep, watchers, privacy check and mail triage |
 | 16 | Workflows: reply drafts, second opinion | **Done 2026-09-24 (simulator)** — Station's `email_reply` / `second_opinion` prompts and `llm/client.py` in Swift (`ios/Loupe/Assist/`); opt-in writing assistant, off by default (BYOK OpenAI-compatible HTTPS or local-network Ollama, key in Keychain); Online label + exact preview + confirm before each call; drafts labelled Draft, wait in Review, copied or opened in Mail by the user, never sent by Loupe; second opinion shown beside Laya's answer, never changes or logs a decision |
+| 17 | Drone mascot (alternate) | **Done 2026-09-24 (simulator)** — Loupe Station's orb-drone (`mascot.js` / `mascot.css` @ `ea7697a`) rebuilt natively in SceneKit behind the same `MascotView(state:)` (`MascotKind` robot \| drone; no call site changed): orb, glass visor face texture, pill / ^ ^ eyes, beacon, seam, tilted orbit ring, Station's light/dark mood colours, hover bob, hop, halo breathe/flash, dashed spinning ring. Station's six moods mapped onto our eight states (table in `DroneRig.swift`); same pause rules, Reduce Motion stills, VoiceOver hidden, bundled `MascotDrone` PNG fallback. Me → Appearance → Mascot: Robot (default) / Drone, persisted, live. 60 fps with eight live drones on the simulator |
+
+**Epic #7 is complete on the simulator** except these owner-blocked items: an iPhone (device fps/latency, battery/thermal for passive mode, Diagnostics run), an Apple developer account (Team ID, App Group for the Share Extension on a device), the model host for delivery, and Google/Microsoft OAuth client IDs for mail/calendar sign-in.
 
 ### Proving milestones
 

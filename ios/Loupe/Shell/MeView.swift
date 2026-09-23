@@ -11,6 +11,7 @@ struct MeView: View {
     @State private var exportError: String?
     @State private var shared: SharedFile?
     @State private var showWebSettings = false
+    @AppStorage(MascotKind.storageKey) private var mascotKind = MascotKind.default.rawValue
     private let engine = EngineInfo.load()
 
     var body: some View {
@@ -68,6 +69,18 @@ struct MeView: View {
                         row("Writing assistant", assist.config.enabled ? (assist.isReady ? "On · Online" : "Needs setup") : "Off")
                     }
                     .accessibilityIdentifier("me.assistant")
+                }
+                Section("Appearance") {
+                    HStack {
+                        Text("Mascot")
+                        Spacer()
+                        Picker("Mascot", selection: $mascotKind) {
+                            ForEach(MascotKind.allCases) { Text($0.title).tag($0.rawValue) }
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                        .accessibilityIdentifier("me.mascot")
+                    }
                 }
                 Section("Web") {
                     Button("Web settings") { showWebSettings = true }

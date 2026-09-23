@@ -7,6 +7,12 @@ struct LoupeApp: App {
     @StateObject private var web = WebModel.make(launch: LaunchOptions.current)
 
     init() {
+        #if DEBUG
+        // -LoupeResetMascot: forget the mascot choice (UI tests start from the default robot).
+        if ProcessInfo.processInfo.arguments.contains("-LoupeResetMascot") {
+            UserDefaults.standard.removeObject(forKey: MascotKind.storageKey)
+        }
+        #endif
         // BGTaskScheduler wants every handler registered before launch finishes.
         BackgroundSorter.shared.register()
         BackgroundSorter.shared.schedule()

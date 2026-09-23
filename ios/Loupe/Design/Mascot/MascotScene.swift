@@ -128,7 +128,7 @@ final class MascotTemplate {
     }
 
     /// A soft studio room for the clearcoat reflections (same gradient as the prototype).
-    private static func studio() -> UIImage {
+    static func studio() -> UIImage {
         let size = CGSize(width: 512, height: 256)
         return UIGraphicsImageRenderer(size: size).image { ctx in
             let g = ctx.cgContext
