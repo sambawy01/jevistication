@@ -3,6 +3,9 @@
 #   uv venv --python 3.12 tools/.venv
 #   uv pip install --python tools/.venv/bin/python -r tools/requirements-laya.txt
 #
+# Transitive versions are locked in tools/requirements-laya.lock.txt. A fresh venv from the lock
+# reproduced the committed fixture's token ids exactly and its PyTorch probabilities to 7e-8.
+#
 # The reference implementation is the Laya authors' own package, installed from GitHub at a pinned
 # commit, so the parity check compares ONNX against *their* forward pass, not a reimplementation.
 laya @ git+https://github.com/NandhaKishorM/laya@c7527708f9f5220c669d8aa385077cd28d04708a
