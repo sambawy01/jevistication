@@ -11,7 +11,8 @@ on the owner's decision that GLiClass's performance is not comparable. Laya had 
 as rejected "on platform" — that was a misreading, corrected below. Its weights are Apache-2.0,
 but **the provenance of its training data is only partly published and includes sources with
 non-commercial terms**; that is recorded in full under *Laya — training-data provenance* and
-filed as build risk 12. The tokenizer dependency it needs (DJL) is recorded under *DJL tokenizers*.
+was filed as build risk 12 — **closed 2026-09-23 by owner decision**: Laya is cleared for shipping
+under Apache-2.0, with this evidence kept as the basis the owner weighed. The tokenizer dependency it needs (DJL) is recorded under *DJL tokenizers*.
 
 ---
 
@@ -19,7 +20,7 @@ filed as build risk 12. The tokenizer dependency it needs (DJL) is recorded unde
 
 | Artifact | Declared | Status |
 |---|---|---|
-| `convaiinnovations/laya-multilingual` @ `052592a1` | `license: apache-2.0` | **Adopted** — primary (2026-09-23). **Training-data provenance open — risk 12** |
+| `convaiinnovations/laya-multilingual` @ `052592a1` | `license: apache-2.0` | **Adopted** — primary (2026-09-23). **Cleared for shipping by owner decision 2026-09-23**; training-data notes below (risk 12, closed) |
 | `NandhaKishorM/laya` (code) @ `c7527708` | Apache-2.0, SPDX `Apache-2.0` | Reference implementation; used by the export tool only, not shipped |
 | `jhu-clsp/mmBERT-base` @ `c5955035` | `license: mit` | Backbone of the primary. **Tokenizer is Gemma 2's — see below** |
 | `knowledgator/gliclass-modern-base-v2.0` | `license: apache-2.0` | Verified; **superseded** as primary 2026-09-23 |
@@ -63,7 +64,7 @@ pretraining datasets (`jhu-clsp/mmbert-*`). **Its card states the tokenizer is G
 `tokenizer.json` is that vocabulary. Gemma 2 is distributed under Google's Gemma Terms of Use, not
 an OSI licence. Whether those terms reach a tokenizer vocabulary redistributed inside an
 MIT-licensed model is a question this review **has not resolved** — it is recorded, not waved
-through, and is part of risk 12.
+through, and was part of risk 12 (closed 2026-09-23 by owner decision).
 
 **`knowledgator/gliclass-modern-base-v2.0`** — *superseded as primary on 2026-09-23; the licence
 finding stands.* Frontmatter reads `license: apache-2.0`. The card states the model "was trained
@@ -191,10 +192,13 @@ not answer whether weights trained on CC-BY-NC and non-commercial-research data 
 commercially — a question on which the law is unsettled, and which NanoJev's rejection shows we
 take seriously. Unlike NanoJev, nothing here is *undeclared*; the risk is in **declared upstream
 terms** the model card does not mention. Fine-tuning on our own fixtures does not remove it.
-**Filed as build risk 12.** Adopted for development on the owner's decision; **not cleared for
-shipping** until one of: the authors publish the full training mix and it is clean; they confirm
+**Filed as build risk 12.** ~~Adopted for development on the owner's decision; not cleared for
+shipping until one of: the authors publish the full training mix and it is clean; they confirm
 the non-commercial sources are absent from the multilingual checkpoint; or we train the head (or
-the whole model) on data we can account for. Asking the authors is the cheapest first step.
+the whole model) on data we can account for.~~ **Closed 2026-09-23 by owner decision** ("we
+searched and its Apache2.0"): the owner cleared Laya for shipping under its Apache-2.0 licence,
+having weighed the evidence above, which stays recorded. Asking the authors for the full mix is
+an optional follow-up, not a blocker.
 
 ---
 
@@ -446,10 +450,10 @@ independently against Qwen3-0.6B. We do not copy their source, prompt templates 
 
 ## Still open
 
-- **Laya's training-data provenance (risk 12)** — the one item that blocks *shipping*, though not
-  development. See the provenance section above for what would close it.
+- ~~**Laya's training-data provenance (risk 12)** — the one item that blocks shipping.~~ **Closed
+  2026-09-23 by owner decision**; cleared for shipping. Asking the authors stays optional.
 - **The Gemma 2 tokenizer question** — whether the Gemma Terms of Use reach mmBERT's vocabulary.
-  Unresolved; part of risk 12.
+  Not resolved on the law; weighed in the owner's 2026-09-23 decision to ship (risk 12, closed).
 - **DJL on Android** — the `tokenizer-native` AAR lags the Java API (0.33.0 vs 0.38.0). Untested.
 - On first fetch of any other artifact, re-read its frontmatter at the exact revision pinned and
   record the commit hash here beside the date. Laya's revision and hashes are recorded above.

@@ -7,8 +7,8 @@ data class LintFinding(val rule: String, val message: String)
  * The lint that stands between a written question and a compiled judgment (C2).
  *
  * Every rule here enforces one thing: **this is a classifier, not a text model.** The engine has
- * no generative model and never writes prose, so a question that asks for an explanation or a
- * free-form number describes a product we did not build. Catching it at authoring time is far
+ * no generative model: judgments never depend on one (PRODUCT.md never list), so a question
+ * that asks for an explanation or a free-form number describes a judgment we cannot make. Catching it at authoring time is far
  * kinder than discovering it as a judgment that scores badly for reasons nobody can see.
  */
 object JudgmentLint {
@@ -45,7 +45,7 @@ object JudgmentLint {
         if (ASKS_FOR_PROSE.containsMatchIn(trimmed)) {
             findings += LintFinding(
                 "asks-for-prose",
-                "asks for an explanation; the engine has no generative model and never writes prose",
+                "asks for an explanation; judgments are decided by a classifier, which answers with a choice, not prose",
             )
         }
         if (ASKS_TO_WRITE.containsMatchIn(trimmed)) {

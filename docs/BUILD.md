@@ -29,7 +29,7 @@ it is kept, because it is still what the Android build would use.
 |---|---|---|
 | Language / UI | Swift, SwiftUI app shell | Kotlin, Jetpack Compose |
 | Engine and templates | **Kotlin Multiplatform** (`jvm`, `iosArm64`, `iosSimulatorArm64`), exported as the XCFramework **`LoupeKit`** | the same modules, JVM/Android |
-| **Decision model** | **`convaiinnovations/laya-multilingual`** — 322M, Apache-2.0 weights, mmBERT-base backbone. *Training-data provenance open — risk 12* | same |
+| **Decision model** | **`convaiinnovations/laya-multilingual`** — 322M, Apache-2.0 weights, mmBERT-base backbone. *Cleared for shipping by owner decision 2026-09-23; training-data notes in `LICENSING.md`* | same |
 | **Second backend** | **`Qwen/Qwen3-0.6B`** — Apache-2.0, decoder, scored by logits | same |
 | Model runtime | ONNX Runtime iOS | ONNX Runtime Mobile (NNAPI / XNNPACK execution providers) |
 | Tokenizer | Hugging Face `tokenizers` Rust crate built for iOS, called through a C FFI, offline only — the same crate DJL wraps, so ids match | DJL `ai.djl.huggingface:tokenizers`, offline mode enforced |
@@ -66,6 +66,8 @@ Apple M4 under ONNX Runtime. **Its card says to keep a choice under ~20 options*
 share the 256-token head budget. And **its training data is only partly published and the part
 that is includes non-commercial sources** — recorded in [`LICENSING.md`](LICENSING.md) and filed
 as risk 12. GLiClass's authors stated their data permits commercial use; Laya's do not say.
+Risk 12 was closed 2026-09-23 by owner decision: Laya is cleared for shipping under its
+Apache-2.0 licence, with the training-data notes kept in `LICENSING.md`.
 
 We fine-tune it on our own fixtures and fit our own calibration — which is what A6 required
 anyway, and which means **we depend on nobody's calibration claim.** That is the product's own
@@ -310,7 +312,7 @@ judgments is the difference between this product and a confident guess.
 | 9 | **Name collision.** `LOUPE` is a crowded mark. Registrations exist for jewellery-trade software (Atelier Technology), sports-card retail (Loupe Tech LLC) and a CRM (Apex); Mysk ships an iOS privacy app called Loupe | None is a consumer personal-data or fraud-detection app, but a crowded mark is a weak mark, and the Mysk app is adjacent on privacy and mobile. **Clear the mark in the target jurisdictions, and check Play Store and domain availability, before any spend on branding, the listing or the domain.** Decision taken with this known |
 | 10 | ~~Approximate public suffix list~~ | **Closed 2026-09-23.** The engine now bundles the real Mozilla PSL (snapshot `2026-09-21_18-50-07_UTC`, SHA-256 pinned and tested), implements the full algorithm — wildcards, exceptions, IDN, both sections — and passes the official test vectors. Refreshed at build time by `tools/update-psl.sh`; never fetched at runtime. Reopens if the snapshot goes stale before a release |
 | 11 | ~~Third-party attribution is unshipped~~ (ONNX Runtime, DJL and the Rust crates in `libtokenizers`, Compose/skiko/Skia, the desktop sources, PDFBox's bundled fonts and data) | **Closed 2026-09-23.** `./gradlew :loupe-desktop:generateThirdPartyNotices` writes `loupe-desktop/src/main/resources/THIRD_PARTY_NOTICES.txt`, packaged in the app jar, from the resolved runtime jars and POMs, 213 pinned Rust crates and the reviewed tables in `third-party/`; `check` and `ThirdPartyNoticesTest` fail when it is stale. Never patch Eigen (MPL-2.0, file-level). **The Android component set is still unverified** — the AAR is a different native build and needs its own run when an Android module exists |
-| 12 | **Laya's training data is only partly published, and the published part includes non-commercial sources.** The authors' own benchmark flags as "in training" `Tobi-Bueck/customer-support-tickets` (CC-BY-NC-4.0) and MS MARCO (Microsoft: non-commercial research only), plus LGPL-3.0, CC-BY-SA-3.0, `unknown` and undeclared sources; the full mix is not published. The tokenizer is Gemma 2's, whose Terms of Use may or may not reach it | Adopted for development on the owner's decision; **not cleared for shipping.** Close it by one of: the authors publishing a clean full mix, or confirming the NC sources are absent from the multilingual checkpoint; or training the head (or model) on data we can account for. Ask the authors first — it is the cheapest. Details in `LICENSING.md` |
+| 12 | ~~Laya's training data is only partly published, and the published part includes non-commercial sources. The authors' own benchmark flags as "in training" `Tobi-Bueck/customer-support-tickets` (CC-BY-NC-4.0) and MS MARCO (Microsoft: non-commercial research only), plus LGPL-3.0, CC-BY-SA-3.0, `unknown` and undeclared sources; the full mix is not published. The tokenizer is Gemma 2's, whose Terms of Use may or may not reach it~~ | **Closed 2026-09-23 by owner decision.** The weights are Apache-2.0 and the owner has cleared Laya for shipping ("we searched and its Apache2.0"). The training-data evidence — NC sources named in the authors' benchmark, the unpublished full mix, the Gemma 2 tokenizer terms — stays recorded in `LICENSING.md` as the basis the owner weighed. Optional follow-up, not a blocker: ask the authors for the multilingual checkpoint's full training mix |
 | 13 | **On-device cost of Laya is unmeasured.** 384 MB INT8 (357 MB opt-in `int8-partial`; SmoothQuant and static calibration tried 2026-09-23 and rejected — the full 58 MB saving costs answers), 256k vocabulary; on a desktop M4 CPU a 1,024-token question took ~1.1 s (INT8, ORT), a short one ~45 ms. A phone CPU is slower. DJL's Android native AAR also lags its Java API (0.33.0 vs 0.38.0). Spec claims in `PRODUCT.md` §3 that rest on the old ~150M, 7–25 ms figure and are now unverified: the per-frame live capture gate, "tens of milliseconds is imperceptible" on arrival triage, a retroactive sweep "in minutes", the game deciding "many times a second" (**on a desktop M4 CPU the game now measures 10 decisions/s at ~62–66 ms P50, ~80 ms P95**, with ~106-token questions; a phone is still unmeasured). The desktop app's sweeps measured a median **73–99 ms per item** on the sample (a light machine) and **125–152 ms** with the machine's load average near 20 — desktop latency depends on what else is running, and a phone shares its CPU with everything | A1 measures it on a real mid-range device before anything depends on the number. Keep states short — latency scales with tokens, and most judgments do not need 1,024. If the Android AAR does not match, pin DJL to 0.33.0 or build the JNI library ourselves |
 | 14 | **Online sources do not work offline.** A proposed Composio bridge (email, calendar, social media) runs through Composio's cloud and needs the network and third-party OAuth; the Web tab's flight search (2026-09-23) fetches through our helper. Neither works in airplane mode, and both send something off the device. | **Governed by the online helper rules, `PRODUCT.md` §4a** (decided 2026-09-23): offline by default, fetch-only, never judge, send the minimum, labelled "Online" with source and fetch time, an off switch, fully usable offline with them off; user keys in the Keychain, never stored or logged server-side. The flight helper is `sambawy01/loupe-web-helper` (private), deployed on Railway. **Composio is still undecided** and, if built, is bound by the same rules. Not in the build order until the owner decides |
 
@@ -431,7 +433,7 @@ their acceptance criteria are met; entries here record increments toward them.
 - **2026-09-22 — C1/C2: judgment library and plain-language authoring.** `JudgmentLint` refuses
   text-judge phrasing — rating scales ("rate 1–10", "out of 100"), requests for prose
   ("explain why", "describe", "summarise"), requests to *write*, and two questions in one. Every
-  rule enforces the same fact: this is a classifier and there is no generative model, so a question
+  rule enforces the same fact: this is a classifier and judgments never depend on a generative model, so a question
   asking for an explanation describes a product that was never built, and catching it at authoring
   time beats discovering it as a judgment that scores badly for invisible reasons.
   `JudgmentAuthor.compile` infers yes/no candidates for a yes/no question and *refuses to guess*
@@ -657,7 +659,7 @@ after 1, 6 needs 3, 4 and 5.
   locally with the weights, all pass — DJL reproduces all 194 upstream token segments exactly,
   and the JVM path reproduces the Python parity numbers. None of this is an accuracy number: the
   fixture measures agreement with upstream, not correctness, and there is still no labelled
-  corpus. Training-data provenance is open (risk 12); on-device cost is unmeasured (risk 13).
+  corpus. Training-data provenance was open at the time (risk 12, since closed by owner decision 2026-09-23); on-device cost is unmeasured (risk 13).
 - **2026-09-23 — F5 (desktop half): the demo game, an original river shooter.** On the owner's
   "Go". Working name ***Riverflight***, a placeholder not cleared as a mark. **Why not Tetris:**
   *Tetris Holding v. Xio* (D.N.J. 2012) held a clone copying Tetris's look to infringe copyright and
@@ -939,6 +941,7 @@ after 1, 6 needs 3, 4 and 5.
   request and never stored or logged. None of the iPhone app exists yet; iPhone latency is
   unmeasured and the model is untuned.
 
+
 ---
 - **2026-09-23 — Epic #6 child 2: `engine` and `templates` are Kotlin Multiplatform; `LoupeKit`
   XCFramework builds.** On the owner's "Go". Targets `jvm`, `iosArm64`, `iosSimulatorArm64`;
@@ -1053,6 +1056,17 @@ after 1, 6 needs 3, 4 and 5.
     a price. The screen says so (disagreement line). 0.59 s for 6 offers on the simulator.
   - Tests: JVM 450 (+10 `FlightJudgeTest`), iOS simulator Kotlin 331; Xcode 33 unit (1 gated,
     skips without the model) + 2 UI, green.
+- **2026-09-23 — Risk 12 closed by owner decision; Loupe Station is the shipping desktop app.**
+  Docs only. The owner ("we searched and its Apache2.0") cleared
+  `convaiinnovations/laya-multilingual` for shipping under its Apache-2.0 licence and treats
+  risk 12 as an early assessment now closed. The training-data evidence — NC sources named in the
+  authors' benchmark, the unpublished full mix, the Gemma 2 tokenizer terms — stays in
+  `LICENSING.md` as the basis the owner weighed; asking the authors remains an optional
+  follow-up. Separately: **Loupe Station** (repo `sambawy01/loupe-station`, Python/Swift, bundle
+  id `com.loupe-ai.desktop`) is now the shipping desktop app. `loupe-desktop` in this repo stays
+  as the reference implementation whose watchers, measurement stack and 55 templates Loupe
+  Station is porting — **mirror any change to watcher logic or thresholds there.** The
+  never-list change `b05f996` (writing is opt-in and approval-gated) was made from that session.
 
 ## Hand-off
 
@@ -1119,9 +1133,10 @@ came from labelled fixtures.
 
 ### Open, and decided by someone other than the next session
 
-- **Risk 12, Laya's training data.** Not cleared for shipping. The cheapest step is asking the
-  authors for the multilingual checkpoint's full training mix. `LICENSING.md` has the evidence.
-- **The Gemma 2 tokenizer question** — part of risk 12.
+- ~~**Risk 12, Laya's training data.** Not cleared for shipping.~~ **Closed 2026-09-23 by owner
+  decision** — cleared for shipping under Apache-2.0. Optional follow-up, not a blocker: ask the
+  authors for the multilingual checkpoint's full training mix. `LICENSING.md` keeps the evidence.
+- ~~**The Gemma 2 tokenizer question** — part of risk 12.~~ Weighed in the owner's 2026-09-23 decision.
 
 ### Buildable here, right now
 

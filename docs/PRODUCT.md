@@ -389,8 +389,8 @@ counterfactuals built on that history are biased forever.
 weights, mmBERT-base backbone, encoder, non-autoregressive, scoring every candidate at its own
 marker in a single forward pass, across 100+ languages. It replaced
 `knowledgator/gliclass-modern-base-v2.0` on 2026-09-23, whose performance was not comparable.
-Its training data is only partly published and includes non-commercial sources; that is an open
-shipping risk, recorded in [`LICENSING.md`](LICENSING.md). Fine-tuned on our fixtures, with
+Its training data is only partly published and includes non-commercial sources; adopted and
+cleared for shipping by owner decision 2026-09-23, with training-data notes in [`LICENSING.md`](LICENSING.md). Fine-tuned on our fixtures, with
 calibration we fit ourselves rather than inherit — it ships uncalibrated and over-confident. Second backend is a logit-scored `Qwen/Qwen3-0.6B` (Apache-2.0), architecturally
 different so that the agreement check in §6 means something. **There is no hosted backend**: a
 network call breaks the offline guarantee. Licence provenance for every candidate, including
@@ -477,8 +477,8 @@ Closed since locking (two reopened on 2026-09-23 — the model, and the platform
 - **Model** — `convaiinnovations/laya-multilingual` (Apache-2.0 weights), since 2026-09-23;
   it replaced `gliclass-modern-base-v2.0` on performance. A logit-scored `Qwen3-0.6B`
   (Apache-2.0) stays the second backend. No hosted backend. Three candidates were rejected on
-  licence grounds, and Laya's training-data provenance is open; see [`LICENSING.md`](LICENSING.md)
-  and risk 12 in [`BUILD.md`](BUILD.md).
+  licence grounds. Laya is cleared for shipping by owner decision 2026-09-23 (risk 12 closed in
+  [`BUILD.md`](BUILD.md)); training-data notes in [`LICENSING.md`](LICENSING.md).
 - **Name** — **Loupe**. A loupe is the lens you hold up to something before you trust it:
   it magnifies, it does not decide for you, and it names no vendor whose model we might one
   day replace. The mark is crowded — see risk 9 in [`BUILD.md`](BUILD.md).
