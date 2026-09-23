@@ -6,6 +6,7 @@ struct NowView: View {
     @ObservedObject var service: JudgmentsService = .shared
     @ObservedObject var watchers: WatchersService = .shared
     @ObservedObject var sources: SourcesService = .shared
+    @ObservedObject var sort: SortService = .shared
     @State private var openItem: SourceItem?
     @State private var showQueue = false
     @State private var opened = false
@@ -83,6 +84,11 @@ struct NowView: View {
                         .buttonStyle(.plain)
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("now.needsYou")
+                }
+                if let last = sort.last {
+                    SortedCard(record: last)
+                        .padding(.horizontal, 16)
+                        .accessibilityIdentifier("now.sorted")
                 }
                 findingsSection
                 PlayCard { launcher.open($0) }

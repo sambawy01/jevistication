@@ -10,8 +10,8 @@ protocol PilotExecutor: AnyObject {
 
 final class QueuePilotExecutor: PilotExecutor {
     static let shared = QueuePilotExecutor()
-    private let queue = DispatchQueue(label: "dev.loupe.game.pilot", qos: .userInitiated)
-    func execute(_ work: @escaping () -> Void) { queue.async(execute: work) }
+    /// The app's one model thread (`ModelWork`): the pilot never shares Laya with a sweep mid-call.
+    func execute(_ work: @escaping () -> Void) { ModelWork.queue.async(execute: work) }
 }
 
 /// Runs a `HostedDecider`'s pilot off the simulation (main) thread and hands each decision back on

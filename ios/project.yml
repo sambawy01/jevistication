@@ -64,6 +64,9 @@ targets:
           - Rajdhani-Bold.ttf
           - JetBrainsMono.ttf
         ITSAppUsesNonExemptEncryption: false
+        # F1 passive mode (epic #7 child 6): one BGProcessingTask, external power, no network.
+        BGTaskSchedulerPermittedIdentifiers: [dev.loupe.app.sort]
+        UIBackgroundModes: [processing]
   LoupeTests:
     type: bundle.unit-test
     platform: iOS

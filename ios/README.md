@@ -34,7 +34,15 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
 
 - Watchers on Now (epic #7 child 5): `Loupe/Now/` over LoupeKit's shared `WatcherRun` + `WatcherFindings`. Runs the five watchers whenever the scanned items change (expiry's model half when Laya is installed); the hero shows the top finding, then every finding with its watcher, evidence lines, why, Confirm / Dismiss / Not relevant (corrections log, Undo) and Open item; the subscriptions census with a monthly total. Loading and empty states say what is true; sample findings carry a Sample pill; the mascot shows `found` for findings not seen before.
 
+- Sorting (epic #7 child 6, F1 + F2): `Loupe/Sort/` over LoupeKit's shared `SweepCoordinator` + `ModelLane`. Every model call in the app (Results sweeps, sorting, the watchers' model half, flight ranking, the game's pilot) runs on the one serial queue `ModelWork.queue`; priorities are foreground > game > sweep, and a sort stops between items when anything above it claims the lane, then resumes by itself when it is free. A run sweeps every judgment over every enabled source, skipping items already judged under the current criteria hash, then runs the watchers; progress shows done/total, items/s and median latency; Cancel works; any stop is checkpointed (rows are in the ledger) and the next run resumes. Me → "Sort while charging" (**off by default**; turning it on asks for notification permission) schedules a `BGProcessingTask` `dev.loupe.app.sort` (`requiresExternalPower`, no network; `BGTaskSchedulerPermittedIdentifiers` + `UIBackgroundModes: processing` in `project.yml`); its expiration handler stops at the next item. Runs refuse, or stop, at thermal `.serious`/`.critical` and in Low Power Mode. Me → "Run now" runs it in the foreground. A local notification and a Now card show the last run's real counts ("412 sorted, 9 need you"). DEBUG: `-LoupeSortDemo` (with `-LoupeFixtures`; stand-in scorer, throwaway ledger).
+  - **Trigger the background task in the simulator:** run the app from Xcode, turn on Me → "Sort while charging", send the app to the background (so the request is submitted), pause in the debugger and enter
+    `e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateLaunchForTaskWithIdentifier:@"dev.loupe.app.sort"]`
+    then continue. To test expiry, while it runs pause again and enter
+    `e -l objc -- (void)[[BGTaskScheduler sharedScheduler] _simulateExpirationForTaskWithIdentifier:@"dev.loupe.app.sort"]`.
+    (The simulator refuses real `submit` calls; the handler logic is covered by `LoupeTests/SortTests.swift` with a fake scheduler.)
+
 ## Pending
+- Sorting on a real iPhone: battery drain and thermal behaviour of a charging-window sort, and whether iOS grants the window at all, need a device (owner-blocked).
 - Game fps and Laya latency on a real iPhone (simulator: 60 fps, ~9 decisions/s, p50 ~80 ms).
 - Model download host: `LayaModelSource.baseURL` is empty (no host recorded); the screen says so.
 - Laya is untuned: on the fixture it is unsure of every offer and ranks an over-cap fare first.

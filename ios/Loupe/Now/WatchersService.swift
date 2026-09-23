@@ -24,7 +24,6 @@ final class WatchersService: ObservableObject {
     private let items: () -> [SourceItem]
     private let model: JudgmentModelProvider
     private let seen: UserDefaults
-    private let queue = DispatchQueue(label: "dev.loupe.watchers", qos: .userInitiated)
     private static let seenKey = "watchers.seenKeys"
 
     init(ledger: LedgerService, items: @escaping () -> [SourceItem], model: JudgmentModelProvider, seen: UserDefaults) {
@@ -48,13 +47,12 @@ final class WatchersService: ObservableObject {
         let backend: Backend? = model.isInstalled ? await model.backend() : nil
         let todayIso = Self.isoDay(today)
         let corrections = ledger.correctionIndex()
-        let result: WatcherSummary = await withCheckedContinuation { c in
-            queue.async {
-                let report = WatcherRun.shared.runIso(items: all, todayIso: todayIso, backend: backend)
-                c.resume(returning: WatcherFindings.shared.summarise(report: report, items: all,
-                                                                     sampleSourceIds: [SourcesService.sampleId],
-                                                                     corrections: corrections))
-            }
+        // On the one model thread (the expiry radar may ask Laya); foreground, so a sort yields.
+        let result: WatcherSummary = await ModelWork.run(.foreground) {
+            let report = WatcherRun.shared.runIso(items: all, todayIso: todayIso, backend: backend)
+            return WatcherFindings.shared.summarise(report: report, items: all,
+                                                    sampleSourceIds: [SourcesService.sampleId],
+                                                    corrections: corrections)
         }
         let keys = Set(result.findings.map(\.key))
         let before = Set(seen.stringArray(forKey: Self.seenKey) ?? [])

@@ -46,6 +46,7 @@ struct MeView: View {
                         Text(exportError).font(.footnote).foregroundStyle(Palette.inkSoft)
                     }
                 }
+                SortSection()
                 Section("Game") {
                     Button { launcher.open(.watch) } label: {
                         row("Riverflight", "watch Laya fly")

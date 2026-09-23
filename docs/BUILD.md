@@ -616,8 +616,8 @@ Nothing below is deferred by choice; each needs something this environment does 
 | **B1–B9** every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, calendar, contacts, notifications, WebView |
 | **D5** actions, preview, undo | Android. The desktop app shows **preview only** and never changes a file; undo exists for corrections |
 | **E1–E4** actuation | Android `AutofillService`, App Intents, accessibility, WebView |
-| **F1** passive mode | WorkManager, charging and thermal constraints |
-| **F2** on a phone | Android sources and WorkManager constraints (risk 3). Built on the desktop |
+| **F1** passive mode | Android: WorkManager, charging and thermal constraints. iPhone: built on the simulator (epic #7 child 6); battery/thermal on a device needs a physical iPhone |
+| **F2** on a phone | Android sources and WorkManager constraints (risk 3). Built on the desktop and the iPhone simulator (epic #7 child 6); device cost unmeasured |
 | **F3** overnight fine-tune | Model weights and a GPU |
 | **F5** the game, on a phone | An Android build and a device. The desktop game runs (`:game-desktop`); the Compose UI is written to move |
 | Real measurement | **A labelled fixture corpus.** Every number the harness produces today comes from synthetic fixtures; the machinery is proven, the numbers are not real. The Laya parity numbers measure agreement with upstream, not accuracy. The desktop app now *collects* labels — every correction is one — so the corpus can start with the owner's own files |
@@ -651,7 +651,8 @@ after 1, 6 needs 3, 4 and 5.
 | 3 | Judgments tab | **Done 2026-09-23 (simulator)** — shared `dev.loupe.kit.judgments` (JudgmentBook, JudgmentSweep, JudgmentResults); Library (55 templates, 10 categories, search, detail, Use this), Write your own (live lint, yes/no · score · pick, bare yes/no refused, criteria-in-prompt off by default), My judgments with counts, per-judgment Results over the sample with Laya (off main, cancellable) or "Model not installed" |
 | 4 | Unsure queue + measurement | **Done 2026-09-23 (simulator)** — shared `JudgmentMeasure` (queue across judgments with audit arm, corrections keyed by criteria hash, D2 gates 10/30, D3 preview, D4 via Harness, "use the baseline"); Unsure queue, Measure screen, Needs you on Now, Me agreement line |
 | 5 | Watchers on Now | **Done 2026-09-23 (simulator)** — orchestration moved to shared `dev.loupe.kit.watchers.WatcherRun` (desktop delegates, its tests unchanged; no rule or threshold changed); `WatcherFindings` (findings with evidence, verdicts as corrections, subscriptions census); Now hero shows the top finding, findings list with Confirm / Dismiss / Not relevant / Open item, census, mascot `found` on new findings, all sample findings labelled Sample |
-| 6–9 | Sweep, phone sources, mascot, model delivery | Not started |
+| 6 | Retroactive sweep + passive mode | **Done 2026-09-23 (simulator)** — shared `SweepCoordinator` + `ModelLane` (one model thread; foreground > game > sweep; preempt between items, resume); every judgment × every enabled source, skipping items judged under the current criteria hash, then the watchers; progress/items/s/median/cancel; BGProcessingTask "Sort while charging" (off by default, external power, no network, expiry checkpoints, thermal `.serious`+ and Low Power Mode stop it); Me → Run now; notification + Now card from real counts. **Battery/thermal on a device is owner-blocked** (needs an iPhone) |
+| 7–9 | Phone sources, mascot, model delivery | Not started |
 
 ### Proving milestones
 
@@ -1123,6 +1124,34 @@ after 1, 6 needs 3, 4 and 5.
   as the reference implementation whose watchers, measurement stack and 55 templates Loupe
   Station is porting — **mirror any change to watcher logic or thresholds there.** The
   never-list change `b05f996` (writing is opt-in and approval-gated) was made from that session.
+- **2026-09-23 — Epic #7 child 6: retroactive sweep and passive mode on iPhone (F1, F2).** New
+  shared `dev.loupe.kit.sweep` (loupe-kit common, no new dependency): `ModelLane` — claims at
+  `FOREGROUND` > `GAME` > `SWEEP`, thread-safe, an idle signal when the last claim above a sweep goes
+  — and `SweepCoordinator`, which runs `JudgmentSweep` for every judgment over every item of every
+  enabled source (skipping items already decided under the judgment's current criteria hash, as the
+  desktop does), then `WatcherRun`; one progress across judgments (done/total, items/s, median model
+  latency from a timing wrapper around the backend), stops between items on cancel, BGTask expiry,
+  heat, Low Power Mode or a higher claim (`StopReason`), always handing rows over before returning,
+  so running again resumes with no item judged twice; `SortSummary` ("N sorted, M need you" — M are
+  answers below threshold or unusable). Tests (JVM + iOS simulator): skip-already-judged and
+  rewording, cancel/expiry then resume exactly once, preemption by a foreground claim mid-sweep and
+  resume on release, the priority order, a failing judgment not stopping the others. iOS: every model
+  call now runs on one serial queue (`ModelWork`): the Results sweep, the watchers and flight ranking
+  claim `FOREGROUND`, the game claims `GAME` while Laya flies (released on close and in deinit), the
+  pilot's executor moved onto the same queue. `SortService` (Run now, progress, cancel, thermal
+  `.serious`/`.critical` and Low Power Mode gating before and during a run, auto-resume after
+  preemption with counts carried across the pause, last run persisted), `BackgroundSorter`
+  (BGProcessingTask `dev.loupe.app.sort`, `requiresExternalPower`, no network, registered in
+  `LoupeApp.init`, rescheduled each run, expiration handler stops at the next item, completes
+  unsuccessfully when stopped so iOS offers another window), a local notification (permission asked
+  only when the setting is turned on), Me → Sorting (toggle **off by default**, Run now, progress,
+  Cancel, last run) and a Now card. XCTests drive the BG handler through a fake scheduler/task and
+  the gating through fake conditions; a UI test runs Me → Run now on the sample with a stand-in
+  scorer. How to fire the task in the simulator debugger is in `ios/README.md`. **Not measured:**
+  battery drain and thermal behaviour on a real iPhone, and how often iOS grants the window — risk
+  3's device half, owner-blocked on a physical iPhone. Traps: the sweep's latency moves with load
+  (see risk 13), so items/s on the simulator is not a phone number.
+
 - **2026-09-23 — Epic #7 child 1: the ledger on iOS, and export.** New KMP module `:persistence`
   (jvm + iOS, no new dependency): a small common JSON reader/writer that matches Gson byte for byte
   (compact and pretty; `GsonParityTest`), `LedgerCodec` / `CorrectionCodec` / `JudgmentCodec` moved

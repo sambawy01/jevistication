@@ -167,8 +167,9 @@ final class WebModel: ObservableObject {
             }
             let ranker = LayaRanker(backend: backend)
             let ledger = self?.ledger
+            // On the one model thread, as foreground work: a passive sort in progress yields to it.
             let work = Task.detached(priority: .userInitiated) { () -> Result<[RankedOffer], Error> in
-                Result(catching: {
+                await ModelWork.run(.foreground) { Result(catching: {
                     let run = try ranker.decide(offers, by: priorities) { done, total in
                         Task { @MainActor [weak self] in
                             if case .running = self?.ranking { self?.ranking = .running(done: done, total: total) }
@@ -177,7 +178,7 @@ final class WebModel: ObservableObject {
                     // Every offer Laya judged is a decision: logged, synced, on this phone only.
                     ledger?.record(run.rows)
                     return run.ranked
-                })
+                }) }
             }
             let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
             guard let self, !Task.isCancelled else { return }

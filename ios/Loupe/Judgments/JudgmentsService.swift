@@ -55,7 +55,6 @@ final class JudgmentsService: ObservableObject {
     let ledger: LedgerService
     private let items: () -> [SourceItem]
     private let model: JudgmentModelProvider
-    private let queue = DispatchQueue(label: "dev.loupe.judgments.sweep", qos: .userInitiated)
     private var bridge: SweepBridge?
     private var loaded = false
 
@@ -194,10 +193,9 @@ final class JudgmentsService: ObservableObject {
         sweep = SweepProgress(judgmentId: j.id, total: Int32(plan.toJudge.count), done: 0, withoutText: plan.withoutText,
                               alreadyDecided: plan.alreadyDecided, mechanical: 0, unusable: 0, elapsedMillis: 0,
                               medianMillis: nil, running: true, cancelled: false, error: nil)
-        let end: SweepProgress = await withCheckedContinuation { c in
-            queue.async {
-                c.resume(returning: JudgmentSweep(backend: backend).run(judgment: j, plan: plan, observer: bridge))
-            }
+        // On the one model thread, as foreground work: a passive sort in progress yields to it.
+        let end: SweepProgress = await ModelWork.run(.foreground) {
+            JudgmentSweep(backend: backend).run(judgment: j, plan: plan, observer: bridge)
         }
         ledger.flush()
         self.bridge = nil
@@ -220,8 +218,8 @@ final class JudgmentsService: ObservableObject {
         sweep = p
     }
 
-    /// Waits for work queued on the sweep queue (tests).
-    nonisolated func flush() { queue.sync {} }
+    /// Waits for work queued on the model queue (tests).
+    nonisolated func flush() { ModelWork.queue.sync {} }
 }
 
 /// Kotlin's `SweepObserver`, called on the sweep queue. The cancel flag is read there and set from

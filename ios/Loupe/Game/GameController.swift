@@ -67,6 +67,10 @@ final class GameController: ObservableObject {
     /// Watch mode with Laya flying: the baseline on the same seed, in lockstep, for the scoreboard.
     private(set) var shadow: GameSession?
     private var scheduler: PilotScheduler?
+    /// Held while Laya flies (the game outranks sweeps). `nonisolated(unsafe)` so deinit can drop it:
+    /// a controller freed without `close()` must not leave passive sorting paused for good.
+    nonisolated(unsafe) private var modelClaim: ModelClaim?
+    deinit { modelClaim?.release() }
     private var steering = TouchSteering()
 
     /// Explosions for the scene to draw: world x, y and whether it is a big one.
@@ -161,6 +165,9 @@ final class GameController: ObservableObject {
     /// Laya flies the same `ModelPilot` as the desktop game; the baseline flies the same seed alongside.
     func flyLaya(_ backend: Backend) {
         pilot = .laya
+        // While Laya flies, the game holds the model lane: a passive sort pauses (and resumes after).
+        modelClaim?.release()
+        modelClaim = ModelWork.lane.claim(priority: .game)
         let decider = GameSessions.shared.modelDecider(backend: backend)
         let scheduler = PilotScheduler(decider: decider, executor: executor, returnToSimulation: returnToSimulation)
         begin(session: GameSessions.shared.hosted(seed: seed, decider: decider,
@@ -170,6 +177,7 @@ final class GameController: ObservableObject {
     }
 
     private func begin(session: GameSession, scheduler: PilotScheduler?, shadow: GameSession?) {
+        if scheduler == nil { modelClaim?.release(); modelClaim = nil }
         self.scheduler?.close()
         self.session.close()
         self.shadow?.close()
@@ -334,6 +342,8 @@ final class GameController: ObservableObject {
 
     func close() {
         openTask?.cancel()
+        modelClaim?.release()
+        modelClaim = nil
         scheduler?.close()
         session.close()
         shadow?.close()
