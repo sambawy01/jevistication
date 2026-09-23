@@ -270,6 +270,7 @@ struct ResultDetailView: View {
                     Text("Preview only: Loupe changes nothing on this phone.").font(.caption).foregroundStyle(Palette.inkSoft)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).card()
+                SecondOpinionSection(judgment: judgment, result: result, assist: AssistService.shared)
                 if let item = result.item {
                     VStack(alignment: .leading, spacing: 6) {
                         Caption(text: "Mechanical facts")

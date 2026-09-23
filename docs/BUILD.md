@@ -564,6 +564,47 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-24 — Epic #7 child 16: Workflows — reply drafts and a second opinion (opt-in writing
+  assistant).** On the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
+  - **Ported from Loupe Station** (`~/laya-studio` at `ea7697a`): `workflows/email_reply.py` (BASE_RULES,
+    OUTPUT_RULES, reply schema, tag neutralising, `thread_subject`, `clean_body`), `workflows/second_opinion.py`
+    (SYSTEM_PROMPT, question block, per-question schema, off-option answers fall back to Laya's),
+    `llm/client.py` (OpenAI-compatible `POST {base}/chat/completions`, JSON mode + schema instruction,
+    one repair turn, retry on 429/5xx/connection errors with Retry-After, typed errors, `redact`,
+    `extract_json`), `llm/providers.py` (`check_base_url`), `mail/drafts.py` (`reply_subject`),
+    `static/js/{assist,llm-settings}.js` (flows, wording). Swift only, in `ios/Loupe/Assist/`.
+    **Not ported:** the server-side key store, public URL and log redaction; the Laya steps
+    (`workflows/laya_steps.py` injection guard, reply planner, brand gate — they need Station's workflow
+    templates; the draft says it was not checked by Laya); `actions.py` `save_email_draft` (Loupe never
+    writes into a mailbox); DeepSeek model listing / connection test.
+  - **Rules as built** (PRODUCT §4, §4a): off by default — unconfigured or switched off, `isReady` is
+    false, no request is built (tests assert zero requests). Provider: an HTTPS OpenAI-compatible
+    endpoint + model + key (BYOK, Keychain `WhenUnlockedThisDeviceOnly`), or Ollama on the local
+    network (private IPv4 / `.local`, no key). Every call shows an Online badge with the provider's
+    name and a preview of exactly the messages sent (the target email's sender, subject and own text
+    — the quoted thread cut, ≤ 7 200 chars; or one item's text ≤ 6 000 with the question); the user taps
+    "Send to <provider>" before each call. Ephemeral URLSession (no cookies, no cache).
+  - **Drafts:** Mail triage → "Draft a reply" (not offered on suspected phishing) → labelled **Draft**,
+    queued in Review as an `email_reply` item (new shared feature/kind in `ReviewRegistry`, action
+    `none`); Approve (in the sheet or in Review) records it; then Copy, or Open in Mail
+    (`MFMailComposeViewController`, pre-filled — the user taps Send). Loupe never sends, saves or files it.
+  - **Second opinion:** judgment result → item → "Ask <provider> for a second opinion (Online)" →
+    "Second opinion: agrees / disagrees — answer — reason" beside Laya's answer. **Display only and not
+    logged** (the simpler honest option): no ledger row, correction, calibration or queue change;
+    kept in memory for the session. Station's `disagreements.jsonl` is not ported.
+  - **Tests:** `LoupeTests/AssistTests.swift` (20, fake `URLProtocol`, no provider contacted): gating
+    (off by default, no key, disabled, unconfirmed → zero requests; remove forgets the key), URL rules,
+    prompt construction and minimisation (quoted thread absent from the request body; tags
+    neutralised; caps), request shape (POST, Bearer, `response_format`, preview == body), parse,
+    repair turn, 401/404/5xx/429/timeout/unreachable/bad JSON, key redaction, second opinion writes
+    nothing to the ledger directory, a draft waits in Review and approval only records it;
+    `LoupeUITests/AssistUITests.swift` (Me shows Writing assistant Off with the switch off; DEBUG
+    `-LoupeFakeAssistant` → Mail triage → Draft a reply → preview → Send → a Draft appears → Approve → Copy).
+  - **PRODUCT.md note (not edited):** §4a says "There is no AI on any server — not ours, not a
+    vendor's", while §4 (changed in `b05f996`) allows "a provider with your own key". Built per §4:
+    the assistant is the user's own provider, never Loupe's, opt-in, and never judges; §4a's line may
+    want a clarifying clause.
+
 - **2026-09-24 — Epic #7 child 15: the Items inbox (CSV, .eml / .mbox, ZIP archives, share-sheet
   imports).** On the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
   - **Ported from Loupe Station** (`~/laya-studio` at `ea7697a`, the `laya_studio/items` package and
@@ -949,6 +990,7 @@ after 1, 6 needs 3, 4 and 5.
 | 13 | Review queue | **Done 2026-09-24 (simulator)** — Loupe Station's review state machine, append-only log, limits and registry ported to shared `dev.loupe.kit.review` (files beside the ledger); proposals from the privacy check (remove a reachable duplicate copy), mail triage (confirm phishing), watchers (keep a finding) and pack judgments; Now card "To review: N"; approve (one or batch), reject with a reason, retry (re-runs the check), undo where reversible; nothing runs without approval; separate from the Unsure queue (labels) |
 | 14 | Preset packs | **Done 2026-09-24 (simulator)** — Station's `laya-preset-pack` format validated exactly as Station in shared `dev.loupe.kit.packs`, plus the C2 lint per question; import from Files / "Open in Loupe" / the bundled, labelled Bistro Cloud example; preview before adding; same-id conflicts skip / replace / keep both; export your judgments as a pack (round-trips) |
 | 15 | Items inbox | **Done 2026-09-24 (simulator)** — Station's `items/csvimport.py` rules in shared `CsvRows` (sniffing, header detection, English/Arabic names, amounts); Sources → Inbox: import CSV (a row per item with column context), `.eml` / `.mbox`, ZIP (pure-Kotlin reader with Station's bomb limits plus traversal / symlink / nested refusals), pasted or shared text and links; each batch listed with counts and removable; items labelled "Imported · origin · name · date" and read by judgments, sweep, watchers, privacy check and mail triage |
+| 16 | Workflows: reply drafts, second opinion | **Done 2026-09-24 (simulator)** — Station's `email_reply` / `second_opinion` prompts and `llm/client.py` in Swift (`ios/Loupe/Assist/`); opt-in writing assistant, off by default (BYOK OpenAI-compatible HTTPS or local-network Ollama, key in Keychain); Online label + exact preview + confirm before each call; drafts labelled Draft, wait in Review, copied or opened in Mail by the user, never sent by Loupe; second opinion shown beside Laya's answer, never changes or logs a decision |
 
 ### Proving milestones
 

@@ -80,6 +80,13 @@ final class ReviewService: ObservableObject {
         submit(ReviewProducers.shared.judgments(plans: plans, packSlug: packSlug))
     }
 
+    /// Queues one proposal and returns the queued item (nil when refused).
+    func submitProposal(_ p: ReviewProposal) -> ReviewItem? {
+        guard let done = queue.submit(p: p, at: now()) as? ReviewResult.Done else { return nil }
+        refresh()
+        return done.item
+    }
+
     @discardableResult
     private func submit(_ proposals: [ReviewProposal]) -> Int {
         var added = 0

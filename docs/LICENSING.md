@@ -398,6 +398,13 @@ registry, pack format, validation rules and tests from the same repository and c
 (the owner's own business example, labelled as such in the app). Same owner, so no licence
 obligation; provenance is in each source header and in `THIRD_PARTY_NOTICES.md`. Adopted.
 
+## Loupe Station writing workflows — checked 2026-09-24
+
+The opt-in writing assistant (epic #7 child 16) ports prompt templates, the OpenAI-compatible client
+logic and wording from the same repository and commit (`laya_studio/workflows/{email_reply,second_opinion}.py`,
+`llm/{client,providers}.py`, `mail/drafts.py`, `static/js/{assist,llm-settings}.js`). Same owner, so no
+licence obligation; no vendor SDK or new dependency (URLSession, MessageUI). Adopted.
+
 ## Rejected
 
 ### NanoJev — weights and dataset declare no licence

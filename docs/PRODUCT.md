@@ -202,7 +202,9 @@ photos, files and SMS. *"We never see it"* is what is true of Gmail and Sheets.
 flight prices — so a source may fetch them, under rules as fixed as the never list:
 
 - **Fetch-only, never judge.** An online source brings data back; every judgment runs on the
-  phone. There is no AI on any server — not ours, not a vendor's.
+  phone. No server's AI — ours or a vendor's — takes part in any judgment. (The opt-in writing
+  assistant in §4, which uses a provider with your own key for drafts, is the one exception and
+  follows these same rules: labelled, previewed, off by default, never deciding a judgment.)
 - **Send the minimum** — the search itself. Nothing from your sources, ledger or corrections.
 - **Labelled every time.** Every result that came from the network says **"Online"**, names its
   source, and shows when it was fetched.

@@ -37,7 +37,9 @@ struct MailTriageCard: View {
 /// the concrete signals behind a phishing verdict, link checks, and Open / Mark safe / Confirm.
 struct MailTriageView: View {
     @ObservedObject var mail: MailTriageService
+    @ObservedObject private var assist = AssistService.shared
     @State private var openItem: SourceItem?
+    @State private var replyTo: SourceItem?
 
     var body: some View {
         ScrollView {
@@ -78,6 +80,7 @@ struct MailTriageView: View {
         .task { if mail.summary == nil { await mail.run() } }
         .refreshable { await mail.run() }
         .sheet(item: $openItem) { ItemTextView(item: $0) }
+        .sheet(item: $replyTo) { ReplyDraftSheet(item: $0, assist: assist, review: ReviewService.shared) }
     }
 
     private func sectionView(_ section: MailSection, _ rows: [MailRow]) -> some View {
@@ -139,6 +142,11 @@ struct MailTriageView: View {
                     Button("Confirm phishing") { mail.confirmPhishing(r) }
                         .foregroundStyle(Palette.dangerText)
                         .accessibilityIdentifier("mail.confirmPhishing")
+                    // Only with an assistant configured; never offered for suspected phishing.
+                    if assist.isReady {
+                        Button("Draft a reply") { replyTo = mail.item(r.itemId) }
+                            .accessibilityIdentifier("mail.draftReply")
+                    }
                 }
             }
             .font(.caption.weight(.semibold))

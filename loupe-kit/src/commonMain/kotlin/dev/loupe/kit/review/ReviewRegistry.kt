@@ -60,18 +60,26 @@ object ReviewRegistry {
     const val MAIL = "mail_triage"
     const val WATCHER = "watcher"
     const val JUDGMENT = "judgment"
-    val FEATURES: List<String> = listOf(PRIVACY, MAIL, WATCHER, JUDGMENT)
+    /** Epic #7 child 16: a reply draft the opt-in writing assistant wrote (Station's `email_reply`). */
+    const val EMAIL_REPLY = "email_reply"
+    val FEATURES: List<String> = listOf(PRIVACY, MAIL, WATCHER, JUDGMENT, EMAIL_REPLY)
 
     fun featureTitle(feature: String): String = when (feature) {
         PRIVACY -> "Privacy check"
         MAIL -> "Mail triage"
         WATCHER -> "Watchers"
         JUDGMENT -> "Judgments"
+        EMAIL_REPLY -> "Reply drafts"
         else -> feature
     }
 
     private val kinds: Map<String, ReviewKind> = listOf(
         ReviewKind("text", listOf(ReviewField("text", true, 20_000))),
+        // Station's email_reply kind, trimmed: approving records it; Loupe never sends or saves it into a mailbox.
+        ReviewKind("email_reply", listOf(
+            ReviewField("item_id", true, 1_000), ReviewField("to", false, 300), ReviewField("subject", true, 300),
+            ReviewField("body", true, 10_000), ReviewField("provider", true, 200), ReviewField("warnings", false, 1_000),
+        )),
         ReviewKind("file_action", listOf(
             ReviewField("path", true, 1_000), ReviewField("name", true, 300), ReviewField("keep", false, 1_000),
         )),

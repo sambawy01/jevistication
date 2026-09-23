@@ -6,6 +6,7 @@ struct MeView: View {
     @ObservedObject private var laya = LayaModel.shared
     @ObservedObject private var ledger = LedgerService.shared
     @ObservedObject private var judgments = JudgmentsService.shared
+    @ObservedObject private var assist = AssistService.shared
     @State private var exporting = false
     @State private var exportError: String?
     @State private var shared: SharedFile?
@@ -61,6 +62,12 @@ struct MeView: View {
                     .accessibilityIdentifier("me.game")
                     Button("Play it yourself") { launcher.open(.human) }
                         .accessibilityIdentifier("me.game.play")
+                }
+                Section("Writing assistant") {
+                    NavigationLink { AssistSettingsView(assist: assist) } label: {
+                        row("Writing assistant", assist.config.enabled ? (assist.isReady ? "On · Online" : "Needs setup") : "Off")
+                    }
+                    .accessibilityIdentifier("me.assistant")
                 }
                 Section("Web") {
                     Button("Web settings") { showWebSettings = true }

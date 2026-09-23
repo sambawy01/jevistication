@@ -138,6 +138,12 @@ its sources".
   pack `examples/packs/bistro-cloud.json` is copied verbatim; it is the owner's own business rules
   (Bistro Cloud) and the app labels it an example. Review / pack wording follows `static/js/review*.js`
   and `static/js/packs.js`.
+- **Also used in (epic #7 child 16):** `ios/Loupe/Assist/` — the reply-draft rules, output rules,
+  schema, tag neutralising, subject and body cleaning of `laya_studio/workflows/email_reply.py` and
+  `mail/drafts.py`; the second-opinion prompt, schema and fallback of `workflows/second_opinion.py`;
+  the OpenAI-compatible request, JSON mode, repair turn, retry, error codes, `redact` and
+  `extract_json` of `llm/client.py`; `check_base_url` of `llm/providers.py`; flow and wording of
+  `static/js/{assist,llm-settings}.js`. No vendor SDK; no server-side key store.
 - **Also used in (epic #7 child 15):** `sources-common/src/commonMain/kotlin/dev/loupe/sources/common/CsvRows.kt`
   — the CSV decoding order, delimiter candidates, header-row rule, English and Arabic header names,
   value-based column detection, amount and number reading (`facts/money.py` `parse_number` and
