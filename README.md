@@ -6,8 +6,10 @@ Teach it a judgment in plain language. It applies it across your photos, files, 
 spreadsheets, calendar and the pages you browse. It shows you what it is unsure about. It
 learns you. Nothing it learns leaves your device.
 
-> Status: specification locked, code not started.
-> Start with [`docs/PRODUCT.md`](docs/PRODUCT.md).
+> Status: the engine core is built and tested headless (JVM Kotlin, CI on every push); the
+> decision model runs through ONNX Runtime on a desktop. No Android app yet, no device
+> measurements, no labelled data. Where it stands: [`docs/BUILD.md`](docs/BUILD.md).
+> The specification: [`docs/PRODUCT.md`](docs/PRODUCT.md).
 
 ## The idea
 
@@ -32,10 +34,12 @@ hers. A bank page that isn't your bank.
 
 ## Why it runs on your phone
 
-The model is ~150M parameters, answers in 7–25 ms, emits zero output tokens, and is
-Apache-2.0. On a desktop those are conveniences. On a phone they are the only reason this can
-exist — your photos and messages are not going to a cloud API, and a model that decodes no
-tokens costs almost no battery.
+The model ([Laya](https://huggingface.co/convaiinnovations/laya-multilingual), multilingual) is
+~320M parameters, emits zero output tokens, and its weights are Apache-2.0. A short question
+takes tens of milliseconds on a desktop CPU; phone latency is not measured yet. On a desktop
+those are conveniences. On a phone they are the only reason this can exist — your photos and
+messages are not going to a cloud API, and a model that decodes no tokens costs far less battery
+than one that does.
 
 Airplane mode: everything still works.
 
@@ -65,6 +69,8 @@ writes prose. Never sends your data to our servers.
 |---|---|
 | [`docs/PRODUCT.md`](docs/PRODUCT.md) | The whole specification: sources, capabilities, actuators, architecture, build order |
 | [`docs/RESEARCH.md`](docs/RESEARCH.md) | The evidence: sixteen repositories, the measured numbers, the patterns taken, and what we chose not to build |
+| [`docs/BUILD.md`](docs/BUILD.md) | The build plan, what is built, what is blocked, and the hand-off |
+| [`docs/LICENSING.md`](docs/LICENSING.md) | Every model, dataset and dependency, verified at source — including what is still open |
 
 ## License
 
