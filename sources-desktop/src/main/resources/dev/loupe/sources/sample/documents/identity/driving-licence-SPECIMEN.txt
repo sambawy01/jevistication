@@ -1,0 +1,11 @@
+SYNTHETIC SAMPLE DATA — every name, number and address here is invented for the Loupe demo.
+
+[Text transcribed from a driving licence — SPECIMEN]
+
+DRIVING LICENCE
+1. SAMPLE
+2. ALEX
+3. 01.01.1990
+4a. 02.02.2019   4b. 02.02.2029
+5. SAMPL900101AX9XX (SPECIMEN)
+9. B

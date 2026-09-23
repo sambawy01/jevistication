@@ -1,0 +1,9 @@
+{
+  "_note": "SYNTHETIC SAMPLE DATA",
+  "trip": "Lisbon, October 2026",
+  "bookings": [
+    {"type": "flight", "reference": "QX7-4411", "from": "LHR", "to": "LIS", "flight": "SP 1203", "departs": "2026-10-14T08:05"},
+    {"type": "hotel", "name": "Casa Azul Lisbon", "check_in": "2026-10-14", "nights": 3}
+  ],
+  "entry_requirement": "Passport must be valid for at least 3 months after the date you plan to leave the Schengen area."
+}

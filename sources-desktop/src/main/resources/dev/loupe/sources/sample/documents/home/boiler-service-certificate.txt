@@ -1,0 +1,8 @@
+SYNTHETIC SAMPLE DATA — every name, number and address here is invented for the Loupe demo.
+
+BOILER SERVICE CERTIFICATE
+Address: 12 Elm Road, Sampletown
+Appliance: Combi boiler, model SAMPLE-24
+Service carried out: 4 March 2026 by Warmhome Heating (engineer ID 0000)
+Result: Safe to use. Flue and pressure checks passed.
+Next service due: March 2027

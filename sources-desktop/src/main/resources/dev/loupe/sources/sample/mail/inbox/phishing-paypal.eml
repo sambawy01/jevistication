@@ -1,0 +1,26 @@
+From: PayPal Security <service@paypa1-secure.example>
+To: Alex Sample <alex@sample.example>
+Date: Mon, 21 Sep 2026 07:12:00 +0000
+Subject: Your account has been limited
+Message-ID: <6042685261152122683@sample.example>
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="SAMPLE-BOUNDARY-42"
+
+--SAMPLE-BOUNDARY-42
+Content-Type: text/plain; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Dear customer,
+
+We noticed unusual activity. Your account will be suspended within 24 hours unless you verify your identity.
+
+Verify now: http://paypal.account-verify.example/login
+
+PayPal Security Team
+(SYNTHETIC SAMPLE — a phishing example)
+--SAMPLE-BOUNDARY-42
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+<p>Dear customer,</p><p>We noticed unusual activity. Your account will be suspended within 24 hours unless you verify your identity.</p><p><a href="http://paypal.account-verify.example/login">Verify now</a></p><p>PayPal Security Team</p>
+--SAMPLE-BOUNDARY-42--

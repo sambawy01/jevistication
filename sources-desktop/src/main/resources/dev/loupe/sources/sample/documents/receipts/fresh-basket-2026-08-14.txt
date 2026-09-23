@@ -1,0 +1,18 @@
+SYNTHETIC SAMPLE DATA — every name, number and address here is invented for the Loupe demo.
+
+FRESH BASKET MARKET
+12 Example Street, Sampletown
+VAT No. 000 0000 00
+
+14/08/2026 18:42        Till 3
+
+Oat milk 1L          2 x 1.55   £3.10
+Sourdough loaf                  £2.40
+Free-range eggs x6              £2.35
+Apples (loose)                  £1.80
+Olive oil 500ml                 £2.80
+
+TOTAL PAID                     £12.45
+VISA DEBIT ****1111            £12.45
+
+Thank you for shopping with us!

@@ -1,0 +1,9 @@
+SYNTHETIC SAMPLE DATA — every name, number and address here is invented for the Loupe demo.
+
+RIVERSIDE SURGERY
+Appointment confirmation
+
+Patient: A. Sample
+Clinician: Dr Example (GP)
+Date: 2 October 2026 at 09:20
+Please arrive 5 minutes early. To cancel, call the surgery at least 24 hours before.

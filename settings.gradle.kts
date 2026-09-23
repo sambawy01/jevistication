@@ -7,3 +7,4 @@ include("game-desktop")
 include("templates")
 
 
+include("sources-desktop")
