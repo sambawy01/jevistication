@@ -49,6 +49,19 @@ enum SharedInbox {
         return target
     }
 
+    /// What the share sheet hands to the Inbox (epic #7 child 15) rather than to Files: CSVs, mail
+    /// files, ZIP archives, and shared text or links. They wait in a hidden `.import` folder (the
+    /// `shared` scan skips hidden folders) until the app opens and imports them as one batch.
+    static let inboxExtensions: Set<String> = ["csv", "tsv", "eml", "mbox", "zip"]
+
+    static func goesToInbox(_ file: URL) -> Bool { inboxExtensions.contains(file.pathExtension.lowercased()) }
+
+    static func importFolder(in inbox: URL) -> URL {
+        let dir = inbox.appendingPathComponent(".import", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
     static func sanitize(_ s: String) -> String {
         let cleaned = s.replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-")
             .trimmingCharacters(in: .whitespacesAndNewlines)

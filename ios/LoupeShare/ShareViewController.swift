@@ -3,7 +3,9 @@ import UniformTypeIdentifiers
 
 /// "Send to Loupe" (epic #7 child 7): the share sheet's way into Loupe. It copies what was shared —
 /// files, images, links, text — into the App Group inbox and closes. It reads nothing, judges nothing
-/// and uses no network; the app reads the inbox (the `shared` source) the next time it opens.
+/// and uses no network; the app reads the inbox (the `shared` source) the next time it opens. CSVs,
+/// mail files, ZIP archives, text and links go to the Inbox's waiting folder instead (child 15): the
+/// app imports them as one batch when it opens.
 final class ShareViewController: UIViewController {
     private let label = UILabel()
 
@@ -45,13 +47,14 @@ final class ShareViewController: UIViewController {
         // A link, or a file handed over by URL.
         if p.hasItemConformingToTypeIdentifier(UTType.url.identifier),
            let url = try? await p.loadItem(forTypeIdentifier: UTType.url.identifier) as? URL {
-            if url.isFileURL { return (try? SharedInbox.drop(file: url, into: inbox)) != nil }
-            return (try? SharedInbox.drop(text: "Link shared to Loupe: \(url.absoluteString)\n", title: url.host ?? "Link", into: inbox)) != nil
+            if url.isFileURL { return (try? SharedInbox.drop(file: url, into: Self.target(for: url, inbox))) != nil }
+            return (try? SharedInbox.drop(text: "Link shared to Loupe: \(url.absoluteString)\n", title: url.host ?? "Link",
+                                          into: SharedInbox.importFolder(in: inbox))) != nil
         }
         // Text: kept as a .txt file.
         if p.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
            let text = try? await p.loadItem(forTypeIdentifier: UTType.plainText.identifier) as? String, !text.isEmpty {
-            return (try? SharedInbox.drop(text: text, title: "Shared text", into: inbox)) != nil
+            return (try? SharedInbox.drop(text: text, title: "Shared text", into: SharedInbox.importFolder(in: inbox))) != nil
         }
         // Any other file.
         if p.hasItemConformingToTypeIdentifier(UTType.data.identifier) {
@@ -66,9 +69,14 @@ final class ShareViewController: UIViewController {
             _ = p.loadFileRepresentation(forTypeIdentifier: type.identifier) { url, _ in
                 // The URL is only valid inside this callback: copy now.
                 guard let url else { cont.resume(returning: nil); return }
-                cont.resume(returning: (try? SharedInbox.drop(file: url, into: inbox)) != nil)
+                cont.resume(returning: (try? SharedInbox.drop(file: url, into: Self.target(for: url, inbox))) != nil)
             }
         }
+    }
+
+    /// The Inbox's waiting folder for CSVs, mail files and archives; the `shared` folder otherwise.
+    nonisolated private static func target(for file: URL, _ inbox: URL) -> URL {
+        SharedInbox.goesToInbox(file) ? SharedInbox.importFolder(in: inbox) : inbox
     }
 
     private func finish(_ message: String, ok: Bool) {

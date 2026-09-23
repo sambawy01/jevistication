@@ -57,6 +57,9 @@ class SourceLibrary @Throws(Exception::class) constructor(home: String) {
         }
     }
 
+    /** Deletes [sourceId]'s cached scan (an Inbox batch that was removed). */
+    fun forget(sourceId: String): Unit = lock.withLock { InboxFs.deleteRecursively(scanFile(sourceId)) }
+
     /** Whether a source is on; [default] until the user has chosen. */
     fun isEnabled(sourceId: String, default: Boolean): Boolean = lock.withLock {
         val obj = PlatformFiles.readText(enabledFile)?.let { runCatching { JsonValue.parse(it).asObj }.getOrNull() }

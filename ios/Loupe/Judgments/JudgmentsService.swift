@@ -252,7 +252,11 @@ extension UserJudgment {
 
 extension SourceItem {
     /// Where the item came from, for a result row.
-    var sourceLabel: String { sourceId == SourcesService.sampleId ? "Sample data" : sourceId }
+    var sourceLabel: String {
+        if sourceId == SourcesService.sampleId { return "Sample data" }
+        if let imported = facts["imported"] { return imported }   // an Inbox item: where it came from (child 15)
+        return sourceId
+    }
 }
 
 // MARK: - Unsure queue and measurement (epic #7 child 4: D1-D4 on the phone)

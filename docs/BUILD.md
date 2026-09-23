@@ -564,6 +564,51 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-24 — Epic #7 child 15: the Items inbox (CSV, .eml / .mbox, ZIP archives, share-sheet
+  imports).** On the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
+  - **Ported from Loupe Station** (`~/laya-studio` at `ea7697a`, the `laya_studio/items` package and
+    `tests/test_items.py`; `static/js/sources.js` for the removable-imports list): new common code in
+    `:sources-common` — `CsvRows` (Station's `csvimport.py`: UTF-8/BOM/UTF-16/Windows-1252 decoding,
+    delimiter sniffed among `, ; tab |`, "no header row" when row 1 holds a date or an amount, the
+    English + Arabic header names, mapping by values as fallback, `parse_amount` / `parse_number` with
+    1,234.56 / 1.234,56 / parentheses / Arabic-Indic digits / currency markers, debit–credit
+    direction, the row identity "normalised content + occurrence"); `Inbox` (batches, manifest,
+    remove; Station's `uploads.safe_name`, 20 MB CSV cap and 100 000-row cap); `ZipReader` + a
+    pure-Kotlin `Inflate` / `Crc32` (no dependency) with **Station's archive limits** from
+    `scan/content.py` (more than 10 000 members refuses the archive; a member of 4 MB+ claiming a
+    ratio over 200 is skipped) plus: a member inflating past its declared size is abandoned, 50 MB per
+    member, 512 MB per archive, path traversal / absolute / drive-letter / backslash / `..` names
+    refused, symbolic links (Unix `S_IFLNK`) and other non-regular members refused, encrypted, ZIP64
+    and non-deflate members not read, archives inside archives not opened, `__MACOSX` and dot files
+    skipped silently. `InboxFs` (expect/actual) is the only writer: exclusive create, no-follow,
+    0600, inside `<home>/inbox-batches/` only. `SourceLibrary.forget`, `DateOrigin.CSV_COLUMN`,
+    `PhoneSourceIds.INBOX` added.
+  - **Phone changes vs Station:** no server, uploads or SQLite item store — each import is a batch
+    cached as its own `SourceLibrary` source (`inbox-<id>`) with a manifest (`sources/inbox.json`);
+    CSV rows are imported with the detected mapping (no mapping editor yet) and **every** non-empty
+    row becomes an item (Station keeps only statement rows) — rows with a date and an amount also
+    carry `amount_minor`, `currency`, `merchant`, `direction`; `.eml` / `.mbox` go through the existing
+    `SourceScanner` / `MimeParser` instead of Station's `archive.py`; the same statement imported
+    twice is marked `duplicateOf` (Station: one item), and the recurring-money watcher skips the
+    marked rows.
+  - **Flow:** every item has source id `inbox` and the fact `imported` ("Imported · Files ·
+    statement.csv · 2026-09-24"), shown as the item's source in results and on Open item; they reach
+    judgments, the sweep, watchers (new: `WatcherRun.charges` reads Inbox rows' statement facts), the
+    privacy check and mail triage through `SourcesService.items()`. Sources → Inbox: switch, Import
+    files… (Files picker), Paste text or a link, each import with counts (items, CSV rows, emails,
+    skipped, already imported), its items and skip reasons, Remove (its items, cache and Loupe's copy;
+    originals untouched). Share sheet: CSV / TSV / EML / MBOX / ZIP files, text and links now go to a
+    hidden `.import` folder in the App Group inbox and become one "Share sheet" batch when the app
+    opens; PDFs, images and other files still go to Files' "Send to Loupe" as in child 7.
+  - **Tests:** `CsvRowsTest` (Station's CSV cases: name/value mapping, Arabic `;` statement,
+    header-less file, month-first, amount forms, sniffing, decoding), `ZipReaderTest` (malicious
+    fixtures built byte by byte: traversal, absolute, drive, backslash, symlink, ratio bomb, lying
+    size, member count, archive total, encrypted, CRC, nested, unsupported method, truncated),
+    `InboxTest`, and loupe-kit `InboxChargesTest` — all on the JVM and the iOS simulator;
+    `LoupeTests/InboxTests.swift` (import → items / judgeable / removal; ZIP with mail reaches mail
+    triage, traversal refused; share-sheet waiting folder collected once; paste + switch);
+    `LoupeUITests/InboxUITests.swift` (`-LoupeFixtures -LoupeInboxDemo` imports a statement CSV; its
+    three rows show as items, a row opens with its column context, the import is removed).
 - **2026-09-24 — Epic #7 children 13 and 14: the Review queue (approve / reject / retry) and preset
   packs.** On the owner's "Go" for epic #7 children 10–17. Uncommitted pending review.
   - **Review queue, ported from Loupe Station** (`~/laya-studio` at `ea7697a`,
@@ -903,6 +948,7 @@ after 1, 6 needs 3, 4 and 5.
 | 12 | Brand-lookalike site checks | **Done 2026-09-23 (simulator)** — Station's `browser/brands.py` list and `signals.py`/`scoring.py` weights in shared `dev.loupe.kit.site`, on the engine's pinned PSL, shown beside the engine's `SiteFraud` (thresholds unchanged; six differences recorded in the Progress log); on every mail link and on web links in other items |
 | 13 | Review queue | **Done 2026-09-24 (simulator)** — Loupe Station's review state machine, append-only log, limits and registry ported to shared `dev.loupe.kit.review` (files beside the ledger); proposals from the privacy check (remove a reachable duplicate copy), mail triage (confirm phishing), watchers (keep a finding) and pack judgments; Now card "To review: N"; approve (one or batch), reject with a reason, retry (re-runs the check), undo where reversible; nothing runs without approval; separate from the Unsure queue (labels) |
 | 14 | Preset packs | **Done 2026-09-24 (simulator)** — Station's `laya-preset-pack` format validated exactly as Station in shared `dev.loupe.kit.packs`, plus the C2 lint per question; import from Files / "Open in Loupe" / the bundled, labelled Bistro Cloud example; preview before adding; same-id conflicts skip / replace / keep both; export your judgments as a pack (round-trips) |
+| 15 | Items inbox | **Done 2026-09-24 (simulator)** — Station's `items/csvimport.py` rules in shared `CsvRows` (sniffing, header detection, English/Arabic names, amounts); Sources → Inbox: import CSV (a row per item with column context), `.eml` / `.mbox`, ZIP (pure-Kotlin reader with Station's bomb limits plus traversal / symlink / nested refusals), pasted or shared text and links; each batch listed with counts and removable; items labelled "Imported · origin · name · date" and read by judgments, sweep, watchers, privacy check and mail triage |
 
 ### Proving milestones
 

@@ -175,6 +175,9 @@ struct ItemTextView: View {
                     if item.sourceId == SourcesService.sampleId {
                         Pill(text: SourcesService.sampleLabel, color: Palette.inkSoft)
                     }
+                    if let imported = item.facts["imported"] {
+                        Pill(text: imported, color: Palette.inkSoft)
+                    }
                     Text(item.location).font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                     Text(item.text)
                         .font(Typeface.mono(13))

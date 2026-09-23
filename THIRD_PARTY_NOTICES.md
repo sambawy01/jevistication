@@ -138,3 +138,12 @@ its sources".
   pack `examples/packs/bistro-cloud.json` is copied verbatim; it is the owner's own business rules
   (Bistro Cloud) and the app labels it an example. Review / pack wording follows `static/js/review*.js`
   and `static/js/packs.js`.
+- **Also used in (epic #7 child 15):** `sources-common/src/commonMain/kotlin/dev/loupe/sources/common/CsvRows.kt`
+  — the CSV decoding order, delimiter candidates, header-row rule, English and Arabic header names,
+  value-based column detection, amount and number reading (`facts/money.py` `parse_number` and
+  currency markers) and the row identity of `laya_studio/items/csvimport.py`; `Inbox.kt` — the
+  item-store ideas (batches as removable sources, content-hash dedupe) of `items/store.py`, the safe
+  file names and size caps of `items/uploads.py`; `ZipReader.kt` — the archive limits of
+  `scan/content.py` (10 000 members, ratio 200 above 4 MB). Ported tests from `tests/test_items.py`.
+  The DEFLATE decoder (`Inflate.kt`) is written for this repository from RFC 1951, in the manner of
+  zlib's public `puff.c` reference decoder; no zlib code is included and no dependency was added.

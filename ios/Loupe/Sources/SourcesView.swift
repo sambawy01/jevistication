@@ -28,6 +28,18 @@ struct SourcesView: View {
                 }
                 Section {
                     NavigationLink {
+                        InboxView(sources: sources)
+                    } label: {
+                        InboxCard(sources: sources)
+                    }
+                    .accessibilityIdentifier("sources.inbox")
+                } header: {
+                    Text("Inbox")
+                } footer: {
+                    Text("Imported CSVs, mail files, ZIP archives and text shared from other apps. Each import is listed with its counts and can be removed.")
+                }
+                Section {
+                    NavigationLink {
                         PrivacyView(privacy: PrivacyService.shared)
                     } label: {
                         PrivacyCard(privacy: PrivacyService.shared)

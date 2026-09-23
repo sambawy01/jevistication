@@ -46,7 +46,7 @@ enum PhoneSource: String, CaseIterable, Identifiable {
     var explainer: String {
         switch self {
         case .photos: return "Reads photos and screenshots on this iPhone, and the text in them, with on-device OCR. Nothing leaves the phone."
-        case .files: return "Reads files and folders you pick, and anything you send with “Send to Loupe” from the share sheet. Nothing leaves the phone."
+        case .files: return "Reads files and folders you pick, and PDFs, images and other files you send with “Send to Loupe” (CSVs, mail, archives, text and links go to the Inbox). Nothing leaves the phone."
         case .calendar: return "Reads your events: titles, times, attendees and how they repeat. Nothing leaves the phone."
         case .contacts: return "Reads names and email addresses so the impersonation watcher knows who you know. Nothing leaves the phone."
         case .mail: return "Online: fetches your own mailbox over IMAP, directly between this iPhone and your mail provider. We never see it."

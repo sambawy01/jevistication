@@ -13,6 +13,9 @@ object PhoneSourceIds {
     const val CONTACTS: String = "contacts"
     const val MAIL: String = "mail"
 
+    /** The Inbox (child 15): imported CSVs, mail files, ZIP archives and shared text. Not a phone source. */
+    const val INBOX: String = "inbox"
+
     val ALL: List<String> = listOf(PHOTOS, FILES, SHARED, CALENDAR, CONTACTS, MAIL)
 }
 

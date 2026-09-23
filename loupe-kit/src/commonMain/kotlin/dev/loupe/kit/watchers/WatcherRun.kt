@@ -153,6 +153,13 @@ object WatcherRun {
                 val date = email.date ?: item.date ?: continue
                 val merchant = email.fromName ?: email.fromAddress?.substringAfter('@') ?: continue
                 out += item to Charge(merchant, date, minor(amount))
+            } else if (item.kind == ItemKind.CSV && item.facts["amount_minor"] != null) {
+                // An Inbox CSV row (epic #7 child 15): the statement facts were read at import.
+                val minor = item.facts["amount_minor"]?.toLongOrNull() ?: continue
+                val merchant = item.facts["merchant"] ?: continue
+                val date = item.date ?: continue
+                if (item.duplicateOf != null) continue
+                out += item to Charge(merchant, date, kotlin.math.abs(minor))
             } else if (item.kind == ItemKind.CSV) {
                 out += csvCharges(item)
             }

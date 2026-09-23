@@ -66,6 +66,7 @@ enum class DateOrigin(val title: String) {
     FILE_MODIFIED("file modified time"),
     PHOTO_CREATED("photo library date"),
     EVENT_START("event start"),
+    CSV_COLUMN("CSV date column"),
 }
 
 /**

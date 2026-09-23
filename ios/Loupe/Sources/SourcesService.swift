@@ -30,10 +30,16 @@ final class SourcesService: ObservableObject {
     /// Bumped whenever any source's items change (a scan lands, a source is switched), so Now re-runs
     /// the watchers.
     @Published var revision = 0
+    /// The Inbox's imports, newest first (epic #7 child 15).
+    @Published var inboxBatches: [InboxBatch] = []
+    @Published var inboxBusy = false
+    @Published var inboxProblem: String?
 
     var scanning: Bool { progress != nil || phone.values.contains { $0.scanning } }
 
     let library: SourceLibrary?
+    /// Imported CSVs, mail files, ZIP archives and shared text (child 15), in LoupeKit.
+    let inbox: Inbox?
     let home: URL
     let deps: PhoneDependencies
     private let sampleRoot: URL?
@@ -55,6 +61,8 @@ final class SourcesService: ObservableObject {
             library = nil
             problem = "The sources cache could not be opened: \(error.localizedDescription)"
         }
+        inbox = library == nil ? nil : try? Inbox(home: home.path, extractors: AppleExtractors())
+        inboxBatches = inbox?.batches() ?? []
         if let library {
             sampleEnabled = library.isEnabled(sourceId: Self.sampleId, default: true)
             sampleScan = library.cached(sourceId: Self.sampleId)
@@ -73,6 +81,10 @@ final class SourcesService: ObservableObject {
         started = true
         if sampleEnabled && sampleScan == nil { scanSample() }
         refreshOnOpen()
+        Task { await collectShared() }
+        #if DEBUG
+        if LaunchOptions.current.inboxDemo { Task { await seedInboxDemo() } }
+        #endif
     }
 
     /// The two roots of the sample: the documents folder and the mail export, with stable ids.
@@ -129,6 +141,7 @@ final class SourcesService: ObservableObject {
         let phoneIds = PhoneSource.allCases.filter { isPhoneEnabled($0) }.flatMap(\.cacheIds)
         return library.items(sourceIds: [Self.sampleId], defaultEnabled: true)
             + library.items(sourceIds: phoneIds, defaultEnabled: true)   // already filtered by each source's switch
+            + (inbox?.items() ?? [])                                      // empty when the Inbox is off
     }
 
     /// Items a judgment reads: every source that is on, less contact cards (facts, not documents).
@@ -139,6 +152,7 @@ final class SourcesService: ObservableObject {
     /// How many sources are on, the sample included.
     var enabledCount: Int {
         (sampleEnabled ? 1 : 0) + PhoneSource.allCases.filter { isPhoneEnabled($0) }.count
+            + (inboxEnabled && !inboxBatches.isEmpty ? 1 : 0)
     }
 
     /// Waits for a queued scan to finish on the background queue (tests).
