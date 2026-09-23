@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct LoupeApp: App {
+    /// Background-session wake-ups for the model download (Loupe/Laya/ModelDownloader.swift).
+    @UIApplicationDelegateAdaptor(LoupeAppDelegate.self) private var appDelegate
     @StateObject private var web = WebModel.make(launch: LaunchOptions.current)
 
     init() {

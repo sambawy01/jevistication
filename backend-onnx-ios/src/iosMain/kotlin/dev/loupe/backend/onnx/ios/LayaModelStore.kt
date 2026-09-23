@@ -47,12 +47,24 @@ import platform.posix.fread
  * file can call [LayaFiles.open] directly after its own verified-once bookkeeping.
  */
 class LayaModelStore(
-    /** The directory holding [FILES]; normally [applicationSupport]'s. */
+    /** The directory holding [files]; normally [applicationSupport]'s. */
     val directory: String,
+    /** Which graph: one of [VARIANTS]' keys. `int8` (the default) is [FILES]. */
+    val variant: String = DEFAULT_VARIANT,
 ) {
+    init {
+        require(variant in VARIANTS) { "unknown Laya variant '$variant' (known: ${VARIANTS.keys})" }
+    }
+
+    /** The tokenizer and this [variant]'s graph, with their pinned SHA-256s. */
+    val files: Map<String, String> = filesFor(variant)
+
+    /** File name of this [variant]'s graph. */
+    val graph: String get() = VARIANTS.getValue(variant).first
+
     /** The expected files that are not present in [directory]. Empty means "ready to verify". */
     fun missing(): List<String> =
-        FILES.keys.filterNot { NSFileManager.defaultManager.fileExistsAtPath(path(it)) }
+        files.keys.filterNot { NSFileManager.defaultManager.fileExistsAtPath(path(it)) }
 
     /** Absolute path of one of [FILES] in [directory]. */
     fun path(name: String): String = "$directory/$name"
@@ -63,7 +75,7 @@ class LayaModelStore(
      */
     fun verify(): LayaFiles {
         val problems = mutableListOf<String>()
-        for ((name, expected) in FILES) {
+        for ((name, expected) in files) {
             val file = path(name)
             if (!NSFileManager.defaultManager.fileExistsAtPath(file)) {
                 problems += "$name: missing"
@@ -73,7 +85,7 @@ class LayaModelStore(
             if (actual != expected) problems += "$name: SHA-256 $actual, expected $expected"
         }
         check(problems.isEmpty()) { "Laya model files in $directory are not usable: ${problems.joinToString("; ")}" }
-        return LayaFiles(tokenizer = path(TOKENIZER), graph = path(GRAPH))
+        return LayaFiles(tokenizer = path(TOKENIZER), graph = path(graph))
     }
 
     /** [verify], then open a backend over the verified files. The caller must close the result. */
@@ -95,6 +107,28 @@ class LayaModelStore(
             TOKENIZER to "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f",
             GRAPH to "8b994315135dd7684331bb58fe3a769e3ca1145a5c421a2a41e2b3c85397b2fa",
         )
+
+        /** The default graph variant: the shipped INT8 export. */
+        const val DEFAULT_VARIANT: String = "int8"
+
+        /**
+         * Every graph variant the app can use: name to (file, pinned SHA-256). `int8-partial` is the
+         * opt-in 357 MB graph (11 `mlp.Wo` kept FP32; docs/BUILD.md 2026-09-23, "A better INT8"):
+         * same parity result, chosen on the parity questions, so never the default.
+         */
+        val VARIANTS: Map<String, Pair<String, String>> = mapOf(
+            DEFAULT_VARIANT to (GRAPH to "8b994315135dd7684331bb58fe3a769e3ca1145a5c421a2a41e2b3c85397b2fa"),
+            "int8-partial" to (
+                "laya-multilingual-choice.int8-partial.onnx" to
+                    "03d732c31f7da991c6d5b1b816032431de67cc7e0080b17ed63a9053e41be973"
+                ),
+        )
+
+        /** The tokenizer and [variant]'s graph, with their pins, in a fixed order. */
+        fun filesFor(variant: String): Map<String, String> {
+            val (graph, sha) = VARIANTS[variant] ?: throw IllegalArgumentException("unknown Laya variant '$variant'")
+            return linkedMapOf(TOKENIZER to FILES.getValue(TOKENIZER), graph to sha)
+        }
 
         /** Subdirectory of Application Support the files are expected in. */
         const val SUBDIRECTORY: String = "Loupe/laya-multilingual"

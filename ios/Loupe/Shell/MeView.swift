@@ -23,6 +23,12 @@ struct MeView: View {
                         row("Laya model", layaStatus)
                     }
                     .accessibilityIdentifier("me.model")
+                    #if DEBUG || LOUPE_DIAGNOSTICS
+                    if Self.showDiagnostics {
+                        NavigationLink { DiagnosticsView() } label: { row("Diagnostics", "device check") }
+                            .accessibilityIdentifier("me.diagnostics")
+                    }
+                    #endif
                 }
                 Section("Your data") {
                     Text(ledgerLine)
@@ -95,11 +101,20 @@ struct MeView: View {
         }
     }
 
+    #if DEBUG
+    static let showDiagnostics = true
+    #elseif LOUPE_DIAGNOSTICS
+    /// A diagnostics Release build shows it only under TestFlight (a sandbox receipt), never from the App Store.
+    static let showDiagnostics = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+    #endif
+
     private var layaStatus: String {
         switch laya.status {
         case .ready: return "on this phone"
         case .checking: return "checking"
         case .downloading(let p): return "downloading \(Int(p * 100))%"
+        case .paused(let p): return "paused at \(Int(p * 100))%"
+        case .verifying: return "checking"
         case .failed: return "needs attention"
         case .notInstalled: return "not on this phone"
         }

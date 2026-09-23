@@ -1,0 +1,3 @@
+// Copy to Signing.local.xcconfig (git-ignored) and set your Team ID: developer.apple.com →
+// Account → Membership details → Team ID (10 characters). ios/scripts/device-build.sh reads it.
+DEVELOPMENT_TEAM = ABCDE12345

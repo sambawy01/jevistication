@@ -58,6 +58,20 @@ class LayaModelStoreTest {
     }
 
     @Test
+    fun theDefaultVariantIsTheShippedInt8AndThePartialOneIsPinnedToo() {
+        assertEquals(LayaModelStore.FILES, LayaModelStore.filesFor(LayaModelStore.DEFAULT_VARIANT))
+        val partial = LayaModelStore.filesFor("int8-partial")
+        assertEquals(
+            listOf(LayaModelStore.TOKENIZER, "laya-multilingual-choice.int8-partial.onnx"),
+            partial.keys.toList(),
+        )
+        assertEquals("03d732c31f7da991c6d5b1b816032431de67cc7e0080b17ed63a9053e41be973", partial.values.last())
+        assertEquals(LayaModelStore.FILES.keys.toSet(), LayaModelStore(tempDir()).missing().toSet())
+        assertEquals(partial.keys.toSet(), LayaModelStore(tempDir(), "int8-partial").missing().toSet())
+        assertFailsWith<IllegalArgumentException> { LayaModelStore(tempDir(), "fp16") }
+    }
+
+    @Test
     fun applicationSupportResolvesToAnExistingDirectory() {
         val store = LayaModelStore.applicationSupport()
         assertTrue(store.directory.endsWith("/Application Support/" + LayaModelStore.SUBDIRECTORY), store.directory)

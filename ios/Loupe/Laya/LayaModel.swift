@@ -1,29 +1,12 @@
 import Foundation
 import LoupeKit
 
-/// Where the one-time model download comes from. PRODUCT.md §4a: the app downloads nothing without
-/// the user's say-so, and the engine itself never touches the network.
-///
-/// Left EMPTY on purpose: the repo records no host for the exported INT8 graph (the upstream
-/// Hugging Face repo holds the PyTorch checkpoint, not this export). Set it to a pinned base URL
-/// serving `tokenizer.json` and `laya-multilingual-choice.int8.onnx`; the SHA-256 pins in
-/// LayaModelStore are checked before anything is used, whatever the host.
-enum LayaModelSource {
-    static let baseURL = ""
-    static var configured: URL? {
-        guard !baseURL.isEmpty, let u = URL(string: baseURL), u.scheme == "https" else { return nil }
-        return u
-    }
-    /// Approximate download sizes, for the consent screen.
-    static let bytes: [String: Int64] = [
-        "tokenizer.json": 34_363_188,
-        "laya-multilingual-choice.int8.onnx": 383_883_281,
-    ]
-    static var totalBytes: Int64 { bytes.values.reduce(0, +) }
-}
-
 /// Laya's files on this phone, and Laya itself once opened. One per app; opening hashes ~418 MB,
 /// so it happens once, off the main thread, and the result is kept.
+///
+/// Getting the files here is the one network use on this path (PRODUCT.md §4a): `ModelDownloader`
+/// over the bundled `models.json`, only after the user's consent. The manifest's host ships EMPTY
+/// (the owner sets it; docs/BUILD.md) and the screen then says so and requests nothing.
 @MainActor
 final class LayaModel: ObservableObject {
     enum Status: Equatable {
@@ -31,27 +14,89 @@ final class LayaModel: ObservableObject {
         case checking
         case ready
         case downloading(Double)          // 0...1
+        case paused(Double)
+        case verifying(String)
         case failed(String)
     }
 
     static let shared = LayaModel()
 
-    @Published private(set) var status: Status = .notInstalled
-    private var opened: LayaOnDevice?
-    private var download: Task<Void, Never>?
-    let directory: String?
+    static let variantKey = "laya.variant"
+    static let cellularKey = "laya.download.cellular"
 
-    init(directory: String? = LayaOnPhone.shared.directory()) {
+    @Published private(set) var status: Status = .notInstalled
+    @Published private(set) var variantID: String
+    @Published var allowsCellular: Bool {
+        didSet { defaults.set(allowsCellular, forKey: Self.cellularKey) }
+    }
+    /// The last delivery refusal or failure, typed (the consent screen and tests read it).
+    @Published private(set) var deliveryError: DeliveryError?
+
+    let manifest: ModelManifest?
+    let manifestProblem: String?
+    let directory: String?
+    private let defaults: UserDefaults
+    private(set) var downloader: ModelDownloader?
+    private var opened: LayaOnDevice?
+
+    init(directory: String? = LayaOnPhone.shared.directory(),
+         manifest: Result<ModelManifest, ModelManifest.Problem> = ModelManifest.bundled(),
+         transport: DownloadTransport? = nil,
+         defaults: UserDefaults = .standard) {
         self.directory = directory
+        self.defaults = defaults
+        self.allowsCellular = defaults.bool(forKey: Self.cellularKey)
+        switch manifest {
+        case .success(let m):
+            self.manifest = m
+            self.manifestProblem = nil
+            let saved = defaults.string(forKey: Self.variantKey)
+            self.variantID = m.variant(saved ?? "") != nil ? saved! : m.defaultVariant
+        case .failure(let p):
+            self.manifest = nil
+            self.manifestProblem = p.localizedDescription
+            self.variantID = "int8"
+        }
+        if let m = self.manifest, let dir = directory, let v = m.variant(variantID) {
+            let storage = ModelStorage(modelDir: URL(fileURLWithPath: dir, isDirectory: true))
+            let t: DownloadTransport
+            if let transport { t = transport } else {
+                let bg = BackgroundDownloadTransport.shared
+                bg.stage = { name in
+                    m.variants.flatMap(\.files).first { $0.name == name }.map(storage.stagedURL)
+                }
+                // Only when a download was running in an earlier launch; creating a session requests nothing.
+                if defaults.bool(forKey: ModelDownloader.activeKey) { bg.reconnect() }
+                t = bg
+            }
+            let d = ModelDownloader(manifest: m, variant: v, storage: storage, transport: t, defaults: defaults)
+            d.onChange = { [weak self] phase in self?.apply(phase) }
+            downloader = d
+            if defaults.bool(forKey: ModelDownloader.activeKey), !storage.missing(v).isEmpty {
+                // Interrupted by a quit: show it as paused with its progress; Resume continues.
+                status = .paused(Double(v.totalBytes - storage.remainingBytes(v)) / Double(max(1, v.totalBytes)))
+                return
+            }
+        }
         refresh()
     }
 
-    var isInstalled: Bool { directory.map { LayaOnPhone.shared.missing(directory: $0).isEmpty } ?? false }
+    var variant: ModelManifest.Variant? { manifest?.variant(variantID) }
+    var hostConfigured: Bool { manifest?.configuredHost != nil }
+    var hasConsent: Bool { downloader?.hasConsent ?? false }
+    var downloadBytes: Int64 { variant?.totalBytes ?? 0 }
+
+    var isInstalled: Bool {
+        directory.map { LayaOnPhone.shared.missing(directory: $0, variant: variantID).isEmpty } ?? false
+    }
 
     /// Re-reads whether the files are present; does not hash them.
     func refresh() {
         if opened != nil { status = .ready; return }
-        if case .downloading = status { return }
+        switch status {
+        case .downloading, .verifying, .paused: return
+        default: break
+        }
         status = isInstalled ? .ready : .notInstalled
     }
 
@@ -61,7 +106,8 @@ final class LayaModel: ObservableObject {
         if let opened { return opened.backend }
         guard let dir = directory, isInstalled else { status = .notInstalled; return nil }
         status = .checking
-        let result = await Task.detached(priority: .userInitiated) { LayaOnPhone.shared.open(directory: dir) }.value
+        let variant = variantID
+        let result = await Task.detached(priority: .userInitiated) { LayaOnPhone.shared.open(directory: dir, variant: variant) }.value
         if let ready = result as? LayaOnPhone.OpenedReady {
             opened = ready.laya
             status = .ready
@@ -71,90 +117,62 @@ final class LayaModel: ObservableObject {
         return nil
     }
 
-    // MARK: Download (only on the user's tap)
+    // MARK: Delivery (only after consent, only on the user's tap)
+
+    /// The user agreed on the consent screen to this variant and size.
+    func grantConsent() { downloader?.recordConsent() }
 
     func startDownload() {
-        guard download == nil, let base = LayaModelSource.configured, let dir = directory else { return }
-        status = .downloading(0)
-        download = Task { [weak self] in
-            do {
-                try await Self.fetchAll(base: base, into: dir) { p in
-                    Task { @MainActor in self?.status = .downloading(p) }
-                }
-                await MainActor.run {
-                    self?.download = nil
-                    self?.status = .checking
-                }
-                _ = await self?.backend()
-            } catch is CancellationError {
-                await MainActor.run { self?.download = nil; self?.refresh() }
-            } catch {
-                await MainActor.run {
-                    self?.download = nil
-                    self?.status = .failed(error.localizedDescription)
-                }
-            }
-        }
+        guard let d = downloader else { return }
+        deliveryError = nil
+        d.start(allowsCellular: allowsCellular)
     }
 
-    func cancelDownload() { download?.cancel() }
+    func pauseDownload() { downloader?.pause() }
 
-    /// Removes the files (and closes Laya). Everything else in Loupe keeps working.
+    func cancelDownload() {
+        downloader?.cancel()
+        status = isInstalled ? .ready : .notInstalled
+    }
+
+    /// Picks the graph variant (the downloaded files of the other one are kept until Remove).
+    func select(variant id: String) {
+        guard let m = manifest, let v = m.variant(id), id != variantID, !(downloader?.isActive ?? false) else { return }
+        opened?.close()
+        opened = nil
+        variantID = id
+        defaults.set(id, forKey: Self.variantKey)
+        downloader?.select(v)
+        status = isInstalled ? .ready : .notInstalled
+    }
+
+    /// Removes every model file and the partial download (and closes Laya). Everything else in
+    /// Loupe keeps working. A new download asks for consent again.
     func remove() {
         opened?.close()
         opened = nil
-        if let dir = directory {
+        if let d = downloader {
+            d.deleteModel()
+        } else if let dir = directory {
             for name in LayaOnPhone.shared.fileNames { try? FileManager.default.removeItem(atPath: dir + "/" + name) }
         }
+        status = .notInstalled
         refresh()
     }
 
-    struct DownloadError: LocalizedError {
-        var errorDescription: String?
-    }
-
-    /// Each file goes to a temporary name, is checked against its SHA-256 pin, and only then moved
-    /// into place. A mismatch deletes it.
-    nonisolated static func fetchAll(base: URL, into dir: String, progress: @escaping @Sendable (Double) -> Void) async throws {
-        let names = LayaOnPhone.shared.fileNames
-        let total = Double(LayaModelSource.totalBytes)
-        var done: Int64 = 0
-        for name in names {
-            try Task.checkCancellation()
-            let dest = URL(fileURLWithPath: dir).appendingPathComponent(name)
-            if FileManager.default.fileExists(atPath: dest.path),
-               LayaOnPhone.shared.sha256(path: dest.path) == LayaOnPhone.shared.pinnedSha256(name: name) {
-                done += LayaModelSource.bytes[name] ?? 0
-                continue
-            }
-            let offset = done
-            let (tmp, response) = try await URLSession.shared.download(from: base.appendingPathComponent(name), delegate: ProgressDelegate { written in
-                progress(min(1, Double(offset + written) / total))
-            })
-            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                throw DownloadError(errorDescription: "The model host answered \((response as? HTTPURLResponse)?.statusCode ?? 0) for \(name).")
-            }
-            guard LayaOnPhone.shared.sha256(path: tmp.path) == LayaOnPhone.shared.pinnedSha256(name: name) else {
-                try? FileManager.default.removeItem(at: tmp)
-                throw DownloadError(errorDescription: "\(name) did not match its SHA-256 pin, so it was deleted and not used.")
-            }
-            try? FileManager.default.removeItem(at: dest)
-            try FileManager.default.moveItem(at: tmp, to: dest)
-            var values = URLResourceValues()
-            values.isExcludedFromBackup = true
-            var d = dest
-            try? d.setResourceValues(values)
-            done += LayaModelSource.bytes[name] ?? 0
+    private func apply(_ phase: ModelDownloader.Phase) {
+        let total = Double(max(1, downloadBytes))
+        switch phase {
+        case .idle: status = isInstalled ? .ready : .notInstalled
+        case let .downloading(_, done, _): status = .downloading(min(1, Double(done) / total))
+        case let .paused(done, _): status = .paused(min(1, Double(done) / total))
+        case .verifying(let f): status = .verifying(f)
+        case .installed:
+            status = .checking
+            Task { _ = await self.backend() }
+        case .failed(let e):
+            deliveryError = e
+            status = .failed(e.localizedDescription)
         }
     }
-}
-
-private final class ProgressDelegate: NSObject, URLSessionDownloadDelegate, @unchecked Sendable {
-    let onBytes: (Int64) -> Void
-    init(_ onBytes: @escaping (Int64) -> Void) { self.onBytes = onBytes }
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData _: Int64,
-                    totalBytesWritten: Int64, totalBytesExpectedToWrite _: Int64) {
-        onBytes(totalBytesWritten)
-    }
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {}
 }

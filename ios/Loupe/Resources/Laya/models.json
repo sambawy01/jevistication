@@ -1,0 +1,31 @@
+{
+  "_comment": "Laya's on-device files (docs/BUILD.md A1, risk 2). The download host is EMPTY until the owner sets it: the app then says 'Model host not configured' and downloads nothing. urlTemplate placeholders: {host} (https only), {variant}, {file}. Sizes and SHA-256s are the exports parity was measured on; a re-export changes them together with the Kotlin pins in LayaModelStore (a test checks the two agree).",
+  "schema": 1,
+  "source": {
+    "host": "",
+    "urlTemplate": "{host}/{file}"
+  },
+  "defaultVariant": "int8",
+  "variants": [
+    {
+      "id": "int8",
+      "title": "INT8 (recommended)",
+      "detail": "The shipped graph: same answers as the desktop on 34/34 golden and 8/8 criteria questions.",
+      "optIn": false,
+      "files": [
+        { "name": "tokenizer.json", "size": 34363188, "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f" },
+        { "name": "laya-multilingual-choice.int8.onnx", "size": 383883281, "sha256": "8b994315135dd7684331bb58fe3a769e3ca1145a5c421a2a41e2b3c85397b2fa" }
+      ]
+    },
+    {
+      "id": "int8-partial",
+      "title": "INT8, partial (smaller, experimental)",
+      "detail": "26 MB smaller. Its layers were picked on the same parity questions, so its result there flatters it.",
+      "optIn": true,
+      "files": [
+        { "name": "tokenizer.json", "size": 34363188, "sha256": "609d8f4c067cd3950f88594c5a802616cea245823836ef5848ee4fc40aab5b6f" },
+        { "name": "laya-multilingual-choice.int8-partial.onnx", "size": 357361791, "sha256": "03d732c31f7da991c6d5b1b816032431de67cc7e0080b17ed63a9053e41be973" }
+      ]
+    }
+  ]
+}

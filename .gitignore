@@ -19,3 +19,6 @@ __pycache__/
 
 # ios-native (ios-native/build.sh): Rust build output; the xcframeworks land in ios-native/build/
 ios-native/tokenizers-ffi/target/
+
+# iOS device signing: the owner's Team ID (ios/Config/Signing.local.xcconfig.example is the template)
+ios/Config/Signing.local.xcconfig

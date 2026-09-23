@@ -1,0 +1,9 @@
+// Signing for every target (project.yml `configFiles`). Checked in, and deliberately empty:
+// a simulator build needs no team. For a device build, copy Signing.local.xcconfig.example to
+// Signing.local.xcconfig (git-ignored) and put your Apple Developer Team ID in it; see ios/README.md.
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
+
+// Optional: the owner's local overrides (DEVELOPMENT_TEAM, and nothing secret — a Team ID is not a secret,
+// but it is the owner's, so it stays out of git).
+#include? "Signing.local.xcconfig"

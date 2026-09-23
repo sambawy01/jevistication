@@ -2,6 +2,9 @@ package dev.loupe.kit
 
 import dev.loupe.backend.onnx.ios.LayaModelStore
 import dev.loupe.backend.onnx.ios.LayaOnDevice
+import dev.loupe.engine.Backend
+import dev.loupe.engine.Judgment
+import dev.loupe.engine.TextState
 
 /**
  * Swift's door to Laya on the phone. Kotlin exceptions must not cross into Swift (an uncaught one
@@ -30,6 +33,52 @@ object LayaOnPhone {
     fun open(directory: String): Opened =
         runCatching { LayaModelStore(directory).open() }
             .fold({ Opened.Ready(it) }, { Opened.Failed(it.message ?: it::class.simpleName ?: "could not open Laya") })
+
+    /** Graph variants the store knows (`int8` default, `int8-partial` opt-in). */
+    val variants: List<String> get() = LayaModelStore.VARIANTS.keys.toList()
+
+    /** File names for [variant] (tokenizer first), or empty for an unknown variant. */
+    fun fileNames(variant: String): List<String> =
+        runCatching { LayaModelStore.filesFor(variant).keys.toList() }.getOrDefault(emptyList())
+
+    /** The pinned SHA-256 of [name] under [variant], or null. */
+    fun pinnedSha256(variant: String, name: String): String? =
+        runCatching { LayaModelStore.filesFor(variant)[name] }.getOrNull()
+
+    /** Expected [variant] files absent from [directory] (all of them for an unknown variant). */
+    fun missing(directory: String, variant: String): List<String> =
+        runCatching { LayaModelStore(directory, variant).missing() }.getOrDefault(listOf(variant))
+
+    /** Verifies [variant]'s files against their pins and opens Laya; the caller closes a [Opened.Ready]. */
+    fun open(directory: String, variant: String): Opened =
+        runCatching { LayaModelStore(directory, variant).open() }
+            .fold({ Opened.Ready(it) }, { Opened.Failed(it.message ?: it::class.simpleName ?: "could not open Laya") })
+
+    /**
+     * One Choice scored exactly as the parity tests score it (the whole state, no budget cut),
+     * for the Diagnostics screen. Probabilities come back in [candidates] order; any Kotlin
+     * exception becomes a [CaseScore.Failed] instead of crossing into Swift.
+     */
+    fun scoreCase(
+        backend: Backend,
+        id: String,
+        question: String,
+        candidates: List<String>,
+        descriptions: List<String>,
+        state: String,
+    ): CaseScore = runCatching {
+        val described = candidates.indices.mapNotNull { i ->
+            descriptions.getOrNull(i)?.takeIf { it.isNotEmpty() }?.let { candidates[i] to it }
+        }.toMap()
+        val judgment = Judgment.Choice(id, question, candidates, descriptions = described)
+        val masses = backend.score(judgment, TextState.build(listOf(id to state), 1_000_000)).masses
+        CaseScore.Scored(candidates.map { masses[it] ?: Double.NaN })
+    }.getOrElse { CaseScore.Failed(it.message ?: it::class.simpleName ?: "scoring failed") }
+
+    sealed class CaseScore {
+        class Scored(val probabilities: List<Double>) : CaseScore()
+        class Failed(val message: String) : CaseScore()
+    }
 
     sealed class Opened {
         class Ready(val laya: LayaOnDevice) : Opened()
