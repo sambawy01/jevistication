@@ -44,6 +44,8 @@ final class WebModel: ObservableObject {
     private let keys: KeyStore
     private let baseline: OfferRanker
     private let laya: () async -> Backend?
+    /// Where Laya's decisions are logged (A5). Rule rankings are not model decisions and log nothing.
+    private let ledger: LedgerService
     private var rankTask: Task<Void, Never>?
     private let defaults: UserDefaults
     private var bag: Set<AnyCancellable> = []
@@ -51,6 +53,7 @@ final class WebModel: ObservableObject {
     init(helper: FlightsHelper, keys: KeyStore, connectivity: Connectivity,
          baseline: OfferRanker = Rankers.baseline,
          laya: @escaping () async -> Backend? = { await LayaModel.shared.backend() },
+         ledger: LedgerService = .shared,
          fixtureMode: Bool = false, autoSearch: Bool = false,
          defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -62,6 +65,7 @@ final class WebModel: ObservableObject {
         self.connectivity = connectivity
         self.baseline = baseline
         self.laya = laya
+        self.ledger = ledger
         self.isFixtureMode = fixtureMode
         self.autoSearch = autoSearch
         self.hasKey = keys.read() != nil
@@ -162,13 +166,17 @@ final class WebModel: ObservableObject {
                 return
             }
             let ranker = LayaRanker(backend: backend)
+            let ledger = self?.ledger
             let work = Task.detached(priority: .userInitiated) { () -> Result<[RankedOffer], Error> in
                 Result(catching: {
-                    try ranker.rank(offers, by: priorities) { done, total in
+                    let run = try ranker.decide(offers, by: priorities) { done, total in
                         Task { @MainActor [weak self] in
                             if case .running = self?.ranking { self?.ranking = .running(done: done, total: total) }
                         }
                     }
+                    // Every offer Laya judged is a decision: logged, synced, on this phone only.
+                    ledger?.record(run.rows)
+                    return run.ranked
                 })
             }
             let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }

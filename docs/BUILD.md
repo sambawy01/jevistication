@@ -626,7 +626,8 @@ after 1, 6 needs 3, 4 and 5.
 | # | Child | State |
 |---|---|---|
 | G | Game on iPhone | **Done 2026-09-23 (simulator)** — KMP `:game`, JVM/iOS parity identical, SpriteKit at 60 fps, Laya live at ~9 decisions/s; device fps/latency need an iPhone |
-| 1–9 | Ledger, sample source, judgments, unsure queue, watchers, sweep, phone sources, mascot, model delivery | Not started |
+| 1 | Ledger on iOS + F4 export | **Done 2026-09-23 (simulator)** — `:persistence` (common), Laya decisions logged as `web:duffel` model rows, Me → Export my data |
+| 2–9 | Sample source, judgments, unsure queue, watchers, sweep, phone sources, mascot, model delivery | Not started |
 
 ### Proving milestones
 
@@ -1098,6 +1099,20 @@ after 1, 6 needs 3, 4 and 5.
   as the reference implementation whose watchers, measurement stack and 55 templates Loupe
   Station is porting — **mirror any change to watcher logic or thresholds there.** The
   never-list change `b05f996` (writing is opt-in and approval-gated) was made from that session.
+- **2026-09-23 — Epic #7 child 1: the ledger on iOS, and export.** New KMP module `:persistence`
+  (jvm + iOS, no new dependency): a small common JSON reader/writer that matches Gson byte for byte
+  (compact and pretty; `GsonParityTest`), `LedgerCodec` / `CorrectionCodec` / `JudgmentCodec` moved
+  out of `loupe-desktop`'s `Persistence.kt`, `LedgerStore` (append + fsync; judgments via synced temp
+  file + rename; POSIX on iOS, java.nio on the JVM), `DataExport` (the desktop's four F4 files) and
+  `PhoneLedger`, the Swift face (open, append, rows by judgment, stats, export; `@Throws`). The
+  desktop `Store`, `Analysis.correctionIndex/effectiveRows` and `export` now delegate to it; desktop
+  tests unchanged and green. `FlightJudge.decide` returns each offer's `LedgerRow`: `resolvedBy`
+  model (unusable with a flat distribution on failure), propensity 1, truncation, item
+  `web:duffel:<offer id>` — the source lives in the item id, `LedgerRow` gained no field. Rule
+  rankings log nothing. iOS: `LedgerService` in Application Support/Loupe (temp under XCTest and
+  `-LoupeFixtures`); Me shows "Decisions logged: N · stored only on this iPhone" and "Export my
+  data" (zip via `NSFileCoordinator .forUploading`, share sheet). The iPhone export also measures
+  judgments with rows but no saved definition (the flight priorities); the desktop does not.
 
 ## Hand-off
 

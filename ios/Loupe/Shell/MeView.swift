@@ -4,6 +4,10 @@ struct MeView: View {
     @EnvironmentObject private var web: WebModel
     @EnvironmentObject private var launcher: GameLauncher
     @ObservedObject private var laya = LayaModel.shared
+    @ObservedObject private var ledger = LedgerService.shared
+    @State private var exporting = false
+    @State private var exportError: String?
+    @State private var shared: SharedFile?
     @State private var showWebSettings = false
     private let engine = EngineInfo.load()
 
@@ -18,6 +22,25 @@ struct MeView: View {
                         row("Laya model", layaStatus)
                     }
                     .accessibilityIdentifier("me.model")
+                }
+                Section("Your data") {
+                    Text(ledgerLine)
+                        .font(.footnote).foregroundStyle(Palette.inkSoft)
+                        .accessibilityIdentifier("me.ledger.count")
+                    Button {
+                        Task { await export() }
+                    } label: {
+                        HStack {
+                            Text("Export my data")
+                            Spacer()
+                            if exporting { ProgressView() }
+                        }
+                    }
+                    .disabled(exporting || ledger.problem != nil)
+                    .accessibilityIdentifier("me.export")
+                    if let exportError {
+                        Text(exportError).font(.footnote).foregroundStyle(Palette.inkSoft)
+                    }
                 }
                 Section("Game") {
                     Button { launcher.open(.watch) } label: {
@@ -36,7 +59,7 @@ struct MeView: View {
                         .accessibilityIdentifier("me.licences")
                 }
                 Section {
-                    Text("Coming with phone sources: calibration, decision history and export.")
+                    Text("Coming with phone sources: calibration and decision history on screen.")
                         .font(.footnote).foregroundStyle(Palette.inkSoft)
                 }
             }
@@ -44,6 +67,25 @@ struct MeView: View {
             .background(Palette.ground.ignoresSafeArea())
             .navigationTitle("Me")
             .sheet(isPresented: $showWebSettings) { WebSettingsSheet().environmentObject(web) }
+            .sheet(item: $shared) { file in ShareSheet(items: [file.url]) }
+        }
+    }
+
+    /// Honest about where the history lives: nothing here is uploaded anywhere.
+    private var ledgerLine: String {
+        if let problem = ledger.problem { return "Decision ledger unavailable: \(problem)" }
+        return "Decisions logged: \(ledger.count) · stored only on this iPhone"
+    }
+
+    /// F4: the desktop's lossless export (ledger, judgments, calibration, corrections), zipped.
+    private func export() async {
+        exporting = true
+        exportError = nil
+        defer { exporting = false }
+        do {
+            shared = SharedFile(url: try await ledger.export())
+        } catch {
+            exportError = "Export failed: \(error.localizedDescription)"
         }
     }
 

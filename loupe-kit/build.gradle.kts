@@ -28,6 +28,7 @@ kotlin {
                 export(project(":engine"))
                 export(project(":templates"))
                 export(project(":game"))
+                export(project(":persistence"))
                 if (layaIos != null) {
                     export(layaIos)
                     export(project(":backend-laya-common"))
@@ -45,6 +46,8 @@ kotlin {
             api(project(":templates"))
             // The game (Riverflight) for the iPhone app: rules, pilots, GameSessions, HostedDecider.
             api(project(":game"))
+            // The ledger on the phone (epic #7 child 1): PhoneLedger, the files, the F4 export.
+            api(project(":persistence"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

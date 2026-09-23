@@ -6,9 +6,11 @@ import dev.loupe.engine.Decision
 import dev.loupe.engine.FailurePosture
 import dev.loupe.engine.Judgment
 import dev.loupe.engine.JudgmentAuthor
+import dev.loupe.engine.LedgerRow
 import dev.loupe.engine.Policy
 import dev.loupe.engine.Probability
 import dev.loupe.engine.Recalibrator
+import dev.loupe.engine.ResolvedBy
 import dev.loupe.engine.TextState
 import dev.loupe.engine.Truncation
 
@@ -122,6 +124,9 @@ object FlightPriorities {
         }
 }
 
+/** One Laya decision on an offer: what the app shows, and the ledger row it writes. */
+data class FlightDecision(val verdict: OfferVerdict, val row: LedgerRow)
+
 /** Laya's verdict on one offer. */
 data class OfferVerdict(
     val id: String,
@@ -152,20 +157,44 @@ class FlightJudge(
     /** For Swift, which does not see Kotlin default arguments. */
     constructor(backend: Backend) : this(backend, DEFAULT_THRESHOLD, Recalibrator.Identity)
 
-    fun judge(judgment: Judgment.Choice, offer: FlightFacts): OfferVerdict {
+    fun judge(judgment: Judgment.Choice, offer: FlightFacts): OfferVerdict = decide(judgment, offer).verdict
+
+    /**
+     * Judges [offer] and returns the ledger row (A5) this decision writes, built exactly as
+     * `DecisionEngine` builds one: the full calibrated distribution, the policy's action, a
+     * propensity of 1 (no exploration here, so the policy's choice is certain), the cut record, and
+     * `resolvedBy` Model — or Unusable, with a flat distribution, when validation failed. The item
+     * is `web:duffel:<offer id>`: the source (epic #6) and the offer. Rule-baseline rankings write
+     * no rows; they are not model decisions.
+     */
+    fun decide(judgment: Judgment.Choice, offer: FlightFacts): FlightDecision {
         val state = FlightState.of(offer)
+        val itemId = itemId(offer.id)
         val scored = runCatching { backend.score(judgment, state) }
         val raw = scored.mapCatching { judgment.validate(it.masses) }
         val failure = raw.exceptionOrNull()
         if (failure != null) {
-            return OfferVerdict(offer.id, 0.0, 0.0, unsure = true, truncated = state.budgetCut != null,
-                failure = failure.message ?: "unusable response")
+            val reason = failure.message ?: "unusable response"
+            val s = scored.getOrNull()
+            val row = LedgerRow(
+                judgmentId = judgment.id,
+                criteriaHash = judgment.criteriaHash,
+                distribution = judgment.noInformation(),
+                action = Policy.UNUSABLE,
+                propensity = Probability.of(1.0),
+                failure = reason,
+                itemId = itemId,
+                resolvedBy = ResolvedBy.Unusable,
+                truncation = Truncation(state.budgetCut, s?.modelContext, s?.optionCriteria),
+            )
+            val verdict = OfferVerdict(offer.id, 0.0, 0.0, unsure = true, truncated = state.budgetCut != null, failure = reason)
+            return FlightDecision(verdict, row)
         }
         val s = scored.getOrThrow()
         val truncation = Truncation(state.budgetCut, s.modelContext, s.optionCriteria)
         val calibrated = recalibrator.calibrate(raw.getOrThrow())
         val decision = Policy.onCutInput(Policy.decide(calibrated, Probability.of(threshold)), truncation, judgment.onFailure)
-        return OfferVerdict(
+        val verdict = OfferVerdict(
             id = offer.id,
             fit = calibrated.getValue(FlightPriorities.FITS).value,
             margin = calibrated.distribution.margin,
@@ -173,10 +202,27 @@ class FlightJudge(
             truncated = truncation.isCut,
             failure = null,
         )
+        val row = LedgerRow(
+            judgmentId = judgment.id,
+            criteriaHash = judgment.criteriaHash,
+            distribution = calibrated.distribution,
+            action = Policy.actionOf(decision),
+            propensity = Probability.of(1.0),
+            itemId = itemId,
+            resolvedBy = ResolvedBy.Model,
+            truncation = truncation,
+        )
+        return FlightDecision(verdict, row)
     }
 
     companion object {
         const val DEFAULT_THRESHOLD: Double = 0.80
+
+        /** The ledger source for flight offers (epic #6): offers come from Duffel via the helper. */
+        const val SOURCE: String = "web:duffel"
+
+        /** The ledger item id of an offer: `web:duffel:<offer id>`. */
+        fun itemId(offerId: String): String = "$SOURCE:$offerId"
 
         /**
          * Best first: usable answers by fit, then unusable ones; ties keep the order given (the

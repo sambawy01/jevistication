@@ -3,6 +3,9 @@ package dev.loupe.kit.flights
 import dev.loupe.engine.Backend
 import dev.loupe.engine.Extent
 import dev.loupe.engine.Fit
+import dev.loupe.engine.Policy
+import dev.loupe.engine.ResolvedBy
+import dev.loupe.engine.Truncation
 import dev.loupe.engine.Scored
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -126,5 +129,40 @@ class FlightJudgeTest {
         val judge = FlightJudge(fake(mapOf("p" to 0.5, "q" to 0.5, "r" to 0.5)))
         val order = FlightJudge.order(listOf("q", "r", "p").map { judge.judge(j, tagged(it)) })
         assertEquals(listOf("q", "r", "p"), order.map { it.id })
+    }
+
+    @Test
+    fun `every Laya decision is a model ledger row with the source and the full distribution`() {
+        val j = (FlightPriorities.compile("nonstop") as FlightJudgment.Ready).judgment
+        val judge = FlightJudge(fake(mapOf("a" to 0.95, "b" to 0.60)))
+        val sure = judge.decide(j, tagged("a"))
+        val unsure = judge.decide(j, tagged("b"))
+        assertEquals(sure.verdict, judge.judge(j, tagged("a")))
+        for (d in listOf(sure, unsure)) {
+            assertEquals(ResolvedBy.Model, d.row.resolvedBy)
+            assertTrue(d.row.isModelPrediction)
+            assertEquals(FlightPriorities.ID, d.row.judgmentId)
+            assertEquals(j.criteriaHash, d.row.criteriaHash)
+            assertEquals("web:duffel:${d.verdict.id}", d.row.itemId)
+            assertEquals(1.0, d.row.propensity.value)
+            assertEquals(Truncation.NONE, d.row.truncation)
+        }
+        assertEquals(FlightPriorities.FITS, sure.row.action)
+        assertEquals(0.95, sure.row.distribution.getValue(FlightPriorities.FITS).value, 1e-12)
+        assertEquals(Policy.ABSTAIN, unsure.row.action)
+        assertEquals(0.4, unsure.row.distribution.getValue(FlightPriorities.MISSES).value, 1e-12)
+    }
+
+    @Test
+    fun `a cut or unusable decision is recorded as such`() {
+        val j = (FlightPriorities.compile("nonstop") as FlightJudgment.Ready).judgment
+        val cut = FlightJudge(fake(mapOf("a" to 0.99), cut = true)).decide(j, tagged("a")).row
+        assertEquals(Policy.ABSTAIN, cut.action)
+        assertTrue(cut.truncated)
+        val broken = FlightJudge(Backend { _, _ -> error("model file truncated") }).decide(j, tagged("x")).row
+        assertEquals(ResolvedBy.Unusable, broken.resolvedBy)
+        assertEquals(Policy.UNUSABLE, broken.action)
+        assertEquals("model file truncated", broken.failure)
+        assertEquals(0.5, broken.distribution.getValue(FlightPriorities.FITS).value, 1e-12)
     }
 }

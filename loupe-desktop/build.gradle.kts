@@ -13,6 +13,8 @@ repositories {
 
 dependencies {
     implementation(project(":templates"))
+    // The ledger, corrections and judgments file formats and the F4 export, shared with the iPhone.
+    implementation(project(":persistence"))
     implementation(project(":sources-desktop"))
     implementation(project(":backend-onnx"))
     // "Watch it think": the Riverflight window, reused as a library. It also supplies ModelLoader.

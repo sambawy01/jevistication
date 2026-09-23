@@ -20,6 +20,13 @@ struct LayaRanker: OfferRanker {
 
     /// Cancellable (checked between offers) and reports `(done, total)` after each offer.
     func rank(_ offers: [Offer], by p: Priorities, progress: (Int, Int) -> Void) throws -> [RankedOffer] {
+        try decide(offers, by: p, progress: progress).ranked
+    }
+
+    /// Laya's ranking plus one ledger row per offer it judged (A5): `resolvedBy` model (or
+    /// unusable), item `web:duffel:<offer id>`, the full distribution and propensity. Only a run
+    /// that finished yields rows; a cancelled one throws and logs nothing.
+    func decide(_ offers: [Offer], by p: Priorities, progress: (Int, Int) -> Void) throws -> (ranked: [RankedOffer], rows: [LedgerRow]) {
         let judgment: JudgmentChoice
         switch FlightPriorities.shared.compile(priorities: p.text) {
         case let ready as FlightJudgmentReady: judgment = ready.judgment
@@ -30,14 +37,17 @@ struct LayaRanker: OfferRanker {
         let baseline = RuleBasedRanker().rank(offers, by: p)
         let judge = FlightJudge(backend: backend)
         var verdicts: [OfferVerdict] = []
+        var rows: [LedgerRow] = []
         progress(0, baseline.count)
         for (i, r) in baseline.enumerated() {
             try Task.checkCancellation()
-            verdicts.append(judge.judge(judgment: judgment, offer: Self.facts(r.offer)))
+            let d = judge.decide(judgment: judgment, offer: Self.facts(r.offer))
+            verdicts.append(d.verdict)
+            rows.append(d.row)
             progress(i + 1, baseline.count)
         }
         let byId = Dictionary(uniqueKeysWithValues: baseline.map { ($0.offer.id, $0) })
-        return FlightJudge.Companion.shared.order(verdicts: verdicts).enumerated().compactMap { i, v in
+        let ranked: [RankedOffer] = FlightJudge.Companion.shared.order(verdicts: verdicts).enumerated().compactMap { i, v in
             guard var r = byId[v.id] else { return nil }
             r.rank = i + 1
             r.score = v.fit
@@ -47,6 +57,7 @@ struct LayaRanker: OfferRanker {
                 ?? (v.truncated ? "The model read only part of this offer" : nil)
             return r
         }
+        return (ranked, rows)
     }
 
     /// The helper's offer as the facts Laya reads. Prices stay the decimal string the helper sent.

@@ -5,11 +5,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.loupe.engine.Backend
 import dev.loupe.engine.DecisionEngine
-import dev.loupe.engine.Export
+import dev.loupe.persistence.DataExport
 import dev.loupe.engine.LedgerRow
 import dev.loupe.engine.Mechanical
 import dev.loupe.engine.Probability
-import dev.loupe.engine.VisibleCalibration
 import dev.loupe.game.desktop.LoadedModel
 import dev.loupe.sources.SampleData
 import dev.loupe.sources.ScanProgress
@@ -508,25 +507,10 @@ class LoupeController(
 
     /** Writes judgments, per-judgment calibration, the ledger and corrections into [dir]. */
     fun export(dir: Path): List<Path> {
-        Files.createDirectories(dir)
-        val merged = ledger.map { row ->
-            val label = row.itemId?.let { correctionIndex[CorrectionKey(row.judgmentId, row.criteriaHash, it)] }
-            if (label != null && label in row.distribution.labels) row.copy(correction = label) else row
-        }
-        val views = judgments.mapNotNull { j ->
-            VisibleCalibration.forJudgment(Analysis.effectiveRows(ledger, j, correctionIndex), j.id)
-        }
-        val files = listOf(
-            dir.resolve("loupe-judgments.json") to Export.judgmentsToJson(judgments.map { it.toDefinition() }),
-            dir.resolve("loupe-calibration.json") to Export.calibrationToJson(views),
-            dir.resolve("loupe-ledger.jsonl") to Export.ledgerToJsonl(merged) + if (merged.isEmpty()) "" else "\n",
-        )
-        for ((path, text) in files) Files.writeString(path, text)
-        val correctionsCopy = dir.resolve("loupe-corrections.jsonl")
-        val source = store.home.resolve("corrections.jsonl")
-        if (Files.exists(source)) Files.copy(source, correctionsCopy, java.nio.file.StandardCopyOption.REPLACE_EXISTING) else Files.writeString(correctionsCopy, "")
-        notice = "Exported ${files.size + 1} files to $dir."
-        return files.map { it.first } + listOf(correctionsCopy)
+        val files = DataExport.files(ledger, correctionIndex, judgments, store.files.correctionsText())
+        val paths = DataExport.write(dir.toString(), files).map { Path.of(it) }
+        notice = "Exported ${paths.size} files to $dir."
+        return paths
     }
 
     // ------------------------------------------------------------------ the game

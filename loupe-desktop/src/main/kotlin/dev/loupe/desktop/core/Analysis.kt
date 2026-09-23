@@ -1,6 +1,8 @@
 package dev.loupe.desktop.core
 
 import dev.loupe.engine.Backend
+import dev.loupe.persistence.CorrectionCodec
+import dev.loupe.persistence.DataExport
 import dev.loupe.engine.FailurePosture
 import dev.loupe.engine.Scored
 import dev.loupe.engine.Calibration
@@ -24,7 +26,7 @@ import dev.loupe.sources.SourceItem
 import dev.loupe.templates.UserJudgment
 
 /** The key a correction is filed under: one item, under one judgment's exact wording. */
-data class CorrectionKey(val judgmentId: String, val criteriaHash: String, val itemId: String)
+typealias CorrectionKey = dev.loupe.persistence.CorrectionKey
 
 /** One decision as the screens show it: the ledger row, the item it was about, and its status. */
 data class DecisionView(
@@ -147,33 +149,15 @@ object Analysis {
     const val MIN_FOR_BASELINE: Int = 10
 
     /** The latest correction per key; a retraction removes the key. Order is the file's order. */
-    fun correctionIndex(corrections: List<Correction>): Map<CorrectionKey, String> {
-        val index = LinkedHashMap<CorrectionKey, String>()
-        for (c in corrections) {
-            val key = CorrectionKey(c.judgmentId, c.criteriaHash, c.itemId)
-            if (c.label == null) index.remove(key) else index[key] = c.label
-        }
-        return index
-    }
+    fun correctionIndex(corrections: List<Correction>): Map<CorrectionKey, String> =
+        CorrectionCodec.index(corrections.map { it.toRecord() })
 
     /**
      * The rows that count for [judgment]: current wording, latest per item, with the user's
      * correction merged in as `LedgerRow.correction` — the field every engine function reads.
      */
-    fun effectiveRows(all: List<LedgerRow>, judgment: UserJudgment, corrections: Map<CorrectionKey, String>): List<LedgerRow> {
-        val hash = judgment.criteriaHash
-        val latest = LinkedHashMap<String, LedgerRow>()
-        for (row in all) {
-            if (row.judgmentId != judgment.id || row.criteriaHash != hash) continue
-            val item = row.itemId ?: continue
-            latest.remove(item)
-            latest[item] = row
-        }
-        return latest.values.map { row ->
-            val label = corrections[CorrectionKey(judgment.id, hash, row.itemId!!)]
-            if (label != null && label in row.distribution.labels) row.copy(correction = label) else row
-        }
-    }
+    fun effectiveRows(all: List<LedgerRow>, judgment: UserJudgment, corrections: Map<CorrectionKey, String>): List<LedgerRow> =
+        DataExport.effectiveRows(all, judgment.id, judgment.criteriaHash, corrections)
 
     /** Rows for [judgment] logged under wording it no longer has. */
     fun earlierWording(all: List<LedgerRow>, judgment: UserJudgment): Int =

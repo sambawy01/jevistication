@@ -24,12 +24,14 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
 
 - Game (epic #7 G): `Loupe/Game/` — SpriteKit river over the KMP `:game` rules from LoupeKit. Now → Play card or Me → Game. You fly (drag steer, hold fire, tap pause, auto-fire) or Watch Laya (raw probability bars, decisions/s, scoreboard vs the baseline on the same seed; baseline + note without the model). Pauses on background; reduced motion; haptics toggle. DEBUG args: `-LoupeGame human|watch`, `-LoupeSeed n`, `-LoupeGameLog` (fps/decisions per second to stdout), `-LoupeSkipOnboarding`.
 
+- Ledger (epic #7 child 1): every Laya-ranked offer is an A5 row (`web:duffel:<offer>`, model/unusable, propensity, truncation) appended and fsynced to Application Support/Loupe/ledger.jsonl in the desktop format (`Loupe/Ledger/LedgerService.swift` over LoupeKit `PhoneLedger`). Me shows the count and "Export my data": the desktop's four F4 files, zipped, via the share sheet. Tests and `-LoupeFixtures` use a throwaway ledger.
+
 ## Pending
 - Game fps and Laya latency on a real iPhone (simulator: 60 fps, ~9 decisions/s, p50 ~80 ms).
 - Model download host: `LayaModelSource.baseURL` is empty (no host recorded); the screen says so.
 - Laya is untuned: on the fixture it is unsure of every offer and ranks an over-cap fare first.
 - Mascot: static reference render with SwiftUI transforms for now. The rigged SceneKit/RealityKit robot comes later.
-- Now/Judgments/Sources/Me content comes with phone sources. Ledger rows (`source = web:duffel`) are not built yet.
+- Now/Judgments/Sources/Me content comes with phone sources.
 - Release builds exclude the fixture JSON (`EXCLUDED_SOURCE_FILE_NAMES`); launch arguments are `#if DEBUG`.
 
 ## Third-party notices (in THIRD_PARTY_NOTICES.md; bundled, shown under Me → Licences)
