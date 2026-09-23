@@ -28,7 +28,7 @@ class OnnxBackendTest {
     private val receipt = Judgment.Choice("is-receipt", "Is this a receipt?", listOf("yes", "no"))
 
     /** Characters as token ids. Enough to make the synthetic graph's output depend on the text. */
-    private val tokenizer = Tokenizer { text, _ ->
+    private val tokenizer = Tokenizer { _, text, _ ->
         val ids = text.take(64).map { it.code.toLong() }.toLongArray()
         val safe = if (ids.isEmpty()) longArrayOf(1L) else ids
         TokenizedInput(safe, LongArray(safe.size) { 1L })

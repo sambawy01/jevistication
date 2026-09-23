@@ -10,12 +10,34 @@ import java.nio.file.Path
 import kotlin.math.exp
 
 /** The tensors one scoring call feeds to the model. */
-class TokenizedInput(val inputIds: LongArray, val attentionMask: LongArray) {
+class TokenizedInput(
+    val inputIds: LongArray,
+    val attentionMask: LongArray,
+    /**
+     * For a model that scores each candidate at its own position in the sequence (Laya scores
+     * each option at a `<mask>` marker), the index of each candidate's marker, in candidate
+     * order. Null for a model that emits one logit per candidate from the sequence as a whole.
+     */
+    val markerPositions: LongArray? = null,
+) {
     init {
         require(inputIds.isNotEmpty()) { "tokenizer produced no tokens" }
         require(inputIds.size == attentionMask.size) {
             "input ids and attention mask must be the same length, were " +
                 "${inputIds.size} and ${attentionMask.size}"
+        }
+        markerPositions?.let { markers ->
+            require(markers.isNotEmpty()) { "marker positions must not be empty" }
+            // In range and strictly increasing: a marker outside the sequence would be clamped by
+            // the graph's gather and silently score the wrong token, and two candidates sharing a
+            // marker would be scored identically whatever the text says.
+            require(markers.all { it >= 0 && it < inputIds.size }) {
+                "marker positions must lie inside the ${inputIds.size}-token sequence, were " +
+                    markers.contentToString()
+            }
+            require((1 until markers.size).all { markers[it] > markers[it - 1] }) {
+                "marker positions must be strictly increasing, were ${markers.contentToString()}"
+            }
         }
     }
 
@@ -23,14 +45,17 @@ class TokenizedInput(val inputIds: LongArray, val attentionMask: LongArray) {
 }
 
 /**
- * Turns an item's text and a judgment's candidate labels into model inputs.
+ * Turns a judgment's question, an item's text and the judgment's candidate labels into model
+ * inputs.
  *
  * This is an interface rather than a concrete tokenizer because the exported model decides the
- * vocabulary, the special tokens and how candidate labels are presented to it. Binding one
- * tokenizer here would tie the backend to a single export.
+ * vocabulary, the special tokens and how the question and candidate labels are presented to it.
+ * Binding one tokenizer here would tie the backend to a single export. The question is part of
+ * the signature because a model that reads it — Laya does, as its "instructions" — answers a
+ * different question without it; the original two-argument form could not express that.
  */
 fun interface Tokenizer {
-    fun encode(text: String, candidates: List<String>): TokenizedInput
+    fun encode(question: String, text: String, candidates: List<String>): TokenizedInput
 }
 
 /** The tensor names a particular exported model uses. */
@@ -39,7 +64,17 @@ data class TensorNames(
     /** Null when the model takes no mask. */
     val attentionMask: String? = "attention_mask",
     val logits: String = "logits",
-)
+    /**
+     * The per-candidate marker positions input (see [TokenizedInput.markerPositions]). Null for a
+     * model that takes none; when set, the tokenizer must supply exactly one per candidate.
+     */
+    val markerPositions: String? = null,
+) {
+    companion object {
+        /** The graph `tools/export-laya-onnx.py` writes; its contract is in that script. */
+        val LAYA: TensorNames = TensorNames(markerPositions = "marker_pos")
+    }
+}
 
 /**
  * A [Backend] backed by ONNX Runtime.
@@ -62,12 +97,31 @@ class OnnxBackend(
 ) : Backend, AutoCloseable {
 
     override fun score(judgment: Judgment.Choice, state: TextState): Map<String, Double> {
-        val encoded = tokenizer.encode(state.text, judgment.candidates)
+        val encoded = tokenizer.encode(judgment.question, state.text, judgment.candidates)
+        // A tokenizer and a graph that disagree about markers are a wiring mistake, not a model
+        // answer: feeding markers to a graph that ignores them, or omitting them from one that
+        // needs them, would still produce numbers. Refuse before running anything.
+        require((names.markerPositions == null) == (encoded.markerPositions == null)) {
+            if (names.markerPositions == null) {
+                "tokenizer produced marker positions but the model takes no marker input"
+            } else {
+                "model takes marker input '${names.markerPositions}' but the tokenizer produced none"
+            }
+        }
+        encoded.markerPositions?.let { markers ->
+            require(markers.size == judgment.candidates.size) {
+                "tokenizer produced ${markers.size} marker positions but judgment " +
+                    "'${judgment.id}' declares ${judgment.candidates.size} candidates"
+            }
+        }
         val inputs = LinkedHashMap<String, OnnxTensor>()
         try {
             inputs[names.inputIds] = OnnxTensor.createTensor(environment, arrayOf(encoded.inputIds))
             names.attentionMask?.let { maskName ->
                 inputs[maskName] = OnnxTensor.createTensor(environment, arrayOf(encoded.attentionMask))
+            }
+            names.markerPositions?.let { markerName ->
+                inputs[markerName] = OnnxTensor.createTensor(environment, arrayOf(encoded.markerPositions))
             }
 
             session.run(inputs).use { results ->
