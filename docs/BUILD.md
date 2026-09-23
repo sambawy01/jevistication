@@ -627,7 +627,8 @@ after 1, 6 needs 3, 4 and 5.
 |---|---|---|
 | G | Game on iPhone | **Done 2026-09-23 (simulator)** — KMP `:game`, JVM/iOS parity identical, SpriteKit at 60 fps, Laya live at ~9 decisions/s; device fps/latency need an iPhone |
 | 1 | Ledger on iOS + F4 export | **Done 2026-09-23 (simulator)** — `:persistence` (common), Laya decisions logged as `web:duffel` model rows, Me → Export my data |
-| 2–9 | Sample source, judgments, unsure queue, watchers, sweep, phone sources, mascot, model delivery | Not started |
+| 2 | Sample source + extractors on iOS | **Done 2026-09-23 (simulator)** — `:sources-common` (common model, text/HTML/MIME/mbox extractors, scanner, cache), PDFKit/ImageIO actuals, parity with the desktop scanner on every sample item; Sources tab with the labelled sample (48 items) |
+| 3–9 | Judgments, unsure queue, watchers, sweep, phone sources, mascot, model delivery | Not started |
 
 ### Proving milestones
 
@@ -1113,6 +1114,29 @@ after 1, 6 needs 3, 4 and 5.
   `-LoupeFixtures`); Me shows "Decisions logged: N · stored only on this iPhone" and "Export my
   data" (zip via `NSFileCoordinator .forUploading`, share sheet). The iPhone export also measures
   judgments with rows but no saved definition (the flight priorities); the desktop does not.
+- **2026-09-23 — Epic #7 child 2: the sample source and extractors on iOS.** New KMP module
+  `:sources-common` (jvm + iOS, no new dependency): the `SourceItem` model, `PlainText` / `HtmlText`
+  / `Links` ported from `:sources-desktop`, a small common MIME reader (folded headers, RFC 2047
+  words, nested `multipart/`, quoted-printable, base64, UTF-8 / ISO-8859-1 / Windows-1252 /
+  US-ASCII), `Mbox.split` (the desktop's `^From \S+.*\d{4}$` rule, so the "From " Trap behaves the
+  same), `SourceScanner` (rule-for-rule port: kinds, `MimeFacts` "extension lies", skip reasons,
+  `ContentHash`, duplicate tiebreak, truncation marker) and `SourceLibrary` (per-source scan cache +
+  on/off, JSON through `:persistence`, atomic writes). PDF text and image metadata are a
+  `PlatformExtractors` the host passes: PDFKit/ImageIO in Swift (`ios/Loupe/Sources/AppleExtractors.swift`),
+  PDFBox/metadata-extractor on the JVM (`DesktopPlatformExtractors`). `ParityTest` in `:sources-desktop`
+  holds the common scanner to the desktop `Scanner` on every sample item (ids, text, facts, hashes,
+  dates, email facts, duplicates, skips — all equal) and the common MIME parser to mime4j on all 24
+  sample messages. **Documented differences:** on the phone, ids carry a `sample:documents/` /
+  `sample:mail/` prefix plus the relative path (the app container path changes across installs);
+  PDF text comes from PDFKit, whose spacing and line breaks can differ from PDFBox (same words; the
+  XCTests check content, pages, creation date, producer); image facts arrive from Swift unordered;
+  raw 8-bit headers are read as UTF-8. The app bundles the sample verbatim as a folder `sample`,
+  scans it off the main thread with progress on first launch, and caches it in Application
+  Support/Loupe/sources; the Sources tab shows "Sample data — not from your phone" (on by default,
+  switchable off), 48 items, skipped/duplicate/no-text counts, last scan and "Scan again", with
+  Photos/Files/Mail/Calendar/Contacts listed as "Coming in child 7". Tests: 14 common tests (JVM + iOS
+  simulator), 2 parity tests, 7 XCTests (PDFKit, ImageIO incl. a written EXIF/GPS JPEG, full sample
+  scan, service cache and switch-off), 1 UI test.
 
 ## Hand-off
 

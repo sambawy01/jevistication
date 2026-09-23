@@ -23,6 +23,11 @@ targets:
       # :backend-laya-common:generateIosThirdPartyNotices. Bundled from its one source of truth.
       - path: ../ios-native/THIRD_PARTY_NOTICES-ios.txt
         buildPhase: resources
+      # The synthetic sample (epic #7 child 2): the desktop's sample resources, verbatim, bundled as
+      # a folder named "sample" and read by the Sources tab. Labelled "not from your phone" in the UI.
+      - path: ../sources-desktop/src/main/resources/dev/loupe/sources/sample
+        type: folder
+        buildPhase: resources
     dependencies:
       # The engine and Laya for iOS, consumed as the KMP-built XCFramework (static). It embeds ONNX
       # Runtime and the Rust tokenizer (cinterop static libraries), so their xcframeworks are not

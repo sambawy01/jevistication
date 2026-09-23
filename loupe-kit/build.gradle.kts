@@ -29,6 +29,7 @@ kotlin {
                 export(project(":templates"))
                 export(project(":game"))
                 export(project(":persistence"))
+                export(project(":sources-common"))
                 if (layaIos != null) {
                     export(layaIos)
                     export(project(":backend-laya-common"))
@@ -48,6 +49,8 @@ kotlin {
             api(project(":game"))
             // The ledger on the phone (epic #7 child 1): PhoneLedger, the files, the F4 export.
             api(project(":persistence"))
+            // Sources on the phone (epic #7 child 2): SourceItem, the common extractors and scanner, the cache.
+            api(project(":sources-common"))
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

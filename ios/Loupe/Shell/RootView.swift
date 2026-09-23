@@ -8,6 +8,7 @@ struct RootView: View {
     @State var initialTab: AppTab
     @State private var selection: AppTab = .now
     @StateObject private var launcher = GameLauncher()
+    @ObservedObject private var sources = SourcesService.shared
     @AppStorage("onboarding.seen") private var onboardingSeen = false
     @State private var showOnboarding = false
     @State private var watchAfterOnboarding = false
@@ -25,9 +26,7 @@ struct RootView: View {
             WebTabView()
                 .tabItem { Label("Web", systemImage: "globe") }
                 .tag(AppTab.web)
-            PlaceholderTab(title: "Sources",
-                           message: "Photos, mail and files on this phone. Nothing is connected yet.",
-                           symbol: "externaldrive")
+            SourcesView(sources: sources)
                 .tabItem { Label("Sources", systemImage: "externaldrive") }
                 .tag(AppTab.sources)
             MeView()
@@ -53,6 +52,7 @@ struct RootView: View {
         }
         .onAppear {
             selection = initialTab
+            sources.start()
             let launch = LaunchOptions.current
             launcher.seed = launch.gameSeed
             if let game = launch.game {

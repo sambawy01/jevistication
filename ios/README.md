@@ -26,12 +26,14 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
 
 - Ledger (epic #7 child 1): every Laya-ranked offer is an A5 row (`web:duffel:<offer>`, model/unusable, propensity, truncation) appended and fsynced to Application Support/Loupe/ledger.jsonl in the desktop format (`Loupe/Ledger/LedgerService.swift` over LoupeKit `PhoneLedger`). Me shows the count and "Export my data": the desktop's four F4 files, zipped, via the share sheet. Tests and `-LoupeFixtures` use a throwaway ledger.
 
+- Sources (epic #7 child 2): the synthetic sample (the desktop's sample resources, bundled as `sample/`) read by LoupeKit's common scanner (`:sources-common`) with PDFKit and ImageIO as the platform readers (`Loupe/Sources/AppleExtractors.swift`), off the main thread with progress, cached in Application Support/Loupe/sources (`SourcesService`, over LoupeKit `SourceLibrary`). The Sources tab shows "Sample data — not from your phone" (on by default, switchable off), its item count and last scan; Photos/Files/Mail/Calendar/Contacts are listed as "Coming in child 7". `SourcesService.items()` is what Judgments and Now read next.
+
 ## Pending
 - Game fps and Laya latency on a real iPhone (simulator: 60 fps, ~9 decisions/s, p50 ~80 ms).
 - Model download host: `LayaModelSource.baseURL` is empty (no host recorded); the screen says so.
 - Laya is untuned: on the fixture it is unsure of every offer and ranks an over-cap fare first.
 - Mascot: static reference render with SwiftUI transforms for now. The rigged SceneKit/RealityKit robot comes later.
-- Now/Judgments/Sources/Me content comes with phone sources.
+- Now/Judgments content comes next (children 3–5), over the cached sample items; phone sources in child 7.
 - Release builds exclude the fixture JSON (`EXCLUDED_SOURCE_FILE_NAMES`); launch arguments are `#if DEBUG`.
 
 ## Third-party notices (in THIRD_PARTY_NOTICES.md; bundled, shown under Me → Licences)

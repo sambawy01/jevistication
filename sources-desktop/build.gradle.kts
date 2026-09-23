@@ -10,6 +10,9 @@ repositories {
 
 dependencies {
     api(project(":engine"))
+    // The common scanner (epic #7 child 2) runs here too, with PDFBox and metadata-extractor as its
+    // platform readers; ParityTest holds it to this module's Scanner item for item.
+    implementation(project(":sources-common"))
 
     // Desktop sources only, never :engine. Each is Apache-2.0, checked from its resolved POM with
     // its transitive dependencies and bundled files — see docs/LICENSING.md, "Desktop sources".
