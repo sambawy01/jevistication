@@ -64,6 +64,9 @@ class PhoneLedger private constructor(val store: LedgerStore) {
     /** The rows one judgment logged, in append order. */
     fun rowsForJudgment(judgmentId: String): List<LedgerRow> = lock.withLock { rows.filter { it.judgmentId == judgmentId } }
 
+    /** The latest correction per (judgment, wording, item); a retraction removes it. */
+    fun correctionIndex(): Map<CorrectionKey, String> = lock.withLock { CorrectionCodec.index(corrections) }
+
     fun count(): Int = lock.withLock { rows.size }
 
     fun stats(): LedgerStats = lock.withLock {

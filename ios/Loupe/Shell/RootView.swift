@@ -18,9 +18,7 @@ struct RootView: View {
             NowView()
                 .tabItem { Label("Now", systemImage: "scope") }
                 .tag(AppTab.now)
-            PlaceholderTab(title: "Judgments",
-                           message: "Questions you write in plain language, run on everything you own. They need sources to run on.",
-                           symbol: "list.bullet.rectangle")
+            JudgmentsView(service: JudgmentsService.shared)
                 .tabItem { Label("Judgments", systemImage: "list.bullet.rectangle") }
                 .tag(AppTab.judgments)
             WebTabView()

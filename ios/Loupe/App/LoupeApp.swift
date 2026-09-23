@@ -23,6 +23,8 @@ struct LaunchOptions {
     var skipOnboarding = false   // -LoupeSkipOnboarding: never show the first-launch sheet
     var game: GameMode?          // -LoupeGame human|watch: open the game at launch
     var gameSeed: Int64 = 1      // -LoupeSeed n
+    var judgmentDemo: String?    // -LoupeJudgmentDemo <template id>: add it, open its results, run
+    var openLibrary = false      // -LoupeLibrary: open Judgments on the Library
 
     static let current: LaunchOptions = {
         var o = LaunchOptions()
@@ -37,6 +39,8 @@ struct LaunchOptions {
         o.skipOnboarding = args.contains("-LoupeSkipOnboarding")
         if let i = args.firstIndex(of: "-LoupeGame"), i + 1 < args.count { o.game = GameMode(rawValue: args[i + 1]) }
         if let i = args.firstIndex(of: "-LoupeSeed"), i + 1 < args.count, let n = Int64(args[i + 1]) { o.gameSeed = n }
+        if let i = args.firstIndex(of: "-LoupeJudgmentDemo"), i + 1 < args.count { o.judgmentDemo = args[i + 1] }
+        o.openLibrary = args.contains("-LoupeLibrary")
         #endif
         return o
     }()

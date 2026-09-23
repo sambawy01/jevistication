@@ -58,6 +58,28 @@ final class LedgerService: ObservableObject, @unchecked Sendable {
 
     func rows(judgmentId: String) -> [LedgerRow] { queue.sync { ledger?.rowsForJudgment(judgmentId: judgmentId) ?? [] } }
 
+    /// Every row, in append order (the Judgments tab filters by judgment and wording in LoupeKit).
+    func allRows() -> [LedgerRow] { queue.sync { ledger?.rows() ?? [] } }
+
+    /// The latest correction per (judgment, wording, item).
+    func correctionIndex() -> [CorrectionKey: String] { queue.sync { ledger?.correctionIndex() ?? [:] } }
+
+    /// The user's judgments (loupe-judgments.json beside the ledger, the desktop's format).
+    func judgments() throws -> [UserJudgment] {
+        try queue.sync {
+            guard let ledger else { throw ExportError.storeUnavailable }
+            return try ledger.judgments()
+        }
+    }
+
+    /// Replaces the saved judgments (synced temp file + rename).
+    func saveJudgments(_ judgments: [UserJudgment]) throws {
+        try queue.sync {
+            guard let ledger else { throw ExportError.storeUnavailable }
+            try ledger.saveJudgments(judgments: judgments)
+        }
+    }
+
     /// F4: writes the desktop's four export files into a fresh folder, then zips it (Foundation's
     /// coordinated-read `.forUploading`, no third-party code) into one file to share.
     func export(now: Date = Date()) async throws -> URL {

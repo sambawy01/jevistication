@@ -628,7 +628,8 @@ after 1, 6 needs 3, 4 and 5.
 | G | Game on iPhone | **Done 2026-09-23 (simulator)** — KMP `:game`, JVM/iOS parity identical, SpriteKit at 60 fps, Laya live at ~9 decisions/s; device fps/latency need an iPhone |
 | 1 | Ledger on iOS + F4 export | **Done 2026-09-23 (simulator)** — `:persistence` (common), Laya decisions logged as `web:duffel` model rows, Me → Export my data |
 | 2 | Sample source + extractors on iOS | **Done 2026-09-23 (simulator)** — `:sources-common` (common model, text/HTML/MIME/mbox extractors, scanner, cache), PDFKit/ImageIO actuals, parity with the desktop scanner on every sample item; Sources tab with the labelled sample (48 items) |
-| 3–9 | Judgments, unsure queue, watchers, sweep, phone sources, mascot, model delivery | Not started |
+| 3 | Judgments tab | **Done 2026-09-23 (simulator)** — shared `dev.loupe.kit.judgments` (JudgmentBook, JudgmentSweep, JudgmentResults); Library (55 templates, 10 categories, search, detail, Use this), Write your own (live lint, yes/no · score · pick, bare yes/no refused, criteria-in-prompt off by default), My judgments with counts, per-judgment Results over the sample with Laya (off main, cancellable) or "Model not installed" |
+| 4–9 | Unsure queue, watchers, sweep, phone sources, mascot, model delivery | Not started |
 
 ### Proving milestones
 
@@ -1137,6 +1138,27 @@ after 1, 6 needs 3, 4 and 5.
   Photos/Files/Mail/Calendar/Contacts listed as "Coming in child 7". Tests: 14 common tests (JVM + iOS
   simulator), 2 parity tests, 7 XCTests (PDFKit, ImageIO incl. a written EXIF/GPS JPEG, full sample
   scan, service cache and switch-off), 1 UI test.
+
+- **2026-09-23 — Epic #7 child 3: the Judgments tab on iOS.** New shared code in `:loupe-kit`
+  (`dev.loupe.kit.judgments`, common, no new dependency), because the desktop's judgment logic lives
+  in `loupe-desktop` over `:sources-desktop` items: `JudgmentBook` (the desktop's `j-<slug>` ids,
+  C1 "Use this" through `Template.instantiate`, C2 through `JudgmentDraft` plus a score shape over
+  named bands; refuses bare `yes`/`no` options and blank ones — the Trap below; criteria-in-prompt
+  default off, with the desktop's calibration-restart notice), `JudgmentSweep` (the controller's F2
+  loop without threads: mechanical first, rows handed over every 16, cancel between items, never
+  throws) and `JudgmentResults` (current wording only, latest per item; acted / unsure / could not
+  judge, "answered by rule", the cut notes, warn-only "no signal"). `PhoneLedger.correctionIndex()`
+  added. `SweepObserver`'s methods are `onSweepProgress`/`onSweepRows`: sharing
+  `ScanObserver.onProgress`'s selector made Kotlin/Native mangle it in Swift. LoupeKit's `Category`
+  cannot be spelled in Swift (the `LoupeKit` class shadows the module), so the Library keys
+  categories by name. iOS: `Loupe/Judgments/` — `JudgmentsService` (list persisted as
+  `loupe-judgments.json` through the ledger store; sweeps on a background queue; rows appended to
+  the ledger as they come), Library, template detail, Write your own, Results (progress, items/s,
+  median call, cancel; confidence bars against the threshold; unsure markers; item detail with the
+  raw distribution). No model → "Model not installed" and nothing is judged. DEBUG
+  `-LoupeJudgmentDemo <template>` / `-LoupeLibrary`. Tests: 10 common (JVM + iOS simulator), 9
+  XCTests (fake backend, asserts off-main), 1 UI test (Library → Use this → My judgments).
+  Screenshots `designs/ios-v1/07-judgment-results.png`, `08-library.png`.
 
 ## Hand-off
 
