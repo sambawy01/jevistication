@@ -33,24 +33,41 @@ data class Observation(
     val depot: Sighting?,
     val bridgeAheadRows: Int?,
     val legal: LegalActions,
+    /** The section the plane is in (each bridge starts the next) and its speed, rows per second. */
+    val section: Int = 1,
+    val scroll: Double = Rules.SCROLL,
 ) {
+    /** Columns the plane can cross while the river scrolls one row, at this section's speed. */
+    val reach: Double get() = Rules.LATERAL / scroll
+
     companion object {
+        /**
+         * How far ahead "near", "far" and threats are looked for, at section 1's speed. Faster
+         * sections stretch all three in proportion ([rowsAhead]), so each stays the same *time*
+         * ahead of the plane.
+         */
         const val NEAR_ROWS: Int = 6
         const val FAR_ROW: Int = 9
         const val MAX_THREATS: Int = 3
         const val THREAT_RANGE: Double = 16.0
 
+        /** [rows] at section 1's speed, stretched to cover the same time at [scroll]. */
+        fun rowsAhead(rows: Int, scroll: Double): Int = (rows * scroll / Rules.SCROLL).roundToInt()
+
         fun of(world: World, legal: LegalActions): Observation {
             val x = world.playerX
             val py = world.playerY
+            val difficulty = world.difficulty
             val here = world.river.rowAt(py + Rules.PLAYER_H / 2)
             val channel = here.channelAt(x) ?: here.water.minBy { abs(it.center - x) }
             val base = floor(py).toInt()
-            val landAhead = (1..NEAR_ROWS).firstOrNull { k -> world.river.row(base + k).channelAt(x) == null }
-            val far = world.river.row(base + FAR_ROW).water.map { Span(it.from - x, it.to - x) }
+            val near = rowsAhead(NEAR_ROWS, difficulty.scroll)
+            val landAhead = (1..near).firstOrNull { k -> world.river.row(base + k).channelAt(x) == null }
+            val far = world.river.row(base + rowsAhead(FAR_ROW, difficulty.scroll)).water.map { Span(it.from - x, it.to - x) }
+            val threatRange = THREAT_RANGE * difficulty.scroll / Rules.SCROLL
 
             val threats = world.enemies
-                .filter { it.alive && it.y + it.height > py && it.y - py < THREAT_RANGE }
+                .filter { it.alive && it.y + it.height > py && it.y - py < threatRange }
                 .sortedBy { it.y }
                 .take(MAX_THREATS)
                 .map { Sighting(it.kind.word, it.y - py, it.x - x, sign(it.vx)) }
@@ -74,6 +91,8 @@ data class Observation(
                 depot = depot,
                 bridgeAheadRows = bridge?.let { (it.y - py).roundToInt() },
                 legal = legal,
+                section = difficulty.section,
+                scroll = difficulty.scroll,
             )
         }
 
@@ -95,6 +114,8 @@ object StateText {
     const val MAX_CHARS: Int = 360
 
     fun describe(o: Observation): String = buildString {
+        // Section and speed first: in a later section the same gap closes sooner.
+        append("section ").append(o.section).append(", speed ").append(o.scroll.roundToInt()).append(". ")
         append("fuel ").append(o.fuelPercent).append('%')
         if (o.fuelPercent < (Rules.FUEL_LOW / Rules.FUEL_MAX * 100)) append(" low")
         append(if (o.weaponReady) ", gun ready." else ", gun reloading.")

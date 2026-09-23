@@ -39,6 +39,16 @@ data class OverrideEvent(val tick: Long, val wanted: Action, val replacedWith: A
  *
  * Neither can make an unavoidable crash avoidable. When every action dies, the ones that survive
  * longest are kept, so the set is never empty and the override never pretends.
+ *
+ * **The horizons are in ticks, not rows, in every section.** They measure time — how long a
+ * decision is held and how soon the next can land — and the plane's sideways speed, which is what
+ * any escape is made of, is the same at every section's scroll; at a faster scroll the same ticks
+ * simply look further up the river. Doubling the recovery horizon, or stretching it with the scroll,
+ * was measured against the fixed one at the cap (10 seeds, baseline and a random pilot, override
+ * on): neither changed materially how far either got or how they died, at up to twice the
+ * look-ahead cost. The deaths that remain are traps the constant-action recovery cannot see (an
+ * enemy in a narrow channel that needed a shot earlier), not horizons too short in rows. Tests hold
+ * the legal set and the override to their promises at the cap.
  */
 object Mechanics {
     /** Ticks a decision is held: 10 Hz decisions plus a few ticks of latency. */

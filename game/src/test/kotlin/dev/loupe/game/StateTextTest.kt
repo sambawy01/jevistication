@@ -6,16 +6,19 @@ import kotlin.test.assertTrue
 
 class StateTextTest {
 
-    /** Every observation a baseline run produces, over several seeds. */
+    /** Every observation a baseline run produces, over several seeds, from the start and from the cap section. */
     private fun observations(): List<Observation> {
         val seen = mutableListOf<Observation>()
-        for (seed in 1L..5L) {
-            val session = GameSession(seed, Control.Piloted(LockstepDecider(BaselinePilot(), 3)))
-            while (!session.world.over && session.world.tick < 4_000) {
-                if (session.world.tick % 6 == 0L) seen += Observation.of(session.world, Mechanics.legalActions(session.world))
-                session.tick()
+        for (start in listOf(1, Difficulty.CAP_SECTION)) {
+            for (seed in 1L..5L) {
+                val session = GameSession(seed, Control.Piloted(LockstepDecider(BaselinePilot(), 3)), startSection = start)
+                while (!session.world.over && session.world.tick < 4_000) {
+                    if (session.world.tick % 6 == 0L) seen += Observation.of(session.world, Mechanics.legalActions(session.world))
+                    session.tick()
+                }
             }
         }
+        assertTrue(seen.any { it.section >= Difficulty.CAP_SECTION }, "no states sampled at the cap")
         return seen
     }
 
@@ -42,7 +45,7 @@ class StateTextTest {
         world.addEnemy(Enemy(EnemyKind.HELI, world.playerX - 2, world.playerY + 4, 4.5))
         world.addDepot(Depot(world.playerX + 3, world.playerY + 9))
         val text = StateText.describe(Observation.of(world, Mechanics.legalActions(world)))
-        assertTrue(text.startsWith("fuel 20% low, gun ready."), text)
+        assertTrue(text.startsWith("section 1, speed 7. fuel 20% low, gun ready."), text)
         assertTrue("heli 4 ahead 2 left moving right." in text, text)
         assertTrue("fuel depot 9 ahead 3 right." in text, text)
     }

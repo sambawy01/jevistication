@@ -26,13 +26,18 @@ object Match {
         val overrideEnabled: Boolean = true,
         /** Hand-off threshold. Headless there is no human, so a hand-off flies the no-op. */
         val threshold: Double = 0.0,
+        /** The section every episode starts in; 1 is the ordinary start. */
+        val startSection: Int = 1,
     )
 
     data class Episode(
         val pilot: String,
         val seed: Long,
         val score: Int,
+        /** Rows flown in this episode (from its start, which is not row 0 past section 1). */
         val rows: Double,
+        /** The section the episode ended in (reached alive, or died in). */
+        val section: Int,
         /** Null when the episode reached [Settings.maxTicks] alive. */
         val death: DeathCause?,
         val ticks: Long,
@@ -60,8 +65,10 @@ object Match {
             threshold = settings.threshold,
             overrideEnabled = settings.overrideEnabled,
             clock = { simNanos },
+            startSection = settings.startSection,
         ).use { session ->
             var seen: PilotDecision? = null
+            val startY = session.world.cameraY
             while (!session.world.over && session.world.tick < settings.maxTicks) {
                 session.tick()
                 simNanos += 1_000_000_000L / Rules.TICK_HZ
@@ -77,7 +84,8 @@ object Match {
                 pilot = pilot.name,
                 seed = seed,
                 score = w.score,
-                rows = w.cameraY,
+                rows = w.cameraY - startY,
+                section = w.section,
                 death = w.death,
                 ticks = w.tick,
                 decisions = s.total,
@@ -102,29 +110,34 @@ object Match {
         appendLine(
             "settings: maxTicks=${settings.maxTicks} (${settings.maxTicks / Rules.TICK_HZ}s), decision every " +
                 "${settings.decisionInterval} ticks, charged delay ${settings.delayTicks} ticks, " +
-                "override=${settings.overrideEnabled}, threshold=${settings.threshold}",
+                "override=${settings.overrideEnabled}, threshold=${settings.threshold}" +
+                if (settings.startSection > 1) ", starting in section ${settings.startSection}" else "",
         )
         appendLine(
             String.format(
-                Locale.ROOT, "%-9s %6s %6s %7s %-7s %5s %5s %5s %5s %5s %8s %8s %7s",
-                "pilot", "seed", "score", "rows", "end", "kills", "dec", "mech", "fail", "ovr", "p50ms", "p95ms", "topRaw",
+                Locale.ROOT, "%-9s %6s %6s %7s %4s %-7s %5s %5s %5s %5s %5s %8s %8s %7s",
+                "pilot", "seed", "score", "rows", "sec", "end", "kills", "dec", "mech", "fail", "ovr", "p50ms", "p95ms", "topRaw",
             ),
         )
         for (e in episodes) {
             appendLine(
                 String.format(
-                    Locale.ROOT, "%-9s %6d %6d %7.1f %-7s %5d %5d %5d %5d %5d %8s %8s %7s",
-                    e.pilot, e.seed, e.score, e.rows, e.death?.name ?: "alive", e.kills, e.decisions, e.mechanical,
+                    Locale.ROOT, "%-9s %6d %6d %7.1f %4d %-7s %5d %5d %5d %5d %5d %8s %8s %7s",
+                    e.pilot, e.seed, e.score, e.rows, e.section, e.death?.name ?: "alive", e.kills, e.decisions, e.mechanical,
                     e.failures, e.overrides, fmt(e.latencyP50Ms), fmt(e.latencyP95Ms), fmt(e.meanTopRaw),
                 ),
             )
         }
         for ((pilot, group) in episodes.groupBy { it.pilot }) {
+            val causes = group.mapNotNull { it.death }.groupingBy { it }.eachCount().entries
+                .sortedBy { it.key.ordinal }.joinToString(" ") { "${it.key}=${it.value}" }.ifEmpty { "none" }
             appendLine(
                 String.format(
-                    Locale.ROOT, "total %-9s score %d, rows %.1f, deaths %d/%d, overrides %d, failures %d",
-                    pilot, group.sumOf { it.score }, group.sumOf { it.rows }, group.count { it.death != null },
-                    group.size, group.sumOf { it.overrides }, group.sumOf { it.failures },
+                    Locale.ROOT,
+                    "total %-9s score %d, rows %.1f, sections mean %.1f max %d, deaths %d/%d (%s), overrides %d, failures %d",
+                    pilot, group.sumOf { it.score }, group.sumOf { it.rows }, group.map { it.section }.average(),
+                    group.maxOf { it.section }, group.count { it.death != null }, group.size, causes,
+                    group.sumOf { it.overrides }, group.sumOf { it.failures },
                 ),
             )
         }

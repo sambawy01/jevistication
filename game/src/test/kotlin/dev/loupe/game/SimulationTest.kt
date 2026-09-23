@@ -50,10 +50,10 @@ class SimulationTest {
     @Test
     fun `the river is always passable and never narrower than the minimum channel`() {
         // Reachability over a discretised column grid: from every reachable column the plane can
-        // move at most LATERAL/SCROLL columns per row, and its whole width must be over water on
-        // both this row and the next (its box straddles rows).
+        // move at most LATERAL/scroll columns per row — at the speed of the section the row is in —
+        // and its whole width must be over water on both this row and the next (its box straddles
+        // rows). DifficultyTest has the stricter, three-row sweep over every section.
         val step = 0.25
-        val reachPerRow = Rules.LATERAL / Rules.SCROLL * 0.9 // a margin below the true reach
         val half = Rules.PLAYER_W / 2
         for (seed in listOf(1L, 2L, 3L, 99L, 12345L, -7L)) {
             val river = River(seed)
@@ -63,6 +63,7 @@ class SimulationTest {
             for (i in 1 until 3_000) {
                 val row = river.row(i)
                 val prev = river.row(i - 1)
+                val reachPerRow = Difficulty.forRow(i).reach * 0.9 // a margin below the true reach
                 for (channel in row.water) {
                     assertTrue(channel.width >= RiverGenerator.MIN_CHANNEL, "seed $seed row $i channel $channel too narrow")
                 }

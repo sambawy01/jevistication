@@ -27,12 +27,16 @@ object Rules {
     const val PLAYER_W: Double = 1.5
     const val PLAYER_H: Double = 1.5
 
-    /** Forward speed, rows per second. */
+    /**
+     * Forward speed in section 1, rows per second. Each later section is faster, up to
+     * [Difficulty.SCROLL_CAP]; the speed actually flown is [World.difficulty]'s.
+     */
     const val SCROLL: Double = 7.0
 
     /**
-     * Sideways speed, columns per second: twice the scroll, so the plane can always cross two
-     * columns per row — faster than any wall is allowed to move (see [RiverGenerator]).
+     * Sideways speed, columns per second, the same in every section: twice the section-1 scroll, so
+     * there the plane crosses two columns per row. Faster sections leave it less reach per row, and
+     * the walls slow to match (see [Difficulty]).
      */
     const val LATERAL: Double = 14.0
 
@@ -42,6 +46,7 @@ object Rules {
     const val FIRE_COOLDOWN_TICKS: Int = 12
 
     const val FUEL_MAX: Double = 100.0
+    /** Section 1's burn and refill; [Difficulty] scales both per section. */
     const val FUEL_DRAIN_PER_S: Double = 2.5
     const val FUEL_REFILL_PER_S: Double = 60.0
 

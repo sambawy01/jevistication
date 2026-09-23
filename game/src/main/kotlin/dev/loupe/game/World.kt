@@ -29,15 +29,21 @@ class World private constructor(
     private val bulletsList: MutableList<Bullet>,
     val tally: Tally,
 ) {
-    constructor(seed: Long) : this(
+    /**
+     * A new run on the river of [seed]. From [startSection] above 1, the run begins just past the
+     * bridge that opens that section, as if that bridge had just been shot: same river, same
+     * spawns, only the start moves. Section 1 is the ordinary start.
+     */
+    constructor(seed: Long, startSection: Int = 1) : this(
         river = River(seed),
         tick = 0,
-        cameraY = 0.0,
+        cameraY = startCamera(startSection),
         playerX = Rules.HALF.toDouble(),
         fuel = Rules.FUEL_MAX,
         score = 0,
         cooldown = 0,
-        spawnedThrough = -1,
+        // Past the start bridge: it and everything below it is behind the plane.
+        spawnedThrough = if (startSection <= 1) -1 else Difficulty.firstRow(startSection),
         enemiesList = mutableListOf(),
         depotsList = mutableListOf(),
         bridgesList = mutableListOf(),
@@ -72,6 +78,10 @@ class World private constructor(
 
     val over: Boolean get() = death != null
     val playerY: Double get() = cameraY + Rules.PLAYER_ROW
+
+    /** How hard the river is where the plane is: the section its bottom edge is in. */
+    val difficulty: Difficulty get() = Difficulty.at(playerY)
+    val section: Int get() = difficulty.section
     val weaponReady: Boolean get() = cooldown == 0
 
     val enemies: List<Enemy> get() = enemiesList
@@ -107,11 +117,13 @@ class World private constructor(
             tally.shotsFired++
         }
 
-        cameraY += Rules.SCROLL * Rules.DT
+        // The section's speed at the start of the tick; passing a bridge speeds up the next tick.
+        val difficulty = difficulty
+        cameraY += difficulty.scroll * Rules.DT
         spawnAhead()
-        moveEnemies()
+        moveEnemies(difficulty)
         moveBullets()
-        burnFuel()
+        burnFuel(difficulty)
         collide()
         cull()
     }
@@ -189,10 +201,13 @@ class World private constructor(
         }
     }
 
-    private fun moveEnemies() {
+    private fun moveEnemies(difficulty: Difficulty) {
+        // Enemies wake the same *time* ahead of the plane in every section: further up the river
+        // when it runs faster (exactly ACTIVATION_ROWS in section 1).
+        val activation = Rules.ACTIVATION_ROWS * difficulty.scroll / Rules.SCROLL
         for (enemy in enemiesList) {
             if (!enemy.alive || enemy.vx == 0.0) continue
-            if (enemy.y - playerY > Rules.ACTIVATION_ROWS) continue
+            if (enemy.y - playerY > activation) continue
             val nextX = enemy.x + enemy.vx * Rules.DT
             val row = river.rowAt(enemy.y)
             if (row.landIn(nextX - enemy.width / 2, nextX + enemy.width / 2)) {
@@ -240,13 +255,13 @@ class World private constructor(
         eventsList += GameEvent.Destroyed(what, x, y, points)
     }
 
-    private fun burnFuel() {
+    private fun burnFuel(difficulty: Difficulty) {
         val plane = player
         if (depotsList.any { it.alive && it.overlaps(plane) }) {
-            fuel = (fuel + Rules.FUEL_REFILL_PER_S * Rules.DT).coerceAtMost(Rules.FUEL_MAX)
+            fuel = (fuel + difficulty.fuelRefillPerS * Rules.DT).coerceAtMost(Rules.FUEL_MAX)
             tally.refuelTicks++
         } else {
-            fuel = (fuel - Rules.FUEL_DRAIN_PER_S * Rules.DT).coerceAtLeast(0.0)
+            fuel = (fuel - difficulty.fuelDrainPerS * Rules.DT).coerceAtLeast(0.0)
         }
     }
 
@@ -265,6 +280,12 @@ class World private constructor(
             death = cause
             eventsList += GameEvent.Died(cause, playerX, playerY)
         }
+    }
+
+    private companion object {
+        /** The camera for a run starting in [section]: the plane's bottom edge just past its bridge. */
+        fun startCamera(section: Int): Double =
+            if (section <= 1) 0.0 else Difficulty.firstRow(section) + 1.0 - Rules.PLAYER_ROW
     }
 
     private fun rowsUnder(box: Box): List<Row> {

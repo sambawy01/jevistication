@@ -172,7 +172,9 @@ class PilotTest {
         val episodes = Match.run((1L..6L).toList(), listOf(BaselinePilot()), settings)
         episodes.forEach { assertTrue(it.ticks > 0) }
         assertTrue(episodes.map { it.rows }.average() > 300, Match.report(episodes, settings))
-        assertTrue(episodes.any { it.death == null }, "no baseline run survived 120 s:\n" + Match.report(episodes, settings))
+        // Since the river speeds up section by section, 120 s alive is no longer the bar (it was
+        // when the game never got harder); getting several bridges in is.
+        assertTrue(episodes.any { it.section >= 5 }, "no baseline run reached section 5:\n" + Match.report(episodes, settings))
         assertTrue(episodes.sumOf { it.kills } > 0)
     }
 

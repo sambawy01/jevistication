@@ -40,12 +40,15 @@ class GameSession(
     overrideEnabled: Boolean = true,
     /** The clock throughput is measured against: wall time live, simulation time headless. */
     private val clock: () -> Long = System::nanoTime,
+    /** The section the run starts in; 1 is the ordinary start. See [World]. */
+    val startSection: Int = 1,
 ) : AutoCloseable {
     init {
         require(decisionInterval >= 1) { "decision interval must be at least one tick, was $decisionInterval" }
+        require(startSection >= 1) { "sections start at 1, was $startSection" }
     }
 
-    val world: World = World(seed)
+    val world: World = World(seed, startSection)
     val stats: DecisionStats = DecisionStats()
 
     @Volatile var threshold: Double = threshold

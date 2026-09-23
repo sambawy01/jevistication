@@ -44,11 +44,14 @@ class LayaPilotTest {
 
     private fun sampleObservations(): List<Observation> {
         val out = mutableListOf<Observation>()
-        for (seed in 1L..3L) {
-            val session = GameSession(seed, Control.Piloted(LockstepDecider(BaselinePilot(), 3)))
-            while (!session.world.over && session.world.tick < 3_600) {
-                if (session.world.tick % 30 == 0L) out += Observation.of(session.world, Mechanics.legalActions(session.world))
-                session.tick()
+        // From the start and from the cap section, so the token budget is held where the state is busiest.
+        for (start in listOf(1, Difficulty.CAP_SECTION)) {
+            for (seed in 1L..3L) {
+                val session = GameSession(seed, Control.Piloted(LockstepDecider(BaselinePilot(), 3)), startSection = start)
+                while (!session.world.over && session.world.tick < 3_600) {
+                    if (session.world.tick % 30 == 0L) out += Observation.of(session.world, Mechanics.legalActions(session.world))
+                    session.tick()
+                }
             }
         }
         return out

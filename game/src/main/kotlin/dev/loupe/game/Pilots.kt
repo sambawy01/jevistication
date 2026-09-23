@@ -74,17 +74,22 @@ class BaselinePilot : Pilot {
         return PilotDecision(action, DecisionSource.BASELINE, latencyNanos = System.nanoTime() - started, observedTick = observation.tick)
     }
 
-    /** Columns to move, right positive. */
+    /**
+     * Columns to move, right positive. Every distance ahead below is in section-1 rows, stretched
+     * by [pace] so it means the same time at the section's speed; in section 1 the rules are
+     * exactly the original ones.
+     */
     private fun target(o: Observation): Double {
-        if ((o.landAheadRows ?: Int.MAX_VALUE) <= 2) return escapeLand(o)
+        val k = pace(o)
+        if ((o.landAheadRows ?: Int.MAX_VALUE) <= 2 * k) return escapeLand(o)
         o.depot?.let { d ->
-            val thirsty = o.fuelPercent < 60 || (o.fuelPercent < 90 && d.ahead < 10)
-            val reachable = abs(d.across) <= d.ahead * 2 - 0.5
+            val thirsty = o.fuelPercent < 60 || (o.fuelPercent < 90 && d.ahead < 10 * k)
+            val reachable = abs(d.across) <= d.ahead * o.reach - 0.5
             if (thirsty && reachable) return d.across
         }
         // Too close to shoot in time and nearly in line: get out of the way.
-        o.threats.firstOrNull { it.ahead < 3.0 && abs(it.across) < 2.5 }?.let { return if (it.across > 0) it.across - 3.5 else it.across + 3.5 }
-        o.threats.firstOrNull { it.ahead in 3.0..10.0 }?.let { return it.across }
+        o.threats.firstOrNull { it.ahead < 3.0 * k && abs(it.across) < 2.5 }?.let { return if (it.across > 0) it.across - 3.5 else it.across + 3.5 }
+        o.threats.firstOrNull { it.ahead in 3.0 * k..10.0 * k }?.let { return it.across }
         val channel = o.farChannels.minByOrNull { abs(it.center) } ?: return (o.waterRight - o.waterLeft) / 2
         return if (o.landAheadRows != null) channel.center else (channel.center + (o.waterRight - o.waterLeft) / 2) / 2
     }
@@ -103,13 +108,17 @@ class BaselinePilot : Pilot {
         if (!o.weaponReady) return false
         val depotInLine = o.depot?.let { abs(it.across) < 1.0 } ?: false
         if (depotInLine && o.fuelPercent < 80) return false
-        val enemyInLine = o.threats.any { abs(it.across) < 1.2 && it.ahead < 14 }
-        val bridgeClose = (o.bridgeAheadRows ?: Int.MAX_VALUE) < 12
+        val k = pace(o)
+        val enemyInLine = o.threats.any { abs(it.across) < 1.2 && it.ahead < 14 * k }
+        val bridgeClose = (o.bridgeAheadRows ?: Int.MAX_VALUE) < 12 * k
         return enemyInLine || bridgeClose
     }
 
     private companion object {
         const val DEADBAND = 0.4
+
+        /** How much faster than section 1 the river is running: 1 there. */
+        fun pace(o: Observation): Double = o.scroll / Rules.SCROLL
     }
 }
 
