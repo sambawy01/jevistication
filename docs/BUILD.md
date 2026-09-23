@@ -544,6 +544,26 @@ their acceptance criteria are met; entries here record increments toward them.
   `GameInputTests` (7) and `PilotSchedulingTests` (6, fake Backend), UI `GameUITests` (2). Real-device
   fps and latency still need an iPhone.
 
+- **2026-09-23 — Epic #7 child 4: the Unsure queue and measurement on iPhone.** New shared
+  `dev.loupe.kit.measure.JudgmentMeasure` (loupe-kit common) ports the desktop `Analysis` D1-D4
+  selection: the queue across **all** judgments (`UncertainQueue.select` over every judgment's
+  current-wording rows, audit share 0.2, seed 11, only items still scanned), answers as
+  `CorrectionRecord`s keyed by item + criteria hash, undo as an appended retraction, the D2 summary
+  with the desktop's gates (agreement from 10, ECE/Brier/reliability bins from 30; mechanical and
+  unusable rows excluded), the D3 preview over logged rows ("N more acted on · you would have
+  rescued M", or "unknown"), D4 through `Harness.evaluate` with the replay backend, and Me's pooled
+  line (from 10 corrections, else how many more). New `UserJudgment.useBaseline` (codec: written
+  only when on; not in the criteria hash): when set, `JudgmentSweep` answers by the baseline as a
+  mechanical row (`resolvedBy` = `baseline`), so it never counts as model evidence. The desktop has
+  no such switch yet. iOS: `UnsureQueueView` (one button per option, Skip, Undo; mascot thinking
+  while items wait, `found` after an answer), `MeasureView` (from Results), "Needs you: N" on Now
+  and My judgments, Me's agreement line; Loupe Station's text-safe ok/warn/danger tokens and its
+  queue wording. Tests: `JudgmentMeasureTest` (5, JVM + iOS sim, mirrors the desktop's one-loop
+  test), XCTest `UnsureQueueTests` (4, fake model), UI `UnsureQueueUITests` (answer an item, the
+  count drops; DEBUG `-LoupeQueueDemo` seeds a throwaway ledger with a stand-in scorer).
+  *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
+  corrected model answers and gated, with per-judgment figures on each Measure screen.
+
 ---
 
 ## Where the build stands
@@ -629,7 +649,8 @@ after 1, 6 needs 3, 4 and 5.
 | 1 | Ledger on iOS + F4 export | **Done 2026-09-23 (simulator)** — `:persistence` (common), Laya decisions logged as `web:duffel` model rows, Me → Export my data |
 | 2 | Sample source + extractors on iOS | **Done 2026-09-23 (simulator)** — `:sources-common` (common model, text/HTML/MIME/mbox extractors, scanner, cache), PDFKit/ImageIO actuals, parity with the desktop scanner on every sample item; Sources tab with the labelled sample (48 items) |
 | 3 | Judgments tab | **Done 2026-09-23 (simulator)** — shared `dev.loupe.kit.judgments` (JudgmentBook, JudgmentSweep, JudgmentResults); Library (55 templates, 10 categories, search, detail, Use this), Write your own (live lint, yes/no · score · pick, bare yes/no refused, criteria-in-prompt off by default), My judgments with counts, per-judgment Results over the sample with Laya (off main, cancellable) or "Model not installed" |
-| 4–9 | Unsure queue, watchers, sweep, phone sources, mascot, model delivery | Not started |
+| 4 | Unsure queue + measurement | **Done 2026-09-23 (simulator)** — shared `JudgmentMeasure` (queue across judgments with audit arm, corrections keyed by criteria hash, D2 gates 10/30, D3 preview, D4 via Harness, "use the baseline"); Unsure queue, Measure screen, Needs you on Now, Me agreement line |
+| 5–9 | Watchers, sweep, phone sources, mascot, model delivery | Not started |
 
 ### Proving milestones
 

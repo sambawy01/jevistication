@@ -5,6 +5,7 @@ struct MeView: View {
     @EnvironmentObject private var launcher: GameLauncher
     @ObservedObject private var laya = LayaModel.shared
     @ObservedObject private var ledger = LedgerService.shared
+    @ObservedObject private var judgments = JudgmentsService.shared
     @State private var exporting = false
     @State private var exportError: String?
     @State private var shared: SharedFile?
@@ -27,6 +28,9 @@ struct MeView: View {
                     Text(ledgerLine)
                         .font(.footnote).foregroundStyle(Palette.inkSoft)
                         .accessibilityIdentifier("me.ledger.count")
+                    Text(judgments.overall().line)
+                        .font(.footnote).foregroundStyle(Palette.ink)
+                        .accessibilityIdentifier("me.agreement")
                     Button {
                         Task { await export() }
                     } label: {
@@ -59,13 +63,14 @@ struct MeView: View {
                         .accessibilityIdentifier("me.licences")
                 }
                 Section {
-                    Text("Coming with phone sources: calibration and decision history on screen.")
+                    Text("Per-judgment calibration, the baseline and the threshold are on each judgment's Measure screen.")
                         .font(.footnote).foregroundStyle(Palette.inkSoft)
                 }
             }
             .scrollContentBackground(.hidden)
             .background(Palette.ground.ignoresSafeArea())
             .navigationTitle("Me")
+            .onAppear { judgments.load(); judgments.refreshLedger() }
             .sheet(isPresented: $showWebSettings) { WebSettingsSheet().environmentObject(web) }
             .sheet(item: $shared) { file in ShareSheet(items: [file.url]) }
         }

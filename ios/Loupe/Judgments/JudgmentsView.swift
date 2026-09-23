@@ -38,6 +38,8 @@ struct JudgmentsView: View {
                 switch route {
                 case .results(let id): JudgmentResultsView(service: service, judgmentId: id, autoRun: route == demoRoute)
                 case .template(let id): TemplateDetailView(service: service, templateId: id)
+                case .measure(let id): MeasureView(service: service, judgmentId: id)
+                case .queue: UnsureQueueView(service: service)
                 }
             }
             .sheet(isPresented: $writing) {
@@ -69,12 +71,17 @@ struct JudgmentsView: View {
         guard let t = launch.judgmentDemo else { return }
         if service.judgments.first(where: { $0.templateId == t }) == nil { service.useTemplate(t) }
         if let route = demoRoute { path.append(route) }
+        if launch.openScreen == "measure", let j = service.judgments.first(where: { $0.templateId == t }) {
+            path.append(JudgmentRoute.measure(j.id))
+        }
     }
 }
 
 enum JudgmentRoute: Hashable {
     case results(String)
     case template(String)
+    case measure(String)
+    case queue
 }
 
 // MARK: - My judgments
@@ -98,6 +105,9 @@ struct MyJudgmentsList: View {
                     }
                     .padding(24).frame(maxWidth: .infinity).card()
                 } else {
+                    NavigationLink(value: JudgmentRoute.queue) { NeedsYouCard(count: service.needsYou) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("judgments.needsYou")
                     ForEach(service.judgments, id: \.id) { j in
                         NavigationLink(value: JudgmentRoute.results(j.id)) { JudgmentCard(judgment: j, counts: service.counts(j)) }
                             .buttonStyle(.plain)
@@ -157,5 +167,27 @@ struct JudgmentCard: View {
             Text(n).font(Typeface.display(22)).foregroundStyle(color)
             Text(label).font(.caption2).foregroundStyle(Palette.inkSoft)
         }
+    }
+}
+
+/// "Needs you: N" — the Unsure queue's door, on Now and in My judgments.
+struct NeedsYouCard: View {
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            MascotView(state: count > 0 ? .thinking : .idle, size: 48)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Needs you: \(count)").font(.headline).foregroundStyle(Palette.ink)
+                Text(count > 0 ? "Items Laya is unsure about, plus a few random checks. One tap each."
+                               : "Nothing waiting for your answer.")
+                    .font(.caption).foregroundStyle(Palette.inkSoft)
+            }
+            Spacer()
+            Image(systemName: "chevron.right").foregroundStyle(Palette.inkSoft)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+        .accessibilityElement(children: .combine)
     }
 }

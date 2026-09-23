@@ -48,6 +48,11 @@ struct JudgmentResultsView: View {
             Text(j.question).font(.subheadline).foregroundStyle(Palette.blue)
             Text("\(j.shapeName) · acts at \(pct(j.threshold)) raw · \(j.templateId == nil ? "written by you" : "from a template")")
                 .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+            if j.useBaseline { Pill(text: "answers by baseline rule", color: Palette.amber) }
+            NavigationLink(value: JudgmentRoute.measure(j.id)) {
+                Label("Measure: calibration, baseline, threshold", systemImage: "chart.bar.xaxis")
+            }
+            .accessibilityIdentifier("results.measure")
         }
     }
 

@@ -25,6 +25,8 @@ struct LaunchOptions {
     var gameSeed: Int64 = 1      // -LoupeSeed n
     var judgmentDemo: String?    // -LoupeJudgmentDemo <template id>: add it, open its results, run
     var openLibrary = false      // -LoupeLibrary: open Judgments on the Library
+    var queueDemo = false        // -LoupeQueueDemo (DEBUG, with -LoupeFixtures): seed the queue with a stand-in scorer
+    var openScreen: String?      // -LoupeOpen queue|measure: open Now's queue, or the first judgment's Measure
 
     static let current: LaunchOptions = {
         var o = LaunchOptions()
@@ -41,6 +43,8 @@ struct LaunchOptions {
         if let i = args.firstIndex(of: "-LoupeSeed"), i + 1 < args.count, let n = Int64(args[i + 1]) { o.gameSeed = n }
         if let i = args.firstIndex(of: "-LoupeJudgmentDemo"), i + 1 < args.count { o.judgmentDemo = args[i + 1] }
         o.openLibrary = args.contains("-LoupeLibrary")
+        o.queueDemo = args.contains("-LoupeQueueDemo") && o.fixtureMode
+        if let i = args.firstIndex(of: "-LoupeOpen"), i + 1 < args.count { o.openScreen = args[i + 1] }
         #endif
         return o
     }()

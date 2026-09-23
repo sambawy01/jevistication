@@ -110,6 +110,11 @@ class JudgmentSweep(private val backend: Backend) {
         /** A judgment's mechanical check, where it has one (A3: the model is not asked). */
         fun mechanical(judgment: UserJudgment, item: SourceItem): Mechanical<String> {
             val positive = judgment.positiveLabel
+            val baseline = judgment.baseline
+            if (judgment.useBaseline && baseline != null) {
+                // D4 "use the baseline": the dumb rule answers; logged as mechanical, never model evidence.
+                return Mechanical.Resolved(baseline.answer(item.text), "baseline")
+            }
             return if (judgment.mechanical == MechanicalCheck.EXACT_DUPLICATE && item.duplicateOf != null && positive != null) {
                 Mechanical.Resolved(positive, "exact-duplicate")
             } else {

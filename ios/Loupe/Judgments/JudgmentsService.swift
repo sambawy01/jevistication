@@ -45,6 +45,12 @@ final class JudgmentsService: ObservableObject {
     /// Every ledger row, refreshed after a sweep or a load (the tab's results and counts read it).
     @Published private(set) var rows: [LedgerRow] = []
     @Published private(set) var corrections: [CorrectionKey: String] = [:]
+    /// Answers given in the queue this session, newest last (what Undo retracts).
+    @Published fileprivate(set) var answered: [UnsureEntry] = []
+    /// The Unsure queue's current batch, and the ledger size it was drawn from.
+    /// Not @Published: it is drawn lazily while a view reads it; answers publish through `corrections`.
+    fileprivate(set) var batch: [UnsureEntry] = []
+    fileprivate var batchStamp = ""
 
     let ledger: LedgerService
     private let items: () -> [SourceItem]
@@ -122,6 +128,14 @@ final class JudgmentsService: ObservableObject {
         guard !running || sweep?.judgmentId != id else { return }
         _ = save(judgments.filter { $0.id != id })
     }
+
+    fileprivate func setCorrection(_ key: CorrectionKey, _ label: String?) {
+        var next = corrections
+        next[key] = label
+        corrections = next
+    }
+
+    fileprivate func replace(_ j: UserJudgment) -> Bool { save(judgments.map { $0.id == j.id ? j : $0 }) }
 
     private func save(_ next: [UserJudgment]) -> Bool {
         do {
@@ -239,3 +253,113 @@ extension SourceItem {
     /// Where the item came from, for a result row.
     var sourceLabel: String { sourceId == SourcesService.sampleId ? "Sample data" : sourceId }
 }
+
+// MARK: - Unsure queue and measurement (epic #7 child 4: D1-D4 on the phone)
+
+/// The queue, the Measure screen and Me's line read these. The rules (ranking with the audit arm,
+/// criteria-hash keys, gating thresholds, the A8 preview, the Harness baseline) are LoupeKit's
+/// `JudgmentMeasure`, shared with the desktop's numbers; this only writes answers to the ledger.
+extension JudgmentsService {
+    /// D1 across every judgment: most torn first, then a random audit arm of confident answers.
+    /// Held as a batch: answered items leave it (so the count drops), and it is drawn again only
+    /// when it runs out or the ledger gained rows (a new run).
+    func unsure() -> [UnsureEntry] {
+        if batch.isEmpty || batchStamp != stamp { refillBatch() }
+        return batch
+    }
+
+    /// Changes when a run adds rows or a judgment is added, removed or reworded.
+    private var stamp: String { "\(rows.count)|" + judgments.map { "\($0.id):\($0.criteriaHash)" }.joined(separator: ",") }
+
+    func refillBatch() {
+        batchStamp = stamp
+        batch = JudgmentMeasure.shared.queue(all: rows, judgments: judgments, corrections: corrections,
+                                             items: items(), size: JudgmentMeasure.shared.QUEUE_SIZE)
+    }
+
+    /// "Needs you: N" — how many items the current batch still holds.
+    var needsYou: Int { unsure().count }
+
+    /// A one-tap answer: a correction keyed by item + the judgment's current criteria hash.
+    func answer(_ entry: UnsureEntry, label: String) {
+        let record = JudgmentMeasure.shared.correction(judgment: entry.judgment, itemId: entry.itemId, label: label,
+                                                       confirmed: label == entry.modelPick, at: Self.now())
+        ledger.recordCorrection(record)
+        setCorrection(entry.key, label)
+        answered.append(entry)
+        batch.removeAll { $0.key == entry.key }
+    }
+
+    var canUndo: Bool { !answered.isEmpty }
+
+    /// Retracts the last answer given here (appends a retraction; the log is never rewritten).
+    func undoLastAnswer() {
+        guard let entry = answered.popLast() else { return }
+        ledger.recordCorrection(JudgmentMeasure.shared.retraction(key: entry.key, at: Self.now()))
+        setCorrection(entry.key, nil)
+        batch.insert(entry, at: 0)
+        notice = "Undid your last answer."
+    }
+
+    func measure(_ j: UserJudgment) -> MeasureSummary {
+        JudgmentMeasure.shared.summary(all: rows, judgment: j, corrections: corrections)
+    }
+
+    func preview(_ j: UserJudgment, candidate: Double) -> PreviewText {
+        JudgmentMeasure.shared.preview(all: rows, judgment: j, corrections: corrections, candidate: candidate)
+    }
+
+    func baseline(_ j: UserJudgment) -> BaselineVerdict? {
+        JudgmentMeasure.shared.baseline(all: rows, judgment: j, corrections: corrections, items: items())
+    }
+
+    func overall() -> OverallAgreement {
+        JudgmentMeasure.shared.overall(all: rows, judgments: judgments, corrections: corrections)
+    }
+
+    /// D3's apply: writes the judgment's threshold.
+    func setThreshold(_ id: String, _ value: Double) {
+        guard let j = judgment(id) else { return }
+        let next = JudgmentMeasure.shared.withThreshold(judgment: j, value: value)
+        if replace(next) { notice = String(format: "Threshold for \"%@\" set to %.2f.", j.title, next.threshold) }
+    }
+
+    /// D4's "use the baseline": from the next run the baseline answers (logged as a rule, not the model).
+    func setUseBaseline(_ id: String, _ on: Bool) {
+        guard let j = judgment(id) else { return }
+        if replace(JudgmentMeasure.shared.withBaseline(judgment: j, on: on)) {
+            notice = on ? "\"\(j.title)\" now answers by its baseline rule; the model is not asked. Re-run to apply."
+                        : "\"\(j.title)\" is back on the model."
+        }
+    }
+
+    static func now() -> String { ISO8601DateFormatter().string(from: Date()) }
+}
+
+#if DEBUG
+/// `-LoupeQueueDemo` (with `-LoupeFixtures`, so the ledger is throwaway): a deterministic stand-in
+/// backend so UI tests can drive the queue without the model. Never used outside that flag.
+final class FixtureQueueBackend: NSObject, Backend {
+    func score(judgment: JudgmentChoice, state: TextState) -> Scored {
+        // A spread of confidences from the text length, stable across runs.
+        let p = 0.5 + Double(state.text.count % 45) / 100
+        return Scored(masses: [judgment.candidates[0]: KotlinDouble(value: p), judgment.candidates[1]: KotlinDouble(value: 1 - p)],
+                      modelContext: nil, optionCriteria: nil)
+    }
+}
+
+extension JudgmentsService {
+    func seedFixtureQueue() async {
+        load()
+        if judgments.first(where: { $0.templateId == "is-receipt" }) == nil { useTemplate("is-receipt") }
+        guard let j = judgments.first(where: { $0.templateId == "is-receipt" }) else { return }
+        let all = items()
+        let plan = JudgmentResults.shared.plan(all: ledger.allRows(), judgment: j, items: all, rerunAll: false)
+        let ledger = self.ledger
+        let bridge = SweepBridge(progress: { _ in }, rows: { ledger.record($0) })
+        _ = JudgmentSweep(backend: FixtureQueueBackend()).run(judgment: j, plan: plan, observer: bridge)
+        ledger.flush()
+        refreshLedger()
+    }
+}
+#endif

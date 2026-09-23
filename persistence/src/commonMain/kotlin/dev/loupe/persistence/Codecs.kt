@@ -127,6 +127,7 @@ object JudgmentCodec {
         f["threshold"] = JsonValue.num(j.threshold)
         // Written only when on, so a file from before the option existed reads the same.
         if (j.criteriaInPrompt) f["criteriaInPrompt"] = JsonValue.Bool(true)
+        if (j.useBaseline) f["useBaseline"] = JsonValue.Bool(true)
         // Written for a reader of the file; recomputed from the wording on load, never trusted.
         f["criteriaHash"] = JsonValue.Str(j.criteriaHash)
         return JsonValue.Obj(f)
@@ -151,6 +152,7 @@ object JudgmentCodec {
         desktopNote = o.optStr("desktopNote"),
         threshold = o.req("threshold").asDouble,
         criteriaInPrompt = o["criteriaInPrompt"]?.takeUnless { it.isNull }?.asBoolean ?: false,
+        useBaseline = o["useBaseline"]?.takeUnless { it.isNull }?.asBoolean ?: false,
     ).also { it.choice } // validates the id and options now, so a bad file fails on load, not mid-sweep
 
     /** The whole `judgments.json` file (pretty, as the desktop wrote it). */

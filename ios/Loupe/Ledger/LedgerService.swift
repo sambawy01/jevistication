@@ -51,6 +51,19 @@ final class LedgerService: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// Appends one correction (or a retraction, label nil) to the corrections log, synced.
+    func recordCorrection(_ correction: CorrectionRecord) {
+        queue.async { [self] in
+            guard let ledger else { return }
+            do {
+                try ledger.appendCorrection(correction: correction)
+            } catch {
+                let m = error.localizedDescription
+                Task { @MainActor in self.problem = m }
+            }
+        }
+    }
+
     /// Waits for every write queued so far (tests; export calls it implicitly by queueing after).
     func flush() { queue.sync {} }
 

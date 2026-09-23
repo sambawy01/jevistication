@@ -50,6 +50,13 @@ data class UserJudgment(
      * it on changes what the model reads, so it changes the criteria hash and calibration restarts.
      */
     val criteriaInPrompt: Boolean = false,
+    /**
+     * D4's "use the baseline": when the model is not beating its dumb baseline on the user's
+     * corrections, the user can have the baseline answer instead. Such answers are logged as
+     * mechanical (`resolvedBy` = `baseline`), so they never count as model evidence. Not part of
+     * the criteria hash: the question the model would be asked is unchanged.
+     */
+    val useBaseline: Boolean = false,
 ) {
     init {
         require(threshold in 0.0..1.0) { "threshold must be in [0,1], was $threshold" }

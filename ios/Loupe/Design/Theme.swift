@@ -15,6 +15,16 @@ enum Palette {
     static let navyTop = Color(hex: 0x0B1B4D)
     static let navyBottom = Color(hex: 0x16307F)
     static let hairline = Color(hex: 0x0A1222).opacity(0.08)
+    // Text-safe status colours from Loupe Station's styles.css (contrast measured there):
+    // ok 5.7:1 on okSoft, warn 6.6:1 on white / 5.8:1 on warnSoft, danger 5.6:1 on dangerSoft.
+    static let okText = Color(hex: 0x16693F)
+    static let okSoft = Color(hex: 0xDFF1E7)
+    static let warnText = Color(hex: 0x8A4F00)
+    static let warnSoft = Color(hex: 0xFBEFD9)
+    static let dangerText = Color(hex: 0xB0261D)
+    static let dangerSoft = Color(hex: 0xFBE5E3)
+    static let track = Color(hex: 0xE9EDF3)
+    static let accentSoft = Color(hex: 0xE4EBFB)
 }
 
 extension Color {

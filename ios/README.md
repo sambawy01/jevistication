@@ -30,12 +30,14 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
 
 - Judgments (epic #7 child 3): `Loupe/Judgments/` over LoupeKit's `JudgmentBook` / `JudgmentSweep` / `JudgmentResults`. Library: the 55 templates by their 10 categories, search, detail (answers, three-part criteria, posture, baseline, examples, parameters), "Use this". Write your own: live lint, yes/no (options that say what they mean; bare yes/no refused), score (named bands), pick one; criteria-in-prompt off by default with the calibration-restart warning. My judgments: counts per judgment. Results: runs over the sample with Laya on a background queue (progress, cancel), decisions appended to the ledger; confidence, source, "answered by rule", cut notes, unsure markers. Without the model it says "Model not installed" and shows no scores. DEBUG: `-LoupeJudgmentDemo tax-receipt` (adds it, opens its results, runs), `-LoupeLibrary`.
 
+- Unsure queue + measurement (epic #7 child 4): `Loupe/Judgments/UnsureQueueView.swift` and `MeasureView.swift` over LoupeKit's `JudgmentMeasure`. Now and My judgments show "Needs you: N" (the queue across all judgments: most torn first plus a random fifth of confident answers); one tap per option, Skip, Undo; answers go to the corrections log keyed by item + criteria hash. Results → Measure: counts, agreement (from 10 corrections), ECE/Brier/reliability bins (from 30, otherwise how many more), the baseline vs the model on your corrected items (says so when the baseline wins, with "Use the baseline"), and the threshold slider with its counterfactual over logged rows; Use writes the threshold. Me: "Agrees with you X% over N corrections" from 10, otherwise how many more. DEBUG: `-LoupeQueueDemo` (with `-LoupeFixtures`; stand-in scorer, throwaway ledger), `-LoupeOpen queue` (Now's queue) or `measure` (with `-LoupeJudgmentDemo`).
+
 ## Pending
 - Game fps and Laya latency on a real iPhone (simulator: 60 fps, ~9 decisions/s, p50 ~80 ms).
 - Model download host: `LayaModelSource.baseURL` is empty (no host recorded); the screen says so.
 - Laya is untuned: on the fixture it is unsure of every offer and ranks an over-cap fare first.
 - Mascot: static reference render with SwiftUI transforms for now. The rigged SceneKit/RealityKit robot comes later.
-- Now content (children 4–5) over the cached sample items; corrections, the unsure queue and calibration on the phone; phone sources in child 7.
+- Now's remaining content (child 5, watchers) over the cached sample items; phone sources in child 7.
 - Release builds exclude the fixture JSON (`EXCLUDED_SOURCE_FILE_NAMES`); launch arguments are `#if DEBUG`.
 
 ## Third-party notices (in THIRD_PARTY_NOTICES.md; bundled, shown under Me → Licences)
