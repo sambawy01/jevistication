@@ -35,6 +35,9 @@ sealed interface Baseline {
     /** This baseline with `{name}` placeholders replaced from [values]. */
     fun substitute(values: Map<String, String>): Baseline
 
+    /** This baseline answering [labels]`[x]` wherever it answered `x` (labels not in the map are kept). */
+    fun relabel(labels: Map<String, String>): Baseline
+
     /**
      * [whenFound] if any of [keywords] occurs in the text (case-insensitive, on word boundaries),
      * else [otherwise].
@@ -62,6 +65,9 @@ sealed interface Baseline {
 
         override fun substitute(values: Map<String, String>): Baseline =
             copy(keywords = keywords.map { fill(it, values) })
+
+        override fun relabel(labels: Map<String, String>): Baseline =
+            copy(whenFound = labels[whenFound] ?: whenFound, otherwise = labels[otherwise] ?: otherwise)
     }
 
     /**
@@ -98,6 +104,9 @@ sealed interface Baseline {
 
         override fun substitute(values: Map<String, String>): Baseline =
             copy(rules = rules.map { it.copy(keywords = it.keywords.map { k -> fill(k, values) }) })
+
+        override fun relabel(labels: Map<String, String>): Baseline =
+            copy(rules = rules.map { it.copy(label = labels[it.label] ?: it.label) }, otherwise = labels[otherwise] ?: otherwise)
     }
 
     /** [whenFound] if the regular expression [pattern] matches anywhere, else [otherwise]. */
@@ -124,6 +133,9 @@ sealed interface Baseline {
         override val labels: Set<String> get() = setOf(whenFound, otherwise)
 
         override fun substitute(values: Map<String, String>): Baseline = this
+
+        override fun relabel(labels: Map<String, String>): Baseline =
+            copy(whenFound = labels[whenFound] ?: whenFound, otherwise = labels[otherwise] ?: otherwise)
     }
 
     /**
@@ -153,6 +165,9 @@ sealed interface Baseline {
         override val labels: Set<String> get() = setOf(whenFound, otherwise)
 
         override fun substitute(values: Map<String, String>): Baseline = copy(before = fill(before, values))
+
+        override fun relabel(labels: Map<String, String>): Baseline =
+            copy(whenFound = labels[whenFound] ?: whenFound, otherwise = labels[otherwise] ?: otherwise)
     }
 
     /**
@@ -181,6 +196,9 @@ sealed interface Baseline {
         override val labels: Set<String> get() = setOf(whenFound, otherwise)
 
         override fun substitute(values: Map<String, String>): Baseline = copy(sender = fill(sender, values))
+
+        override fun relabel(labels: Map<String, String>): Baseline =
+            copy(whenFound = labels[whenFound] ?: whenFound, otherwise = labels[otherwise] ?: otherwise)
     }
 
     /**
@@ -195,6 +213,8 @@ sealed interface Baseline {
         override val labels: Set<String> get() = setOf(label)
 
         override fun substitute(values: Map<String, String>): Baseline = this
+
+        override fun relabel(labels: Map<String, String>): Baseline = copy(label = labels[label] ?: label)
     }
 
     companion object {

@@ -43,6 +43,8 @@ tasks.test {
     useJUnitPlatform()
     // PDFBox writes a font cache to the home directory unless told where; keep it in the build.
     systemProperty("pdfbox.fontcache", layout.buildDirectory.dir("pdfbox-cache").get().asFile.absolutePath)
+    // PDFBox falls back to the home directory when the folder does not exist, so create it first.
+    doFirst { layout.buildDirectory.dir("pdfbox-cache").get().asFile.mkdirs() }
 }
 
 // Regenerates the synthetic sample PDFs and images committed under src/main/resources. Run by hand
@@ -54,4 +56,6 @@ tasks.register<JavaExec>("generateSamples") {
     mainClass.set("dev.loupe.sources.SampleDataGeneratorKt")
     args(file("src/main/resources/dev/loupe/sources/sample").absolutePath)
     systemProperty("pdfbox.fontcache", layout.buildDirectory.dir("pdfbox-cache").get().asFile.absolutePath)
+    // PDFBox falls back to the home directory when the folder does not exist, so create it first.
+    doFirst { layout.buildDirectory.dir("pdfbox-cache").get().asFile.mkdirs() }
 }

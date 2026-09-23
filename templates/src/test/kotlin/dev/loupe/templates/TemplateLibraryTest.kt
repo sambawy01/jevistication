@@ -96,8 +96,10 @@ class TemplateLibraryTest {
             val template = assertNotNull(TemplateLibrary.byId(definition.judgment.id), definition.judgment.id)
             assertEquals(definition.judgment.question, template.question)
             assertEquals(definition.invariant, template.invariant)
-            val made = (template.instantiate(definition.judgment.id) as Template.InstantiateResult.Created).judgment
-            assertEquals(definition.judgment.criteriaHash, made.criteriaHash, "same wording, same hash")
+            // Same question and criteria; the options say what they mean instead of bare yes/no
+            // (see Shape.Binary), so the library's copy is a different judgment from the engine's.
+            val shape = assertIs<Shape.Binary>(template.shape)
+            assertNotEquals("yes", shape.positive)
         }
     }
 
@@ -109,7 +111,8 @@ class TemplateLibraryTest {
         }
         assertTrue(all.any { it.shape is Shape.Ordinal })
         assertTrue(all.any { it.shape is Shape.Pick })
-        assertTrue(all.any { it.shape == Shape.YesNo })
+        assertTrue(all.any { it.shape is Shape.Binary })
+        assertTrue(all.none { it.shape == Shape.YesNo }, "no template offers the model bare yes/no")
     }
 
     @Test
@@ -135,9 +138,9 @@ class TemplateParameterTest {
         assertEquals(mapOf("sender" to "alex@example.org"), made.parameters)
         val baseline = assertIs<Baseline.SenderIs>(made.baseline)
         assertEquals("alex@example.org", baseline.sender)
-        assertEquals("yes", baseline.answer("From: Alex <alex@example.org>\nAre you coming?"))
-        assertEquals("no", baseline.answer("From: Alex <alex@example.org>\nSee you."))
-        assertEquals("no", baseline.answer("From: Other <o@example.org>\nAre you coming?"))
+        assertEquals("waiting on my response", baseline.answer("From: Alex <alex@example.org>\nAre you coming?"))
+        assertEquals("not waiting on me", baseline.answer("From: Alex <alex@example.org>\nSee you."))
+        assertEquals("not waiting on me", baseline.answer("From: Other <o@example.org>\nAre you coming?"))
     }
 
     @Test
@@ -145,11 +148,11 @@ class TemplateParameterTest {
         assertIs<Template.InstantiateResult.Rejected>(expires.instantiate("u", mapOf("date" to "next March")))
         assertIs<Template.InstantiateResult.Rejected>(expires.instantiate("u", mapOf("date" to "2027-02-30")))
         val made = (expires.instantiate("u", mapOf("date" to "2027-03-31")) as Template.InstantiateResult.Created).judgment
-        assertEquals("yes", made.baseline!!.answer("Date of expiry 14 JAN 2027"))
-        assertEquals("no", made.baseline!!.answer("Date of expiry 14 JAN 2029"))
+        assertEquals(made.positiveLabel, made.baseline!!.answer("Date of expiry 14 JAN 2027"))
+        assertEquals("no expiry that matters", made.baseline!!.answer("Date of expiry 14 JAN 2029"))
         // Ambiguous 03/04/2027 is taken on its earlier reading, the safe error for an expiry.
         val early = (expires.instantiate("u", mapOf("date" to "2027-03-10")) as Template.InstantiateResult.Created).judgment
-        assertEquals("yes", early.baseline!!.answer("valid until 03/04/2027"))
+        assertEquals(early.positiveLabel, early.baseline!!.answer("valid until 03/04/2027"))
     }
 
     @Test
@@ -231,5 +234,10 @@ class UserJudgmentTest {
         assertEquals(Shape.YesNo, made.shape)
         assertEquals("yes", made.baseline!!.answer("A note from your landlord"))
         assertEquals(null, made.templateId)
+        val two = assertIs<UserJudgment.EditResult.Edited>(
+            JudgmentDraft(question = "Is this from my landlord?", options = listOf("from my landlord", "not from my landlord")).compile("u-two"),
+        ).judgment
+        assertEquals(Shape.Binary("from my landlord", "not from my landlord"), two.shape)
+        assertEquals("from my landlord", two.positiveLabel)
     }
 }

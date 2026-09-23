@@ -39,9 +39,38 @@ enum class SourceKind(val title: String) {
 sealed interface Shape {
     val candidates: List<String>
 
-    /** Yes or no. The positive label is `yes`. */
+    /** The label a warning or a threshold is about, for the two-option shapes; null otherwise. */
+    val positiveOption: String?
+        get() = when (this) {
+            YesNo -> "yes"
+            is Binary -> positive
+            else -> null
+        }
+
+    /** Yes or no, as bare labels. The positive label is `yes`. What a written yes/no question compiles to. */
     data object YesNo : Shape {
         override val candidates: List<String> = JudgmentAuthor.YES_NO
+    }
+
+    /**
+     * A yes/no question whose two options **say what they mean** — "a receipt or proof of
+     * purchase" against "not a receipt" — rather than a bare `yes`/`no`.
+     *
+     * Why the library uses this: Laya scores each option's own text at its marker, and with bare
+     * `yes`/`no` it largely ignored the question. On the 45 synthetic sample items, two unrelated
+     * yes/no questions got near-identical answers, and switching to descriptive options raised
+     * agreement with hand labels on all three judgments tried (see `docs/BUILD.md`, progress log).
+     * That is a small synthetic check, not an accuracy claim; it is why the templates are shaped
+     * this way, and it is a controlled variable to re-measure on real corrections.
+     */
+    data class Binary(val positive: String, val negative: String) : Shape {
+        init {
+            require(positive.isNotBlank() && negative.isNotBlank() && positive != negative) {
+                "a binary shape needs two different, non-blank options"
+            }
+        }
+
+        override val candidates: List<String> = listOf(positive, negative)
     }
 
     /**
@@ -224,7 +253,7 @@ data class Template(
     }
 
     /** The label a threshold and a warning are about: `yes` for yes/no, otherwise null. */
-    val positiveLabel: String? get() = if (shape is Shape.YesNo) "yes" else null
+    val positiveLabel: String? get() = shape.positiveOption
 
     /** The question with [values] substituted — or the reasons it cannot be. */
     fun render(values: Map<String, String>): Rendered {

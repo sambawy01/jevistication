@@ -1,5 +1,3 @@
-SYNTHETIC SAMPLE DATA — every name, number and address here is invented for the Loupe demo.
-
 FRESH BASKET MARKET
 12 Example Street, Sampletown
 VAT No. 000 0000 00
@@ -16,3 +14,5 @@ TOTAL PAID                     £12.45
 VISA DEBIT ****1111            £12.45
 
 Thank you for shopping with us!
+
+— Synthetic sample for the Loupe demo: every name, number and address is invented.

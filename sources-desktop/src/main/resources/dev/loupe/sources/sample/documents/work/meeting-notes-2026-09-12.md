@@ -1,5 +1,3 @@
-SYNTHETIC SAMPLE DATA — every name, number and address here is invented for the Loupe demo.
-
 # Harbour Bridge refit — meeting notes, 12 September 2026
 
 **Attendees:** A. Sample, Priya Example, Jordan Placeholder
@@ -11,3 +9,5 @@ SYNTHETIC SAMPLE DATA — every name, number and address here is invented for th
 ## Actions
 - A. Sample to update the project plan and circulate it by Friday.
 - Priya to confirm scaffolding dates with the supplier.
+
+— Synthetic sample for the Loupe demo: every name, number and address is invented.

@@ -1162,9 +1162,81 @@ object TemplateLibrary {
         ),
     )
 
+    /**
+     * The two options each yes/no template offers the model, positive first. Written so that each
+     * option says what it means: with bare `yes`/`no`, Laya largely ignored the question on the
+     * sample (see [Shape.Binary]). A warn-only template's negative option is what the model reads,
+     * never what the user is shown — the app shows "no signal", because §4 forbids a blessing.
+     */
+    private val OPTIONS: Map<String, Pair<String, String>> = mapOf(
+        "is-receipt" to ("a receipt or proof of purchase" to "not a receipt"),
+        "tax-receipt" to ("a payment record for my tax return" to "not needed for tax"),
+        "refund-issued" to ("a refund issued to me" to "no refund issued"),
+        "bill-unpaid" to ("a bill still to pay" to "nothing left to pay"),
+        "warranty-proof" to ("proof of purchase for a durable item" to "not warranty proof"),
+        "is-expiring-document" to ("a document whose expiry matters" to "no expiry that matters"),
+        "expires-before" to ("a document whose expiry matters" to "no expiry that matters"),
+        "deadline" to ("a deadline I must meet" to "no deadline for me"),
+        "signed-agreement" to ("a signed contract or agreement" to "not a signed agreement"),
+        "official-notice" to ("an official notice from a public body" to "not an official notice"),
+        "needs-reply" to ("waiting on my response" to "not waiting on me"),
+        "reply-from-sender" to ("waiting on my response" to "not waiting on me"),
+        "meeting-request" to ("a request to meet" to "not a meeting request"),
+        "someone-will-follow-up" to ("a promise to get back to me" to "no promise to follow up"),
+        "unsubscribe-candidate" to ("bulk mail I no longer read" to "mail worth keeping"),
+        "subscription-charge" to ("a recurring subscription charge" to "not a subscription charge"),
+        "trial-ending" to ("a free trial about to charge me" to "not a trial warning"),
+        "price-rise" to ("a price rise for me" to "no price rise for me"),
+        "auto-renewal" to ("an automatic renewal notice" to "not an automatic renewal"),
+        "cancellation-confirmed" to ("a confirmed cancellation" to "not a cancellation"),
+        "is-duplicate" to ("a redundant copy" to "not a redundant copy"),
+        "is-stale" to ("no longer useful to keep" to "still useful to keep"),
+        "is-junk" to ("worthless to keep" to "worth keeping"),
+        "refetchable-download" to ("a download I could fetch again" to "personal or one-off"),
+        "superseded-version" to ("an earlier, superseded version" to "a current or unique version"),
+        "screenshot-worth-keeping" to ("a screenshot worth keeping" to "nothing worth keeping"),
+        "photo-of-document" to ("a photo of a paper document" to "not a document photo"),
+        "photo-has-sensitive-data" to ("shows a card number, ID number or password" to "no sensitive number shown"),
+        "task-for-me" to ("a task assigned to me" to "no task for me"),
+        "about-project" to ("about this project" to "not about this project"),
+        "meeting-notes" to ("meeting notes or minutes" to "not meeting notes"),
+        "expense-claimable" to ("a work expense I could claim" to "not a claimable expense"),
+        "confidential" to ("confidential business information" to "nothing confidential"),
+        "booking-confirmed" to ("a confirmed travel booking" to "not a confirmed booking"),
+        "trip-changed" to ("a change to a trip I booked" to "no change to a trip"),
+        "entry-requirement" to ("an entry requirement for a trip" to "no entry requirement"),
+        "phishing" to ("a scam or phishing attempt" to "an ordinary message"),
+        "impostor-sender" to ("someone pretending to be someone else" to "consistent with its sender"),
+        "pressure-tactics" to ("pressure to act immediately" to "no pressure to act now"),
+        "asks-for-secrets" to ("a request for a password, code or card number" to "no request for secrets"),
+        "claims-brand" to ("claims to come from that brand" to "does not claim to be that brand"),
+        "too-good-to-be-true" to ("an unrequested prize or windfall" to "no unrequested windfall"),
+        "health-record" to ("a medical record, prescription or appointment" to "not a health record"),
+        "about-person" to ("about this person" to "not about this person"),
+        "sentimental" to ("a sentimental keepsake" to "not sentimental"),
+        "home-admin" to ("about running the home" to "not home admin"),
+        "remind-me" to ("worth a reminder later" to "no reminder needed"),
+    )
+
+    /** A yes/no template restated with descriptive options; baseline and examples follow. */
+    private fun Template.described(positive: String, negative: String): Template {
+        check(shape == Shape.YesNo) { "$id is not a yes/no template" }
+        val labels = mapOf("yes" to positive, "no" to negative)
+        return copy(
+            shape = Shape.Binary(positive, negative),
+            baseline = baseline?.relabel(labels),
+            examples = examples.map { it.copy(answer = labels.getValue(it.answer)) },
+        )
+    }
+
     /** Every template, grouped in [Category] order. */
     val ALL: List<Template> =
         (money + documents + email + subscriptions + files + photos + work + travel + safety + personal)
+            .map { t ->
+                val options = OPTIONS[t.id]
+                check((options != null) == (t.shape == Shape.YesNo)) { "${t.id}: every yes/no template needs descriptive options" }
+                if (options == null) t else t.described(options.first, options.second)
+            }
             .sortedBy { it.category.ordinal }
 
     /** Looks a template up by id. */

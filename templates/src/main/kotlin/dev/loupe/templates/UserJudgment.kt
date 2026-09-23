@@ -37,9 +37,10 @@ data class UserJudgment(
     val desktopNote: String? = null,
     /**
      * The top-label mass at or above which the engine acts rather than queuing. The desktop app
-     * runs the identity recalibrator, so today this is read against the model's **raw** mass. The default is a starting point nobody has validated — the research found
-     * fourteen of fourteen projects shipping exactly that — and the threshold slider, reading the
-     * user's own corrections, is how it gets validated.
+     * runs the identity recalibrator, so today this is read against the model's **raw** mass.
+     * The default is a starting point nobody has validated — the research found fourteen of
+     * fourteen projects shipping exactly that — and the threshold slider, reading the user's own
+     * corrections, is how it gets validated.
      */
     val threshold: Double = defaultThreshold(shape),
 ) {
@@ -53,7 +54,7 @@ data class UserJudgment(
     val criteriaHash: String get() = choice.criteriaHash
 
     /** The label a warning or a threshold is about, where there is one. */
-    val positiveLabel: String? get() = if (shape is Shape.YesNo) "yes" else null
+    val positiveLabel: String? get() = shape.positiveOption
 
     /** The form `Export.judgmentsToJson` writes. */
     fun toDefinition(): JudgmentDefinition = JudgmentDefinition(choice, invariant, breaks, lookalikes)
@@ -77,12 +78,23 @@ data class UserJudgment(
             is Shape.Pick -> if (options == null) s else runCatching {
                 Shape.Pick(options, s.noOp?.takeIf { it in options })
             }.getOrElse { return EditResult.Rejected(listOf(LintFinding("invalid-options", it.message ?: "invalid options"))) }
+            is Shape.Binary -> if (options == null) s else runCatching {
+                require(options.size == 2) { "a two-option judgment keeps exactly two options" }
+                Shape.Binary(options[0].trim(), options[1].trim())
+            }.getOrElse { return EditResult.Rejected(listOf(LintFinding("invalid-options", it.message ?: "invalid options"))) }
             else -> s
         }
         return when (val compiled = JudgmentAuthor.compile(id, newQuestion, newShape.candidates, onFailure)) {
             is AuthorResult.Rejected -> EditResult.Rejected(compiled.findings)
             is AuthorResult.Compiled -> {
-                val keptBaseline = baseline?.takeIf { b -> b.labels.all { it in newShape.candidates } }
+                // A two-option judgment whose options were renamed keeps its baseline, relabelled;
+                // anything else keeps it only if every label it can answer still exists.
+                val relabelled = if (shape is Shape.Binary && newShape is Shape.Binary) {
+                    baseline?.relabel(mapOf(shape.positive to newShape.positive, shape.negative to newShape.negative))
+                } else {
+                    baseline
+                }
+                val keptBaseline = relabelled?.takeIf { b -> b.labels.all { it in newShape.candidates } }
                 EditResult.Edited(
                     copy(
                         title = newTitle.ifBlank { title },
@@ -107,7 +119,7 @@ data class UserJudgment(
     companion object {
         /** Starting thresholds on the raw top mass; unvalidated until the user's corrections say. */
         fun defaultThreshold(shape: Shape): Double = when (shape) {
-            Shape.YesNo -> 0.80
+            Shape.YesNo, is Shape.Binary -> 0.80
             is Shape.Pick -> 0.60
             is Shape.Ordinal -> 0.60
         }
@@ -128,7 +140,7 @@ data class JudgmentDraft(
     val invariant: String = "",
     val breaks: String = "",
     val lookalikes: String = "",
-    /** Words that make the dumb baseline say `yes` (yes/no questions only). */
+    /** Words that make the dumb baseline give the first option (two-option questions only). */
     val baselineKeywords: List<String> = emptyList(),
     val onFailure: FailurePosture = FailurePosture.NULL_ACTION,
 ) {
@@ -153,16 +165,19 @@ data class JudgmentDraft(
         val compiled = JudgmentAuthor.compile(id, question, options.ifEmpty { null }, onFailure)
         if (compiled is AuthorResult.Rejected) return UserJudgment.EditResult.Rejected(compiled.findings)
         val judgment = (compiled as AuthorResult.Compiled).judgment
-        val shape: Shape = if (judgment.candidates == JudgmentAuthor.YES_NO) {
-            Shape.YesNo
-        } else {
-            Shape.Pick(judgment.candidates, judgment.candidates.firstOrNull { it.lowercase() in NO_OP_WORDS })
+        val candidates = judgment.candidates
+        // Two options are a yes/no question whose first option is the one it is about.
+        val shape: Shape = when {
+            candidates == JudgmentAuthor.YES_NO -> Shape.YesNo
+            candidates.size == 2 -> Shape.Binary(candidates[0], candidates[1])
+            else -> Shape.Pick(candidates, candidates.firstOrNull { it.lowercase() in NO_OP_WORDS })
         }
         val keywords = baselineKeywords.map { it.trim() }.filter { it.isNotEmpty() }
+        val positive = shape.positiveOption
         val baseline = when {
-            shape == Shape.YesNo && keywords.isNotEmpty() -> Baseline.Keyword(keywords, "yes", "no")
-            shape == Shape.YesNo -> Baseline.Constant("no")
-            else -> Baseline.Constant((shape as Shape.Pick).noOp ?: shape.candidates.last())
+            positive != null && keywords.isNotEmpty() -> Baseline.Keyword(keywords, positive, candidates[1])
+            positive != null -> Baseline.Constant(candidates[1])
+            else -> Baseline.Constant((shape as Shape.Pick).noOp ?: candidates.last())
         }
         return UserJudgment.EditResult.Edited(
             UserJudgment(

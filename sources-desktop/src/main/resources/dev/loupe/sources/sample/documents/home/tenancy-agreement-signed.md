@@ -1,5 +1,3 @@
-SYNTHETIC SAMPLE DATA — every name, number and address here is invented for the Loupe demo.
-
 # Assured Shorthold Tenancy Agreement
 
 **Property:** 12 Elm Road, Sampletown
@@ -14,3 +12,5 @@ SYNTHETIC SAMPLE DATA — every name, number and address here is invented for th
 
 Signed: *A. Sample* (Tenant), 1 May 2026
 Signed: *B. Example* (Landlord), 1 May 2026
+
+— Synthetic sample for the Loupe demo: every name, number and address is invented.

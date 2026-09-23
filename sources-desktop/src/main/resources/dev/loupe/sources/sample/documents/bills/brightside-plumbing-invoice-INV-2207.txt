@@ -1,5 +1,3 @@
-SYNTHETIC SAMPLE DATA — every name, number and address here is invented for the Loupe demo.
-
 BRIGHTSIDE PLUMBING
 Invoice INV-2207
 Date: 16 September 2026
@@ -11,3 +9,5 @@ Emergency call-out and replacement of kitchen tap        £180.00
 Amount due: £180.00
 Payment due by 30 September 2026.
 Please pay by bank transfer to sort code 00-00-00, account 00000000, quoting INV-2207.
+
+— Synthetic sample for the Loupe demo: every name, number and address is invented.
