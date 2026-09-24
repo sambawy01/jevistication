@@ -1,8 +1,5 @@
 package dev.loupe.kit.site
 
-import dev.loupe.engine.FraudAssessment
-import dev.loupe.engine.SiteFraud
-
 /*
  * Combine deterministic signals (and, when present, Laya's reading of the page) into one score,
  * level and reasons.
@@ -14,6 +11,11 @@ import dev.loupe.engine.SiteFraud
  * No model is called here: Laya's answers, when a caller has them, are data.
  *
  *     score = min(100, deterministic points + combination bonus + Laya points)
+ *
+ * Since 2026-09-24 this is the page profile of the ONE phishing / site formula shared with Loupe
+ * Station (docs/PHISHING-FORMULA.md, owner decision A): the engine's `SiteFraud` rules are merged in
+ * (see [SiteSignals]) and the opt-in online facts ([OnlineSignals]) are scored here as deterministic
+ * evidence, except that a young domain or certificate alone is capped at "caution".
  *
  * Guard rails: a known-good domain ignores Laya and the brand checks; Laya alone never makes a page
  * "danger" (without a deterministic risk signal the score is capped at 59, unless the page has a
@@ -66,10 +68,11 @@ object SiteScoring {
         LAYA_POINTS.values.forEach { (code, _, text) -> put(code, text) }
         put(IMPOSTOR_LOGIN.first, IMPOSTOR_LOGIN.third)
         put(PRESSURE_LOGIN.first, PRESSURE_LOGIN.third)
+        OnlineSignals.PAGE_WEIGHTS.forEach { (code, wt) -> put(code, wt.second) }
         put("user_trusted", "You marked this site as trusted.")
         put("known_good", "This is the real website of a well-known company.")
     }
-    val REASON_PARAMS = listOf("brand", "domain", "target", "host", "tld", "suffix")
+    val REASON_PARAMS = listOf("brand", "domain", "target", "host", "tld", "suffix", "list")
     val REASON_CODES: List<String> get() = REASON_TEXT.keys.toList()
 
     fun levelFor(score: Int): String = when {
@@ -96,17 +99,31 @@ object SiteScoring {
         return out
     }
 
-    /** The verdict for one page. [laya] is null when Laya did not run (always, on the phone today). */
-    fun combine(det: List<SiteSignal>, facts: PageVerdictFacts, laya: Map<String, LayaPageAnswer>? = null, allowlisted: Boolean = false): SiteVerdict {
+    /**
+     * The verdict for one page. [laya] is null when Laya did not run (always, on the phone today);
+     * [online] the reasons from the opt-in online checks ([OnlineSignals.pageReasons]; empty when
+     * they are off), ignored on a known-good domain.
+     */
+    fun combine(
+        det: List<SiteSignal>,
+        facts: PageVerdictFacts,
+        laya: Map<String, LayaPageAnswer>? = null,
+        allowlisted: Boolean = false,
+        online: List<SiteReason> = emptyList(),
+    ): SiteVerdict {
         if (allowlisted) {
             return SiteVerdict(0, "safe", listOf(SiteReason("user_trusted", REASON_TEXT.getValue("user_trusted"), 0, "user")), listOf("user_trusted"))
         }
         val reasons = det.map { SiteReason(it.code, it.text, it.weight, it.source, it.params) }.toMutableList()
-        val codes = det.map { it.code }.toSet()
+        val codes = det.map { it.code }.toMutableSet()
         val gates = mutableListOf<String>()
         if ((facts.password || facts.card) && (codes intersect IMPOSTOR_CODES).isNotEmpty()) {
             reasons += SiteReason(IMPOSTOR_LOGIN.first, IMPOSTOR_LOGIN.third, IMPOSTOR_LOGIN.second, "page")
         }
+        // Online facts count as deterministic evidence (never on a well-known brand's own domain).
+        val onlineReasons = if (facts.knownGood) emptyList() else online.distinctBy { it.code }
+        reasons += onlineReasons
+        codes += onlineReasons.map { it.code }
         val detPoints = reasons.sumOf { it.weight }
 
         val layaReasons = mutableListOf<LayaReason>()
@@ -123,11 +140,16 @@ object SiteScoring {
             gates += "laya_only_cap"
         }
         var score = minOf(100, detPoints + layaTotal)
-        val hasRisk = (codes intersect SiteSignals.RISK_CODES).isNotEmpty()
+        val hasRisk = (codes intersect (SiteSignals.RISK_CODES + OnlineSignals.PAGE_RISK_CODES)).isNotEmpty()
         val strongAsk = (facts.password || facts.card) && (strong intersect CREDENTIAL_ASKS).isNotEmpty() && !facts.knownGood
         if (score >= DANGER_AT && !hasRisk && !strongAsk) {
             score = NO_RISK_CAP
             gates += "no_deterministic_risk"
+        }
+        val weighed = (reasons + layaReasons.map { it.reason }).filter { it.weight > 0 }.map { it.code }.toSet()
+        if (score >= DANGER_AT && weighed.isNotEmpty() && weighed.all { it in OnlineSignals.PAGE_AGE_CODES }) {
+            score = NO_RISK_CAP                  // a young domain (or certificate) alone is never "danger"
+            gates += "online_age_only_cap"
         }
         if (facts.knownGood && reasons.isEmpty()) {
             reasons += SiteReason("known_good", REASON_TEXT.getValue("known_good"), 0, "url")
@@ -137,44 +159,49 @@ object SiteScoring {
     }
 
     /** Signals then verdict for [page]: Station's `url_and_page_signals` + `combine`. */
-    fun verdict(page: PageFacts, laya: Map<String, LayaPageAnswer>? = null, allowlisted: Boolean = false, config: SiteConfig = SiteConfig.DEFAULT): SiteVerdict {
+    fun verdict(
+        page: PageFacts,
+        laya: Map<String, LayaPageAnswer>? = null,
+        allowlisted: Boolean = false,
+        config: SiteConfig = SiteConfig.DEFAULT,
+        online: List<SiteReason> = emptyList(),
+    ): SiteVerdict {
         val (sig, facts) = SiteSignals.urlAndPageSignals(page, config)
-        return combine(sig, facts, laya, allowlisted)
+        return combine(sig, facts, laya, allowlisted, online)
     }
 }
 
 /**
- * One site check with both results side by side: Loupe Station's brand / look-alike scoring
- * ([station]) and the engine's mechanical site-fraud watcher ([engine]). Neither changes the other:
- * the engine's thresholds and signals are untouched, and Station's extra evidence is shown next to
- * them. [warn] is true when either one raised something.
+ * One site check: the ONE verdict of the shared phishing / site formula (docs/PHISHING-FORMULA.md)
+ * with its signals. There is no second verdict beside it any more: the engine's `SiteFraud` rules are
+ * part of the formula. [warn] is true when the level is caution or danger. Nothing here blesses: a
+ * "safe" level is shown as "No signal".
  */
-data class SiteCheckResult(val url: String, val station: SiteVerdict, val engine: FraudAssessment) {
-    val warn: Boolean get() = station.level != "safe" || engine.hasWarnings()
+data class SiteCheckResult(val url: String, val verdict: SiteVerdict) {
+    val warn: Boolean get() = verdict.level != "safe"
 
-    /** Station's reasons that carry weight, then the engine's signals, as plain lines. */
+    /** The reasons that carry weight, strongest first, as plain lines (online ones say so). */
     val lines: List<String>
-        get() = station.reasons.filter { it.weight > 0 }.map { it.text } + engine.signals.map { "Engine: ${it.detail}" }
+        get() = verdict.reasons.filter { it.weight > 0 }.map { r -> if (r.source == "online") "${OnlineSignals.label(r.params)}: ${r.text}" else r.text }
 
     val levelTitle: String
-        get() = when (station.level) {
+        get() = when (verdict.level) {
             "danger" -> "Danger"
             "caution" -> "Caution"
-            else -> if (engine.hasWarnings()) "Caution" else "No signal"
+            else -> "No signal"
         }
 }
 
 object SiteCheck {
-    /** Station's brand-lookalike scoring merged with the engine's `SiteFraud.assess` for one URL. */
-    fun check(page: PageFacts, config: SiteConfig = SiteConfig.DEFAULT): SiteCheckResult {
-        val (sig, facts) = SiteSignals.urlAndPageSignals(page, config)
-        val station = SiteScoring.combine(sig, facts)
-        val formAction = page.forms.firstOrNull { it.password && !it.action.isNullOrEmpty() }?.action
-        val engine = SiteFraud.assess(page.url, claimedBrand = facts.brandClaim, formActionUrl = formAction)
-        return SiteCheckResult(page.url, station, engine)
-    }
+    /** The formula's verdict for one page (no Laya on the phone). [online] as [SiteScoring.combine]. */
+    fun check(page: PageFacts, config: SiteConfig = SiteConfig.DEFAULT, online: List<SiteReason> = emptyList()): SiteCheckResult =
+        SiteCheckResult(page.url, SiteScoring.verdict(page, config = config, online = online))
 
     fun checkUrl(url: String): SiteCheckResult = check(PageFacts(url))
+
+    /** [checkUrl] with the opt-in online facts for its domain, when the caller has them. */
+    fun checkUrl(url: String, online: OnlineContext?): SiteCheckResult =
+        check(PageFacts(url), online = online?.let { OnlineSignals.pageReasons(url, it) }.orEmpty())
 
     private val URL_RE = Regex("""(?:https?://|www\.)[^\s<>"'()\[\]{}]{3,2000}""", RegexOption.IGNORE_CASE)
 

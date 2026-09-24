@@ -25,7 +25,20 @@ data class FraudAssessment(val url: String, val signals: List<FraudSignal>) {
 }
 
 /**
- * Site fraud and identity mismatch (C3), mechanical layer.
+ * Site fraud and identity mismatch (C3), mechanical layer: the engine's **thin** API.
+ *
+ * The apps do not show this as a verdict. Since 2026-09-24 (owner decision A) one phishing / site
+ * formula serves both Loupe and Loupe Station: `dev.loupe.kit.site.PhishingFormula` in loupe-kit,
+ * written down in docs/PHISHING-FORMULA.md. It reuses the facts here — [OriginFacts] (hosts, the
+ * pinned PSL, scripts, where a form posts) — and adds what the engine cannot know (brand lists,
+ * confusables, field types, online facts). This object stays for engine-only callers and follows the
+ * same rules where the engine can apply them:
+ *  - a punycode host is **not** a signal by itself (rule 2); only mixed scripts in one label are,
+ *    checked on the decoded label;
+ *  - [OriginFacts.brandMatchesOrigin] is the name-vs-domain check the formula uses only for brands
+ *    that are not on its brand list (rule 1);
+ *  - a cross-domain form post is reported as a fact; the formula weighs it by the fields it carries
+ *    (rule 4).
  *
  * Every check here reads the page's *origin*, never its content, because origin facts are
  * unforgeable by the page and content is written by whoever is attacking. Content may be fed to a
@@ -58,9 +71,6 @@ object SiteFraud {
 
         if (host in knownBadHosts) {
             signals += FraudSignal("known-bad", "$host is on a known-bad list")
-        }
-        if (OriginFacts.isPunycode(host)) {
-            signals += FraudSignal("punycode-host", "$host is punycode-encoded")
         }
         if (OriginFacts.hasMixedScripts(host)) {
             signals += FraudSignal("mixed-script-host", "$host mixes writing systems in one label")

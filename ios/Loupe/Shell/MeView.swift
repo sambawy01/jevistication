@@ -7,6 +7,7 @@ struct MeView: View {
     @ObservedObject private var ledger = LedgerService.shared
     @ObservedObject private var judgments = JudgmentsService.shared
     @ObservedObject private var assist = AssistService.shared
+    @ObservedObject private var online = OnlineChecksService.shared
     @State private var exporting = false
     @State private var exportError: String?
     @State private var shared: SharedFile?
@@ -69,6 +70,12 @@ struct MeView: View {
                         row("Writing assistant", assist.config.enabled ? (assist.isReady ? "On · Online" : "Needs setup") : "Off")
                     }
                     .accessibilityIdentifier("me.assistant")
+                }
+                Section("Online phishing checks") {
+                    NavigationLink { OnlineChecksView(online: online) } label: {
+                        row("Online phishing checks", online.settings.anyOn ? "On · Online" : "Off")
+                    }
+                    .accessibilityIdentifier("me.onlineChecks")
                 }
                 Section("Appearance") {
                     HStack {

@@ -209,7 +209,8 @@ class WatchersTest {
     @Test
     fun `no watcher wording ever blesses`() {
         val report = Watchers.run(sampleItems(), today, backend = null)
-        val words = report.fraud.map { it.assessment.summary() }
+        val words = report.fraud.flatMap { f -> f.verdict.reasons.filter { it.weight > 0 }.map { it.text } }
+        assertTrue(words.isNotEmpty())
         assertTrue(words.none { w -> listOf("safe", "legitimate", "trusted").any { it in w.lowercase() } })
     }
 

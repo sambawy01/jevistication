@@ -84,6 +84,10 @@ object Export {
                             label to Json.number(row.distribution.getValue(label).value)
                         },
                     ),
+                    // Emitted only on an automatic-baseline row: the model's answer kept alongside.
+                    row.modelDistribution?.let { d ->
+                        "modelDistribution" to Json.obj(d.labels.map { label -> label to Json.number(d.getValue(label).value) })
+                    },
                 ),
             )
         }

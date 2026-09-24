@@ -17,6 +17,9 @@ import dev.loupe.sources.Scanner
 import dev.loupe.sources.SourceItem
 import dev.loupe.sources.SourceSpec
 import dev.loupe.sources.SourceType
+import dev.loupe.kit.measure.AutoBaseline
+import dev.loupe.kit.measure.JudgmentMeasure
+import dev.loupe.templates.BaselineMode
 import dev.loupe.templates.JudgmentDraft
 import dev.loupe.templates.MechanicalCheck
 import dev.loupe.templates.Template
@@ -355,6 +358,17 @@ class LoupeController(
         }
     }
 
+    /** Decision B's manual override: Auto (the default), Always baseline or Always Laya. */
+    fun setBaselineMode(id: String, mode: BaselineMode) {
+        val current = judgment(id) ?: return
+        replace(JudgmentMeasure.withBaselineMode(current, mode))
+        notice = when (mode) {
+            BaselineMode.AUTO -> "\"${current.title}\": Auto — the baseline answers only while it beats Laya on your corrections."
+            BaselineMode.ALWAYS_BASELINE -> "\"${current.title}\" now always answers by its baseline rule; Laya is not asked. Re-run to apply."
+            BaselineMode.ALWAYS_LAYA -> "\"${current.title}\" now always answers with Laya."
+        }
+    }
+
     fun setThreshold(id: String, value: Double) {
         val current = judgment(id) ?: return
         replace(current.copy(threshold = value.coerceIn(0.0, 1.0)))
@@ -399,6 +413,12 @@ class LoupeController(
         val started = System.nanoTime()
         sweep = SweepState(judgmentId, todo.size, 0, items.size - withText.size, withText.size - todo.size, 0, 0, 0L, null, running = true, cancelled = false)
 
+        // Decision B (shared with the phone): under Auto the baseline answers once it is strictly
+        // more accurate on at least 30 of the user's corrections; Laya's answer is kept beside it.
+        val baselineRule = judgment.baseline
+        val auto = AutoBaseline.verdict(
+            judgment.baselineMode, baselineRule != null, Analysis.effectiveRows(ledger, judgment, correctionIndex),
+        ) { id -> itemsById[id]?.let { baselineRule?.answer(it.text) } }.automatic
         return scope.launch(modelDispatcher) {
             val engine = DecisionEngine(backend, Probability.of(judgment.threshold))
             val buffer = ArrayList<LedgerRow>()
@@ -426,8 +446,10 @@ class LoupeController(
                     val t0 = System.nanoTime()
                     val outcome = engine.decide(judgment.choice, item.toItem()) { mechanical(judgment, item) }
                     if (!outcome.resolvedMechanically) latencies += System.nanoTime() - t0
-                    if (outcome.row.failure != null) unusable++
-                    buffer += outcome.row
+                    var row = outcome.row
+                    if (auto && baselineRule != null && !outcome.resolvedMechanically) row = AutoBaseline.resolve(row, baselineRule.answer(item.text))
+                    if (row.failure != null) unusable++
+                    buffer += row
                     done++
                     if (buffer.size >= FLUSH_EVERY) flush()
                     publish(running = true)
@@ -450,6 +472,11 @@ class LoupeController(
     /** A judgment's mechanical check, where it has one (A3: the model is not asked). */
     private fun mechanical(judgment: UserJudgment, item: SourceItem): Mechanical<String> {
         val positive = judgment.positiveLabel
+        val baselineRule = judgment.baseline
+        if (judgment.baselineMode == BaselineMode.ALWAYS_BASELINE && baselineRule != null) {
+            // "Always baseline": the rule answers and the model is not asked.
+            return Mechanical.Resolved(baselineRule.answer(item.text), AutoBaseline.ALWAYS_CHECK)
+        }
         return if (judgment.mechanical == MechanicalCheck.EXACT_DUPLICATE && item.duplicateOf != null && positive != null) {
             Mechanical.Resolved(positive, "exact-duplicate")
         } else {

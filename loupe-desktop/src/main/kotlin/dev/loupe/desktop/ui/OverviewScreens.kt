@@ -153,11 +153,11 @@ fun WatchersScreen(c: LoupeController, platform: Platform) {
         }
         Card {
             H2("Site fraud")
-            Muted("${r.linksChecked} link(s) and every sender's domain checked against the brand the sender claims, using origin facts only (never page content). The public-suffix list is an approximation (build risk 10).")
+            Muted("${r.linksChecked} link(s) and every sender's domain scored by the one phishing formula shared with Loupe Station (docs/PHISHING-FORMULA.md), with the brand the sender claims; origin facts only, never page content. Caution and danger are listed.")
             for (f in r.fraud) {
-                Note("${f.item.name}: ${f.what} — " + f.assessment.signals.joinToString("; ") { it.detail }, warn = true)
+                Note("${f.item.name}: ${f.what} — ${f.verdict.level} (${f.verdict.score}): " + f.verdict.reasons.filter { it.weight > 0 }.joinToString("; ") { it.text }, warn = true)
             }
-            if (r.fraud.isEmpty()) Muted("No mechanical signal fired. This is not an all-clear: these checks cover origin only.")
+            if (r.fraud.isEmpty()) Muted("No link or sender reached caution. This is not an all-clear: these checks cover origin only.")
         }
     }
 }

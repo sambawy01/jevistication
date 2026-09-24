@@ -5,7 +5,9 @@ import dev.loupe.engine.DecisionEngine
 import dev.loupe.engine.LedgerRow
 import dev.loupe.engine.Mechanical
 import dev.loupe.engine.Probability
+import dev.loupe.kit.measure.AutoBaseline
 import dev.loupe.sources.common.SourceItem
+import dev.loupe.templates.BaselineMode
 import dev.loupe.templates.MechanicalCheck
 import dev.loupe.templates.UserJudgment
 import kotlin.time.TimeSource
@@ -51,7 +53,12 @@ interface SweepObserver {
  */
 class JudgmentSweep(private val backend: Backend) {
 
-    fun run(judgment: UserJudgment, plan: SweepPlan, observer: SweepObserver): SweepProgress {
+    /**
+     * [autoBaseline]: the judgment is on [BaselineMode.AUTO] and its baseline currently wins on the
+     * user's corrections ([dev.loupe.kit.measure.AutoBaselineVerdict.automatic]). The model is still
+     * asked; the baseline's answer is logged as the decision and the model's kept alongside.
+     */
+    fun run(judgment: UserJudgment, plan: SweepPlan, observer: SweepObserver, autoBaseline: Boolean = false): SweepProgress {
         val mark = TimeSource.Monotonic.markNow()
         val todo = plan.toJudge
         val buffer = ArrayList<LedgerRow>()
@@ -87,8 +94,15 @@ class JudgmentSweep(private val backend: Backend) {
                 val t0 = TimeSource.Monotonic.markNow()
                 val outcome = engine.decide(judgment.choice, item.toItem()) { Companion.mechanical(judgment, item) }
                 if (outcome.resolvedMechanically) byRule++ else latencies += t0.elapsedNow().inWholeNanoseconds
-                if (outcome.row.failure != null) unusable++
-                buffer += outcome.row
+                var row = outcome.row
+                val baseline = judgment.baseline
+                if (autoBaseline && judgment.baselineMode == BaselineMode.AUTO && baseline != null && !outcome.resolvedMechanically) {
+                    // Decision B: the baseline answers, Laya's answer is kept beside it.
+                    row = AutoBaseline.resolve(row, baseline.answer(item.text))
+                    byRule++
+                }
+                if (row.failure != null) unusable++
+                buffer += row
                 done++
                 if (buffer.size >= FLUSH_EVERY) flush()
                 observer.onSweepProgress(progress(running = true))
@@ -111,9 +125,9 @@ class JudgmentSweep(private val backend: Backend) {
         fun mechanical(judgment: UserJudgment, item: SourceItem): Mechanical<String> {
             val positive = judgment.positiveLabel
             val baseline = judgment.baseline
-            if (judgment.useBaseline && baseline != null) {
-                // D4 "use the baseline": the dumb rule answers; logged as mechanical, never model evidence.
-                return Mechanical.Resolved(baseline.answer(item.text), "baseline")
+            if (judgment.baselineMode == BaselineMode.ALWAYS_BASELINE && baseline != null) {
+                // "Always baseline": the dumb rule answers, the model is not asked; logged as mechanical.
+                return Mechanical.Resolved(baseline.answer(item.text), AutoBaseline.ALWAYS_CHECK)
             }
             return if (judgment.mechanical == MechanicalCheck.EXACT_DUPLICATE && item.duplicateOf != null && positive != null) {
                 Mechanical.Resolved(positive, "exact-duplicate")

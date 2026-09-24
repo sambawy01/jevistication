@@ -2,7 +2,11 @@ package dev.loupe.kit.mail
 
 import dev.loupe.kit.site.Brand
 import dev.loupe.kit.site.Brands
+import dev.loupe.engine.Contact
+import dev.loupe.engine.Impersonation
 import dev.loupe.kit.site.Hosts
+import dev.loupe.kit.site.OnlineContext
+import dev.loupe.kit.site.OnlineSignals
 import dev.loupe.kit.site.ParsedUrl
 import dev.loupe.kit.site.SiteConfig
 import dev.loupe.kit.site.SiteSignals
@@ -38,7 +42,7 @@ import dev.loupe.sources.common.MimeParser
 /** One reason in a phishing verdict. */
 data class PhishReason(val code: String, val text: String, val weight: Int, val params: Map<String, String>, val source: String)
 
-/** Station's `assess()` result. */
+/** Station's `assess()` result: the email profile of the shared formula (docs/PHISHING-FORMULA.md). */
 data class PhishVerdict(
     val flag: Boolean,
     val score: Int,
@@ -46,8 +50,13 @@ data class PhishVerdict(
     val known: Boolean,
     val trusted: Boolean,
     val domain: String,
+    /** Gates that capped the score (`online_age_only_cap`). */
+    val gates: List<String> = emptyList(),
 ) {
     val codes: Set<String> get() = reasons.map { it.code }.toSet()
+
+    /** The formula's level: danger when flagged, caution from [Phishing.REVIEW_AT], else safe. */
+    val level: String get() = if (flag) "danger" else if (score >= Phishing.REVIEW_AT) "caution" else "safe"
 }
 
 object Phishing {
@@ -71,7 +80,6 @@ object Phishing {
         "sender_brand_in_domain_bait" to (40 to "The sender's domain {domain} glues {brand} to words like \"secure\" or \"verify\"; {brand} does not use it."),
         "sender_brand_other_tld" to (20 to "The sender uses the name {brand} on a domain {brand} does not use ({domain})."),
         "sender_brand_in_domain" to (10 to "The sender's domain {domain} contains the name {brand}, but it is not {brand}'s."),
-        "sender_punycode" to (10 to "The sender's domain uses international characters ({domain})."),
         "sender_suspicious_tld" to (8 to "The sender's domain ends in .{tld}, an ending often used by throw-away scam sites."),
         "sender_ip" to (25 to "The sender's address uses a bare IP number instead of a domain."),
         // display name
@@ -100,15 +108,19 @@ object Phishing {
         "link_ip" to (25 to "A link goes to a bare IP number ({host}) instead of a website name."),
         "link_suspicious_tld" to (8 to "A link goes to a domain ending in .{tld}, often used by throw-away scam sites."),
         "link_shortener" to (5 to "A link uses a link shortener, so its real destination is hidden."),
+        // your contacts (rule 6: contact impersonation feeds the same score as the brand checks)
+        "contact_homograph_domain" to (60 to "The sender's name is your contact {name}, and {domain} imitates their domain {target} with look-alike letters."),
+        "contact_lookalike_domain" to (45 to "The sender's name is your contact {name}, but {domain} is a near miss of {target}, the domain they write from."),
+        "contact_name_other_address" to (30 to "The sender's name is your contact {name}, but {address} is not an address they write from."),
         // Laya (weight shown is the maximum; 0.5-0.8 counts half)
         "laya_phishing" to (LAYA_STRONG to "Laya's reading of the text: it looks like a phishing or scam attempt."),
-    )
+    ).also { m -> m.putAll(OnlineSignals.MAIL_WEIGHTS) }
     val INFO_TEXT: Map<String, String> = linkedMapOf(
         "known_sender" to "The sender's domain {domain} belongs to {brand}.",
         "trusted_sender" to "You marked {domain} as a trusted sender.",
     )
     val REASON_CODES: List<String> = WEIGHTS.keys.toList() + INFO_TEXT.keys
-    val REASON_PARAMS = listOf("brand", "domain", "shown", "target", "host", "tld")
+    val REASON_PARAMS = listOf("brand", "domain", "shown", "target", "host", "tld", "name", "address")
     val RISK_CODES: Set<String> = WEIGHTS.filter { (c, w) -> w.first >= RISK_MIN && c != "laya_phishing" }.keys
 
     private val SENDER_CODES = mapOf(
@@ -116,7 +128,7 @@ object Phishing {
         "lookalike_brand" to "sender_lookalike_brand", "brand_domain_in_subdomain" to "sender_brand_domain_in_subdomain",
         "brand_in_subdomain" to "sender_brand_in_subdomain", "brand_in_domain_bait" to "sender_brand_in_domain_bait",
         "brand_other_tld" to "sender_brand_other_tld", "brand_in_domain" to "sender_brand_in_domain",
-        "punycode" to "sender_punycode", "suspicious_tld" to "sender_suspicious_tld", "ip_host" to "sender_ip",
+        "suspicious_tld" to "sender_suspicious_tld", "ip_host" to "sender_ip",
     )
     private val LINK_CODES = mapOf(
         "homograph_brand" to "link_homograph_brand", "lookalike_brand" to "link_lookalike_brand",
@@ -324,6 +336,8 @@ object Phishing {
         layaP: Double? = null,
         trusted: List<String> = emptyList(),
         config: SiteConfig = DEFAULT_CONFIG,
+        contacts: List<Contact> = emptyList(),
+        online: OnlineContext? = null,
     ): PhishVerdict {
         val (display, address) = parseAddress(sender)
         val domain = domainOf(address)
@@ -418,18 +432,90 @@ object Phishing {
             add(code, "link", *params.map { it.key to it.value }.toTypedArray())
         }
 
+        // your contacts: a known name from another address, a near miss or look-alike of their domain
+        for ((code, params) in contactSignals(display, address, contacts)) {
+            add(code, "contact", *params.map { it.key to it.value }.toTypedArray())
+        }
+
+        // opt-in online checks (never for a trusted or brand sender: those returned above)
+        if (online != null) {
+            val evidence = runCatching { OnlineSignals.mailEvidence(reg.takeUnless { freemail }, linkTargets(text, links, reg, config), online) }
+                .getOrDefault(emptyList())                      // an online failure never changes the offline verdict
+            for (r in evidence) if (reasons.none { it.code == r.code }) reasons += PhishReason(r.code, r.text, r.weight, r.params, "online")
+        }
+
         val det = reasons.sumOf { it.weight }
-        val hasRisk = reasons.any { it.code in RISK_CODES }
+        var hasRisk = reasons.any { it.code in RISK_CODES }
         var layaPoints = 0
         if (layaP != null && layaP >= 0.5 && det > 0) {
             layaPoints = if (layaP >= LAYA_FULL_P) LAYA_STRONG else LAYA_WEAK
             reasons += PhishReason("laya_phishing", WEIGHTS.getValue("laya_phishing").second, layaPoints, emptyMap(), "laya")
         }
-        val score = minOf(100, det + layaPoints)
+        var score = minOf(100, det + layaPoints)
+        val gates = mutableListOf<String>()
+        val weighed = reasons.filter { it.weight > 0 }.map { it.code }.toSet()
+        if (weighed.isNotEmpty() && weighed.all { it in OnlineSignals.MAIL_AGE_CODES }) {
+            if (score >= PHISHING_AT) gates += "online_age_only_cap"
+            score = minOf(score, PHISHING_AT - 1)            // a young domain (or certificate) alone never flags a message
+            hasRisk = false
+        }
         return PhishVerdict(
             flag = score >= PHISHING_AT && hasRisk, score = score, reasons = reasons.sortedByDescending { it.weight },
-            known = false, trusted = false, domain = reg ?: "",
+            known = false, trusted = false, domain = reg ?: "", gates = gates,
         )
+    }
+
+    /** Webmail domains: anyone can open a second address there, so a known name on one is always checked. */
+    private val WEBMAIL = setOf("gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "yahoo.com", "icloud.com", "live.com", "aol.com", "proton.me", "protonmail.com")
+
+    /**
+     * Rule 6 of docs/PHISHING-FORMULA.md: the sender's display name is one of your [contacts] but the
+     * address is not theirs. The engine's `Impersonation` facts, scored: a look-alike of their domain
+     * (an international domain whose confusable letters fold to theirs) 60, a near miss
+     * (Levenshtein 1-2) 45, otherwise 30 —
+     * except a second address on the contact's own, non-webmail domain (receipts@ and support@).
+     */
+    fun contactSignals(display: String, address: String, contacts: List<Contact>): List<Pair<String, Map<String, String>>> {
+        val name = display.trim()
+        if (name.isEmpty() || address.isEmpty() || contacts.isEmpty()) return emptyList()
+        val contact = contacts.firstOrNull { it.name.equals(name, ignoreCase = true) } ?: return emptyList()
+        val addr = address.lowercase()
+        val theirs = contact.addresses.map { it.lowercase() }
+        if (addr in theirs) return emptyList()
+        val domain = domainOf(address)
+        val known = theirs.map { domainOf(it) }.filter { it.isNotEmpty() }.toSet()
+        if (domain in known && domain !in WEBMAIL) return emptyList()
+        if (domain.isNotEmpty() && domain !in known) {
+            // An international domain whose look-alike letters fold to a contact's domain (rule 2).
+            val unicode = Hosts.decodeDomain(domain)
+            val sk = SiteSignals.skeleton(unicode)
+            known.firstOrNull { unicode.any { c -> c.code >= 128 } && SiteSignals.skeleton(Hosts.decodeDomain(it)) == sk }?.let { t ->
+                return listOf("contact_homograph_domain" to mapOf("name" to contact.name, "domain" to Hosts.decodeDomain(domain), "target" to t))
+            }
+            known.minByOrNull { Impersonation.levenshtein(domain, it) }?.takeIf { Impersonation.levenshtein(domain, it) in 1..2 }?.let { t ->
+                return listOf("contact_lookalike_domain" to mapOf("name" to contact.name, "domain" to domain, "target" to t))
+            }
+        }
+        return listOf("contact_name_other_address" to mapOf("name" to contact.name, "address" to address))
+    }
+
+    /**
+     * (url) of the links worth an online check: web links that are not the sender's own domain, a
+     * mailing service's click tracker, a well-known brand's domain or a private address.
+     */
+    fun linkTargets(text: String, links: List<Pair<String, String>>, senderReg: String?, config: SiteConfig): List<String> {
+        val hrefs = links.take(MAX_LINKS).map { it.first } + urls(text).map { if (it.lowercase().startsWith("http")) it else "http://$it" }
+        val out = mutableListOf<String>()
+        for (raw in hrefs) {
+            val href = raw.trim()
+            if (!(href.startsWith("http://", true) || href.startsWith("https://", true)) || href in out) continue
+            val u = ParsedUrl.parse(href) ?: continue
+            if (u.host.isEmpty() || Hosts.isPrivateHost(u.host) || Hosts.isIp(u.host)) continue
+            val reg = u.registrable ?: u.host
+            if (reg == senderReg || reg in LINK_TRACKERS || LINK_TRACKERS.any { u.host.endsWith(".$it") } || config.known(u.registrable, u.suffix)) continue
+            out += href
+        }
+        return out.take(MAX_LINKS)
     }
 
     internal fun urls(text: String): List<String> =

@@ -107,4 +107,56 @@ internal object Punycode {
         }
         return out.toString()
     }
+
+    private fun value(c: Char): Int? = when (c) {
+        in '0'..'9' -> c - '0' + 26
+        in 'a'..'z' -> c - 'a'
+        in 'A'..'Z' -> c - 'A'
+        else -> null
+    }
+
+    /** [input] (Punycode without the ACE prefix) decoded, or null when it is not valid Punycode. */
+    fun decode(input: String): String? {
+        val out = ArrayList<Int>()
+        val b = input.lastIndexOf('-')
+        if (b > 0) {
+            for (c in input.substring(0, b)) {
+                if (c.code >= 0x80) return null
+                out += c.code
+            }
+        }
+        var i = 0L
+        var n = INITIAL_N
+        var bias = INITIAL_BIAS
+        var pos = if (b > 0) b + 1 else 0
+        while (pos < input.length) {
+            val old = i
+            var w = 1L
+            var k = BASE
+            while (true) {
+                if (pos >= input.length) return null
+                val d = value(input[pos++]) ?: return null
+                i += d * w
+                if (i > Int.MAX_VALUE) return null
+                val t = when {
+                    k <= bias -> TMIN
+                    k >= bias + TMAX -> TMAX
+                    else -> k - bias
+                }
+                if (d < t) break
+                w *= (BASE - t)
+                if (w > Int.MAX_VALUE) return null
+                k += BASE
+            }
+            bias = adapt((i - old).toInt(), out.size + 1, old == 0L)
+            n += (i / (out.size + 1)).toInt()
+            i %= (out.size + 1)
+            if (n > 0x10FFFF) return null
+            out.add(i.toInt(), n)
+            i++
+        }
+        val sb = StringBuilder()
+        for (cp in out) appendCodePoint(sb, cp)
+        return sb.toString()
+    }
 }

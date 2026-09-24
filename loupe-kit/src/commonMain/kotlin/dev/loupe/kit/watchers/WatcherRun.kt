@@ -7,7 +7,6 @@ import dev.loupe.engine.DateFacts
 import dev.loupe.engine.DecisionEngine
 import dev.loupe.engine.ExpiryAlert
 import dev.loupe.engine.ExpiryRadar
-import dev.loupe.engine.FraudAssessment
 import dev.loupe.engine.Impersonation
 import dev.loupe.engine.ImpersonationReason
 import dev.loupe.engine.ImpersonationSignal
@@ -16,7 +15,9 @@ import dev.loupe.engine.OriginFacts
 import dev.loupe.engine.Probability
 import dev.loupe.engine.RecurringCharge
 import dev.loupe.engine.RecurringMoney
-import dev.loupe.engine.SiteFraud
+import dev.loupe.kit.site.PageFacts
+import dev.loupe.kit.site.SiteScoring
+import dev.loupe.kit.site.SiteVerdict
 import dev.loupe.engine.TermChange
 import dev.loupe.engine.TermChangeDetector
 import dev.loupe.engine.ValidityRule
@@ -35,8 +36,11 @@ data class TermChangeFinding(val earlier: SourceItem, val later: SourceItem, val
 /** A message whose sender does not add up. */
 data class ImpersonationFinding(val item: SourceItem, val signals: List<ImpersonationSignal>)
 
-/** A link, or a sender domain, with mechanical fraud signals. */
-data class FraudFinding(val item: SourceItem, val what: String, val assessment: FraudAssessment)
+/**
+ * A link, or a sender domain, that the shared phishing / site formula (docs/PHISHING-FORMULA.md)
+ * rates caution or danger: its one [verdict], with the signals behind it.
+ */
+data class FraudFinding(val item: SourceItem, val what: String, val verdict: SiteVerdict)
 
 /** Everything the watchers raised. Warnings only: there is deliberately no "all clear" here. */
 data class WatcherReport(
@@ -70,8 +74,9 @@ data class WatcherReport(
  * - **Impersonation** — a contact is inferred from history (a display name used at least twice
  *   from the same address), and, when the Contacts source is on, the address book's cards (their
  *   names and email addresses) are known contacts too (epic #7 child 7).
- * - **Site fraud** — the links in emails, and each sender's own domain, against the brand the sender
- *   claims to be; origin facts only, never page content.
+ * - **Site fraud** — the links in emails, and each sender's own domain, through the shared phishing
+ *   / site formula (docs/PHISHING-FORMULA.md) with the brand the sender claims; origin facts only,
+ *   never page content. A finding is a caution or danger verdict.
  */
 object WatcherRun {
     /** "Schengen requires six months of passport validity" — the spec's own example rule. */
@@ -235,14 +240,7 @@ object WatcherRun {
         return messages.mapNotNull { (item, message) ->
             if (message.displayName.isBlank()) return@mapNotNull null
             val others = messages.filter { it.first !== item }.map { it.second }
-            val inferred = others.filter { it.displayName.isNotBlank() }
-                .groupBy { it.displayName.lowercase() }
-                .mapNotNull { (_, byName) ->
-                    val trusted = byName.groupingBy { it.address.lowercase() }.eachCount().filterValues { it >= 2 }.keys
-                    if (trusted.isEmpty()) null else Contact(byName.first().displayName, trusted)
-                }
-            val contacts = (inferred + book).groupBy { it.name.lowercase() }
-                .map { (_, same) -> Contact(same.first().name, same.flatMap { it.addresses }.map { it.lowercase() }.toSet()) }
+            val contacts = contactsFrom(others, book)
             val signals = Impersonation.check(message, contacts, others)
             val domain = message.address.substringAfter('@').lowercase()
             val knownDomains = contacts.firstOrNull { it.name.equals(message.displayName, ignoreCase = true) }
@@ -259,18 +257,36 @@ object WatcherRun {
         }
     }
 
-    /** `SiteFraud.assess` on every link in an email, and on the sender's own domain. */
+    /**
+     * Known contacts for judging one message: a display name used at least twice from the same
+     * address in [others] (history), merged with the address [book].
+     */
+    fun contactsFrom(others: List<Message>, book: List<Contact>): List<Contact> {
+        val inferred = others.filter { it.displayName.isNotBlank() }
+            .groupBy { it.displayName.lowercase() }
+            .mapNotNull { (_, byName) ->
+                val trusted = byName.groupingBy { it.address.lowercase() }.eachCount().filterValues { it >= 2 }.keys
+                if (trusted.isEmpty()) null else Contact(byName.first().displayName, trusted)
+            }
+        return (inferred + book).groupBy { it.name.lowercase() }
+            .map { (_, same) -> Contact(same.first().name, same.flatMap { it.addresses }.map { it.lowercase() }.toSet()) }
+    }
+
+    /**
+     * The shared formula on every link in an email, and on the sender's own domain, with the brand
+     * the sender claims; a finding wherever the verdict is caution or danger.
+     */
     fun fraud(emails: List<SourceItem>): List<FraudFinding> {
         val out = mutableListOf<FraudFinding>()
         for (item in emails) {
             val email = item.email!!
             val address = email.fromAddress ?: continue
             val brand = claimedBrand(email.fromName, address)
-            val sender = SiteFraud.assess("https://" + address.substringAfter('@'), claimedBrand = brand)
-            if (sender.hasWarnings()) out += FraudFinding(item, "sender $address", sender)
+            val sender = SiteScoring.verdict(PageFacts("https://" + address.substringAfter('@').lowercase(), claimedBrand = brand))
+            if (sender.level != "safe") out += FraudFinding(item, "sender $address", sender)
             for (link in email.links) {
-                val assessment = SiteFraud.assess(link, claimedBrand = brand)
-                if (assessment.hasWarnings()) out += FraudFinding(item, "link $link", assessment)
+                val verdict = SiteScoring.verdict(PageFacts(link, claimedBrand = brand))
+                if (verdict.level != "safe") out += FraudFinding(item, "link $link", verdict)
             }
         }
         return out

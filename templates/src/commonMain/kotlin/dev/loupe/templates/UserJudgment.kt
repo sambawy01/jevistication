@@ -51,13 +51,17 @@ data class UserJudgment(
      */
     val criteriaInPrompt: Boolean = false,
     /**
-     * D4's "use the baseline": when the model is not beating its dumb baseline on the user's
-     * corrections, the user can have the baseline answer instead. Such answers are logged as
-     * mechanical (`resolvedBy` = `baseline`), so they never count as model evidence. Not part of
-     * the criteria hash: the question the model would be asked is unchanged.
+     * Who answers: D4's baseline or the model. [BaselineMode.AUTO] (the default, as Loupe Station)
+     * lets the baseline answer once it is strictly more accurate than the model on at least 30 of
+     * the user's corrections; the other two are the user's manual override. Baseline answers are
+     * logged as mechanical, so they never count as model evidence. Not part of the criteria hash:
+     * the question the model would be asked is unchanged.
      */
-    val useBaseline: Boolean = false,
+    val baselineMode: BaselineMode = BaselineMode.AUTO,
 ) {
+    /** The manual "Always baseline" override (D4's old "use the baseline" switch). */
+    val useBaseline: Boolean get() = baselineMode == BaselineMode.ALWAYS_BASELINE
+
     init {
         require(threshold in 0.0..1.0) { "threshold must be in [0,1], was $threshold" }
     }
@@ -239,3 +243,14 @@ data class JudgmentDraft(
         private val NO_OP_WORDS = setOf("not sure", "none", "none of these", "neither", "unsure", "other")
     }
 }
+
+/**
+ * Who answers a judgment that has a baseline (owner decision B, 2026-09-24, matching Loupe Station).
+ *
+ * - [AUTO]: the model, until the baseline is **strictly** more accurate on at least 30 of the user's
+ *   corrections under the current wording; then the baseline answers, the model is still asked and
+ *   its answer is kept alongside (`LedgerRow.modelDistribution`), logged `mechanical:auto-baseline`.
+ * - [ALWAYS_BASELINE]: the baseline answers and the model is not asked (`mechanical:baseline`).
+ * - [ALWAYS_LAYA]: the model answers, whatever the corrections say.
+ */
+enum class BaselineMode { AUTO, ALWAYS_BASELINE, ALWAYS_LAYA }

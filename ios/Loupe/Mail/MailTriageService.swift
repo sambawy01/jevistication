@@ -2,26 +2,31 @@ import Foundation
 import LoupeKit
 
 /// Mail triage (epic #7 children 11 and 12): LoupeKit's shared `MailTriage` — Loupe Station's
-/// classifier rules and evidence-based phishing checks, with Station's brand look-alike site checks
-/// merged beside the engine's site-fraud watcher — over every mail item of the enabled sources
+/// classifier rules and the one phishing / site formula shared with Station (docs/PHISHING-FORMULA.md),
+/// with the opt-in online checks when they are on — over every mail item of the enabled sources
 /// (the sample's inbox now; IMAP mail when that source is on), plus site checks on web-link items.
 /// Mechanical, no model; it runs on the model queue at sweep priority like the privacy check.
 /// Mark safe / Confirm phishing are appended ledger corrections, with Undo. Nothing leaves the phone.
 @MainActor
 final class MailTriageService: ObservableObject {
-    static let shared = MailTriageService(ledger: LedgerService.shared, items: { SourcesService.shared.items() })
+    static let shared = MailTriageService(ledger: LedgerService.shared, items: { SourcesService.shared.items() }, online: OnlineChecksService.shared)
 
     @Published private(set) var summary: MailSummary?
     @Published private(set) var running = false
     @Published var notice: String?
     @Published private(set) var lastVerdict: MailRow?
 
+    /// The online checks' status line for the last run (nil when they are off).
+    @Published private(set) var onlineStatus: String?
+
     private let ledger: LedgerService
     private let items: () -> [SourceItem]
+    private let online: OnlineChecksService
 
-    init(ledger: LedgerService, items: @escaping () -> [SourceItem]) {
+    init(ledger: LedgerService, items: @escaping () -> [SourceItem], online: OnlineChecksService = .shared) {
         self.ledger = ledger
         self.items = items
+        self.online = online
     }
 
     var rows: [MailRow] { summary?.rows ?? [] }
@@ -38,8 +43,12 @@ final class MailTriageService: ObservableObject {
         }
         let all = items()
         let corrections = ledger.correctionIndex()
+        let raws = Self.rawSources(all)
+        // Opt-in online checks (PRODUCT.md §4a): nil, and no request at all, while every switch is off.
+        let context = await online.context(items: all, raws: raws)
+        onlineStatus = context == nil ? nil : online.status
         summary = await ModelWork.run(.sweep) {
-            MailTriage.shared.summariseWithRaw(items: all, raws: Self.rawSources(all), corrections: corrections)
+            MailTriage.shared.summariseOnline(items: all, raws: raws, corrections: corrections, online: context)
         }
     }
 

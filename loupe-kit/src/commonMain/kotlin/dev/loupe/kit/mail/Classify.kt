@@ -1,5 +1,8 @@
 package dev.loupe.kit.mail
 
+import dev.loupe.engine.Contact
+import dev.loupe.kit.site.OnlineContext
+
 import dev.loupe.templates.Baseline
 
 /*
@@ -241,14 +244,20 @@ object MailClassify {
     )
 
     /** Everything the labels need beyond the answers (Station's `triage_flags`). */
-    fun triageFlags(m: MailMessage, view: Map<String, TriageAnswer>, trusted: List<String> = emptyList()): Flags {
+    fun triageFlags(
+        m: MailMessage,
+        view: Map<String, TriageAnswer>,
+        trusted: List<String> = emptyList(),
+        contacts: List<Contact> = emptyList(),
+        online: OnlineContext? = null,
+    ): Flags {
         val (phishP0, spamP, urgency) = readings(view)
         var phishP = phishP0
         // a text reading below the phishing threshold does not count at all
         for ((qid, a) in view) {
             if (KINDS[qid] == "noul" && "phish" in qid.lowercase() && phishP != null && a.p >= phishP && a.p < PHISHING_MIN) phishP = null
         }
-        val evidence = Phishing.assess(m.sender, m.body, m.replyTo, m.authResults, m.links, layaP = phishP, trusted = trusted)
+        val evidence = Phishing.assess(m.sender, m.body, m.replyTo, m.authResults, m.links, layaP = phishP, trusted = trusted, contacts = contacts, online = online)
         val pcat = providerCategory(m.provider, m.labels, m.folder, m.inference)
         val key = pcat?.key
         val transactional = key == "updates" || evidence.known || evidence.trusted || TRANSACTIONAL_RE.containsMatchIn(m.subject)

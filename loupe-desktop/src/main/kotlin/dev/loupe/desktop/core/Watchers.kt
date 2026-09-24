@@ -3,7 +3,7 @@ package dev.loupe.desktop.core
 import dev.loupe.engine.Backend
 import dev.loupe.engine.Charge
 import dev.loupe.engine.ExpiryAlert
-import dev.loupe.engine.FraudAssessment
+import dev.loupe.kit.site.SiteVerdict
 import dev.loupe.engine.ImpersonationSignal
 import dev.loupe.engine.RecurringCharge
 import dev.loupe.engine.TermChange
@@ -28,7 +28,8 @@ data class TermChangeFinding(val earlier: SourceItem, val later: SourceItem, val
 data class ImpersonationFinding(val item: SourceItem, val signals: List<ImpersonationSignal>)
 
 /** A link, or a sender domain, with mechanical fraud signals. */
-data class FraudFinding(val item: SourceItem, val what: String, val assessment: FraudAssessment)
+/** A link or sender domain the shared phishing formula rates caution or danger (docs/PHISHING-FORMULA.md). */
+data class FraudFinding(val item: SourceItem, val what: String, val verdict: SiteVerdict)
 
 /** Everything the watchers raised. Warnings only: there is deliberately no "all clear" here. */
 data class WatcherReport(
@@ -69,7 +70,7 @@ object Watchers {
             chargesFound = r.chargesFound,
             termChanges = r.termChanges.map { TermChangeFinding(back(it.earlier), back(it.later), it.changes) },
             impersonation = r.impersonation.map { ImpersonationFinding(back(it.item), it.signals) },
-            fraud = r.fraud.map { FraudFinding(back(it.item), it.what, it.assessment) },
+            fraud = r.fraud.map { FraudFinding(back(it.item), it.what, it.verdict) },
             emailsChecked = r.emailsChecked,
             linksChecked = r.linksChecked,
         )

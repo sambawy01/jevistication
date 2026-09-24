@@ -116,20 +116,35 @@ struct MeasureView: View {
                     Text(v.message).font(.subheadline.weight(.semibold))
                         .foregroundStyle(v.baselineWins ? Palette.warnText : Palette.ink)
                         .accessibilityIdentifier("measure.baseline.verdict")
-                    if v.baselineWins || j.useBaseline {
-                        Toggle("Use the baseline for this judgment", isOn: Binding(
-                            get: { j.useBaseline }, set: { service.setUseBaseline(j.id, $0) }))
-                            .accessibilityIdentifier("measure.useBaseline")
-                        Text("From the next run the baseline rule answers and the model is not asked. Those answers are logged as a rule, never as model evidence.")
-                            .font(.caption).foregroundStyle(Palette.inkSoft)
-                    }
                 } else {
                     Text("The comparison runs on items you have corrected. Answer some in the Unsure queue.")
                         .font(.footnote).foregroundStyle(Palette.inkSoft)
                 }
+                whoAnswers(j)
                 Text("Compared at equal coverage — both forced to answer every item — replaying exactly what the model logged rather than re-running it.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             }
+        }
+    }
+
+    /// Decision B: Auto (the default, as Loupe Station) or a manual override.
+    @ViewBuilder private func whoAnswers(_ j: UserJudgment) -> some View {
+        let auto = service.autoBaseline(j)
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Who answers").font(.subheadline.weight(.semibold))
+            Picker("Who answers", selection: Binding(get: { j.baselineMode }, set: { service.setBaselineMode(j.id, $0) })) {
+                Text("Auto").tag(BaselineMode.auto_)
+                Text("Always baseline").tag(BaselineMode.alwaysBaseline)
+                Text("Always Laya").tag(BaselineMode.alwaysLaya)
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("measure.whoAnswers")
+            Text(auto.line).font(.subheadline)
+                .foregroundStyle(auto.baselineAnswers ? Palette.warnText : Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("measure.whoAnswers.line")
+            Text("Auto lets the baseline rule answer once it is right more often than Laya on at least \(AutoBaseline.shared.MIN_CORRECTIONS) of your corrections. Its answers are logged as a rule, with Laya's answer kept beside them, so they never count as Laya's.")
+                .font(.caption).foregroundStyle(Palette.inkSoft)
         }
     }
 

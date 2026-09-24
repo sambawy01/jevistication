@@ -9,6 +9,7 @@ import dev.loupe.engine.Probability
 import dev.loupe.engine.ResolvedBy
 import dev.loupe.engine.Truncation
 import dev.loupe.templates.Baseline
+import dev.loupe.templates.BaselineMode
 import dev.loupe.templates.MechanicalCheck
 import dev.loupe.templates.Shape
 import dev.loupe.templates.SourceKind
@@ -42,6 +43,12 @@ object LedgerCodec {
             // Absent on lines written before the field existed: unknown, which reads as not cut.
             truncation = o["truncation"]?.takeUnless { it.isNull }?.asObj?.let { t ->
                 Truncation(t.optExtent("textBudget"), t.optExtent("modelContext"), t.optExtent("optionCriteria"))
+            },
+            // Only on automatic-baseline rows: the model's answer kept alongside the baseline's.
+            modelDistribution = o["modelDistribution"]?.takeUnless { it.isNull }?.asObj?.let { m ->
+                val model = LinkedHashMap<String, Double>()
+                for ((label, mass) in m.fields) model[label] = mass.asDouble
+                Distribution.of(model)
             },
         )
     }
@@ -127,7 +134,9 @@ object JudgmentCodec {
         f["threshold"] = JsonValue.num(j.threshold)
         // Written only when on, so a file from before the option existed reads the same.
         if (j.criteriaInPrompt) f["criteriaInPrompt"] = JsonValue.Bool(true)
-        if (j.useBaseline) f["useBaseline"] = JsonValue.Bool(true)
+        // Written only when not the default (Auto). A file from before the modes had
+        // `useBaseline: true`, read as Always baseline.
+        if (j.baselineMode != BaselineMode.AUTO) f["baselineMode"] = JsonValue.Str(j.baselineMode.name)
         // Written for a reader of the file; recomputed from the wording on load, never trusted.
         f["criteriaHash"] = JsonValue.Str(j.criteriaHash)
         return JsonValue.Obj(f)
@@ -152,7 +161,8 @@ object JudgmentCodec {
         desktopNote = o.optStr("desktopNote"),
         threshold = o.req("threshold").asDouble,
         criteriaInPrompt = o["criteriaInPrompt"]?.takeUnless { it.isNull }?.asBoolean ?: false,
-        useBaseline = o["useBaseline"]?.takeUnless { it.isNull }?.asBoolean ?: false,
+        baselineMode = o.optStr("baselineMode")?.let { m -> BaselineMode.entries.firstOrNull { it.name == m } }
+            ?: if (o["useBaseline"]?.takeUnless { it.isNull }?.asBoolean == true) BaselineMode.ALWAYS_BASELINE else BaselineMode.AUTO,
     ).also { it.choice } // validates the id and options now, so a bad file fails on load, not mid-sweep
 
     /** The whole `judgments.json` file (pretty, as the desktop wrote it). */

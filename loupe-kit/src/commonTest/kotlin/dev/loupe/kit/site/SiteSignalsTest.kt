@@ -48,9 +48,13 @@ class SiteSignalsTest {
         assertTrue("homograph_brand" in codes("https://${idn("аррlе.com")}/"))                  // Cyrillic а р р е
         val mixed = codes("https://${idn("gооgle-news.com")}/")                                 // Latin + Cyrillic о
         assertTrue("mixed_script" in mixed || "homograph_brand" in mixed)
-        // a genuine single-script IDN (Arabic) is only noted, at low weight
-        assertEquals(setOf("punycode"), codes("https://${idn("مثال.مصر")}/"))
-        assertTrue(SiteSignals.WEIGHTS.getValue("punycode").first < SiteScoring.SAFE_BELOW)
+        // Formula rule 2: a genuine single-script IDN (Arabic, Chinese, German) is not suspicious by itself
+        assertEquals(emptySet(), codes("https://${idn("مثال.مصر")}/"))
+        assertEquals(emptySet(), codes("https://${idn("例子.中国")}/"))
+        assertEquals(emptySet(), codes("https://${idn("bücher.de")}/"))
+        assertFalse("punycode" in SiteSignals.WEIGHTS)
+        // a host typed in Unicode is read in its ASCII form, so the homograph is still caught
+        assertTrue("homograph_brand" in codes("https://pаypal.com/signin"))
     }
 
     @Test
@@ -95,8 +99,13 @@ class SiteSignalsTest {
         assertFalse("password_posts_elsewhere" in same)
         val insecure = codes("https://example.com/login", PageFacts("", forms = listOf(PageForm("http://example.com/session", password = true))))
         assertTrue("password_posts_http" in insecure)
-        // a search form posting elsewhere is not a password form
-        assertFalse("password_posts_elsewhere" in codes("https://example.com/", PageFacts("", forms = listOf(PageForm("https://search.other.com/")))))
+        // formula rule 4: a card form posting elsewhere is as strong as a password form ...
+        assertTrue("password_posts_elsewhere" in codes("https://example.com/pay", PageFacts("", forms = listOf(PageForm("https://collector.evil.ru/c.php", card = true)))))
+        // ... a search form posting elsewhere is only a weak signal
+        val search = codes("https://example.com/", PageFacts("", forms = listOf(PageForm("https://search.other.com/"))))
+        assertFalse("password_posts_elsewhere" in search)
+        assertTrue("form_posts_elsewhere" in search)
+        assertTrue(SiteSignals.WEIGHTS.getValue("form_posts_elsewhere").first < 15)
     }
 
     @Test
@@ -123,6 +132,26 @@ class SiteSignalsTest {
     fun sharedHostingLogin() {
         assertTrue("shared_hosting_login" in codes("https://my-bank-login.web.app/", PageFacts("", passwordFields = 1)))
         assertFalse("shared_hosting_login" in codes("https://my-blog.github.io/"))
+        // formula rule 5: the twelve shared-hosting names the PSL does not list add their own caution
+        assertEquals(12, Hosts.SHARED_NOT_IN_PSL.size, Hosts.SHARED_NOT_IN_PSL.toString())
+        for (name in Hosts.SHARED_NOT_IN_PSL) {
+            assertTrue(name in Brands.SHARED_HOSTING, name)
+            assertEquals(name, Hosts.registrableDomain("x.$name"), "$name became a PSL suffix: update the formula")
+        }
+        assertEquals(setOf("shared_hosting"), codes("https://my-shop.wordpress.com/"))
+        assertEquals(emptySet(), codes("https://wordpress.com/"))
+        assertFalse("shared_hosting" in codes("https://my-blog.github.io/"))                   // a PSL suffix: host control says enough
+    }
+
+    @Test
+    fun brandOwnershipListFirstThenName() {
+        // formula rule 1: the brand list decides for listed brands (Microsoft owns live.com) ...
+        assertEquals(emptySet(), codes("https://login.live.com/", PageFacts("", title = "Sign in to your Microsoft account", passwordFields = 1)))
+        assertEquals(emptySet(), codes("https://www.youtube.com/", PageFacts("", claimedBrand = "Google")))
+        assertTrue("brand_mismatch" in codes("https://paypal-help.example/", PageFacts("", claimedBrand = "PayPal")))
+        // ... and the engine's name-vs-domain check only for brands not on it
+        assertEquals(emptySet(), codes("https://www.streamflix.example/", PageFacts("", claimedBrand = "Streamflix")))
+        assertTrue("brand_mismatch" in codes("https://streamflix-billing.example/", PageFacts("", claimedBrand = "Streamflix")))
     }
 
     @Test
@@ -219,21 +248,20 @@ class SiteSignalsTest {
         assertFalse("pressure_login" in verdict("https://blog.example.com/", laya("other", urgency = 0.95)).reasons.map { it.code })
     }
 
-    // ------------------------------------------------------------------ the merge with the engine (child 12)
+    // ------------------------------------------------------------------ one verdict (formula, 2026-09-24)
     @Test
-    fun siteCheckShowsStationAndEngineSideBySide() {
+    fun siteCheckShowsOneVerdict() {
         val c = SiteCheck.checkUrl("http://paypal.account-verify.example/login")
-        assertTrue("brand_in_subdomain" in c.station.reasons.map { it.code })
+        assertTrue("brand_in_subdomain" in c.verdict.reasons.map { it.code })
         assertTrue(c.warn)
-        // the engine's own watcher is run unchanged: no brand claimed, so nothing from it here
-        assertFalse(c.engine.hasWarnings())
+        assertEquals("Caution", c.levelTitle)
+        assertTrue(c.lines.none { it.startsWith("Engine: ") })
         val homograph = SiteCheck.checkUrl("https://${idn("pаypal.com")}/signin")
-        assertTrue("punycode-host" in homograph.engine.signals.map { it.name })
-        assertTrue("homograph_brand" in homograph.station.reasons.map { it.code })
-        assertTrue(homograph.lines.any { it.startsWith("Engine: ") })
+        assertEquals("danger", homograph.verdict.level)
+        assertTrue("homograph_brand" in homograph.verdict.reasons.map { it.code })
         val real = SiteCheck.checkUrl("https://www.paypal.com/signin")
         assertFalse(real.warn)
-        assertEquals("No signal", real.levelTitle)
+        assertEquals("No signal", real.levelTitle)                                            // never "safe"
     }
 
     @Test

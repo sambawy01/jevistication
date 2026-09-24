@@ -46,15 +46,25 @@ object OriginFacts {
     fun isPunycode(host: String): Boolean =
         labels(host).any { it.startsWith("xn--", ignoreCase = true) }
 
+    /**
+     * [host] with every `xn--` label decoded to Unicode (a label that is not valid Punycode is kept
+     * as written). The script checks read this form: `xn--pypal-4ve.com` is `pаypal.com`.
+     */
+    fun unicodeHost(host: String): String =
+        host.split('.').joinToString(".") { label ->
+            if (label.startsWith("xn--", ignoreCase = true)) Punycode.decode(label.substring(4).lowercase()) ?: label else label
+        }
+
     /** True when the host contains characters outside ASCII. */
     fun hasNonAsciiHost(host: String): Boolean = host.any { it.code > 127 }
 
     /**
      * True when a single label mixes writing systems — the homograph signal. `pаypal.com` with a
      * Cyrillic `а` among Latin letters is the canonical case, and it is indistinguishable by eye.
+     * Punycode labels are decoded first, so the wire form (`xn--pypal-4ve.com`) is caught too.
      */
     fun hasMixedScripts(host: String): Boolean =
-        labels(host).any { label ->
+        labels(unicodeHost(host)).any { label ->
             val scripts = codePoints(label)
                 .map { letterScript(it) }
                 .filter { it >= 0 }

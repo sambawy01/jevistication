@@ -247,16 +247,18 @@ object Analysis {
         val baseline = judgment.baseline ?: return null
         // Mechanical rows are not model predictions: replaying their certain distribution would
         // credit the model with the hash check's answers.
+        // Automatic-baseline rows count through the model answer kept beside them (decision B).
         val rows = effectiveRows(all, judgment, corrections)
-            .filter { it.correction != null && it.itemId in items && !it.isMechanical }
+            .filter { it.correction != null && it.itemId in items && (!it.isMechanical || it.modelDistribution != null) }
         if (rows.isEmpty()) return null
         val logged = rows.associateBy { it.itemId!! }
         // Replays the logged answer and the logged context cut, so a replayed decision is held to
         // the same cut-input rule the original was. The text-budget cut recomputes from the text.
         val replay = Backend { _, state ->
             val row = logged.getValue(state.items.single().id)
+            val said = row.modelDistribution ?: row.distribution
             Scored(
-                row.distribution.labels.associateWith { row.distribution.getValue(it).value },
+                said.labels.associateWith { said.getValue(it).value },
                 modelContext = row.truncation?.modelContext,
                 optionCriteria = row.truncation?.optionCriteria,
             )

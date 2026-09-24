@@ -1,6 +1,14 @@
 package dev.loupe.kit.mail
 
+import dev.loupe.engine.Contact
+import dev.loupe.engine.Message
+import dev.loupe.kit.site.Hosts
+import dev.loupe.kit.site.OnlineContext
+import dev.loupe.kit.site.OnlineSignals
+import dev.loupe.kit.site.ParsedUrl
 import dev.loupe.kit.site.SiteCheck
+import dev.loupe.kit.site.SiteConfig
+import dev.loupe.kit.watchers.WatcherRun
 import dev.loupe.kit.site.SiteCheckResult
 import dev.loupe.persistence.CorrectionKey
 import dev.loupe.persistence.CorrectionRecord
@@ -125,11 +133,14 @@ data class MailRow(
     /** The concrete signals, strongest first: phishing reasons, then urgent / scam wording, then link checks. */
     val signals: List<MailSignal>
         get() = buildList {
-            verdict.reasons.filter { it.weight > 0 }.forEach { add(MailSignal(it.code, it.text, it.weight, "phishing")) }
+            verdict.reasons.filter { it.weight > 0 }.forEach { r ->
+                if (r.source == "online") add(MailSignal(r.code, "${OnlineSignals.label(r.params)}: ${r.text}", r.weight, "online"))
+                else add(MailSignal(r.code, r.text, r.weight, "phishing"))
+            }
             phishingCue?.let { add(MailSignal("scam_wording", "The text uses a classic scam line: “$it”.", 0, "wording")) }
             urgentCue?.let { add(MailSignal("urgent_language", "Urgent language: “$it”.", 0, "wording")) }
             linkChecks.filter { it.warn }.forEach { c ->
-                add(MailSignal("site_check", "Site check (${c.levelTitle}): ${c.url} — ${c.lines.firstOrNull() ?: ""}", c.station.score, "site"))
+                add(MailSignal("site_check", "Site check (${c.levelTitle}): ${c.url} — ${c.lines.firstOrNull() ?: ""}", c.verdict.score, "site"))
             }
         }
 
@@ -163,9 +174,15 @@ object MailTriage {
     const val SAFE = "safe"
     const val PHISHING = "phishing"
 
-    fun triage(m: MailMessage, personVerdict: String? = null, trusted: List<String> = emptyList()): MailRow {
+    fun triage(
+        m: MailMessage,
+        personVerdict: String? = null,
+        trusted: List<String> = emptyList(),
+        contacts: List<Contact> = emptyList(),
+        online: OnlineContext? = null,
+    ): MailRow {
         val view = MailClassify.answers(m.text)
-        val flags = MailClassify.triageFlags(m, view, trusted)
+        val flags = MailClassify.triageFlags(m, view, trusted, contacts, online)
         val phishing = when (personVerdict) {
             SAFE -> false
             PHISHING -> true
@@ -183,7 +200,7 @@ object MailTriage {
         }
         val checks = m.links.map { it.first }
             .filter { it.startsWith("http", ignoreCase = true) || it.startsWith("www.", ignoreCase = true) }
-            .distinct().take(10).map { SiteCheck.checkUrl(if (it.startsWith("www.", ignoreCase = true)) "http://$it" else it) }
+            .distinct().take(10).map { SiteCheck.checkUrl(if (it.startsWith("www.", ignoreCase = true)) "http://$it" else it, online) }
         return MailRow(
             itemId = m.id, sender = m.sender, subject = m.subject, dateIso = m.dateIso,
             categoryKey = cat.label, categoryTitle = MailClassify.words(cat.label), categoryWeak = cat.weak,
@@ -204,22 +221,88 @@ object MailTriage {
      * Every mail item triaged. [raw] gives an item's `.eml` source when the phone can read it
      * (null otherwise). Corrections recorded with [markSafe] / [confirmPhishing] decide.
      */
-    fun summarise(items: List<SourceItem>, raw: (SourceItem) -> String?, corrections: Map<CorrectionKey, String>): MailSummary {
-        val rows = items.filter { it.kind == ItemKind.EMAIL }.map { item ->
+    /**
+     * Every mail item triaged. [raw] gives an item's `.eml` source when the phone can read it
+     * (null otherwise). Corrections recorded with [markSafe] / [confirmPhishing] decide. Your
+     * contacts (the address book and names seen twice from one address) feed the same score
+     * (formula rule 6); [online] is the opt-in online checks' data, null when they are off.
+     */
+    fun summarise(
+        items: List<SourceItem>,
+        raw: (SourceItem) -> String?,
+        corrections: Map<CorrectionKey, String>,
+        online: OnlineContext? = null,
+    ): MailSummary {
+        val book = WatcherRun.addressBook(items)
+        val mails = items.filter { it.kind == ItemKind.EMAIL }
+        val messages = mails.mapNotNull { item -> item.email?.fromAddress?.let { item.id to Message(item.email?.fromName ?: "", it, item.text) } }
+        val rows = mails.map { item ->
             val msg = MailMessage.fromItem(item, raw(item))
-            triage(msg, corrections[CorrectionKey(JUDGMENT_ID, CRITERIA, item.id)])
+            val contacts = WatcherRun.contactsFrom(messages.filter { it.first != item.id }.map { it.second }, book)
+            triage(msg, corrections[CorrectionKey(JUDGMENT_ID, CRITERIA, item.id)], contacts = contacts, online = online)
         }
-        return MailSummary(sortRows(rows), webLinks(items))
+        return MailSummary(sortRows(rows), webLinks(items, online = online))
     }
 
     /** For Swift: [summarise] with a map of raw sources by item id. */
     fun summariseWithRaw(items: List<SourceItem>, raws: Map<String, String>, corrections: Map<CorrectionKey, String>): MailSummary =
         summarise(items, { raws[it.id] }, corrections)
 
+    /** For Swift: [summarise] with raw sources and the online checks' data (null when off). */
+    fun summariseOnline(items: List<SourceItem>, raws: Map<String, String>, corrections: Map<CorrectionKey, String>, online: OnlineContext?): MailSummary =
+        summarise(items, { raws[it.id] }, corrections, online)
+
+    /**
+     * The domains the online checks may look up for these items (sender and link domains in their
+     * ICANN form; never a free-mail provider, a brand's own domain, a hosting platform's customer
+     * site, a private address), at most [max]. What Swift asks the web helper about.
+     */
+    fun onlineLookups(items: List<SourceItem>, raws: Map<String, String>, max: Int = 40): List<String> {
+        val out = LinkedHashSet<String>()
+        for (item in items) {
+            if (item.kind == ItemKind.EMAIL) {
+                val m = MailMessage.fromItem(item, raws[item.id])
+                val (_, address) = Phishing.parseAddress(m.sender)
+                val domain = Phishing.domainOf(address)
+                val reg = Hosts.registrableDomain(domain)
+                if (reg != null && !Phishing.isFreemail(reg) && !Phishing.DEFAULT_CONFIG.known(reg, Hosts.publicSuffix(domain))) {
+                    OnlineSignals.lookupDomain(domain)?.let(out::add)
+                }
+                for (u in Phishing.linkTargets(m.body, m.links, reg, Phishing.DEFAULT_CONFIG)) OnlineSignals.lookupDomainOfUrl(u)?.let(out::add)
+            } else if (item.kind != ItemKind.CONTACT && item.hasText) {
+                for (u in SiteCheck.linksIn(item.text, 5)) {
+                    val p = ParsedUrl.parse(u) ?: continue
+                    if (!SiteConfig.DEFAULT.known(p.registrable, p.suffix)) OnlineSignals.lookupDomain(p.host)?.let(out::add)
+                }
+            }
+            if (out.size >= max) break
+        }
+        return out.take(max)
+    }
+
+    /**
+     * The web links Google Safe Browsing may be asked about (on a local hash-prefix match only):
+     * the mail links worth an online check and web links in other items, at most [max].
+     */
+    fun onlineUrls(items: List<SourceItem>, raws: Map<String, String>, max: Int = 60): List<String> {
+        val out = LinkedHashSet<String>()
+        for (item in items) {
+            if (item.kind == ItemKind.EMAIL) {
+                val m = MailMessage.fromItem(item, raws[item.id])
+                val reg = Hosts.registrableDomain(Phishing.domainOf(Phishing.parseAddress(m.sender).second))
+                out += Phishing.linkTargets(m.body, m.links, reg, Phishing.DEFAULT_CONFIG)
+            } else if (item.kind != ItemKind.CONTACT && item.hasText) {
+                out += SiteCheck.linksIn(item.text, 5)
+            }
+            if (out.size >= max) break
+        }
+        return out.take(max)
+    }
+
     /** Web links in items that are not mail (a link shared to Loupe, a document), each with its site check. */
-    fun webLinks(items: List<SourceItem>, maxItems: Int = 50): List<WebLinkCheck> =
+    fun webLinks(items: List<SourceItem>, maxItems: Int = 50, online: OnlineContext? = null): List<WebLinkCheck> =
         items.asSequence().filter { it.kind != ItemKind.EMAIL && it.kind != ItemKind.CONTACT && it.hasText }
-            .flatMap { item -> SiteCheck.linksIn(item.text, 5).map { WebLinkCheck(item.id, item.name, SiteCheck.checkUrl(it)) } }
+            .flatMap { item -> SiteCheck.linksIn(item.text, 5).map { WebLinkCheck(item.id, item.name, SiteCheck.checkUrl(it, online)) } }
             .take(maxItems).toList()
 
     fun markSafe(row: MailRow, at: String): CorrectionRecord = CorrectionRecord(JUDGMENT_ID, CRITERIA, row.itemId, SAFE, at, false)

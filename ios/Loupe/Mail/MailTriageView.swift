@@ -56,6 +56,13 @@ struct MailTriageView: View {
                         }
                     }
                 }
+                if let status = mail.onlineStatus {
+                    Label { Text(status).font(.caption).foregroundStyle(Palette.ink) } icon: {
+                        Image(systemName: "globe").foregroundStyle(Palette.blue)
+                    }
+                    .card()
+                    .accessibilityIdentifier("mail.onlineStatus")
+                }
                 if let s = mail.summary {
                     if s.rows.isEmpty {
                         Text("No mail to triage. Turn on the sample or Mail in Sources.")
@@ -160,7 +167,7 @@ struct MailTriageView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Links in your items").font(Typeface.display(20)).foregroundStyle(Palette.ink)
                 .accessibilityIdentifier("mail.section.links")
-            Text("Site checks on web links found outside mail: Loupe Station's brand look-alike signals beside the engine's site-fraud checks.")
+            Text("Site checks on web links found outside mail: one verdict from the phishing formula Loupe shares with Loupe Station, with the signals behind it.")
                 .font(.caption).foregroundStyle(Palette.inkSoft)
             ForEach(Array(links.enumerated()), id: \.offset) { _, l in
                 VStack(alignment: .leading, spacing: 4) {

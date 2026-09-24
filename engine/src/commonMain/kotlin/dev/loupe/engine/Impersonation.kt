@@ -16,7 +16,11 @@ enum class ImpersonationReason {
     /** The domain is a near-miss of one the contact really uses. */
     LOOKALIKE_DOMAIN,
 
-    /** The address contains punycode or mixes writing systems. */
+    /**
+     * The address's domain mixes writing systems in one label (checked on the decoded form).
+     * Punycode alone is not a signal (docs/PHISHING-FORMULA.md rule 2): a single-script
+     * international domain is someone's ordinary address.
+     */
     HOMOGRAPH_IN_ADDRESS,
 
     /** Nothing has ever arrived from this address before. */
@@ -67,10 +71,10 @@ object Impersonation {
             }
         }
 
-        if (domain != null && (OriginFacts.isPunycode(domain) || OriginFacts.hasMixedScripts(domain))) {
+        if (domain != null && OriginFacts.hasMixedScripts(domain)) {
             signals += ImpersonationSignal(
                 ImpersonationReason.HOMOGRAPH_IN_ADDRESS,
-                "$domain uses punycode or mixes writing systems",
+                "$domain mixes writing systems",
             )
         }
 
@@ -90,7 +94,7 @@ object Impersonation {
         address.substringAfter('@', "").lowercase().takeIf { it.isNotEmpty() }
 
     /** Edit distance, used only to spot a near-miss domain. */
-    internal fun levenshtein(a: String, b: String): Int {
+    fun levenshtein(a: String, b: String): Int {
         if (a == b) return 0
         var previous = IntArray(b.length + 1) { it }
         for (i in 1..a.length) {

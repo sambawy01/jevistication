@@ -171,7 +171,7 @@ class MailTriageTest {
         val checks = MailTriage.webLinks(listOf(shared))
         val c = assertNotNull(checks.singleOrNull())
         assertEquals("https://paypal-secure-login.com/verify", c.check.url)
-        assertTrue("brand_in_domain_bait" in c.check.station.reasons.map { it.code })
+        assertTrue("brand_in_domain_bait" in c.check.verdict.reasons.map { it.code })
         assertTrue(c.check.warn)
     }
 }

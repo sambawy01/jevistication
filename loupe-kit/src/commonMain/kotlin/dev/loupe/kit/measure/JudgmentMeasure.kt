@@ -17,6 +17,7 @@ import dev.loupe.engine.ThresholdPreview
 import dev.loupe.engine.ThresholdSlider
 import dev.loupe.engine.UncertainQueue
 import dev.loupe.engine.VisibleCalibration
+import dev.loupe.templates.BaselineMode
 import dev.loupe.persistence.CorrectionKey
 import dev.loupe.persistence.CorrectionRecord
 import dev.loupe.persistence.DataExport
@@ -223,15 +224,18 @@ object JudgmentMeasure {
     fun baseline(all: List<LedgerRow>, judgment: UserJudgment, corrections: Map<CorrectionKey, String>, items: List<SourceItem>): BaselineVerdict? {
         val baseline = judgment.baseline ?: return null
         val byId = items.associateBy { it.id }
+        // Model rows, plus automatic-baseline rows through the model answer kept beside them
+        // (decision B): once the baseline answers, the user's corrections keep measuring both.
         val rows = effectiveRows(all, judgment, corrections)
-            .filter { it.correction != null && it.itemId in byId && !it.isMechanical }
+            .filter { it.correction != null && it.itemId in byId && (!it.isMechanical || it.modelDistribution != null) }
             .distinctBy { it.itemId }
         if (rows.isEmpty()) return null
         val logged = rows.associateBy { it.itemId!! }
         val replay = Backend { _, state ->
             val row = logged.getValue(state.items.single().id)
+            val said = row.modelDistribution ?: row.distribution
             Scored(
-                row.distribution.labels.associateWith { row.distribution.getValue(it).value },
+                said.labels.associateWith { said.getValue(it).value },
                 modelContext = row.truncation?.modelContext,
                 optionCriteria = row.truncation?.optionCriteria,
             )
@@ -241,8 +245,17 @@ object JudgmentMeasure {
         return BaselineVerdict(Harness.evaluate(judgment.choice, fixtures, engine, baseline.asFunction()), baseline.description)
     }
 
-    /** "Use the baseline": the judgment answers by its baseline rule from the next run on, model not asked. */
-    fun withBaseline(judgment: UserJudgment, on: Boolean): UserJudgment = judgment.copy(useBaseline = on && judgment.baseline != null)
+    /** "Always baseline" on or back to Auto (the old switch); see [withBaselineMode]. */
+    fun withBaseline(judgment: UserJudgment, on: Boolean): UserJudgment =
+        withBaselineMode(judgment, if (on) BaselineMode.ALWAYS_BASELINE else BaselineMode.AUTO)
+
+    /** Who answers from the next run on: Auto, Always baseline or Always Laya (decision B). */
+    fun withBaselineMode(judgment: UserJudgment, mode: BaselineMode): UserJudgment =
+        judgment.copy(baselineMode = if (judgment.baseline == null) BaselineMode.AUTO else mode)
+
+    /** Decision B's verdict for [judgment]: who answers now, and on what evidence. */
+    fun autoBaseline(all: List<LedgerRow>, judgment: UserJudgment, corrections: Map<CorrectionKey, String>, items: List<SourceItem>): AutoBaselineVerdict =
+        AutoBaseline.verdict(all, judgment, corrections, items)
 
     /**
      * Me's line, pooled over every judgment's corrected model answers under current wording. Shown

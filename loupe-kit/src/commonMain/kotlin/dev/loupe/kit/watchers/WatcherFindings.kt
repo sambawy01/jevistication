@@ -164,11 +164,12 @@ object WatcherFindings {
             out += WatcherFinding(
                 key = "site-fraud:" + item.id,
                 watcher = WatcherKind.SITE_FRAUD,
-                title = "“${email.fromName ?: email.fromAddress}” is not on the domain it claims",
+                title = "“${email.fromName ?: email.fromAddress}”: " +
+                    (if (group.any { it.verdict.level == "danger" }) "danger" else "caution") + " — a link or the sender's domain looks like phishing",
                 evidence = listOf("From: ${email.fromName?.let { "“$it” " } ?: ""}<${email.fromAddress}>") +
-                    group.flatMap { g -> g.assessment.signals.map { s -> "${g.what.substringBefore(' ')} ${g.what.substringAfter(' ')}: ${s.detail}" } },
-                why = "Mechanical: origin facts only (the domain against the brand the sender claims), never the page's content. " +
-                    "${group.sumOf { it.assessment.signals.size }} signal(s). Nothing here can clear a link.",
+                    group.flatMap { g -> g.verdict.reasons.filter { it.weight > 0 }.map { r -> "${g.what.substringBefore(' ')} ${g.what.substringAfter(' ')}: ${r.text}" } },
+                why = "Mechanical: origin facts only, scored by the one phishing formula shared with Loupe Station " +
+                    "(${group.joinToString(", ") { "${it.verdict.level} ${it.verdict.score}" }}), never the page's content. Nothing here can clear a link.",
                 itemId = item.id,
                 itemName = item.name,
                 otherItemId = null,

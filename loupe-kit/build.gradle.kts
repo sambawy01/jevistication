@@ -19,10 +19,13 @@ val layaIos = rootProject.findProject(":backend-onnx-ios")
 // the repo by path (the iOS simulator shares the host file system), as :sources-common's do.
 val sampleDir = rootProject.file("sources-desktop/src/main/resources/dev/loupe/sources/sample")
 val examplePack = rootProject.file("examples/packs/bistro-cloud.json")
+// The shared phishing formula's test vectors (docs/PHISHING-FORMULA.md), run on the JVM and the iOS simulator.
+val phishingVectors = rootProject.file("docs/phishing-vectors.json")
 val generateTestPaths by tasks.registering {
     val outDir = layout.buildDirectory.dir("generated/testPaths/kotlin")
     inputs.property("sample", sampleDir.absolutePath)
     inputs.property("examplePack", examplePack.absolutePath)
+    inputs.property("phishingVectors", phishingVectors.absolutePath)
     val scratch = layout.buildDirectory.dir("tmp/kit-tests").get().asFile.absolutePath
     inputs.property("scratch", scratch)
     outputs.dir(outDir)
@@ -34,6 +37,7 @@ val generateTestPaths by tasks.registering {
                 "package dev.loupe.kit.watchers\n\n" +
                 "internal const val SAMPLE_DIR: String = \"" + sampleDir.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val EXAMPLE_PACK: String = \"" + examplePack.absolutePath.replace("\\", "/") + "\"\n" +
+                "internal const val PHISHING_VECTORS: String = \"" + phishingVectors.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val TEST_TMP: String = \"" + scratch.replace("\\", "/") + "\"\n",
         )
     }

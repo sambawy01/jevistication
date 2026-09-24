@@ -226,11 +226,21 @@ against its dumb baseline.
 set is not biased to hard cases.
 
 **D2 · Visible calibration.** Per judgment: selective accuracy, coverage, how often it declined,
-how agreement has moved. **Never a single system accuracy number.**
+how agreement has moved. **Never a single system accuracy number.** *Owner override, recorded
+2026-09-24: the owner keeps Me's "Agrees with you X% over N corrections" line (pooled over corrected
+model answers, gated at 10 corrections) despite this rule; per-judgment figures stay on each Measure
+screen.*
 
 **D3 · Threshold slider.** Backed by A8. Shows what a change would have done before committing.
 
 **D4 · Baseline runner.** Every judgment carries a dumb baseline and the app reports which wins.
+*Decided 2026-09-24 (owner, matching Loupe Station): the baseline also answers **automatically** —
+a judgment on **Auto** (the default) is answered by its keyword baseline once the baseline is strictly
+more accurate on at least 30 of the user's corrections under the current wording (a tie keeps the
+model; no harness snapshot ships here, so corrections alone decide). Such rows are logged
+`mechanical:auto-baseline` with the model's answer kept alongside (`LedgerRow.modelDistribution`), so
+corrections keep measuring both. The old "use the baseline" switch became a manual override: Auto /
+Always baseline (`mechanical:baseline`, model not asked) / Always Laya.*
 
 **D5 · Actions.** Preview, undo, and the rule that uncertain items queue rather than act.
 
@@ -564,6 +574,48 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-24 — One phishing formula, automatic baseline, online phishing checks (owner decisions
+  A–D).** Uncommitted pending review.
+  - **A · One phishing / site formula** for Loupe and Loupe Station, written down in
+    [`PHISHING-FORMULA.md`](PHISHING-FORMULA.md) with 54 shared test vectors
+    ([`phishing-vectors.json`](phishing-vectors.json), run on the JVM and the iOS simulator by
+    `PhishingFormulaTest`). It replaces the six "Station vs engine" differences logged with children 11
+    and 12: (1) brand list first, the engine's name check only for unlisted brands (Microsoft on
+    `live.com` is now plainly safe); (2) an IDN is a signal only when brand-confusable or mixed-script
+    (Station's `punycode` 10 / `sender_punycode` 10 and the engine's `punycode-host` removed); (3) the
+    engine's per-label script check, on the decoded label; (4) cross-domain posts strong (30) for
+    password **or card** forms, weak (`form_posts_elsewhere` 5) otherwise; (5) the full pinned PSL
+    for host control, the 12 non-PSL shared-hosting names add `shared_hosting` 10, and online facts use
+    the ICANN-only registrable domain (none under a PRIVATE suffix); (6) contact impersonation feeds
+    the email score (`contact_homograph_domain` 60, `contact_lookalike_domain` 45,
+    `contact_name_other_address` 30). Implemented once in loupe-kit (`SiteSignals`, `SiteScoring`,
+    `OnlineSignals`, `Phishing`); the engine keeps a thin API (`SiteFraud` facts, `OriginFacts.unicodeHost`,
+    public `Impersonation.levenshtein`). `SiteCheckResult` now carries **one** verdict (the
+    side-by-side engine result is gone from the kit, iOS Mail triage and the desktop watchers screen);
+    the fraud watcher reports caution/danger verdicts. Before/after on the sample and every fixture is
+    in PHISHING-FORMULA.md §9: the sample's fake PayPal stays danger 100; the only sample change is
+    "Mum" from a new address (safe → caution 30, not flagged).
+  - **B · Automatic baseline** (see D4 above): shared `AutoBaseline` (verdict, `resolve`),
+    `BaselineMode` on `UserJudgment` (codec: written only when not Auto; a legacy `useBaseline: true`
+    reads as Always baseline), `JudgmentSweep` / `SweepCoordinator` / the desktop sweep switch by
+    themselves, D4 counts automatic rows through the kept model answer. iOS Measure: "Who answers"
+    Auto / Always baseline / Always Laya with the verdict line; desktop Baseline screen: the same card.
+  - **C · Online phishing checks on iPhone** (PRODUCT.md §4a): `ios/Loupe/Online/` — domain facts
+    client for the helper's `POST /v1/domain-facts` (404 → "online checks not available yet", 429 →
+    back off, `sources: []` never "checked", 6 h in-memory cache, a fresh random install id per
+    request), OpenPhish / keyless PhishTank lists downloaded and matched on the phone, Google Safe
+    Browsing Update API v4 with the user's key from the Keychain (hash prefixes only). Me → Online
+    phishing checks (all off by default); Mail triage shows an "Online" status line and labels every
+    online reason with source and time. The helper route may not be deployed yet: built against fakes.
+  - **D · Docs:** this entry, D2's owner override (Me's "Agrees with you X%" line stays), D4's
+    automatic baseline, PRODUCT.md §4a (the helper's in-memory 6 h per-install cache; the online
+    phishing checks' rules).
+  - **Tests:** `PhishingFormulaTest` (vectors + PSL modes, helper parsing, ages, feeds, gates, labels),
+    `AutoBaselineTest` (30-correction gate, strict win, tie keeps Laya, kept model answer, ledger
+    round-trip, overrides, legacy file, the coordinator switching), updated `SiteSignalsTest`,
+    `SiteFraudTest`; XCTest `OnlineChecksTests` (zero requests when off, only ICANN domains sent,
+    404, 429, empty sources, lists, Safe Browsing prefixes only) with a fake `URLProtocol`.
+
 - **2026-09-24 — Epic #7 child 17: the drone mascot, an alternate to the robot.** On the owner's
   "Go" for epic #7 children 10–17. Uncommitted pending review.
   - **Ported from Loupe Station** (`~/laya-studio` `laya_studio/static/js/mascot.js` + `static/mascot.css`
@@ -752,7 +804,8 @@ their acceptance criteria are met; entries here record increments toward them.
     Weak questions (category, urgency, is_phishing) keep Station's `weak` marking. The keyword rules
     run through a lookbehind-free matcher (0.5 s → <5 ms per email on the simulator), pinned to
     `Baseline.answer` by `MailClassifyParityTest` on every case and sample email.
-  - **Station vs engine, both results kept visible, no engine threshold changed:**
+  - **Station vs engine, both results kept visible, no engine threshold changed** *(superseded
+    2026-09-24 by the one formula in PHISHING-FORMULA.md, which settles each difference below)*:
     (1) brand ownership — the engine's `brandMatchesOrigin` compares the registrable domain's first
     label with the brand's name, Station uses the brand's domain list (+ country domains), so e.g.
     "Microsoft" on `live.com` or "Google" on `youtube.com` is an engine `brand-origin-mismatch` but

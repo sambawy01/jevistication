@@ -188,6 +188,8 @@ final class JudgmentsService: ObservableObject {
             return
         }
         let plan = JudgmentResults.shared.plan(all: ledger.allRows(), judgment: j, items: all, rerunAll: rerunAll)
+        // Decision B: under Auto the baseline answers once it wins on the user's corrections.
+        let auto = AutoBaseline.shared.verdict(all: ledger.allRows(), judgment: j, corrections: corrections, items: all).automatic
         let ledger = self.ledger
         let bridge = SweepBridge(
             progress: { p in Task { @MainActor [weak self] in self?.publish(p) } },
@@ -198,7 +200,7 @@ final class JudgmentsService: ObservableObject {
                               medianMillis: nil, running: true, cancelled: false, error: nil)
         // On the one model thread, as foreground work: a passive sort in progress yields to it.
         let end: SweepProgress = await ModelWork.run(.foreground) {
-            JudgmentSweep(backend: backend).run(judgment: j, plan: plan, observer: bridge)
+            JudgmentSweep(backend: backend).run(judgment: j, plan: plan, observer: bridge, autoBaseline: auto)
         }
         ledger.flush()
         self.bridge = nil
@@ -329,13 +331,26 @@ extension JudgmentsService {
         if replace(next) { notice = String(format: "Threshold for \"%@\" set to %.2f.", j.title, next.threshold) }
     }
 
-    /// D4's "use the baseline": from the next run the baseline answers (logged as a rule, not the model).
+    /// The old switch: "Always baseline" on, or back to Auto.
     func setUseBaseline(_ id: String, _ on: Bool) {
-        guard let j = judgment(id) else { return }
-        if replace(JudgmentMeasure.shared.withBaseline(judgment: j, on: on)) {
-            notice = on ? "\"\(j.title)\" now answers by its baseline rule; the model is not asked. Re-run to apply."
-                        : "\"\(j.title)\" is back on the model."
+        setBaselineMode(id, on ? .alwaysBaseline : .auto_)
+    }
+
+    /// Decision B: who answers from the next run on — Auto, Always baseline or Always Laya.
+    func setBaselineMode(_ id: String, _ mode: BaselineMode) {
+        guard let j = judgment(id), j.baselineMode != mode else { return }
+        if replace(JudgmentMeasure.shared.withBaselineMode(judgment: j, mode: mode)) {
+            switch mode {
+            case .alwaysBaseline: notice = "\"\(j.title)\" now always answers by its baseline rule; Laya is not asked. Re-run to apply."
+            case .alwaysLaya: notice = "\"\(j.title)\" now always answers with Laya."
+            default: notice = "\"\(j.title)\": Auto — the baseline answers only while it beats Laya on your corrections."
+            }
         }
+    }
+
+    /// Decision B's verdict: who answers now, and on what evidence.
+    func autoBaseline(_ j: UserJudgment) -> AutoBaselineVerdict {
+        AutoBaseline.shared.verdict(all: rows, judgment: j, corrections: corrections, items: items())
     }
 
     static func now() -> String { ISO8601DateFormatter().string(from: Date()) }
@@ -362,7 +377,7 @@ extension JudgmentsService {
         let plan = JudgmentResults.shared.plan(all: ledger.allRows(), judgment: j, items: all, rerunAll: false)
         let ledger = self.ledger
         let bridge = SweepBridge(progress: { _ in }, rows: { ledger.record($0) })
-        _ = JudgmentSweep(backend: FixtureQueueBackend()).run(judgment: j, plan: plan, observer: bridge)
+        _ = JudgmentSweep(backend: FixtureQueueBackend()).run(judgment: j, plan: plan, observer: bridge, autoBaseline: false)
         ledger.flush()
         refreshLedger()
     }

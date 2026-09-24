@@ -116,6 +116,13 @@ data class LedgerRow(
      * must tell "known whole" from "never recorded" checks for null.
      */
     val truncation: Truncation? = null,
+    /**
+     * The model's own distribution, kept **alongside** a mechanical answer that replaced it: a
+     * judgment switched to its baseline automatically (`resolvedBy` = `mechanical:auto-baseline`)
+     * still asks the model, logs the baseline's answer as the decision and keeps what the model said
+     * here, so the user's later corrections keep measuring both. Null on every other row.
+     */
+    val modelDistribution: Distribution? = null,
 ) {
     init {
         require((resolvedBy is ResolvedBy.Unusable) == (failure != null)) {

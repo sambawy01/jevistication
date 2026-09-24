@@ -1,0 +1,909 @@
+{
+  "formula": "loupe-phishing-formula",
+  "version": 1,
+  "psl": "2026-09-21_18-50-07_UTC",
+  "now": "2026-09-24T12:00:00Z",
+  "pages": [
+    {
+      "id": "real-paypal-login",
+      "url": "https://www.paypal.com/signin",
+      "title": "PayPal: Log in",
+      "password": true,
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "paypal.com",
+        "onlineDomain": "paypal.com"
+      }
+    },
+    {
+      "id": "paypa1-login",
+      "url": "https://paypa1.com/signin",
+      "title": "Log in",
+      "password": true,
+      "expect": {
+        "level": "danger",
+        "score": 65,
+        "signals": [
+          "impostor_login",
+          "lookalike_brand"
+        ],
+        "hostControl": "paypa1.com",
+        "onlineDomain": "paypa1.com"
+      }
+    },
+    {
+      "id": "microsoft-on-live-com",
+      "url": "https://login.live.com/",
+      "title": "Sign in to your Microsoft account",
+      "password": true,
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "live.com",
+        "onlineDomain": "live.com"
+      }
+    },
+    {
+      "id": "google-claim-on-youtube",
+      "url": "https://www.youtube.com/",
+      "claimedBrand": "Google",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "youtube.com",
+        "onlineDomain": "youtube.com"
+      }
+    },
+    {
+      "id": "paypal-title-elsewhere",
+      "url": "https://secure-check.example/",
+      "title": "PayPal: Log in",
+      "password": true,
+      "expect": {
+        "level": "caution",
+        "score": 50,
+        "signals": [
+          "brand_mismatch_login"
+        ],
+        "hostControl": "secure-check.example",
+        "onlineDomain": "secure-check.example"
+      }
+    },
+    {
+      "id": "homograph-paypal",
+      "url": "https://xn--pypal-4ve.com/signin",
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "homograph_brand"
+        ],
+        "hostControl": "xn--pypal-4ve.com",
+        "onlineDomain": "xn--pypal-4ve.com"
+      }
+    },
+    {
+      "id": "homograph-paypal-unicode-typed",
+      "url": "https://pаypal.com/signin",
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "homograph_brand"
+        ],
+        "hostControl": "xn--pypal-4ve.com",
+        "onlineDomain": "xn--pypal-4ve.com"
+      }
+    },
+    {
+      "id": "idn-arabic",
+      "url": "https://xn--mgbh0fb.xn--wgbh1c/",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "xn--mgbh0fb.xn--wgbh1c",
+        "onlineDomain": "xn--mgbh0fb.xn--wgbh1c"
+      }
+    },
+    {
+      "id": "idn-chinese",
+      "url": "https://xn--fsqu00a.xn--fiqs8s/",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "xn--fsqu00a.xn--fiqs8s",
+        "onlineDomain": "xn--fsqu00a.xn--fiqs8s"
+      }
+    },
+    {
+      "id": "idn-german",
+      "url": "https://xn--bcher-kva.de/",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "xn--bcher-kva.de",
+        "onlineDomain": "xn--bcher-kva.de"
+      }
+    },
+    {
+      "id": "mixed-script-google",
+      "url": "https://xn--ggle-news-02ha.com/",
+      "expect": {
+        "level": "danger",
+        "score": 80,
+        "signals": [
+          "lookalike_brand",
+          "mixed_script"
+        ],
+        "hostControl": "xn--ggle-news-02ha.com",
+        "onlineDomain": "xn--ggle-news-02ha.com"
+      }
+    },
+    {
+      "id": "unlisted-brand-own-domain",
+      "url": "https://www.streamflix.example/account",
+      "claimedBrand": "Streamflix",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "streamflix.example",
+        "onlineDomain": "streamflix.example"
+      }
+    },
+    {
+      "id": "unlisted-brand-elsewhere",
+      "url": "https://streamflix-billing.example/",
+      "claimedBrand": "Streamflix",
+      "expect": {
+        "level": "safe",
+        "score": 15,
+        "signals": [
+          "brand_mismatch"
+        ],
+        "hostControl": "streamflix-billing.example",
+        "onlineDomain": "streamflix-billing.example"
+      }
+    },
+    {
+      "id": "unlisted-brand-elsewhere-login",
+      "url": "https://streamflix-billing.example/login",
+      "claimedBrand": "Streamflix",
+      "password": true,
+      "expect": {
+        "level": "caution",
+        "score": 50,
+        "signals": [
+          "brand_mismatch_login"
+        ],
+        "hostControl": "streamflix-billing.example",
+        "onlineDomain": "streamflix-billing.example"
+      }
+    },
+    {
+      "id": "password-posts-elsewhere",
+      "url": "https://example.com/login",
+      "forms": [
+        {
+          "action": "https://collector.evil.ru/p.php",
+          "password": true
+        }
+      ],
+      "expect": {
+        "level": "caution",
+        "score": 30,
+        "signals": [
+          "password_posts_elsewhere"
+        ],
+        "hostControl": "example.com",
+        "onlineDomain": "example.com"
+      }
+    },
+    {
+      "id": "card-posts-elsewhere",
+      "url": "https://example.com/pay",
+      "forms": [
+        {
+          "action": "https://collector.evil.ru/c.php",
+          "card": true
+        }
+      ],
+      "expect": {
+        "level": "caution",
+        "score": 30,
+        "signals": [
+          "password_posts_elsewhere"
+        ],
+        "hostControl": "example.com",
+        "onlineDomain": "example.com"
+      }
+    },
+    {
+      "id": "search-posts-elsewhere",
+      "url": "https://example.com/",
+      "forms": [
+        {
+          "action": "https://search.other.com/"
+        }
+      ],
+      "expect": {
+        "level": "safe",
+        "score": 5,
+        "signals": [
+          "form_posts_elsewhere"
+        ],
+        "hostControl": "example.com",
+        "onlineDomain": "example.com"
+      }
+    },
+    {
+      "id": "github-pages",
+      "url": "https://x.github.io/",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "x.github.io",
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "paypal-on-github-pages",
+      "url": "https://paypal.github.io/login",
+      "expect": {
+        "level": "safe",
+        "score": 20,
+        "signals": [
+          "brand_other_tld"
+        ],
+        "hostControl": "paypal.github.io",
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "google-storage-bucket",
+      "url": "https://storage.googleapis.com/bucket/login.html",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "storage.googleapis.com",
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "netlify-deep",
+      "url": "https://a.b.my-site.netlify.app/",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "my-site.netlify.app",
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "wordpress-customer",
+      "url": "https://my-shop.wordpress.com/",
+      "expect": {
+        "level": "safe",
+        "score": 10,
+        "signals": [
+          "shared_hosting"
+        ],
+        "hostControl": "wordpress.com",
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "wordpress-customer-login",
+      "url": "https://my-bank-login.wordpress.com/",
+      "password": true,
+      "expect": {
+        "level": "safe",
+        "score": 25,
+        "signals": [
+          "shared_hosting",
+          "shared_hosting_login"
+        ],
+        "hostControl": "wordpress.com",
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "paypal-on-wordpress",
+      "url": "https://paypal.wordpress.com/",
+      "expect": {
+        "level": "caution",
+        "score": 40,
+        "signals": [
+          "brand_in_subdomain",
+          "shared_hosting"
+        ],
+        "hostControl": "wordpress.com",
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "brand-domain-in-subdomain",
+      "url": "https://paypal.com.account-verify.xyz/",
+      "expect": {
+        "level": "caution",
+        "score": 53,
+        "signals": [
+          "brand_domain_in_subdomain",
+          "suspicious_tld"
+        ],
+        "hostControl": "account-verify.xyz",
+        "onlineDomain": "account-verify.xyz"
+      }
+    },
+    {
+      "id": "co-uk-subdomain",
+      "url": "https://shop.example.co.uk/",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "example.co.uk",
+        "onlineDomain": "example.co.uk"
+      }
+    },
+    {
+      "id": "data-url",
+      "url": "data:text/html;base64,PGh0bWw+",
+      "expect": {
+        "level": "caution",
+        "score": 40,
+        "signals": [
+          "data_url"
+        ],
+        "hostControl": null,
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "userinfo",
+      "url": "https://www.paypal.com@evil.example/login",
+      "expect": {
+        "level": "caution",
+        "score": 30,
+        "signals": [
+          "userinfo_in_url"
+        ],
+        "hostControl": "evil.example",
+        "onlineDomain": "evil.example"
+      }
+    },
+    {
+      "id": "home-router",
+      "url": "http://192.168.1.1/login",
+      "password": true,
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": null,
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "online-young-domain",
+      "url": "https://fresh-shop.example/",
+      "online": {
+        "facts": {
+          "fresh-shop.example": {
+            "sources": [
+              "rdap"
+            ],
+            "created": "2026-09-21T09:00:00Z",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "caution",
+        "score": 35,
+        "signals": [
+          "online_domain_new_week"
+        ],
+        "hostControl": "fresh-shop.example",
+        "onlineDomain": "fresh-shop.example"
+      }
+    },
+    {
+      "id": "online-young-domain-and-cert",
+      "url": "https://fresh-shop.example/",
+      "online": {
+        "facts": {
+          "fresh-shop.example": {
+            "sources": [
+              "rdap",
+              "crtsh"
+            ],
+            "created": "2026-09-21T09:00:00Z",
+            "first_seen": "2026-09-22T00:00:00Z",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "caution",
+        "score": 55,
+        "signals": [
+          "online_cert_new",
+          "online_domain_new_week"
+        ],
+        "hostControl": "fresh-shop.example",
+        "onlineDomain": "fresh-shop.example"
+      }
+    },
+    {
+      "id": "online-month-old-domain",
+      "url": "https://fresh-shop.example/",
+      "online": {
+        "facts": {
+          "fresh-shop.example": {
+            "sources": [
+              "rdap"
+            ],
+            "created": "2026-09-04",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "safe",
+        "score": 20,
+        "signals": [
+          "online_domain_new_month"
+        ],
+        "hostControl": "fresh-shop.example",
+        "onlineDomain": "fresh-shop.example"
+      }
+    },
+    {
+      "id": "online-halfyear-old-domain",
+      "url": "https://fresh-shop.example/",
+      "online": {
+        "facts": {
+          "fresh-shop.example": {
+            "sources": [
+              "rdap"
+            ],
+            "created": "2026-06-01",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "safe",
+        "score": 8,
+        "signals": [
+          "online_domain_new_halfyear"
+        ],
+        "hostControl": "fresh-shop.example",
+        "onlineDomain": "fresh-shop.example"
+      }
+    },
+    {
+      "id": "online-young-lookalike-login",
+      "url": "https://paypa1.com/signin",
+      "password": true,
+      "online": {
+        "facts": {
+          "paypa1.com": {
+            "sources": [
+              "rdap",
+              "crtsh"
+            ],
+            "created": "2026-09-22T00:00:00Z",
+            "first_seen": "2026-09-23T00:00:00Z",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "danger",
+        "score": 100,
+        "signals": [
+          "impostor_login",
+          "lookalike_brand",
+          "online_cert_new",
+          "online_domain_new_week"
+        ],
+        "hostControl": "paypa1.com",
+        "onlineDomain": "paypa1.com"
+      }
+    },
+    {
+      "id": "online-no-sources",
+      "url": "https://fresh-shop.example/",
+      "online": {
+        "facts": {
+          "fresh-shop.example": {
+            "sources": [],
+            "created": "2026-09-21T09:00:00Z",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "fresh-shop.example",
+        "onlineDomain": "fresh-shop.example"
+      }
+    },
+    {
+      "id": "online-known-good-ignored",
+      "url": "https://www.paypal.com/signin",
+      "online": {
+        "facts": {
+          "paypal.com": {
+            "sources": [
+              "rdap"
+            ],
+            "created": "2026-09-23T00:00:00Z",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "paypal.com",
+        "onlineDomain": "paypal.com"
+      }
+    },
+    {
+      "id": "online-private-suffix-no-facts",
+      "url": "https://x.github.io/",
+      "online": {
+        "facts": {
+          "github.io": {
+            "sources": [
+              "rdap"
+            ],
+            "created": "2026-09-23T00:00:00Z",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "x.github.io",
+        "onlineDomain": null
+      }
+    },
+    {
+      "id": "online-feed-url",
+      "url": "https://login-check.example/verify?id=7",
+      "online": {
+        "feeds": {
+          "openphish": [
+            "https://login-check.example/verify?id=7"
+          ]
+        }
+      },
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "online_phish_list_url"
+        ],
+        "hostControl": "login-check.example",
+        "onlineDomain": "login-check.example"
+      }
+    },
+    {
+      "id": "online-feed-host",
+      "url": "https://login-check.example/other",
+      "online": {
+        "feeds": {
+          "openphish": [
+            "https://login-check.example/verify?id=7"
+          ]
+        }
+      },
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "online_phish_list_host"
+        ],
+        "hostControl": "login-check.example",
+        "onlineDomain": "login-check.example"
+      }
+    },
+    {
+      "id": "online-feed-domain",
+      "url": "https://a.bad-domain.example/x",
+      "online": {
+        "feeds": {
+          "phishtank": [
+            "http://bad-domain.example/"
+          ]
+        }
+      },
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "online_phish_list_domain"
+        ],
+        "hostControl": "bad-domain.example",
+        "onlineDomain": "bad-domain.example"
+      }
+    },
+    {
+      "id": "online-feed-path-shared-host",
+      "url": "https://docs.google.com/forms/other",
+      "online": {
+        "feeds": {
+          "openphish": [
+            "https://docs.google.com/forms/d/phish"
+          ]
+        }
+      },
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "google.com",
+        "onlineDomain": "google.com"
+      }
+    },
+    {
+      "id": "online-safe-browsing",
+      "url": "https://malware-drop.example/file",
+      "online": {
+        "safeBrowsing": [
+          "https://malware-drop.example/file"
+        ]
+      },
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "online_safe_browsing"
+        ],
+        "hostControl": "malware-drop.example",
+        "onlineDomain": "malware-drop.example"
+      }
+    }
+  ],
+  "emails": [
+    {
+      "id": "paypal-phish",
+      "from": "\"PayPal\" <service@paypa1-security.com>",
+      "body": "We noticed unusual activity on your PayPal account and have limited it. Verify your information within 24 hours or your account will be permanently suspended: https://paypa1-security.com/verify?id=88213",
+      "expect": {
+        "level": "danger",
+        "score": 85,
+        "signals": [
+          "display_brand_mismatch",
+          "sender_lookalike_brand"
+        ],
+        "flag": true
+      }
+    },
+    {
+      "id": "sample-paypal-phish",
+      "from": "PayPal Security <service@paypa1-secure.example>",
+      "body": "Verify your identity within 24 hours.",
+      "links": [
+        [
+          "http://paypal.account-verify.example/login",
+          "Verify now"
+        ]
+      ],
+      "expect": {
+        "level": "danger",
+        "score": 100,
+        "signals": [
+          "display_brand_mismatch",
+          "link_brand_in_subdomain",
+          "sender_lookalike_brand"
+        ],
+        "flag": true
+      }
+    },
+    {
+      "id": "google-alert",
+      "from": "Google <no-reply@accounts.google.com>",
+      "body": "A new sign-in on Mac. You can also see security activity at https://myaccount.google.com/notifications",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "flag": false
+      }
+    },
+    {
+      "id": "microsoft-from-live-com",
+      "from": "Microsoft account team <account-security-noreply@accountprotection.microsoft.com>",
+      "body": "Security code for your Microsoft account. https://account.live.com/activity",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "flag": false
+      }
+    },
+    {
+      "id": "idn-arabic-sender",
+      "from": "أحمد <ahmed@xn--mgbh0fb.xn--wgbh1c>",
+      "body": "مرحبا",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "flag": false
+      }
+    },
+    {
+      "id": "contact-other-address",
+      "from": "Mum <mum.family@quickmail.example>",
+      "body": "I lost my phone, this is my new address.",
+      "contacts": [
+        {
+          "name": "Mum",
+          "addresses": [
+            "mum@family.example"
+          ]
+        }
+      ],
+      "expect": {
+        "level": "caution",
+        "score": 30,
+        "signals": [
+          "contact_name_other_address"
+        ],
+        "flag": false
+      }
+    },
+    {
+      "id": "contact-near-miss-domain",
+      "from": "Mum <mum@famlly.example>",
+      "body": "Can you send me a gift card?",
+      "contacts": [
+        {
+          "name": "Mum",
+          "addresses": [
+            "mum@family.example"
+          ]
+        }
+      ],
+      "expect": {
+        "level": "caution",
+        "score": 45,
+        "signals": [
+          "contact_lookalike_domain"
+        ],
+        "flag": false
+      }
+    },
+    {
+      "id": "contact-homograph-domain",
+      "from": "Mum <mum@xn--fmily-4ve.example>",
+      "body": "Can you send me a gift card?",
+      "contacts": [
+        {
+          "name": "Mum",
+          "addresses": [
+            "mum@family.example"
+          ]
+        }
+      ],
+      "expect": {
+        "level": "danger",
+        "score": 95,
+        "signals": [
+          "contact_homograph_domain",
+          "sender_mixed_script"
+        ],
+        "flag": true
+      }
+    },
+    {
+      "id": "contact-own-domain-second-address",
+      "from": "CloudBox <support@cloudbox.example>",
+      "body": "Your storage is almost full.",
+      "contacts": [
+        {
+          "name": "CloudBox",
+          "addresses": [
+            "receipts@cloudbox.example"
+          ]
+        }
+      ],
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "flag": false
+      }
+    },
+    {
+      "id": "online-young-sender-alone",
+      "from": "Deals <hello@fresh-shop.example>",
+      "body": "New arrivals this week.",
+      "online": {
+        "facts": {
+          "fresh-shop.example": {
+            "sources": [
+              "rdap",
+              "crtsh"
+            ],
+            "created": "2026-09-21T09:00:00Z",
+            "first_seen": "2026-09-22T00:00:00Z",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "caution",
+        "score": 49,
+        "signals": [
+          "sender_cert_new",
+          "sender_domain_new_week"
+        ],
+        "flag": false
+      }
+    },
+    {
+      "id": "online-link-on-feed",
+      "from": "Deals <hello@shop.example>",
+      "body": "Claim here: https://login-check.example/verify?id=7",
+      "online": {
+        "feeds": {
+          "openphish": [
+            "https://login-check.example/verify?id=7"
+          ]
+        }
+      },
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "link_phish_list"
+        ],
+        "flag": true
+      }
+    },
+    {
+      "id": "online-freemail-sender-not-looked-up",
+      "from": "Sara <sara.nabil@gmail.com>",
+      "body": "Lunch?",
+      "online": {
+        "facts": {
+          "gmail.com": {
+            "sources": [
+              "rdap"
+            ],
+            "created": "2026-09-23T00:00:00Z",
+            "fetched_at": "2026-09-24T11:00:00Z"
+          }
+        }
+      },
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "flag": false
+      }
+    }
+  ]
+}

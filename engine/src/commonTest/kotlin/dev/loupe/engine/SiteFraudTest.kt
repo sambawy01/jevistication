@@ -24,7 +24,11 @@ class SiteFraudTest {
 
     @Test
     fun `flags punycode and mixed-script hosts`() {
-        assertTrue("punycode-host" in names(SiteFraud.assess("https://xn--pypal-4ve.com")))
+        // Rule 2 of docs/PHISHING-FORMULA.md: punycode alone is not a signal; mixed scripts are,
+        // on the decoded label too.
+        assertTrue("punycode-host" !in names(SiteFraud.assess("https://xn--pypal-4ve.com")))
+        assertTrue("mixed-script-host" in names(SiteFraud.assess("https://xn--pypal-4ve.com")))
+        assertTrue(names(SiteFraud.assess("https://xn--mgbh0fb.xn--wgbh1c/")).isEmpty()) // مثال.مصر
         assertTrue("mixed-script-host" in names(SiteFraud.assess("https://pаypal.com")))
     }
 

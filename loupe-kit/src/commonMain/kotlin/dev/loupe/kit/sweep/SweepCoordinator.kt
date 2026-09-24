@@ -4,6 +4,8 @@ import dev.loupe.engine.Backend
 import dev.loupe.engine.LedgerRow
 import dev.loupe.kit.judgments.JudgmentResults
 import dev.loupe.kit.judgments.JudgmentSweep
+import dev.loupe.kit.measure.AutoBaseline
+import dev.loupe.persistence.CorrectionKey
 import dev.loupe.kit.judgments.SweepObserver
 import dev.loupe.kit.judgments.SweepPlan
 import dev.loupe.kit.judgments.SweepProgress
@@ -122,6 +124,7 @@ class SweepCoordinator(private val backend: Backend, private val lane: ModelLane
         ledger: List<LedgerRow>,
         todayIso: String,
         observer: CoordinatorObserver,
+        corrections: Map<CorrectionKey, String> = emptyMap(),
     ): CoordinatorResult {
         val mark = TimeSource.Monotonic.markNow()
         val plans = plans(judgments, items, ledger)
@@ -158,7 +161,9 @@ class SweepCoordinator(private val backend: Backend, private val lane: ModelLane
             if (stopped != null) break
             if (plan.toJudge.isEmpty()) continue
             val base = doneBefore
-            val end: SweepProgress = JudgmentSweep(timed).run(judgment, plan, object : SweepObserver {
+            // Decision B: under Auto, the baseline answers once it wins on the user's corrections.
+            val auto = AutoBaseline.verdict(ledger, judgment, corrections, items).automatic
+            val end: SweepProgress = JudgmentSweep(timed).run(judgment, plan, autoBaseline = auto, observer = object : SweepObserver {
                 override fun onSweepProgress(progress: SweepProgress) {
                     observer.onCoordinatorProgress(progress(judgment.id, base + progress.done, running = true))
                 }

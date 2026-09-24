@@ -81,6 +81,30 @@ object Hosts {
         return publicSuffix(h) in Brands.SHARED_HOSTING || Brands.SHARED_HOSTING.any { h.endsWith(".$it") }
     }
 
+    /**
+     * The shared-hosting name [host] sits under when that name is **not** a suffix in the pinned PSL
+     * (Station's twelve: wordpress.com, weebly.com, glitch.me, ...), for a customer's site on it (not
+     * the service's own bare domain or `www`). Rule 5: the PSL says the service controls the host,
+     * which it does not, so the formula adds its own "shared hosting" caution. Null otherwise.
+     */
+    fun sharedHostingNotInPsl(host: String): String? {
+        val h = host.trim('.').lowercase()
+        for (name in SHARED_NOT_IN_PSL) {
+            if (h.endsWith(".$name") && h != "www.$name") return name
+        }
+        return null
+    }
+
+    /**
+     * Station's shared-hosting names that are not suffixes in the pinned Mozilla PSL (listed in
+     * docs/PHISHING-FORMULA.md; a test pins that each is still absent). `run.app` is not among them:
+     * the PSL lists Cloud Run's real host suffixes under it (`a.run.app`).
+     */
+    val SHARED_NOT_IN_PSL: List<String> = listOf(
+        "000webhostapp.com", "godaddysites.com", "strikingly.com", "jimdosite.com", "wordpress.com", "railway.app",
+        "serveo.net", "weebly.com", "site123.me", "glitch.me", "tilda.ws", "loca.lt",
+    )
+
     // ------------------------------------------------------------------------ IP details
     private fun ipv4(h: String): Long? {
         val parts = h.split(".")
@@ -125,6 +149,9 @@ object Hosts {
         if (!label.startsWith("xn--")) return label
         return Punycode.decode(label.substring(4)) ?: label
     }
+
+    /** A domain with every `xn--` label decoded to Unicode. */
+    fun decodeDomain(domain: String): String = domain.split('.').joinToString(".") { decodeLabel(it) }
 
     /** A domain to ASCII, label by label, or null when a label cannot be encoded. */
     fun toAsciiDomain(domain: String): String? {
@@ -174,7 +201,8 @@ data class ParsedUrl(
             val hostPort = netloc.substringAfterLast('@')
             val hostname = if (hostPort.startsWith("[")) hostPort.substring(1).substringBefore(']')
             else hostPort.substringBefore(':')
-            val host = hostname.lowercase().trimEnd('.')
+            // A host typed in Unicode (pаypal.com) is read in its IDNA ASCII form, as a browser sends it.
+            val host = hostname.lowercase().trimEnd('.').let { h -> if (h.all { it.code < 128 }) h else Hosts.toAsciiDomain(h) ?: h }
             val labels = if (host.isNotEmpty()) host.split(".") else emptyList()
             return ParsedUrl(
                 scheme = scheme,

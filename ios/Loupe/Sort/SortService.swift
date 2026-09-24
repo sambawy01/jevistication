@@ -133,6 +133,8 @@ final class SortService: ObservableObject {
 
         ledger.flush()
         let rows = ledger.allRows()
+        // Decision B needs the user's corrections: the baseline answers automatically where it wins.
+        let corrections = ledger.correctionIndex()
         let conditions = self.conditions
         let ledger = self.ledger
         let bridge = CoordinatorBridge(
@@ -148,7 +150,7 @@ final class SortService: ObservableObject {
         // Queued without a claim: a sweep is the lowest priority and never makes anything wait.
         let result: CoordinatorResult = await withCheckedContinuation { c in
             ModelWork.queue.async {
-                c.resume(returning: coordinator.run(judgments: js, items: all, ledger: rows, todayIso: today, observer: bridge))
+                c.resume(returning: coordinator.run(judgments: js, items: all, ledger: rows, todayIso: today, observer: bridge, corrections: corrections))
             }
         }
         ledger.flush()

@@ -217,8 +217,34 @@ flight prices — so a source may fetch them, under rules as fixed as the never 
   stores or logs it, or the search.
 
 The flight helper is a separate private repository, `sambawy01/loupe-web-helper`, deployed on
-Railway at `https://loupe-web-helper-production.up.railway.app`: one endpoint, `POST
-/v1/flights/search`, through Duffel, schema v1. It is stateless and holds no key of its own.
+Railway at `https://loupe-web-helper-production.up.railway.app`: `POST /v1/flights/search`, through
+Duffel, schema v1, and (2026-09-24) `POST /v1/domain-facts` for the online phishing checks below. It
+holds no key of its own and stores nothing on disk; for domain facts it keeps an in-memory, per-install
+cache of looked-up domains for up to 6 h, never on disk, never shared between installs.
+
+**Online phishing checks** *(added 2026-09-24 on the owner's decision; the weights are in
+[`PHISHING-FORMULA.md`](PHISHING-FORMULA.md) §5)*. Phishing is judged on the phone by one formula
+shared with Loupe Station; three opt-in sources may add facts to it, each **off by default**, each
+with its own switch, each result labelled **"Online"** with its source and fetch time:
+
+- **Domain age and certificates** — `POST /v1/domain-facts {"domain": …}` on the same helper, which
+  looks up registration (RDAP: created, updated, expires, registrar) and certificate-log facts (first
+  seen, latest issued, count in 90 days, issuers). Only one **ICANN registrable domain** is sent per
+  request (the Public Suffix List's private section off), never a full address, page, email or
+  anything about the user; a page on a hosting platform (`x.github.io`, a cloud-storage bucket) is not
+  looked up at all. The helper keeps **an in-memory, per-install cache of looked-up domains for up to
+  6 h, never on disk, never shared between installs**. An answer with no sources is "no facts", never
+  shown as checked. If the helper does not offer the route yet, the app says "online checks not
+  available yet"; when it is rate-limited, the app backs off.
+- **Known-phishing lists** — OpenPhish's public feed (PhishTank's too, only in its keyless form),
+  downloaded whole to the phone and matched there. Nothing about the user's links is sent.
+- **Google Safe Browsing** — only with the user's **own** Google key, kept in the Keychain
+  (`WhenUnlockedThisDeviceOnly`). The phone keeps Google's list of hash prefixes; only when a link
+  matches it locally are short hash prefixes sent to Google, never the link.
+
+Online facts only ever **add** suspicion, never clear a site; a young domain alone never makes a page
+"danger" or an email "phishing". With every switch off no request is made and every verdict is the
+offline one.
 
 This is the one place *"never leaves your device"* is not the claim: the search does leave it. What
 stays true is that nothing *you own* does, and that we never see it — see risk 14 in

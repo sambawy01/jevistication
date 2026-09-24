@@ -168,6 +168,7 @@ fun BaselineScreen(c: LoupeController) = NeedsJudgment(c) { j ->
             Muted("Every judgment is measured against the version with no model. Upstream, a model-chosen method lost to \"keep the last 24k characters\" and they shipped the plain one; the same can happen here, and this screen says so.")
         }
         if (j.baseline == null) return@Column
+        WhoAnswersCard(c, j)
         if (comparison == null) {
             Empty("Nothing to compare yet", "The comparison runs on items you have corrected. Answer some in the queue.") { PrimaryButton("Open the queue") { c.screen = Screen.QUEUE } }
             return@Column
@@ -186,6 +187,34 @@ fun BaselineScreen(c: LoupeController) = NeedsJudgment(c) { j ->
         }
         Muted("Compared at equal coverage — both forced to answer every item — through the engine's own Harness, replaying exactly what the model logged rather than re-running it.")
         CriteriaCard(c, j)
+    }
+}
+
+/** Decision B: who answers — Auto (the default, as Loupe Station), Always baseline, Always Laya. */
+@Composable
+private fun WhoAnswersCard(c: LoupeController, j: dev.loupe.templates.UserJudgment) {
+    val verdict = remember(c.ledger, c.correctionIndex, j, c.itemsById) {
+        dev.loupe.kit.measure.AutoBaseline.verdict(j.baselineMode, j.baseline != null, Analysis.effectiveRows(c.ledger, j, c.correctionIndex)) { id ->
+            c.itemsById[id]?.let { j.baseline?.answer(it.text) }
+        }
+    }
+    Card {
+        H3("Who answers")
+        Body(verdict.line)
+        Muted(
+            "Auto lets the baseline rule answer once it is right more often than Laya on at least " +
+                "${dev.loupe.kit.measure.AutoBaseline.MIN_CORRECTIONS} of your corrections. Its answers are logged as a rule, " +
+                "with Laya's answer kept beside them, so they never count as Laya's.",
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((mode, title) in listOf(
+                dev.loupe.templates.BaselineMode.AUTO to "Auto",
+                dev.loupe.templates.BaselineMode.ALWAYS_BASELINE to "Always baseline",
+                dev.loupe.templates.BaselineMode.ALWAYS_LAYA to "Always Laya",
+            )) {
+                if (mode == j.baselineMode) PrimaryButton(title) {} else SecondaryButton(title) { c.setBaselineMode(j.id, mode) }
+            }
+        }
     }
 }
 

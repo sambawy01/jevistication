@@ -47,6 +47,13 @@ data class PageFacts(
     val passwordFields: Int = 0,
     val cardFields: Int = 0,
     val forms: List<PageForm> = emptyList(),
+    /**
+     * A brand the caller knows the page (or message) claims to be, as free text — e.g. the first
+     * word of an institutional sender's name. Rule 1 of docs/PHISHING-FORMULA.md: a brand on the
+     * list is checked against its official domains; any other name with the engine's name-vs-domain
+     * check (`OriginFacts.brandMatchesOrigin`).
+     */
+    val claimedBrand: String? = null,
 )
 
 /** What scoring needs besides the signals. */
@@ -117,7 +124,6 @@ object SiteSignals {
     val WEIGHTS: Map<String, Pair<Int, String>> = linkedMapOf(
         // host
         "ip_host" to (25 to "The address is a bare IP number instead of a website name."),
-        "punycode" to (10 to "The website name uses international characters (it is written as {host} underneath)."),
         "mixed_script" to (35 to "The website name mixes letters from different alphabets, a trick to imitate another name."),
         "homograph_brand" to (60 to "The website name imitates {brand} with look-alike letters from another alphabet."),
         "lookalike_brand" to (45 to "The website name looks like {brand} but is not {brand}'s website."),
@@ -129,6 +135,7 @@ object SiteSignals {
         "many_subdomains" to (10 to "The website name has an unusually long chain of subdomains."),
         "suspicious_tld" to (8 to "The domain ends in .{tld}, an ending often used by throw-away scam sites."),
         "shared_hosting_login" to (15 to "A sign-in or payment form on a free hosting or site-builder address ({suffix})."),
+        "shared_hosting" to (10 to "This is a customer's site on {suffix}, a shared hosting service; {suffix} does not vouch for it."),
         // url
         "data_url" to (40 to "The page was opened from a data: or blob: address, which has no real website behind it."),
         "userinfo_in_url" to (30 to "The address has text before an @ sign, which hides the real website name."),
@@ -139,15 +146,16 @@ object SiteSignals {
         // forms
         "http_password" to (30 to "The page asks for a password over an unencrypted connection (http://)."),
         "http_card" to (30 to "The page asks for card details over an unencrypted connection (http://)."),
-        "password_posts_elsewhere" to (30 to "The password form sends what you type to another website ({target})."),
-        "password_posts_http" to (25 to "The password form sends what you type over an unencrypted connection."),
+        "password_posts_elsewhere" to (30 to "The password or card form sends what you type to another website ({target})."),
+        "password_posts_http" to (25 to "The password or card form sends what you type over an unencrypted connection."),
+        "form_posts_elsewhere" to (5 to "A form on the page sends what you type to another website ({target})."),
         // branding
         "brand_mismatch_login" to (50 to "The page presents itself as {brand} and asks you to sign in or pay, but it is not on {brand}'s website."),
         "brand_mismatch" to (15 to "The page presents itself as {brand}, but it is not on {brand}'s website."),
     )
 
-    /** Signals that count as a deterministic risk (weight >= 15, plus punycode). */
-    val RISK_CODES: Set<String> = WEIGHTS.filter { it.value.first >= 15 }.keys + "punycode"
+    /** Signals that count as a deterministic risk (weight >= 15). */
+    val RISK_CODES: Set<String> = WEIGHTS.filter { it.value.first >= 15 }.keys
 
     val PHISHY_WORDS: Set<String> = """
         login logon signin sign secure security verify verification account accounts update confirm billing
@@ -252,9 +260,8 @@ object SiteSignals {
                 out += SiteSignal("mixed_script", mapOf("host" to u.unicodeHost))
             }
         }
-        if (u.labels.any { it.startsWith("xn--") } && !homograph && out.none { it.code == "mixed_script" }) {
-            out += SiteSignal("punycode", mapOf("host" to host))
-        }
+        // Rule 2: an international name that is neither a brand's look-alike nor mixed-script is
+        // someone's ordinary site (مثال.مصر, 例子.中国): no signal.
         // brands in the registrable label
         if (regLabel.isNotEmpty() && !homograph) {
             val dec = Hosts.decodeLabel(regLabel)
@@ -339,8 +346,10 @@ object SiteSignals {
             if (hasCard) out += SiteSignal("http_card", source = "page")
         }
         val reg = u.registrable ?: u.host
+        // Rule 4: a password or card form posting to another registrable domain is strong; any
+        // other form posting elsewhere (search, newsletter) is weak.
         for (f in page.forms) {
-            if (!f.password) continue
+            if (!f.password && !f.card) continue
             val action = ParsedUrl.parse(f.action ?: "") ?: continue
             if (action.host.isEmpty()) continue                         // posts back to this page
             val target = Hosts.registrableDomain(action.host) ?: action.host
@@ -351,6 +360,18 @@ object SiteSignals {
             if (action.scheme == "http" && u.scheme == "https") {
                 out += SiteSignal("password_posts_http", source = "page")
                 break
+            }
+        }
+        if (out.none { it.code == "password_posts_elsewhere" }) {
+            for (f in page.forms) {
+                if (f.password || f.card) continue
+                val action = ParsedUrl.parse(f.action ?: "") ?: continue
+                if (action.host.isEmpty() || action.scheme !in setOf("http", "https")) continue
+                val target = Hosts.registrableDomain(action.host) ?: action.host
+                if (target != reg) {
+                    out += SiteSignal("form_posts_elsewhere", mapOf("target" to target), source = "page")
+                    break
+                }
             }
         }
         return out
@@ -370,6 +391,13 @@ object SiteSignals {
         return null
     }
 
+    /** A listed brand whose display name or a token is [name] (case-insensitive), or null. */
+    fun listedBrand(name: String, config: SiteConfig): Brand? {
+        val n = name.trim().lowercase()
+        if (n.isEmpty()) return null
+        return config.brands.firstOrNull { b -> b.name.lowercase() == n || b.tokens.any { it.lowercase() == n } }
+    }
+
     /** All deterministic signals for one page, plus the facts scoring needs. */
     fun urlAndPageSignals(page: PageFacts, config: SiteConfig = SiteConfig.DEFAULT): Pair<List<SiteSignal>, PageVerdictFacts> {
         val u = ParsedUrl.parse(page.url) ?: ParsedUrl.parse("")!!
@@ -380,17 +408,31 @@ object SiteSignals {
         val hasPassword = page.passwordFields > 0 || page.forms.any { it.password }
         val hasCard = page.cardFields > 0 || page.forms.any { it.card }
         val knownGood = config.known(u.registrable, u.suffix)
-        val claim = brandClaim(page, config)
-        if (claim != null && !knownGood && !config.owns(claim, u.registrable, u.suffix) && !dataPage) {
+        // Rule 1: the brand list first (a brand owns its listed domains: Microsoft owns live.com);
+        // a claimed name that is not on the list falls back to the engine's name-vs-domain check.
+        val listed = brandClaim(page, config) ?: page.claimedBrand?.let { listedBrand(it, config) }
+        val claimName: String? = listed?.name ?: page.claimedBrand?.trim()?.takeIf { it.isNotEmpty() }
+        val mismatch = when {
+            claimName == null || knownGood || dataPage || u.host.isEmpty() -> false
+            listed != null -> !config.owns(listed, u.registrable, u.suffix)
+            else -> !OriginFacts.brandMatchesOrigin(claimName, u.host)
+        }
+        if (mismatch) {
             val code = if (hasPassword || hasCard) "brand_mismatch_login" else "brand_mismatch"
-            signals += SiteSignal(code, mapOf("brand" to claim.name), source = "page")
+            signals += SiteSignal(code, mapOf("brand" to claimName!!), source = "page")
+        }
+        // Rule 5: host control is the full pinned PSL; Station's shared-hosting names that are not
+        // PSL suffixes (wordpress.com, weebly.com, ...) add a caution of their own.
+        val sharedName = Hosts.sharedHostingNotInPsl(u.host)
+        if (sharedName != null && !knownGood) {
+            signals += SiteSignal("shared_hosting", mapOf("suffix" to sharedName), source = "url")
         }
         if ((hasPassword || hasCard) && Hosts.isSharedHosting(u.host) && !knownGood) {
-            signals += SiteSignal("shared_hosting_login", mapOf("suffix" to (u.suffix ?: "")), source = "page")
+            signals += SiteSignal("shared_hosting_login", mapOf("suffix" to (sharedName ?: u.suffix ?: "")), source = "page")
         }
         val facts = PageVerdictFacts(
             host = u.host, unicodeHost = u.unicodeHost, registrable = u.registrable, scheme = u.scheme, path = u.path,
-            knownGood = knownGood, brandClaim = claim?.name, password = hasPassword, card = hasCard,
+            knownGood = knownGood, brandClaim = claimName, password = hasPassword, card = hasCard,
             sharedHosting = Hosts.isSharedHosting(u.host),
         )
         // one signal per code (the first wording wins; they share a weight)
