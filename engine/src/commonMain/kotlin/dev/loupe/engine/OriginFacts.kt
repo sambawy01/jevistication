@@ -69,8 +69,24 @@ object OriginFacts {
                 .map { letterScript(it) }
                 .filter { it >= 0 }
                 .toSet()
-            scripts.size > 1
+            scripts.size > 1 && scripts !in ALLOWED_SCRIPT_SETS
         }
+
+    // Script ids read from sample letters, so they are the same ids on JVM and iOS.
+    private val HAN = letterScript(0x6F22)       // 漢
+    private val HIRAGANA = letterScript(0x3072)  // ひ
+    private val KATAKANA = letterScript(0x30AB)  // カ
+    private val HANGUL = letterScript(0xD55C)    // 한
+
+    /**
+     * Script combinations that are one writing system, not a mix (formula v1.1, rule 3):
+     * Japanese (Han + Hiragana + Katakana, any two or all three) and Korean (Han + Hangul).
+     * Any of these together with Latin, Cyrillic, Greek or another script is still mixed.
+     */
+    private val ALLOWED_SCRIPT_SETS: Set<Set<Int>> = setOf(
+        setOf(HAN, HIRAGANA), setOf(HAN, KATAKANA), setOf(HIRAGANA, KATAKANA), setOf(HAN, HIRAGANA, KATAKANA),
+        setOf(HAN, HANGUL),
+    )
 
     private val IPV4 = Regex("""^\d{1,3}(\.\d{1,3}){3}$""")
 

@@ -261,7 +261,7 @@ class SiteSignalsTest {
         assertTrue("homograph_brand" in homograph.verdict.reasons.map { it.code })
         val real = SiteCheck.checkUrl("https://www.paypal.com/signin")
         assertFalse(real.warn)
-        assertEquals("No signal", real.levelTitle)                                            // never "safe"
+        assertEquals("No warning signs found", real.levelTitle)                                            // never "safe"
     }
 
     @Test

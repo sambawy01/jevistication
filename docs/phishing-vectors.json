@@ -1,6 +1,6 @@
 {
   "formula": "loupe-phishing-formula",
-  "version": 1,
+  "version": "1.1",
   "psl": "2026-09-21_18-50-07_UTC",
   "now": "2026-09-24T12:00:00Z",
   "pages": [
@@ -130,6 +130,41 @@
         "signals": [],
         "hostControl": "xn--bcher-kva.de",
         "onlineDomain": "xn--bcher-kva.de"
+      }
+    },
+    {
+      "id": "idn-japanese-mixed-kana",
+      "url": "https://xn--v8j0cwa6gzha3lrd7410cymwb.jp/",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "xn--v8j0cwa6gzha3lrd7410cymwb.jp",
+        "onlineDomain": "xn--v8j0cwa6gzha3lrd7410cymwb.jp"
+      }
+    },
+    {
+      "id": "idn-korean-han-hangul",
+      "url": "https://xn--p8s937b4q9bkkuslr.kr/",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "hostControl": "xn--p8s937b4q9bkkuslr.kr",
+        "onlineDomain": "xn--p8s937b4q9bkkuslr.kr"
+      }
+    },
+    {
+      "id": "mixed-script-latin-cyrillic-brand",
+      "url": "https://xn--micrsoft-qbh.com/",
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "homograph_brand"
+        ],
+        "hostControl": "xn--micrsoft-qbh.com",
+        "onlineDomain": "xn--micrsoft-qbh.com"
       }
     },
     {

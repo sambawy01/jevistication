@@ -90,6 +90,23 @@ class OriginFactsTest {
     }
 
     @Test
+    fun `Japanese and Korean script sets are one writing system and not a mix`() {
+        // Formula v1.1 rule 3: Han + Hiragana + Katakana (Japanese), Han + Hangul (Korean).
+        assertFalse(OriginFacts.hasMixedScripts("ひらがな漢字カタカナ.jp"))
+        assertFalse(OriginFacts.hasMixedScripts("xn--v8j0cwa6gzha3lrd7410cymwb.jp"))
+        assertFalse(OriginFacts.hasMixedScripts("ひらがなカタカナ.jp"))
+        assertFalse(OriginFacts.hasMixedScripts("한국어漢字.kr"))
+        assertFalse(OriginFacts.hasMixedScripts("xn--p8s937b4q9bkkuslr.kr"))
+        // Mixing any of them with another script is still mixed.
+        assertTrue(OriginFacts.hasMixedScripts("漢字abc.jp"))
+        assertTrue(OriginFacts.hasMixedScripts("カタカナpaypal.com"))
+        assertTrue(OriginFacts.hasMixedScripts("한국어ひらがな.kr"))
+        assertTrue(OriginFacts.hasMixedScripts("한국어漢字카タ.kr"))
+        assertTrue(OriginFacts.hasMixedScripts("micrоsoft.com"))
+        assertTrue(OriginFacts.hasMixedScripts("xn--micrsoft-qbh.com"))
+    }
+
+    @Test
     fun `detects a form posting to another registrable domain`() {
         assertTrue(
             OriginFacts.postsCrossOrigin("https://paypal.com/login", "https://evil.example/collect"),

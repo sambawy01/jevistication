@@ -1,17 +1,25 @@
 # The phishing / site formula
 
-*Formula version 1 — decided by the owner 2026-09-24 (decisions A and C). One formula for Loupe
+*Formula version 1.1 — decided by the owner 2026-09-24 (decisions A and C). One formula for Loupe
 (iPhone, desktop, engine callers) and Loupe Station. It replaces the engine's `SiteFraud` rules and
 Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they differed.*
 
 - **Reference implementation:** `loupe-kit` — `dev.loupe.kit.site` (`SiteSignals`, `SiteScoring`,
   `OnlineSignals`, `Hosts`, `Brands`) for pages and links, `dev.loupe.kit.mail.Phishing` for email.
   The engine keeps a thin API (`OriginFacts`, `SiteFraud`, `Impersonation`: facts only, no verdict).
-- **Test vectors:** [`phishing-vectors.json`](phishing-vectors.json) — 42 pages/links and 12 emails,
+- **Test vectors:** [`phishing-vectors.json`](phishing-vectors.json) — 45 pages/links and 12 emails,
   each with the expected level, score, weighted signal codes and (pages) both PSL answers. Loupe runs
   them on the JVM and the iOS simulator (`PhishingFormulaTest`); Station must run the same file.
-- A verdict is **never shown as "safe"**: the lowest level is displayed as "No signal" (§4 of
-  PRODUCT.md, "never blesses").
+- A verdict is **never shown as "safe"**: the lowest level is displayed as **"No warning signs
+  found"** on every surface (§4 of PRODUCT.md, "never blesses"; owner decision, v1.1). The wire
+  code stays `safe`.
+
+**Changelog**
+- **v1.1 (2026-09-24):** rule 3 treats Japanese (Han + Hiragana + Katakana) and Korean (Han +
+  Hangul) as one script set each; the lowest level is displayed "No warning signs found"; the
+  shared-hosting count is 12 non-PSL names (`run.app` is already a PSL suffix). New vectors
+  `idn-japanese-mixed-kana`, `idn-korean-han-hangul`, `mixed-script-latin-cyrillic-brand`.
+- **v1 (2026-09-24):** first shared formula.
 
 ---
 
@@ -62,6 +70,12 @@ googleapis.com's age says nothing about who runs the page. Vectors: `github-page
 3. **Mixed scripts.** Per label, on the decoded label: the label mixes scripts when its letters have
    more than one Unicode Script property value (Common/Inherited ignored; the engine's
    `OriginFacts.hasMixedScripts`, generated script table). Digits of another script do not count.
+   **Allowed script sets (v1.1):** Han + Hiragana + Katakana (any two or all three: Japanese) and
+   Han + Hangul (Korean) are one writing system, not a mix, as is Latin with Common/Inherited.
+   Any of them together with Latin, Cyrillic, Greek or any other script in one label is still
+   mixed (`漢字abc`, `한국어ひらがな`). Vectors: `idn-japanese-mixed-kana`, `idn-korean-han-hangul`
+   (score 0), `mixed-script-latin-cyrillic-brand` (`micrоsoft.com`, danger 60 — `homograph_brand`
+   takes precedence over `mixed_script` on a brand confusable).
 4. **Cross-domain form posts.** A form whose action's registrable domain (mode a) differs from the
    page's: **strong** when the form has a password or card field (`password_posts_elsewhere` 30,
    risk), **weak** for any other form (`form_posts_elsewhere` 5). A password/card form on https that
@@ -146,7 +160,7 @@ laya  = min(40, Laya points)          (25 when no deterministic signal and < 2 s
 score = min(100, det + laya)
 if score ≥ 60 and no risk code (page ≥15 or online ≥15) and no strong credential ask: score = 59
 if score ≥ 60 and every weighted code is an online age code:                          score = 59
-level = danger ≥ 60 · caution ≥ 30 · safe < 30        (safe is displayed "No signal")
+level = danger ≥ 60 · caution ≥ 30 · safe < 30        (safe is displayed "No warning signs found")
 ```
 A user-trusted site is safe with the reason `user_trusted`. A known-good domain with no reasons gets
 the info reason `known_good` (weight 0).
@@ -184,21 +198,24 @@ age-only cap: score ≤ 49, never flagged
 A sender on a known-good or trusted domain is safe (`known_sender` / `trusted_sender`) unless the
 receiving server says DMARC failed (`spoofed_known_sender` 60).
 
-## 7. What changed (formula v1 vs the two old rule sets)
+## 7. What changed (formula v1.1 vs the two old rule sets)
 
-| # | Engine `SiteFraud` (old) | Station (old) | Formula v1 |
+| # | Engine `SiteFraud` (old) | Station (old) | Formula v1.1 |
 |---|---|---|---|
 | 1 | brand name = registrable label | brand domain list | list first; name check only for unlisted brands |
-| 2 | any `xn--` host warns | `punycode` 10 on any IDN | no signal unless brand-confusable or mixed-script |
-| 3 | mixed scripts on the raw (often ASCII) host | Unicode character-name scripts | script property, per decoded label |
+| 2 | any `xn--` host warns | `punycode` 10 on any IDN | not a signal unless brand-confusable or mixed-script |
+| 3 | mixed scripts on the raw (often ASCII) host | Unicode character-name scripts | script property, per decoded label; Japanese and Korean sets allowed (v1.1) |
 | 4 | any cross-domain form | password forms only | password/card strong (30), others weak (5) |
 | 5 | full PSL | trimmed `psl.py`, shared-hosting list | full pinned PSL; the 12 non-PSL names add `shared_hosting` 10; online facts use ICANN-only |
 | 6 | `Impersonation` apart | brands only | contact signals in the email score |
 
 **Station must:** use the pinned Mozilla PSL for mode (a) and ICANN-only for (b); drop `punycode` /
 `sender_punycode`; treat card forms like password forms and add `form_posts_elsewhere`; add
-`shared_hosting`, the free-text brand fallback, the contact codes; drop `domain_expiring`; read
-Unicode hosts in IDNA ASCII; then pass `phishing-vectors.json`.
+`shared_hosting` (the 12 non-PSL names — not `run.app`, already a PSL suffix), the free-text brand
+fallback, the contact codes; drop `domain_expiring`; read Unicode hosts in IDNA ASCII; treat Han +
+Hiragana + Katakana and Han + Hangul as one script set each in the mixed-script rule (v1.1); label
+the lowest level **"No warning signs found"** in every UI and string (never "safe", "No signal" or
+"Looks safe"); then pass `phishing-vectors.json` (version 1.1).
 
 ## 8. Test vectors
 

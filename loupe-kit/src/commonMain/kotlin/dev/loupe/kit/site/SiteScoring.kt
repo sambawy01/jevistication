@@ -175,7 +175,7 @@ object SiteScoring {
  * One site check: the ONE verdict of the shared phishing / site formula (docs/PHISHING-FORMULA.md)
  * with its signals. There is no second verdict beside it any more: the engine's `SiteFraud` rules are
  * part of the formula. [warn] is true when the level is caution or danger. Nothing here blesses: a
- * "safe" level is shown as "No signal".
+ * "safe" level is shown as [LOWEST_LEVEL_TITLE] ("No warning signs found", formula v1.1).
  */
 data class SiteCheckResult(val url: String, val verdict: SiteVerdict) {
     val warn: Boolean get() = verdict.level != "safe"
@@ -188,8 +188,13 @@ data class SiteCheckResult(val url: String, val verdict: SiteVerdict) {
         get() = when (verdict.level) {
             "danger" -> "Danger"
             "caution" -> "Caution"
-            else -> "No signal"
+            else -> LOWEST_LEVEL_TITLE
         }
+
+    companion object {
+        /** The owner's wording for the lowest level on every surface (formula v1.1): never "safe". */
+        const val LOWEST_LEVEL_TITLE: String = "No warning signs found"
+    }
 }
 
 object SiteCheck {
