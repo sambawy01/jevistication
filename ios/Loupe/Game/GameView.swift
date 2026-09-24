@@ -30,7 +30,7 @@ struct GameView: View {
                 river
                 panel
             }
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear(perform: syncSettings)
@@ -60,9 +60,9 @@ struct GameView: View {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.system(size: 15, weight: .bold))
                         .frame(width: 34, height: 34)
-                        .background(.white.opacity(0.12), in: Circle())
+                        .background(Palette.overlayInk.opacity(0.12), in: Circle())
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Palette.overlayInk)
                 .accessibilityLabel("Close game")
                 .accessibilityIdentifier("game.close")
 
@@ -76,9 +76,9 @@ struct GameView: View {
                 Button { game.setPaused(!game.paused) } label: {
                     Image(systemName: game.paused ? "play.fill" : "pause.fill").font(.system(size: 14, weight: .bold))
                         .frame(width: 34, height: 34)
-                        .background(.white.opacity(0.12), in: Circle())
+                        .background(Palette.overlayInk.opacity(0.12), in: Circle())
                 }
-                .foregroundStyle(.white)
+                .foregroundStyle(Palette.overlayInk)
                 .accessibilityLabel(game.paused ? "Resume" : "Pause")
                 .accessibilityIdentifier("game.pause")
             }
@@ -102,7 +102,7 @@ struct GameView: View {
 
     private func stat(_ label: String, _ value: String, id: String, alignment: HorizontalAlignment = .leading) -> some View {
         VStack(alignment: alignment, spacing: 0) {
-            Text(label).font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(.white.opacity(0.65))
+            Text(label).font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.overlayInk.opacity(0.65))
             Text(value).font(Typeface.display(30)).monospacedDigit().foregroundStyle(Palette.cyan)
         }
         .accessibilityElement(children: .ignore)
@@ -115,14 +115,14 @@ struct GameView: View {
         let fuel = game.hud.fuelPercent
         let low = Double(fuel) < Rules.shared.FUEL_LOW
         return VStack(spacing: 4) {
-            Text("FUEL").font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(.white.opacity(0.65))
+            Text("FUEL").font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.overlayInk.opacity(0.65))
             ZStack(alignment: .leading) {
-                Capsule().fill(.white.opacity(0.15))
+                Capsule().fill(Palette.overlayInk.opacity(0.15))
                 Capsule().fill(low ? Palette.amber : Palette.mint)
                     .frame(width: 110 * CGFloat(fuel) / 100)
             }
             .frame(width: 110, height: 8)
-            Text("\(fuel)%").font(Typeface.mono(11)).foregroundStyle(.white.opacity(0.85))
+            Text("\(fuel)%").font(Typeface.mono(11)).foregroundStyle(Palette.overlayInk.opacity(0.85))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Fuel")
@@ -186,9 +186,9 @@ struct GameView: View {
 
     private var pausedOverlay: some View {
         VStack(spacing: 12) {
-            Text("Paused").font(Typeface.display(34)).foregroundStyle(.white)
+            Text("Paused").font(Typeface.display(34)).foregroundStyle(Palette.overlayInk)
             Button("Resume") { game.setPaused(false) }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.neonPrimary)
                 .accessibilityIdentifier("game.resume")
         }
         .padding(24)
@@ -199,13 +199,13 @@ struct GameView: View {
 
     private var overOverlay: some View {
         VStack(spacing: 8) {
-            Text(game.hud.death ?? "Run over").font(Typeface.display(28)).foregroundStyle(.white)
-            Text("Score \(game.hud.score) · \(game.hud.rows) rows").font(Typeface.mono(13)).foregroundStyle(.white.opacity(0.85))
+            Text(game.hud.death ?? "Run over").font(Typeface.display(28)).foregroundStyle(Palette.overlayInk)
+            Text("Score \(game.hud.score) · \(game.hud.rows) rows").font(Typeface.mono(13)).foregroundStyle(Palette.overlayInk.opacity(0.85))
             if game.mode == .human {
-                Button("Fly again") { game.newRiver() }.buttonStyle(.borderedProminent)
+                Button("Fly again") { game.newRiver() }.buttonStyle(.neonPrimary)
                     .accessibilityIdentifier("game.again")
             } else {
-                Text("Next river in a moment…").font(.footnote).foregroundStyle(.white.opacity(0.75))
+                Text("Next river in a moment…").font(.footnote).foregroundStyle(Palette.overlayInk.opacity(0.75))
             }
         }
         .padding(20)
@@ -219,6 +219,8 @@ struct GameView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 if game.mode == .human { humanPanel } else { watchPanel }
+                // The pilot's live run, in place under the river: its decisions, who made them, where they went.
+                LiveRunSection(view: "game")
             }
             .padding(16)
         }
@@ -408,7 +410,7 @@ struct PlayCard: View {
                 Button { onPlay(.watch) } label: {
                     Label("Watch Laya fly", systemImage: "eye").frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.neonPrimary)
                 .accessibilityIdentifier("now.play.watch")
                 Button { onPlay(.human) } label: {
                     Label("Play", systemImage: "gamecontroller").frame(maxWidth: .infinity)

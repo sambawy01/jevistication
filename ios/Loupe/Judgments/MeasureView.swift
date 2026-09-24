@@ -36,7 +36,7 @@ struct MeasureView: View {
                 .padding(16)
             }
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Measure")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { service.load(); service.refreshLedger() }
@@ -163,7 +163,7 @@ struct MeasureView: View {
                     service.setThreshold(j.id, value)
                     candidate = nil
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.neonPrimary)
                 .disabled(abs(value - j.threshold) < 0.0001)
                 .accessibilityIdentifier("measure.apply")
                 Button(String(format: "Reset (%.2f)", j.threshold)) { candidate = nil }.buttonStyle(.bordered)

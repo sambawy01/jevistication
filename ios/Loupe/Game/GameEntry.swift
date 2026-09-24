@@ -25,23 +25,23 @@ struct OnboardingView: View {
                 Spacer()
                 MascotView(state: .greeting, size: 84)
             }
-            Text("Judgment, on this phone.").font(Typeface.display(34)).foregroundStyle(.white)
+            Text("Judgment, on this phone.").font(Typeface.display(34)).foregroundStyle(Palette.overlayInk)
             Text("Loupe asks a small model plain questions about what is on your phone, and shows how sure it is. Nothing leaves the phone to be judged.")
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(Palette.overlayInk.opacity(0.85))
             VStack(alignment: .leading, spacing: 6) {
                 Text("SEE IT WORK").font(Typeface.mono(11, weight: .medium)).tracking(0.8).foregroundStyle(Palette.cyan)
                 Text("Watch Laya fly a river: every move is a question it answers live, with its probabilities on screen, against a simple rule-based pilot on the same river.")
-                    .font(.subheadline).foregroundStyle(.white.opacity(0.85))
+                    .font(.subheadline).foregroundStyle(Palette.overlayInk.opacity(0.85))
             }
             Spacer()
             Button(action: onWatch) {
                 Label("Watch Laya fly", systemImage: "eye").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.neonPrimary)
             .accessibilityIdentifier("onboarding.watch")
             Button("Not now", action: onSkip)
                 .frame(maxWidth: .infinity)
-                .foregroundStyle(.white.opacity(0.85))
+                .foregroundStyle(Palette.overlayInk.opacity(0.85))
                 .accessibilityIdentifier("onboarding.skip")
         }
         .padding(24)

@@ -482,7 +482,7 @@ struct PhotoSheet: View {
                 else { ProgressView() }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(Color.black.opacity(0.92))
+            .background(Palette.scrim)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
         .task {
@@ -499,7 +499,7 @@ struct MailHeadersSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
+                NeonSection {
                     ForEach(ref.headers, id: \.self) { h in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(h.name).font(.caption).foregroundStyle(Palette.inkSoft)
@@ -512,6 +512,7 @@ struct MailHeadersSheet: View {
                          : "If Mail did not open it, the account is not in Mail on this iPhone: search for the sender and subject above.")
                 }
             }
+            .neonList()
             .navigationTitle("Find this message")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -623,7 +624,7 @@ struct ShowWhereView: View {
                 }
                 .padding(16)
             }
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle("Show where")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -714,10 +715,10 @@ enum DemoItems {
         let lines = ["LOUPE TEST BANK", "VISA", "4539 1488 0343 6467", "VALID THRU 09/29"]
         let size = CGSize(width: 900, height: 560)
         let img = UIGraphicsImageRenderer(size: size).image { ctx in
-            UIColor.white.setFill(); ctx.fill(CGRect(origin: .zero, size: size))
+            Palette.UI.paper.setFill(); ctx.fill(CGRect(origin: .zero, size: size))
             for (i, l) in lines.enumerated() {
                 (l as NSString).draw(at: CGPoint(x: 60, y: 60 + i * 110),
-                                     withAttributes: [.font: UIFont.monospacedSystemFont(ofSize: 58, weight: .bold), .foregroundColor: UIColor.black])
+                                     withAttributes: [.font: UIFont.monospacedSystemFont(ofSize: 58, weight: .bold), .foregroundColor: Palette.UI.ink])
             }
         }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("card-photo.png")

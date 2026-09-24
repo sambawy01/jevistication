@@ -19,7 +19,7 @@ struct MeView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Engine (on device)") {
+                NeonSection("Engine (on device)") {
                     row("LoupeKit", engine.linked ? "linked" : "missing")
                     row("Built-in judgments", "\(engine.builtInJudgments)")
                     row("Public Suffix List", engine.pslVersion)
@@ -38,7 +38,7 @@ struct MeView: View {
                     }
                     #endif
                 }
-                Section("Your data") {
+                NeonSection("Your data") {
                     Text(ledgerLine)
                         .font(.footnote).foregroundStyle(Palette.inkSoft)
                         .accessibilityIdentifier("me.ledger.count")
@@ -61,7 +61,7 @@ struct MeView: View {
                     }
                 }
                 SortSection()
-                Section("Game") {
+                NeonSection("Game") {
                     Button { launcher.open(.watch) } label: {
                         row("Riverflight", "watch Laya fly")
                     }
@@ -70,19 +70,19 @@ struct MeView: View {
                     Button("Play it yourself") { launcher.open(.human) }
                         .accessibilityIdentifier("me.game.play")
                 }
-                Section("Writing assistant") {
+                NeonSection("Writing assistant") {
                     NavigationLink { AssistSettingsView(assist: assist) } label: {
                         row("Writing assistant", assist.config.enabled ? (assist.isReady ? "On · Online" : "Needs setup") : "Off")
                     }
                     .accessibilityIdentifier("me.assistant")
                 }
-                Section("Online phishing checks") {
+                NeonSection("Online phishing checks") {
                     NavigationLink { OnlineChecksView(online: online) } label: {
                         row("Online phishing checks", online.settings.anyOn ? "On · Online" : "Off")
                     }
                     .accessibilityIdentifier("me.onlineChecks")
                 }
-                Section("Appearance") {
+                NeonSection("Appearance") {
                     HStack {
                         Text("Mascot")
                         Spacer()
@@ -94,20 +94,20 @@ struct MeView: View {
                         .accessibilityIdentifier("me.mascot")
                     }
                 }
-                Section("Web") {
+                NeonSection("Web") {
                     Button("Web settings") { showWebSettings = true }
                 }
-                Section("About") {
+                NeonSection("About") {
                     NavigationLink("Licences") { LicencesView() }
                         .accessibilityIdentifier("me.licences")
                 }
-                Section {
+                NeonSection {
                     Text("Per-judgment calibration, the baseline and the threshold are on each judgment's Measure screen.")
                         .font(.footnote).foregroundStyle(Palette.inkSoft)
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle("Me")
             .onAppear { judgments.load(); judgments.refreshLedger() }
             .sheet(isPresented: $showWebSettings) { WebSettingsSheet().environmentObject(web) }

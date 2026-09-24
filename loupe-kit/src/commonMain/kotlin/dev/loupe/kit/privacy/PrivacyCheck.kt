@@ -77,6 +77,15 @@ data class PrivacySummary(
     val groups: List<PrivacyGroup> get() = PrivacyGroup.entries.filter { g -> findings.any { it.group == g } }
 }
 
+/** Told about each item a privacy check reads: counts only, never what was found or where. */
+interface PrivacyItemListener {
+    /** Item [done] of [total] checked; [findings] rules fired on it; [skipped] when it was not checked. */
+    fun onItem(done: Int, total: Int, findings: Int, skipped: Boolean)
+
+    /** Every item is read; the duplicate pass runs now. */
+    fun onDuplicates()
+}
+
 object PrivacyCheck {
     /** Corrections-log judgment id and "criteria" for privacy verdicts (the rules have no wording). */
     const val JUDGMENT_ID = "privacy"
@@ -124,11 +133,20 @@ object PrivacyCheck {
     fun isOcr(item: SourceItem): Boolean = PrivacyEvidence.isOcr(item.kind == ItemKind.IMAGE, item.facts["text"])
 
     /** Every finding in [items], before the user's verdicts. */
-    fun findings(items: List<SourceItem>, sampleSourceIds: Set<String>, today: LocalDate = PiiRules.systemToday()): List<PrivacyFinding> {
+    fun findings(
+        items: List<SourceItem>,
+        sampleSourceIds: Set<String>,
+        today: LocalDate = PiiRules.systemToday(),
+        listener: PrivacyItemListener? = null,
+    ): List<PrivacyFinding> {
         val out = mutableListOf<PrivacyFinding>()
-        for (item in items) {
+        for ((index, item) in items.withIndex()) {
             // Contact cards are the address book itself: a phone number there is the point, not a leak.
-            if (item.kind == ItemKind.CONTACT) continue
+            if (item.kind == ItemKind.CONTACT) {
+                listener?.onItem(index + 1, items.size, 0, true)
+                continue
+            }
+            val before = out.size
             val sample = item.sourceId in sampleSourceIds
             fun finding(rule: String, group: PrivacyGroup, risk: String, title: String, previews: List<String>, message: String) =
                 PrivacyFinding(
@@ -172,7 +190,9 @@ object PrivacyCheck {
                     out += finding(sg.type, groupFor(sg.type), "business_exposed", title(sg), sg.previews, message)
                 }
             }
+            listener?.onItem(index + 1, items.size, out.size - before, false)
         }
+        listener?.onDuplicates()
 
         // ---- duplicates
         val byId = items.associateBy { it.id }
@@ -197,8 +217,9 @@ object PrivacyCheck {
         sampleSourceIds: Set<String>,
         corrections: Map<CorrectionKey, String>,
         today: LocalDate = PiiRules.systemToday(),
+        listener: PrivacyItemListener? = null,
     ): PrivacySummary {
-        val all = findings(items, sampleSourceIds, today)
+        val all = findings(items, sampleSourceIds, today, listener)
         val shown = all.filter { corrections[CorrectionKey(JUDGMENT_ID, CRITERIA, it.key)] != SAFE }
         return PrivacySummary(shown, all.size - shown.size, items.count { it.kind != ItemKind.CONTACT })
     }
@@ -214,6 +235,18 @@ object PrivacyCheck {
      */
     fun summariseWith(items: List<SourceItem>, sampleSourceIds: Set<String>, corrections: Map<CorrectionKey, String>, readContent: Boolean): PrivacySummary =
         summarise(if (readContent) items else withoutContent(items), sampleSourceIds, corrections)
+
+    /**
+     * [summariseWith] reporting each item to [listener] as it is checked (the live run view), on the calling
+     * thread. The listener sees counts only: no finding, name or text.
+     */
+    fun summariseWatching(
+        items: List<SourceItem>,
+        sampleSourceIds: Set<String>,
+        corrections: Map<CorrectionKey, String>,
+        readContent: Boolean,
+        listener: PrivacyItemListener,
+    ): PrivacySummary = summarise(if (readContent) items else withoutContent(items), sampleSourceIds, corrections, PiiRules.systemToday(), listener)
 
     /** The items with their text withheld (`read_content` off). */
     fun withoutContent(items: List<SourceItem>): List<SourceItem> = items.map { it.copy(text = "", hasText = false, textTruncated = false) }

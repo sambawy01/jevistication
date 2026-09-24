@@ -145,6 +145,8 @@ final class ModelSettingsModel: ObservableObject {
             case "idle_unload_min": return num == 0 ? MS.t("unit.never") : MS.t("unit.min", ["n": MS.number(num)])
             case "content_budget_s", "time_limit_s": return MS.t("unit.s", ["n": MS.number(num)])
             case "queue_size", "ocr_max_pages": return MS.t("unit.pages", ["n": MS.number(num)])
+            case "cost_input_per_mtok", "cost_output_per_mtok": return MS.t("unit.usdPerM", ["n": String(format: "%.2f", num)])
+            case "cost_tokens_in", "cost_tokens_out": return MS.t("unit.tokens", ["n": MS.number(num)])
             default: return MS.t("unit.chars", ["n": MS.number(num)])
             }
         }
@@ -158,6 +160,9 @@ final class ModelSettingsModel: ObservableObject {
         case "accept_confidence": return 0.05
         case "idle_unload_min", "time_limit_s", "queue_size", "ocr_max_pages": return 1
         case "content_budget_s": return 5
+        case "cost_input_per_mtok", "cost_output_per_mtok": return 0.25
+        case "cost_tokens_in": return 50
+        case "cost_tokens_out": return 10
         case "max_decisions_per_s": return 0.5
         default: return 100   // characters
         }

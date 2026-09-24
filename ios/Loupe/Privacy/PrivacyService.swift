@@ -61,9 +61,16 @@ final class PrivacyService: ObservableObject {
         let corrections = ledger.correctionIndex()
         // Model settings (`features.scan`): read_content off checks names, folders and duplicates only.
         let readContent = settings.current.readContent
-        summary = await ModelWork.run(.sweep) {
-            PrivacyCheck.shared.summariseWith(items: all, sampleSourceIds: [SourcesService.sampleId], corrections: corrections, readContent: readContent)
+        // The live run view (Folder Scan's loop): one particle per item checked, counts only.
+        let job = ActivityCenter.shared.start("scan", title: "act.title.privacy", view: "scan", total: all.count, stage: "act.stage.deciding")
+        job.meta(["files_total": all.count, "files_seen": 0, "laya_files": 0, "rule_only": 0, "ocr_files": 0])
+        let listener = PrivacyJobListener(job: job, readContent: readContent, pace: ActivityCenter.slowPace)
+        let result = await ModelWork.run(.sweep) {
+            PrivacyCheck.shared.summariseWatching(items: all, sampleSourceIds: [SourcesService.sampleId], corrections: corrections,
+                                                  readContent: readContent, listener: listener)
         }
+        summary = result
+        job.finish("done", "act.res.scan", ["files": Int(result.itemsChecked), "flagged": result.findings.count])
         // The check is rules on iPhone either way; use_laya off says so on screen, as Station's Folder Scan.
         settings.recordRun(Features.shared.SCAN, layaOff: !settings.useLaya(Features.shared.SCAN))
     }
@@ -167,4 +174,26 @@ final class PrivacyService: ObservableObject {
         guard let s = summary else { return }
         summary = PrivacySummary(findings: s.findings.filter { $0.key != f.key }, markedSafe: s.markedSafe, itemsChecked: s.itemsChecked)
     }
+}
+
+/// Reports each checked item of a privacy check to its live run: counts only (LoupeKit's `ActivityReport`).
+/// Called on the model queue; `pace` (DEBUG `-LoupeSlowJobs`) spaces items so a UI test can watch them move.
+final class PrivacyJobListener: NSObject, PrivacyItemListener, @unchecked Sendable {
+    let job: LiveJob
+    let readContent: Bool
+    let pace: TimeInterval
+
+    init(job: LiveJob, readContent: Bool, pace: TimeInterval) {
+        self.job = job
+        self.readContent = readContent
+        self.pace = pace
+    }
+
+    func onItem(done: Int32, total: Int32, findings: Int32, skipped: Bool) {
+        job.scanned(findings: Int(findings), skipped: skipped, readContent: readContent)
+        job.progress(Int(done), of: Int(total))
+        if pace > 0 { Thread.sleep(forTimeInterval: pace) }
+    }
+
+    func onDuplicates() { job.stage("act.stage.hashing") }
 }

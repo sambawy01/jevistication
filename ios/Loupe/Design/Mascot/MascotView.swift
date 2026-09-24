@@ -56,7 +56,7 @@ struct MascotView: View {
                 Image(uiImage: MascotStills.shared.image(state, points: size, kind: kind, dark: dark))
                     .resizable().scaledToFit()
             } else {
-                MascotSceneView(kind: kind, state: state, lookAt: lookAt, reduceMotion: reduceMotion, dark: dark,
+                MascotSceneView(kind: kind, state: state, lookAt: lookAt, reduceMotion: Motion.reduced(reduceMotion), dark: dark,
                                 active: scenePhase == .active && tabSelected)
                     .id(kind)
             }
@@ -297,7 +297,7 @@ struct MascotGallery: View {
             }
             .padding(12)
         }
-        .background(Color(red: 0.96, green: 0.96, blue: 0.94).ignoresSafeArea())
+        .neonGround()
     }
 }
 #endif

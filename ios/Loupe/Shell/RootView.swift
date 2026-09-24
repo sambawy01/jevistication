@@ -16,26 +16,28 @@ struct RootView: View {
     var body: some View {
         TabView(selection: $selection) {
             NowView()
-                .tabItem { Label("Now", systemImage: "scope") }
+                .tabItem { Label("Now", systemImage: "dot.radiowaves.left.and.right") }
                 .tag(AppTab.now)
                 .environment(\.mascotTabSelected, selection == .now)
             JudgmentsView(service: JudgmentsService.shared)
-                .tabItem { Label("Judgments", systemImage: "list.bullet.rectangle") }
+                .tabItem { Label("Judgments", systemImage: "checklist") }
                 .tag(AppTab.judgments)
                 .environment(\.mascotTabSelected, selection == .judgments)
             WebTabView()
-                .tabItem { Label("Web", systemImage: "globe") }
+                .tabItem { Label("Web", systemImage: "globe.americas.fill") }
                 .tag(AppTab.web)
                 .environment(\.mascotTabSelected, selection == .web)
             SourcesView(sources: sources)
-                .tabItem { Label("Sources", systemImage: "externaldrive") }
+                .tabItem { Label("Sources", systemImage: "externaldrive.fill.badge.checkmark") }
                 .tag(AppTab.sources)
                 .environment(\.mascotTabSelected, selection == .sources)
             MeView()
-                .tabItem { Label("Me", systemImage: "person") }
+                .tabItem { Label("Me", systemImage: "person.crop.circle.fill") }
                 .tag(AppTab.me)
                 .environment(\.mascotTabSelected, selection == .me)
         }
+        // Jobs running off-screen, and the model-load banner (the live run views are in place on each screen).
+        .overlay(alignment: .bottom) { ActivityDock() }
         .environmentObject(launcher)
         // "Open in Loupe" from the share sheet or Files: a preset pack goes to the Judgments preview.
         .onOpenURL { url in
@@ -84,7 +86,7 @@ struct PlaceholderTab: View {
                 HonestEmptyState(title: "Nothing here yet", message: message, symbol: symbol)
                     .padding(.top, 24)
             }
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle(title)
         }
     }

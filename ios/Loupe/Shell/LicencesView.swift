@@ -14,6 +14,7 @@ struct LicencesView: View {
         List(Self.notices) { n in
             NavigationLink(n.title) { NoticeText(notice: n) }
         }
+        .neonList()
         .navigationTitle("Licences")
         .accessibilityIdentifier("licences.list")
     }

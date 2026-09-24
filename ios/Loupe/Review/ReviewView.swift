@@ -33,7 +33,7 @@ struct ReviewView: View {
 
     var body: some View {
         List {
-            Section {
+            NeonSection {
                 Text("Actions the checks propose: remove a duplicate copy, confirm a phishing message, keep a finding on Now, add a judgment. Nothing happens until you approve it.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
                 Text("Not the Unsure queue: that one asks you for answers the model learns from. This one is actions.")
@@ -54,7 +54,7 @@ struct ReviewView: View {
                 if let p = review.problem { Text(p).font(.caption).foregroundStyle(Palette.dangerText) }
             }
             if review.open.isEmpty {
-                Section {
+                NeonSection {
                     Text("Nothing to review. When a check proposes an action, it waits here.")
                         .font(.subheadline).foregroundStyle(Palette.inkSoft)
                         .accessibilityIdentifier("review.empty")
@@ -63,7 +63,7 @@ struct ReviewView: View {
                 ForEach(ReviewRegistry.shared.FEATURES, id: \.self) { feature in
                     let rows = review.open.filter { $0.feature == feature }
                     if !rows.isEmpty {
-                        Section(ReviewRegistry.shared.featureTitle(feature: feature)) {
+                        NeonSection(ReviewRegistry.shared.featureTitle(feature: feature)) {
                             ForEach(rows, id: \.id) { item in
                                 ReviewRow(item: item, selected: selected.contains(item.id), working: working,
                                           toggle: { toggle(item) },
@@ -77,7 +77,7 @@ struct ReviewView: View {
                 }
             }
             if !review.decided.isEmpty {
-                Section {
+                NeonSection {
                     DisclosureGroup("Decided (\(review.decided.count))", isExpanded: $showDecided) {
                         ForEach(review.decided, id: \.id) { item in
                             ReviewRow(item: item, selected: false, working: working, toggle: {}, approve: {}, reject: {}, retry: {},
@@ -87,6 +87,7 @@ struct ReviewView: View {
                 }
             }
         }
+        .neonList()
         .navigationTitle("Review")
         .toolbar {
             if !selected.isEmpty {
@@ -169,10 +170,10 @@ private struct ReviewRow: View {
             }
             HStack {
                 if item.status == ReviewStatus.shared.PENDING {
-                    Button(verb, action: approve).buttonStyle(.borderedProminent).accessibilityIdentifier("review.approve")
+                    Button(verb, action: approve).buttonStyle(.neonPrimary).accessibilityIdentifier("review.approve")
                     Button("Reject", role: .destructive, action: reject).buttonStyle(.bordered).accessibilityIdentifier("review.reject")
                 } else if item.status == ReviewStatus.shared.FAILED {
-                    Button("Retry", action: retry).buttonStyle(.borderedProminent).accessibilityIdentifier("review.retry")
+                    Button("Retry", action: retry).buttonStyle(.neonPrimary).accessibilityIdentifier("review.retry")
                     Button("Reject", role: .destructive, action: reject).buttonStyle(.bordered).accessibilityIdentifier("review.reject")
                 } else if item.status == ReviewStatus.shared.APPLIED && item.reversible {
                     Button("Undo", action: undo).buttonStyle(.bordered).accessibilityIdentifier("review.undo")
@@ -204,14 +205,15 @@ private struct RejectSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Why not?") {
+                NeonSection("Why not?") {
                     ForEach(["Not needed", "Wrong", "I will do it myself"], id: \.self) { r in
                         Button(r) { onReject(r); dismiss() }
                     }
                     TextField("Another reason", text: $reason).accessibilityIdentifier("review.reason")
                 }
-                Section { Text("A rejected proposal is not made again.").font(.caption) }
+                NeonSection { Text("A rejected proposal is not made again.").font(.caption) }
             }
+            .neonList()
             .navigationTitle("Reject")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

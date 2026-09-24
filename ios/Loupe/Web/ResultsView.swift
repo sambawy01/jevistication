@@ -11,6 +11,7 @@ struct ResultsView: View {
                     header(r)
                     if !r.live { testBanner }
                     prioritiesCard
+                    LiveRunSection(view: "flights", whileRunning: true)
                     ForEach(web.shown) { OfferCard(item: $0) }
                     Text("Loupe never books or pays. Copy the offer and finish on Duffel or the airline's site.")
                         .font(.footnote).foregroundStyle(Palette.inkSoft).padding(.top, 4)
@@ -18,7 +19,7 @@ struct ResultsView: View {
             }
             .padding(16)
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("results.screen")

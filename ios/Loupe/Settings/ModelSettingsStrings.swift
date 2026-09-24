@@ -139,6 +139,20 @@ enum MS {
         "g.text_chars_multilingual.desc": ("Characters sent to Laya for a feature set to \"Same as everywhere\". More context against speed and battery.",
                                            "عدد الأحرف المرسلة إلى Laya للميزة المضبوطة على «كما في كل مكان». سياق أكثر مقابل السرعة والبطارية."),
 
+        // Cost of asking (the live run views): Station's eng.g.cost_* wording, "this device" for "this Mac".
+        "g.cost_input_per_mtok": ("Cost of asking: input price", "كلفة السؤال: سعر الإدخال"),
+        "g.cost_input_per_mtok.desc": ("Dollars per million input tokens of the cloud model the live views compare Laya with. Default: Claude Sonnet 5 list price. Nothing is ever sent to it.",
+                                       "دولارات لكل مليون رمز إدخال للنموذج السحابي الذي تقارن به العروض المباشرة Laya. الافتراضي: سعر Claude Sonnet 5 المعلن. لا يُرسل إليه شيء أبدًا."),
+        "g.cost_output_per_mtok": ("Cost of asking: output price", "كلفة السؤال: سعر الإخراج"),
+        "g.cost_output_per_mtok.desc": ("Dollars per million output tokens of that cloud model.", "دولارات لكل مليون رمز إخراج لذلك النموذج السحابي."),
+        "g.cost_tokens_in": ("Cost of asking: tokens in per decision", "كلفة السؤال: رموز الإدخال لكل قرار"),
+        "g.cost_tokens_in.desc": ("Input tokens one decision would take in a cloud request (an excerpt with its questions).",
+                                  "رموز الإدخال التي يأخذها قرار واحد في طلب سحابي (مقتطف مع أسئلته)."),
+        "g.cost_tokens_out": ("Cost of asking: tokens out per decision", "كلفة السؤال: رموز الإخراج لكل قرار"),
+        "g.cost_tokens_out.desc": ("Output tokens one decision would take (a short JSON answer).", "رموز الإخراج التي يأخذها قرار واحد (إجابة JSON قصيرة)."),
+        "unit.usdPerM": ("${n} per 1M tokens", "{n} دولار لكل مليون رمز"),
+        "unit.tokens": ("{n} tokens", "{n} رمزًا"),
+
         // Features
         "feat.judgments": ("Judgments and sorting", "الأحكام والفرز"),
         "feat.judgments.hint": ("Your judgments: runs from a judgment's results and the sort in the background.", "أحكامك: التشغيل من نتائج الحكم والفرز في الخلفية."),

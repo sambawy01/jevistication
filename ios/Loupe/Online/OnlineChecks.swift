@@ -344,9 +344,23 @@ final class OnlineChecksService: ObservableObject {
         var pdb: PhishingDbIndex?
         if s.feeds {
             let lists = s.lists.filter { $0 != "phishingdb" }
+            // The refresh's live run: one step per list (its id), in Me → Online checks or the dock.
+            let job = ActivityCenter.shared.start("feeds", title: "act.title.feeds", view: "protection",
+                                                  total: lists.count + (s.phishingDb ? 1 : 0), stage: "act.stage.downloading")
+            var refreshed = 0
             for l in lists {
-                do { try await feeds.refresh(l) } catch { notes.append("Phishing list \(l): could not download (\(error)).") }
+                job.step(l, key: "act.stage.downloading", state: "running")
+                do {
+                    try await feeds.refresh(l)
+                    refreshed += 1
+                    job.step(l, key: "act.stage.downloading", state: "done")
+                } catch {
+                    notes.append("Phishing list \(l): could not download (\(error)).")
+                    job.step(l, key: "act.stage.downloading", state: "error")
+                }
+                job.progress(refreshed, of: nil)
             }
+            defer { job.finish("done", "act.res.feeds", ["lists": refreshed]) }
             let entries = feeds.entries(lists)
             if !entries.isEmpty {
                 index = FeedIndex(entries: entries)
@@ -355,7 +369,11 @@ final class OnlineChecksService: ObservableObject {
                              " list on this phone · \(entries.values.map(\.count).reduce(0, +)) entries · fetched \(feedsAt ?? at)")
             }
             if s.phishingDb {
-                if let error = await phishingDb.refresh(refreshHours: s.refreshHours) {
+                job.step("phishingdb", key: "act.stage.downloading", state: "running")
+                let pdbError = await phishingDb.refresh(refreshHours: s.refreshHours)
+                job.step("phishingdb", key: "act.stage.downloading", state: pdbError == nil ? "done" : "error")
+                if pdbError == nil { refreshed += 1; job.progress(refreshed, of: nil) }
+                if let error = pdbError {
                     notes.append("Phishing.Database: could not update (\(error)); the last good copy is kept.")
                 }
                 let store = phishingDb

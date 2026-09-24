@@ -43,7 +43,7 @@ struct PackPreviewView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
+                NeonSection {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(preview.pack.name).font(.headline)
                         if !preview.pack.description_.isEmpty {
@@ -58,11 +58,11 @@ struct PackPreviewView: View {
                             .accessibilityIdentifier("packs.exampleLabel")
                     }
                 }
-                Section("Will be added (\(preview.addable.count))") {
+                NeonSection("Will be added (\(preview.addable.count))") {
                     ForEach(preview.addable, id: \.judgmentId) { plan in PlanRow(plan: plan) }
                 }
                 if !preview.refused.isEmpty {
-                    Section {
+                    NeonSection {
                         ForEach(preview.refused, id: \.judgmentId) { plan in PlanRow(plan: plan) }
                     } header: {
                         Text("Not added: the lint refused them (\(preview.refused.count))")
@@ -71,7 +71,7 @@ struct PackPreviewView: View {
                     }
                 }
                 if preview.conflicts > 0 {
-                    Section("You already have \(preview.conflicts) of these") {
+                    NeonSection("You already have \(preview.conflicts) of these") {
                         Picker("Same id", selection: $choice) {
                             Text("Skip them").tag(ConflictChoice.skip)
                             Text("Replace mine").tag(ConflictChoice.replace)
@@ -85,7 +85,7 @@ struct PackPreviewView: View {
                         }
                     }
                 }
-                Section {
+                NeonSection {
                     Button {
                         packs.add(choice)
                         dismiss()
@@ -102,6 +102,7 @@ struct PackPreviewView: View {
                     Text("Nothing is added until you choose. Judgments from a pack are yours to change or delete like any other.")
                 }
             }
+            .neonList()
             .navigationTitle("Pack preview")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { packs.preview = nil; dismiss() } } }

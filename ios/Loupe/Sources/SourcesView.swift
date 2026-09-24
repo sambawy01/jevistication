@@ -10,14 +10,14 @@ struct SourcesView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section {
+                NeonSection {
                     sampleRow
                 } header: {
                     Text("On this iPhone")
                 } footer: {
                     Text("Synthetic receipts, SPECIMEN documents, subscription mail and a phishing example, shipped inside the app so Loupe can be tried without your data. Read on this iPhone; nothing leaves it.")
                 }
-                Section {
+                NeonSection {
                     ForEach(PhoneSource.allCases) { source in
                         PhoneSourceRow(sources: sources, source: source)
                     }
@@ -26,7 +26,7 @@ struct SourcesView: View {
                 } footer: {
                     Text("Each source is off until you turn it on. Turning one on is the only time Loupe asks iOS for its permission. Off means its items leave every judgment and watcher.")
                 }
-                Section {
+                NeonSection {
                     NavigationLink {
                         InboxView(sources: sources)
                     } label: {
@@ -38,7 +38,7 @@ struct SourcesView: View {
                 } footer: {
                     Text("Imported CSVs, mail files, ZIP archives and text shared from other apps. Each import is listed with its counts and can be removed.")
                 }
-                Section {
+                NeonSection {
                     NavigationLink {
                         PrivacyView(privacy: PrivacyService.shared)
                     } label: {
@@ -48,7 +48,7 @@ struct SourcesView: View {
                 } footer: {
                     Text("Checks every source that is on for ID and card numbers, IBANs, contact lists, keys and tokens, and duplicate files. Mechanical, on this iPhone.")
                 }
-                Section {
+                NeonSection {
                     NavigationLink {
                         MailTriageView(mail: MailTriageService.shared)
                     } label: {
@@ -61,11 +61,11 @@ struct SourcesView: View {
                     Text("Sorts every email from the sources that are on (the sample now, your IMAP mailbox when it is on) into Loupe Station's categories and checks it for phishing: sender, reply address, mail-server checks and links. Mechanical, on this iPhone.")
                 }
                 if let problem = sources.problem {
-                    Section { Text(problem).font(.footnote).foregroundStyle(Palette.red) }
+                    NeonSection { Text(problem).font(.footnote).foregroundStyle(Palette.red) }
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle("Sources")
         }
     }

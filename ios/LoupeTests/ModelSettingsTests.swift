@@ -46,7 +46,8 @@ final class ModelSettingsTests: XCTestCase {
         XCTAssertEqual(m.sections.map(\.scope), ["global", "judgments", "scan", "email", "browser", "watchers", "flights", "game", "playground"])
         XCTAssertEqual(m.sections.first?.rows.map(\.name),
                        ["routing", "memory_mode", "idle_unload_min", "accept_confidence", "use_calibration", "rules_first",
-                        "baseline_switch", "bias_correction", "text_chars_english", "text_chars_multilingual"])
+                        "baseline_switch", "bias_correction", "text_chars_english", "text_chars_multilingual",
+                                                   "cost_input_per_mtok", "cost_output_per_mtok", "cost_tokens_in", "cost_tokens_out"])
         XCTAssertEqual(m.rows("game").map(\.name), ["use_laya", "routing", "text_chars", "max_decisions_per_s"])
         XCTAssertEqual(m.rows("scan").map(\.name), ["use_laya", "routing", "text_chars", "read_content", "content_budget_s", "ocr", "ocr_max_pages"])
         XCTAssertTrue(m.sections.last!.rows.isEmpty, "the Playground is desktop-only")

@@ -80,13 +80,13 @@ struct NowView: View {
                             Circle().fill(Palette.mint).frame(width: 8, height: 8)
                             Text("On this phone. Nothing leaves it.")
                                 .font(.subheadline)
-                                .foregroundStyle(.white.opacity(0.9))
+                                .foregroundStyle(Palette.ink)
                             Spacer()
                             Text("0 bytes out")
                                 .font(Typeface.mono(12))
-                                .foregroundStyle(.white.opacity(0.85))
+                                .foregroundStyle(Palette.ink)
                         }
-                        Divider().overlay(.white.opacity(0.15))
+                        Divider().overlay(Palette.hairline)
                         HStack(spacing: 0) {
                             stat("Needs you", hasDecisions ? "\(service.needsYou)" : nil)
                             stat("Findings", watchers.summary.map { "\($0.findings.count)" })
@@ -97,6 +97,9 @@ struct NowView: View {
                         }
                     }
                 }
+                // Runs that belong to Now, live and in place: the passive sort and the watchers.
+                LiveRunSection(view: "now", whileRunning: true).padding(.horizontal, 16)
+                LiveRunSection(view: "watchers", whileRunning: true).padding(.horizontal, 16)
                 if hasDecisions {
                     Button { showQueue = true } label: { NeedsYouCard(count: service.needsYou) }
                         .buttonStyle(.plain)
@@ -125,7 +128,7 @@ struct NowView: View {
             }
             .padding(.bottom, 24)
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .scrollBounceBehavior(.basedOnSize)
     }
 
@@ -202,7 +205,7 @@ struct NowView: View {
 
     private func stat(_ label: String, _ value: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundStyle(.white.opacity(0.7))
+            Text(label).font(.caption).foregroundStyle(Palette.inkSoft)
             // An em dash, not a zero: there is no data yet, and zero would be a claim.
             Text(value ?? "—").font(Typeface.display(26)).foregroundStyle(Palette.cyan)
         }

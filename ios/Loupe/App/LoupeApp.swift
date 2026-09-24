@@ -13,6 +13,8 @@ struct LoupeApp: App {
             UserDefaults.standard.removeObject(forKey: MascotKind.storageKey)
         }
         #endif
+        // Dark neon everywhere (owner decision 2026-09-24): bars, tabs, controls.
+        NeonChrome.install()
         // BGTaskScheduler wants every handler registered before launch finishes.
         BackgroundSorter.shared.register()
         BackgroundSorter.shared.schedule()
@@ -22,16 +24,18 @@ struct LoupeApp: App {
         WindowGroup {
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-LoupeMascotGallery") {
-                MascotGallery()
+                MascotGallery().preferredColorScheme(.dark)
             } else {
                 RootView(initialTab: LaunchOptions.current.initialTab)
                     .environmentObject(web)
                     .tint(Palette.blue)
+                    .preferredColorScheme(.dark)
             }
             #else
             RootView(initialTab: LaunchOptions.current.initialTab)
                 .environmentObject(web)
                 .tint(Palette.blue)
+                .preferredColorScheme(.dark)
             #endif
         }
     }

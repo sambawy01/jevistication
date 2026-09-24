@@ -188,7 +188,7 @@ struct DiagnosticsView: View {
 
     var body: some View {
         List {
-            Section {
+            NeonSection {
                 Text("Runs the \(runner.fixture?.cases.count ?? 0) pinned parity questions (34 golden + 8 criteria) through Laya on this phone and compares each answer with the desktop's INT8 answer. Measures latency by token length, peak memory, thermal state and battery. Nothing leaves the phone unless you share the report.")
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
                 Stepper("Timed passes: \(passes)", value: $passes, in: 1...20).disabled(runner.isRunning)
@@ -205,14 +205,15 @@ struct DiagnosticsView: View {
                 }
             }
             switch runner.phase {
-            case .opening: Section { ProgressView("Checking and opening Laya…") }
+            case .opening: NeonSection { ProgressView("Checking and opening Laya…") }
             case let .running(done, total):
-                Section { ProgressView(value: Double(done), total: Double(max(1, total))) { Text("\(done) / \(total)") } }
-            case .failed(let m): Section { Text(m).foregroundStyle(Palette.red).font(.footnote) }
+                NeonSection { ProgressView(value: Double(done), total: Double(max(1, total))) { Text("\(done) / \(total)") } }
+            case .failed(let m): NeonSection { Text(m).foregroundStyle(Palette.red).font(.footnote) }
             default: EmptyView()
             }
             if let r = runner.report { results(r) }
         }
+        .neonList()
         .navigationTitle("Diagnostics")
         .accessibilityIdentifier("diag.screen")
         .sheet(item: $shared) { file in ShareSheet(items: [file.url]) }
@@ -221,26 +222,26 @@ struct DiagnosticsView: View {
     private var statusText: String { model.isInstalled ? "installed" : "not installed" }
 
     @ViewBuilder private func results(_ r: DiagnosticsReport) -> some View {
-        Section("Agreement with the desktop (JVM INT8)") {
+        NeonSection("Agreement with the desktop (JVM INT8)") {
             ForEach(r.agreement.keys.sorted(), id: \.self) { k in
                 let a = r.agreement[k]!
                 row(k, "\(a.same)/\(a.total) · max |Δp| \(a.maxAbsDelta.map { String(format: "%.2g", $0) } ?? "–")")
                 if !a.differing.isEmpty { Text("Different: \(a.differing.joined(separator: ", "))").font(.caption).foregroundStyle(Palette.red) }
             }
         }
-        Section("Latency by tokens (ms)") {
+        NeonSection("Latency by tokens (ms)") {
             ForEach(r.latency + [r.latencyAll], id: \.bucket) { l in
                 row("\(l.bucket) (\(l.samples))", "p50 \(fmt(l.p50Ms)) · p95 \(fmt(l.p95Ms))")
             }
         }
-        Section("Phone") {
+        NeonSection("Phone") {
             row("Peak phys_footprint", DeliveryError.bytes(Int64(r.memory.peakPhysFootprintBytes)))
             row("Thermal start → end (worst)", "\(r.thermal.start) → \(r.thermal.end) (\(r.thermal.worst))")
             row("Battery", r.battery.drainPercentPerHour.map { String(format: "%.1f%%/h", $0) } ?? "no estimate")
             Text(r.battery.note).font(.caption).foregroundStyle(Palette.inkSoft)
             row("Duration", String(format: "%.0f s%@", r.durationSeconds, r.completed ? "" : " (stopped)"))
         }
-        Section {
+        NeonSection {
             Button("Share report (JSON)") {
                 do { shared = try runner.exportURL().map(SharedFile.init) } catch { exportError = error.localizedDescription }
             }

@@ -1061,6 +1061,36 @@ their acceptance criteria are met; entries here record increments toward them.
   IMG_1507 case pass. MIT notice for Phishing.Database in Me → Licences and THIRD_PARTY_NOTICES.md.
   Not verified: DNS answers on a real device (tests use fakes).
 
+- **2026-09-24 — iPhone: dark neon theme app-wide, and the live run view (owner decisions, 2026-09-24).**
+  *Theme decision (owner):* the whole iPhone app moves from the light blue-white "clean room" (navy hero on
+  Now) to one dark neon design system — deep navy / near-black grounds (#070B18, #0B1530, #13235A), elevated
+  cards with a 1px cyan-blue border, signals electric blue / cyan / mint / amber / red, glow only on live and
+  active things (a working card's turning border, the lit stage node, particles, the mascot engine, chart
+  peaks), rolling counters, sweeping bars and donuts, hierarchical SF Symbols. Station keeps its light theme
+  (the contract's AMENDMENT applies to Station only). Every token is in `ios/Loupe/Design/Theme.swift`
+  (`Palette`, `Palette.UI` for SpriteKit/UIKit, `Typeface`, `Effects`, `Motion`, `NeonChrome`, `NeonSection`,
+  `.card(active:)`, `.neonGlow`, `.neonGround()`, `.neonList()`, `.neonPrimary`); views hold no colour
+  literals (grep: only the mascot's 3D materials under `Design/Mascot/` keep their own). Text contrast ≥ 4.5:1
+  on the darkest surface (ratios in Theme.swift); primary buttons are dark text on cyan→blue; Reduce Motion
+  keeps glows static and stops every sweep, roll, border turn and particle (DEBUG `-LoupeReduceMotion` forces
+  it for UI tests).
+  *Live run view:* the Station contract (README "Live run view", laya-studio) as LoupeKit's shared
+  `dev.loupe.kit.activity` (`ActivityRegistry`, `ActivityJob`, `JobSnapshot` field for field, `LiveRun` loops,
+  stage→node map, gate ends, particle batching (6 a gate), the 12 s screen-reader rule, `CostReference` and the
+  `cost_*` Model settings keys (defaults $2.00 / $10.00 per 1M, 700 + 60 tokens; price re-checked at
+  platform.claude.com/docs/en/about-claude/pricing on 2026-09-24: Sonnet 5 $2 / $10 is now standard)).
+  `Activity.clean` keeps only numbers, booleans and short ids, and (stricter than Station) drops anything that
+  ends like a file name; judgment question ids travel as opaque `j:` + FNV hash. Fed by the real jobs:
+  judgment sweep, passive sort, privacy check (`scan`, per item through `PrivacyItemListener`), mail triage
+  (`email_run`), watchers, inbox import, flights ranking, model open and download (`model_load`), phishing lists
+  (`feeds`), writing assistant (`llm_job`) and the game. SwiftUI view in place on each owning screen
+  (`LiveRunSection`): vertical pipeline, three decision diamonds, the mascot as engine ("powered by Laya ·
+  multilingual") following the entering particle, four cards, Activity dock and model-load banner; EN + AR,
+  mirrored in RTL. Names added beyond Station's: docs/LIVE-RUN-VIEW.md. Tests: `ActivityTest` (JVM + iOS
+  simulator, incl. no text / names / paths in a real privacy check's job), `LoupeTests/LiveRunTests.swift`,
+  `LoupeUITests/LiveRunUITests.swift` (counters move; Reduce Motion variant; design screenshots to
+  `~/.gstack/projects/sambawy01-jevistication/designs/ios-v2-dark/`). DEBUG `-LoupeSlowJobs` paces items 150 ms.
+
 ## Where the build stands
 
 As of 2026-09-23. Everything below was built on JVM Kotlin: no iOS or Android build, no device.

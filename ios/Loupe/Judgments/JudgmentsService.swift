@@ -200,9 +200,21 @@ final class JudgmentsService: ObservableObject {
         // Decision B: under Auto the baseline answers once it wins on the user's corrections.
         let auto = AutoBaseline.shared.verdict(all: ledger.allRows(), judgment: j, corrections: corrections, items: all).automatic
         let ledger = self.ledger
+        // The live run on the results screen: one particle per judged item (ids and numbers only).
+        var cancelBridge: (() -> Void)?
+        let job = ActivityCenter.shared.start("judgments", title: "act.title.judgments", view: "judgments",
+                                              total: plan.toJudge.count, stage: "act.stage.deciding", cancel: { cancelBridge?() })
+        let threshold = policy.thresholdFor(judgment: j)
         let bridge = SweepBridge(
-            progress: { p in Task { @MainActor [weak self] in self?.publish(p) } },
-            rows: { rows in ledger.record(rows) })
+            progress: { p in
+                job.progress(Int(p.done), of: Int(p.total))
+                Task { @MainActor [weak self] in self?.publish(p) }
+            },
+            rows: { rows in
+                ledger.record(rows)
+                job.rows(rows, threshold: threshold, model: policy.useLaya ? "multilingual" : nil)
+            })
+        cancelBridge = { [weak bridge] in bridge?.cancel() }
         self.bridge = bridge
         sweep = SweepProgress(judgmentId: j.id, total: Int32(plan.toJudge.count), done: 0, withoutText: plan.withoutText,
                               alreadyDecided: plan.alreadyDecided, mechanical: 0, unusable: 0, elapsedMillis: 0,
@@ -211,6 +223,9 @@ final class JudgmentsService: ObservableObject {
         let end: SweepProgress = await ModelWork.run(.foreground) {
             JudgmentSweep(backend: backend).runWith(judgment: j, plan: plan, observer: bridge, autoBaseline: auto, policy: policy)
         }
+        job.finish(end.error != nil ? "error" : end.cancelled ? "cancelled" : "done",
+                   end.error != nil ? "act.res.failed" : end.cancelled ? "act.res.stopped" : "act.res.judgments",
+                   ["done": Int(end.done), "uncertain": 0])
         settings.recordRun(Features.shared.JUDGMENTS, layaOff: end.layaOff)
         ledger.flush()
         self.bridge = nil

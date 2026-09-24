@@ -36,7 +36,10 @@ struct InboxView: View {
 
     var body: some View {
         List {
-            Section {
+            if ActivityCenter.shared.latest("sources")?.running == true {
+                NeonSection { LiveRunSection(view: "sources", whileRunning: true).listRowInsets(EdgeInsets()) }
+            }
+            NeonSection {
                 Toggle(isOn: Binding(get: { sources.inboxEnabled }, set: { sources.setInboxEnabled($0) })) {
                     Text("Use imported items").font(.subheadline)
                 }
@@ -54,7 +57,7 @@ struct InboxView: View {
             } footer: {
                 Text("CSV files become one item per row, with the column names beside each value. Mail files, ZIP archives (unpacked on this iPhone, with unsafe paths, links and zip bombs refused) and text shared from other apps land here too. Nothing leaves the phone.")
             }
-            Section {
+            NeonSection {
                 if sources.inboxBatches.isEmpty {
                     Text("Nothing imported yet.").font(.footnote).foregroundStyle(Palette.inkSoft)
                 }
@@ -74,7 +77,7 @@ struct InboxView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Inbox")
         .fileImporter(isPresented: $importing, allowedContentTypes: Self.importTypes, allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { Task { await sources.importToInbox(urls) } }
@@ -124,13 +127,13 @@ struct InboxBatchView: View {
         let items = sources.inboxItems(batch)
         let skipped = sources.inboxSkipped(batch)
         List {
-            Section {
+            NeonSection {
                 Text(Self.counts(batch)).font(.subheadline).accessibilityIdentifier("inbox.batch.counts")
                 if let first = items.first, let label = first.facts["imported"] {
                     Text(label).font(.footnote).foregroundStyle(Palette.inkSoft).accessibilityIdentifier("inbox.batch.label")
                 }
             }
-            Section("Items") {
+            NeonSection("Items") {
                 ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
                     Button { open = item } label: {
                         VStack(alignment: .leading, spacing: 2) {
@@ -142,7 +145,7 @@ struct InboxBatchView: View {
                 }
             }
             if !skipped.isEmpty {
-                Section("Skipped") {
+                NeonSection("Skipped") {
                     ForEach(Array(skipped.enumerated()), id: \.offset) { _, s in
                         VStack(alignment: .leading, spacing: 2) {
                             Text(s.path).font(.footnote).lineLimit(1)
@@ -151,7 +154,7 @@ struct InboxBatchView: View {
                     }
                 }
             }
-            Section {
+            NeonSection {
                 Button("Remove this import", role: .destructive) {
                     sources.removeInboxBatch(batch.id)
                     dismiss()
@@ -162,7 +165,7 @@ struct InboxBatchView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle(batch.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: Binding(get: { open.map(IdentifiedItem.init) }, set: { open = $0?.item })) { wrapped in

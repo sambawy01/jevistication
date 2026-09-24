@@ -150,10 +150,23 @@ final class SortService: ObservableObject {
         let corrections = ledger.correctionIndex()
         let conditions = self.conditions
         let ledger = self.ledger
+        // The passive sort's live run (Now): one particle per judged item; the dock shows it when Now is not on screen.
+        let thresholds = Dictionary(js.map { ($0.id, snapshot.policy(feature: Features.shared.JUDGMENTS).thresholdFor(judgment: $0)) }) { a, _ in a }
+        let job = ActivityCenter.shared.start("sort", title: "act.title.sort", view: "now", stage: "act.stage.deciding",
+                                              cancel: { [weak self] in self?.cancel() })
+        let model: String? = sweepsUseLaya ? "multilingual" : nil
         let bridge = CoordinatorBridge(
             conditions: conditions,
-            progress: { p in Task { @MainActor [weak self] in self?.publish(p) } },
-            rows: { ledger.record($0) })
+            progress: { p in
+                job.progress(Int(p.done), of: Int(p.total))
+                Task { @MainActor [weak self] in self?.publish(p) }
+            },
+            rows: { rows in
+                ledger.record(rows)
+                for (id, group) in Dictionary(grouping: rows, by: { $0.judgmentId }) {
+                    job.rows(group, threshold: thresholds[id] ?? 0.7, model: model)
+                }
+            })
         self.bridge = bridge
         resumeTrigger = nil
         progress = CoordinatorProgress(done: 0, total: 0, alreadyDecided: 0, judgments: Int32(js.count), currentJudgmentId: nil,
@@ -169,6 +182,9 @@ final class SortService: ObservableObject {
                 c.resume(returning: r)
             }
         }
+        job.finish(result.error != nil ? "error" : result.stopped != nil ? "cancelled" : "done",
+                   result.error != nil ? "act.res.failed" : result.stopped != nil ? "act.res.stopped" : "act.res.sort",
+                   ["done": Int(result.summary.sorted)])
         settings.recordRun(Features.shared.JUDGMENTS, layaOff: !sweepsUseLaya)
         if result.watchers != nil { settings.recordRun(Features.shared.WATCHERS, layaOff: result.layaOff.contains(Features.shared.WATCHERS)) }
         ledger.flush()

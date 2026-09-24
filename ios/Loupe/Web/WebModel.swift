@@ -164,8 +164,12 @@ final class WebModel: ObservableObject {
         settings.recordRun(Features.shared.FLIGHTS, layaOff: !policy.useLaya)
         guard policy.useLaya else { finishRules(.layaOff); return }
         ranking = .running(done: 0, total: offers.count)
+        // The ranking's live run on the results screen: one particle per offer Laya judged.
+        let job = ActivityCenter.shared.start("flights", title: "act.title.flights", view: "flights", total: offers.count,
+                                              stage: "act.stage.ranking", cancel: { [weak self] in self?.cancelRanking() })
         rankTask = Task { [weak self, laya] in
             guard let backend = await laya() else {
+                job.finish("error", "act.res.failed")
                 let failed: String? = await MainActor.run {
                     if case let .failed(m) = LayaModel.shared.status { return m } else { return nil }
                 }
@@ -178,16 +182,20 @@ final class WebModel: ObservableObject {
             let work = Task.detached(priority: .userInitiated) { () -> Result<[RankedOffer], Error> in
                 await ModelWork.run(.foreground) { Result(catching: {
                     let run = try ranker.decide(offers, by: priorities) { done, total in
+                        job.progress(Int(done), of: Int(total))
                         Task { @MainActor [weak self] in
                             if case .running = self?.ranking { self?.ranking = .running(done: done, total: total) }
                         }
                     }
                     // Every offer Laya judged is a decision: logged, synced, on this phone only.
                     ledger?.record(run.rows)
+                    job.rows(run.rows, threshold: 0.5)
                     return run.ranked
                 }) }
             }
             let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+            if case .success(let r) = result { job.finish("done", "act.res.flights", ["offers": r.count]) }
+            else if Task.isCancelled { job.finish("cancelled", "act.res.stopped") } else { job.finish("error", "act.res.failed") }
             guard let self, !Task.isCancelled else { return }
             switch result {
             case .success(let r):

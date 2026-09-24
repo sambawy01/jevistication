@@ -44,6 +44,7 @@ struct MailTriageView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                LiveRunSection(view: "email")
                 Text("Loupe Station's mail rules, read on this iPhone: a category from keyword rules, and a phishing verdict only from evidence a scam cannot hide — the sender's domain, the name it shows, where replies go, the mail server's checks and where links really go. The wording alone never flags an email.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
                 LayaOffBanner(feature: Features.shared.EMAIL)
@@ -82,7 +83,7 @@ struct MailTriageView: View {
             }
             .padding(16)
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Mail triage")
         .navigationBarTitleDisplayMode(.inline)
         .task { if mail.summary == nil { await mail.run() } }

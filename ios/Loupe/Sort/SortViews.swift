@@ -6,7 +6,7 @@ struct SortSection: View {
     @ObservedObject var sort: SortService = .shared
 
     var body: some View {
-        Section {
+        NeonSection {
             Toggle("Sort while charging", isOn: Binding(
                 get: { sort.enabled },
                 set: { on in

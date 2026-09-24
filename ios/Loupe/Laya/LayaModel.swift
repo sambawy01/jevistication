@@ -28,7 +28,12 @@ final class LayaModel: ObservableObject {
     static let variantKey = "laya.variant"
     static let cellularKey = "laya.download.cellular"
 
-    @Published private(set) var status: Status = .notInstalled
+    @Published private(set) var status: Status = .notInstalled {
+        didSet { reportDelivery(status) }
+    }
+    /// The download's live run (kind `model_load`, Me → Model): started on the first byte, finished on ready.
+    private var downloadJob: LiveJob?
+    static let loadSecondsKey = "laya.load.lastSeconds"
     @Published private(set) var variantID: String
     @Published var allowsCellular: Bool {
         didSet { defaults.set(allowsCellular, forKey: Self.cellularKey) }
@@ -116,7 +121,21 @@ final class LayaModel: ObservableObject {
         guard let dir = directory, isInstalled else { status = .notInstalled; return nil }
         status = .checking
         let variant = variantID
+        // "Loading the multilingual model… about 6 s": the banner, from the last load's duration.
+        let last = defaults.double(forKey: Self.loadSecondsKey)
+        let job = ActivityCenter.shared.start("model_load", title: "act.title.modelLoad", params: ["model": "multilingual"],
+                                              view: "setup", ref: "multilingual", stage: "act.stage.loadingModel",
+                                              expected: last > 0 ? last : nil)
+        job.model("multilingual")
+        let began = Date()
         let result = await Task.detached(priority: .userInitiated) { LayaOnPhone.shared.open(directory: dir, variant: variant) }.value
+        let took = Date().timeIntervalSince(began)
+        if result is LayaOnPhone.OpenedReady {
+            defaults.set(took, forKey: Self.loadSecondsKey)
+            job.finish("done", "act.res.modelLoaded", ["seconds": (took * 10).rounded() / 10])
+        } else {
+            job.finish("error", "act.res.modelFailed", ["model": "multilingual"])
+        }
         if let ready = result as? LayaOnPhone.OpenedReady {
             let m = LayaOnPhone.shared.memory(first: ready.laya, directory: dir, variant: variant)
             memory = m
@@ -126,6 +145,30 @@ final class LayaModel: ObservableObject {
         }
         status = .failed((result as? LayaOnPhone.OpenedFailed)?.message ?? "Could not open the model.")
         return nil
+    }
+
+    private func reportDelivery(_ s: Status) {
+        switch s {
+        case .downloading(let p):
+            if downloadJob == nil {
+                downloadJob = ActivityCenter.shared.start("model_load", title: "act.title.modelDownload", params: ["model": "multilingual"],
+                                                          view: "setup", ref: "multilingual", stage: "act.stage.downloading",
+                                                          cancel: { [weak self] in self?.cancelDownload() })
+            }
+            downloadJob?.progressFraction(p, of: 1)
+        case .verifying:
+            downloadJob?.stage("act.stage.verifying")
+        case .ready:
+            downloadJob?.finish("done", "act.res.downloaded"); downloadJob = nil
+        case .paused:
+            downloadJob?.finish("cancelled", "act.res.stopped"); downloadJob = nil
+        case .failed:
+            downloadJob?.finish("error", "act.res.failed"); downloadJob = nil
+        case .notInstalled:
+            downloadJob?.finish("cancelled", "act.res.stopped"); downloadJob = nil
+        case .checking:
+            break
+        }
     }
 
     // MARK: Delivery (only after consent, only on the user's tap)

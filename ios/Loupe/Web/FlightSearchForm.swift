@@ -43,12 +43,12 @@ struct FlightSearchForm: View {
                 Task { await web.search() }
             } label: {
                 HStack {
-                    if web.searchState == .searching { ProgressView().tint(.white) }
+                    if web.searchState == .searching { ProgressView().tint(Palette.onAccent) }
                     Text(web.searchState == .searching ? "Searching…" : "Search flights")
                 }
                 .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.neonPrimary)
             .disabled(web.searchState == .searching || !formValid)
             .accessibilityIdentifier("search.go")
         }

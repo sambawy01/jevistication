@@ -42,6 +42,8 @@ struct PrivacyView: View {
                     .font(.caption).foregroundStyle(Palette.inkSoft)
                 LayaOffBanner(feature: Features.shared.SCAN)
                 if let notice = privacy.notice { noticeRow(notice) }
+                // The check's live run, in place (Station's Folder Scan loop).
+                LiveRunSection(view: "scan")
                 if let s = privacy.summary {
                     if s.findings.isEmpty {
                         Text(s.itemsChecked == 0
@@ -63,7 +65,7 @@ struct PrivacyView: View {
             }
             .padding(16)
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Privacy check")
         .navigationBarTitleDisplayMode(.inline)
         .task { if privacy.summary == nil { await privacy.run() } }

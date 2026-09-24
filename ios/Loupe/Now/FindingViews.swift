@@ -38,19 +38,19 @@ struct HeroFindingCard: View {
             .foregroundStyle(Palette.cyan)
             Text(finding.title)
                 .font(Typeface.display(22))
-                .foregroundStyle(.white)
+                .foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
             if let line = finding.evidence.first {
-                Text(line).font(Typeface.mono(12)).foregroundStyle(.white.opacity(0.85)).lineLimit(2)
+                Text(line).font(Typeface.mono(12)).foregroundStyle(Palette.ink).lineLimit(2)
             }
             if more > 0 {
-                Text("+ \(more) more below").font(.caption).foregroundStyle(.white.opacity(0.7))
+                Text("+ \(more) more below").font(.caption).foregroundStyle(Palette.inkSoft)
             }
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(.white.opacity(0.15)))
+        .background(Palette.accentSoft, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Palette.hairline))
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("now.topFinding")
     }
@@ -193,7 +193,7 @@ struct ItemTextView: View {
                 }
                 .padding(16)
             }
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle(item.name)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

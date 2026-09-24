@@ -19,7 +19,7 @@ class EngineSettingsTest {
     private val stationDefaults = """
         {"global":{"routing":"auto","memory_mode":"balanced","idle_unload_min":10,"accept_confidence":null,
           "use_calibration":true,"rules_first":true,"baseline_switch":true,"bias_correction":"off","text_chars_english":1400,
-          "text_chars_multilingual":2400},
+          "text_chars_multilingual":2400,"cost_input_per_mtok":2,"cost_output_per_mtok":10,"cost_tokens_in":700,"cost_tokens_out":60},
          "features":{
           "scan":{"use_laya":true,"routing":null,"text_chars":null,"read_content":true,"content_budget_s":60,"ocr":true,"ocr_max_pages":3},
           "email":{"use_laya":true,"routing":null,"text_chars":null},

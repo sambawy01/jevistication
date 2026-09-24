@@ -10,17 +10,20 @@ struct OnlineChecksView: View {
 
     var body: some View {
         Form {
-            Section {
+            NeonSection {
                 Text("Loupe checks phishing on this phone. These switches add facts that only exist online. Each is off until you turn it on, every result says \"Online\" with its source and time, and Loupe works fully with them off.")
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
             }
-            Section {
+            if ActivityCenter.shared.latest("protection")?.running == true {
+                NeonSection { LiveRunSection(view: "protection", whileRunning: true).listRowInsets(EdgeInsets()) }
+            }
+            NeonSection {
                 Toggle("Domain age and certificates", isOn: binding(\.domainFacts))
                     .accessibilityIdentifier("online.domainFacts")
                 Text("Online · Loupe web helper. Sends one website domain at a time (e.g. example.com; never a full address, a page, an email or anything about you) and gets back when it was registered and when its first security certificate appeared. The helper keeps looked-up domains in memory for up to 6 hours, never on disk, never shared between installs. Websites on hosting platforms (x.github.io) are never looked up.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             } header: { Text("Online · Web helper") }
-            Section {
+            NeonSection {
                 Toggle("Known-phishing lists", isOn: binding(\.feeds))
                     .accessibilityIdentifier("online.feeds")
                 if online.settings.feeds {
@@ -37,7 +40,7 @@ struct OnlineChecksView: View {
                 Text("Online · Phishing.Database (MIT licence; it gathers several sources it does not all name), and OpenPhish or PhishTank if you add them. Downloads the public lists — the same files for everyone — and matches your links on this phone. Nothing about your links is sent. Phishing.Database's small \"new today\" files are checked hourly, the full list on the schedule above.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             } header: { Text("Online · Phishing lists") }
-            Section {
+            NeonSection {
                 Toggle("DNS facts", isOn: binding(\.dnsFacts))
                     .accessibilityIdentifier("online.dnsFacts")
                 Text("Online · this iPhone's own DNS resolver (the same one every app uses; no other service). Asks for a link's website domain whether it takes email (MX, SPF), what it tells mail servers to do with forged mail (DMARC), and whether your resolver validated it (DNSSEC). Shown as reassuring facts; they never clear a warning sign.")
@@ -52,7 +55,7 @@ struct OnlineChecksView: View {
                 Text("Online · asks each list about a link's website domain through this iPhone's resolver, which passes the question to the list's operator. Free for personal, non-commercial, low-volume use only (Spamhaus, SURBL and URIBL terms); a product sold to others needs each operator's paid feed. A list that refuses your network shows as \"could not be checked\", never as a listing.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             } header: { Text("Online · DNS") }
-            Section {
+            NeonSection {
                 Toggle("Google Safe Browsing", isOn: binding(\.safeBrowsing))
                     .disabled(!online.keySet)
                     .accessibilityIdentifier("online.safeBrowsing")
@@ -73,14 +76,14 @@ struct OnlineChecksView: View {
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             } header: { Text("Online · Google Safe Browsing") }
             if let status = online.status {
-                Section("Last run") {
+                NeonSection("Last run") {
                     Text(status).font(.caption).foregroundStyle(Palette.ink)
                         .accessibilityIdentifier("online.status")
                 }
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Online phishing checks")
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -14,7 +14,7 @@ xcodebuild test -project Loupe.xcodeproj -scheme Loupe -destination 'platform=iO
 DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` (in-memory key store), `-LoupeFixtures` (bundled fixture offers, no network), `-LoupeAutoSearch`.
 
 ## Done
-- Shell: Now (navy hero, logo, mascot), Judgments, Web, Sources, Me. Non-Web tabs show honest empty states, no fake data. Me reads facts from LoupeKit (built-in judgments, PSL version).
+- Shell: Now (dark neon hero, logo, mascot), Judgments, Web, Sources, Me. Non-Web tabs show honest empty states, no fake data. Me reads facts from LoupeKit (built-in judgments, PSL version).
 - Web · Flights: explainer, Duffel key (prefix check, verify via `/v1/health` + probe search, Keychain `WhenUnlockedThisDeviceOnly`), settings (helper on/off, Flights on/off, Remove key), search form, typed helper errors, NWPathMonitor offline state, Online badge, test-data banner, copyable hand-off text. Loupe never books or pays.
 - Ranking on device: `OfferRanker` protocol, `RuleBasedRanker` (stops, price cap, departure window, bags, refundable). The only network target is loupe-web-helper.
 
@@ -60,6 +60,9 @@ DEBUG-only launch arguments: `-LoupeTab now|web|…`, `-LoupeEphemeralKeychain` 
 - Verify what a result names (owner rule 2026-09-24): `Loupe/Shell/ItemReference.swift`. Every row that refers to an item — privacy check, Now findings, mail triage and link site checks, judgment results, Unsure, Review, Inbox — shows thumbnail, name, source/folder and date, with Open original (Photos asset, or Quick Look for documents and pictures only; scripts, code, HTML and executables are never opened), Share, and for mail Open in Mail (`message://` + Message-ID) or the headers to find it. Privacy findings: **Show where** re-derives the match on tap with LoupeKit's `PrivacyEvidence` — masked value and brand, masked context, the checks passed, and on a picture the Vision line's box — and keeps nothing. DEBUG `-LoupeFixtures -LoupePrivacyPhotoDemo` adds a rendered test-card photo. Tests: `LoupeTests/ItemReferenceTests.swift`, `LoupeUITests/PrivacyUITests.swift` (`PrivacyShowWhereUITests`); shared `EvidenceTest`.
 
 - Online phishing checks (formula v1.2, 2026-09-24): Phishing.Database list (on by default with the lists; `Online/PhishingDatabase.swift`), OpenPhish off by default, DNS facts and domain blocklists through the system resolver (`Online/SiteDns.swift`, `res_9_nsend`, off by default); link verdicts grouped as Warning signs / Reassuring facts / Also noticed (not counted). Show where masks as Loupe Station does.
+
+- Dark neon theme (owner decision 2026-09-24): one design system in `Loupe/Design/Theme.swift` — tokens, `NeonChrome` (bars, tabs, controls), `.card(active:)` with the turning border, `.neonGlow`, `NeonSection`/`.neonList()` for lists and forms, `.neonPrimary` buttons, `RollingNumber`, `SweepBar`, `Donut`, `NeonIcon`. No colour literals in views. Reduce Motion: static glows, nothing animates (`-LoupeReduceMotion` in DEBUG).
+- Live run view (Station contract, docs/LIVE-RUN-VIEW.md): `Loupe/Activity/` (`ActivityCenter`, `LiveJob`, `LiveRunModel`, `LiveRunView`, `ActivityDock`, `ActStrings`) over LoupeKit's `dev.loupe.kit.activity`. In place on Privacy (`scan`), Mail (`email`), Judgment results (`judgments`), Now (sort, watchers, while running), flight results, Me → Laya model (`setup`), Online checks (`protection`) and the game panel. DEBUG `-LoupeSlowJobs` paces items so the run can be watched. Tests: `LoupeTests/LiveRunTests.swift`, `LoupeUITests/LiveRunUITests.swift`.
 
 ## Pending
 - Sorting on a real iPhone: battery drain and thermal behaviour of a charging-window sort, and whether iOS grants the window at all, need a device (owner-blocked).

@@ -19,6 +19,10 @@ struct JudgmentResultsView: View {
                     LayaOffBanner(feature: Features.shared.JUDGMENTS)
                     modelCard(j)
                     if let s = service.sweep, s.judgmentId == j.id { sweepCard(s) }
+                    // The run, live and in place: the pipeline, the mascot engine, the decision diamonds and cards.
+                    LiveRunSection(view: "judgments") { q in
+                        service.judgments.first { Activity.shared.questionId(id: $0.id) == q }?.title
+                    }
                     criteriaCard(j)
                     results(j)
                 }
@@ -27,7 +31,7 @@ struct JudgmentResultsView: View {
                 Text("This judgment was deleted.").foregroundStyle(Palette.inkSoft).padding(24)
             }
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Results")
         .navigationBarTitleDisplayMode(.inline)
         .task {
@@ -88,7 +92,7 @@ struct JudgmentResultsView: View {
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
                 HStack {
                     Button { Task { await service.startSweep(j.id) } } label: { Label("Run on new items", systemImage: "play.fill") }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.neonPrimary)
                         .accessibilityIdentifier("results.run")
                     Button("Re-run all") { Task { await service.startSweep(j.id, rerunAll: true) } }
                         .buttonStyle(.bordered)
@@ -304,7 +308,7 @@ struct ResultDetailView: View {
             }
             .padding(16)
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Item")
         .navigationBarTitleDisplayMode(.inline)
     }

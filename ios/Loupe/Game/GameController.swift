@@ -203,7 +203,38 @@ final class GameController: ObservableObject {
         accumulated = 0
         overSince = nil
         pendingEffects.removeAll()
+        // The pilot's live run (a mobile-only kind, `game`): each decision it makes, who made it, where it went.
+        liveJob?.finish("cancelled", "act.res.stopped")
+        liveJob = ActivityCenter.shared.start("game", title: "act.title.game", view: "game", stage: "act.stage.playing")
+        reported = (0, 0, 0)
         refreshHUD()
+    }
+
+    private var liveJob: LiveJob?
+    private var reported: (model: Int, mechanical: Int, failures: Int) = (0, 0, 0)
+
+    /// New decisions since the last HUD refresh go to the live run: an action label and its probability only.
+    private func reportDecisions(_ h: HUDSnapshot) {
+        guard let job = liveJob else { return }
+        let chosen = h.bars.first { $0.chosen }
+        let label = chosen?.label.lowercased()
+        let dm = h.modelDecisions - reported.model, dr = h.mechanical - reported.mechanical, df = h.failures - reported.failures
+        if dm > 0 {
+            job.count("read", dm)
+            job.decision("move", label, chosen?.raw, src: "laya", model: "multilingual")
+            job.gate("accepted", dm)
+        }
+        if dr > 0 {
+            job.count("read", dr)
+            job.decision("move", label, 1, src: "rule")
+            job.gate("accepted", dr)
+        }
+        if df > 0 { job.count("read", df); job.gate("skipped", df) }
+        reported = (h.modelDecisions, h.mechanical, h.failures)
+        if h.over {
+            job.finish("done", "act.res.game", ["score": h.score, "rows": h.rows])
+            liveJob = nil
+        }
     }
 
     // MARK: Loop
@@ -334,6 +365,7 @@ final class GameController: ObservableObject {
             h.baselineOver = shadow.world.over
         }
         h.fps = fps
+        reportDecisions(h)
         if h != hud { hud = h }
     }
 
@@ -357,6 +389,8 @@ final class GameController: ObservableObject {
     }
 
     func close() {
+        liveJob?.finish("cancelled", "act.res.stopped")
+        liveJob = nil
         openTask?.cancel()
         modelClaim?.release()
         modelClaim = nil

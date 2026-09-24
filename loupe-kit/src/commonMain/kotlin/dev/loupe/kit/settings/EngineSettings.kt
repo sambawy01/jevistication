@@ -184,6 +184,13 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
     val textCharsEnglish: Int get() = number("global.text_chars_english")?.toInt() ?: 1_400
     val textCharsMultilingual: Int get() = number("global.text_chars_multilingual")?.toInt() ?: 2_400
 
+    /** The cost-of-asking price for the live run views: the saved `cost_*` values over the reference list price. */
+    val costReference: dev.loupe.kit.activity.CostReference
+        get() = dev.loupe.kit.activity.CostReference.DEFAULT.withPrices(
+            number("global.cost_input_per_mtok") ?: 2.0, number("global.cost_output_per_mtok") ?: 10.0,
+            number("global.cost_tokens_in")?.toInt() ?: 700, number("global.cost_tokens_out")?.toInt() ?: 60,
+        )
+
     // --- per feature ---
     fun useLaya(feature: String): Boolean = bool("features.$feature.use_laya")
 
@@ -337,6 +344,12 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
             add(global("text_chars_english", SettingKind.INT, n(1_400), 200.0, 20_000.0, onPhone = OnPhone.DESKTOP_ONLY,
                 note = "iPhone has no English model, so this limit is unused here."))
             add(global("text_chars_multilingual", SettingKind.INT, n(2_400), 200.0, 20_000.0))
+            // "Cost of asking" in the live run views (Station's engine_settings cost_*): the cloud price the
+            // views compare Laya with. Defaults: CostReference.DEFAULT (Claude Sonnet 5 list price, 2026-09-24).
+            add(global("cost_input_per_mtok", SettingKind.NUMBER, n(2), 0.0, 1_000.0))
+            add(global("cost_output_per_mtok", SettingKind.NUMBER, n(10), 0.0, 1_000.0))
+            add(global("cost_tokens_in", SettingKind.INT, n(700), 0.0, 200_000.0))
+            add(global("cost_tokens_out", SettingKind.INT, n(60), 0.0, 200_000.0))
 
             addAll(common(Features.SCAN))
             add(feature(Features.SCAN, "read_content", SettingKind.BOOL, b(true)))

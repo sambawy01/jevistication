@@ -28,7 +28,7 @@ struct JudgmentsView: View {
                 case .library: LibraryView(service: service)
                 }
             }
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle("Judgments")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { PacksMenu(packs: packs) }
@@ -104,7 +104,7 @@ struct MyJudgmentsList: View {
                         Text("Pick a template from the Library, or write your own question.")
                             .multilineTextAlignment(.center).foregroundStyle(Palette.inkSoft)
                         Button("Open the Library", action: openLibrary)
-                            .buttonStyle(.borderedProminent)
+                            .buttonStyle(.neonPrimary)
                             .accessibilityIdentifier("judgments.openLibrary")
                     }
                     .padding(24).frame(maxWidth: .infinity).card()

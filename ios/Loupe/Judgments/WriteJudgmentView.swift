@@ -48,13 +48,13 @@ struct WriteJudgmentView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                NeonSection {
                     TextField("Name (for your lists)", text: $m.title).accessibilityIdentifier("write.title")
                     TextField("The question, in plain language", text: $m.question, prompt: Text("Is this from my landlord?"), axis: .vertical)
                         .accessibilityIdentifier("write.question")
                 } header: { Text("Question") }
 
-                Section {
+                NeonSection {
                     Picker("Shape", selection: $m.shape) {
                         ForEach([DraftShape.yesNo, .score, .pick], id: \.self) { Text($0.title).tag($0) }
                     }
@@ -75,7 +75,7 @@ struct WriteJudgmentView: View {
                     Text(shapeHelp)
                 }
 
-                Section {
+                NeonSection {
                     TextField("True when…", text: $m.invariant, axis: .vertical)
                     TextField("False when…", text: $m.breaks, axis: .vertical)
                     TextField("Looks like it but isn't…", text: $m.lookalikes, axis: .vertical)
@@ -85,7 +85,7 @@ struct WriteJudgmentView: View {
                     }
                 } header: { Text("What it means") }
 
-                Section {
+                NeonSection {
                     Picker("If the model's answer cannot be used", selection: $m.posture) {
                         Text("Null action").tag(FailurePosture.nullAction)
                         Text("Loud").tag(FailurePosture.loud)
@@ -99,7 +99,7 @@ struct WriteJudgmentView: View {
                         .font(.caption).foregroundStyle(m.criteriaInPrompt ? Palette.amber : Palette.inkSoft)
                 } header: { Text("Behaviour") }
 
-                Section {
+                NeonSection {
                     if m.question.trimmingCharacters(in: .whitespaces).isEmpty {
                         Text("Start with a question. It is checked as you type: this is a classifier, so it refuses rating scales, requests for explanations or writing, and two questions in one.")
                             .font(.footnote).foregroundStyle(Palette.inkSoft)
@@ -117,6 +117,7 @@ struct WriteJudgmentView: View {
                     ForEach(refused, id: \.self) { Text($0).font(.footnote).foregroundStyle(Palette.red) }
                 } header: { Text("Checked as you type") }
             }
+            .neonList()
             .navigationTitle("Write your own")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

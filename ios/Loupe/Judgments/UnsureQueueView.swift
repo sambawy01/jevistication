@@ -51,7 +51,7 @@ struct UnsureQueueView: View {
             }
             .padding(16)
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Unsure")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { service.load(); service.refreshLedger() }

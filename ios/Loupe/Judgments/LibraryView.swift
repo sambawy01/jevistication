@@ -165,7 +165,7 @@ struct TemplateDetailView: View {
                 .padding(16)
             }
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Template")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -209,7 +209,7 @@ struct TemplateDetailView: View {
                 Label(added == nil ? "Use this" : "Added to My judgments", systemImage: added == nil ? "plus.circle.fill" : "checkmark.circle.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.neonPrimary)
             .controlSize(.large)
             .disabled(added != nil)
             .accessibilityIdentifier("template.use")

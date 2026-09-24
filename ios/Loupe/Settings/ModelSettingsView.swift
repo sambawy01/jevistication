@@ -24,7 +24,7 @@ struct ModelSettingsView: View {
     var body: some View {
         ScrollViewReader { proxy in
             List {
-                Section {
+                NeonSection {
                     Text(MS.t("intro")).font(.footnote).foregroundStyle(Palette.inkSoft)
                     if let notice = service.notice {
                         Text(notice).font(.footnote).foregroundStyle(Palette.ink)
@@ -32,7 +32,7 @@ struct ModelSettingsView: View {
                     }
                 }
                 ForEach(model.sections) { section in
-                    Section {
+                    NeonSection {
                         if section.scope == Features.shared.PLAYGROUND {
                             Text(MS.t("desktopOnly")).font(.footnote).foregroundStyle(Palette.inkSoft)
                         }
@@ -51,7 +51,7 @@ struct ModelSettingsView: View {
                     }
                     .id(section.scope)
                 }
-                Section {
+                NeonSection {
                     Button(MS.t("restoreAll"), role: .destructive) { confirmRestore = true }
                         .disabled(!model.anyChanged)
                         .accessibilityIdentifier("settings.restoreAll")
@@ -60,7 +60,7 @@ struct ModelSettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle(MS.t("title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

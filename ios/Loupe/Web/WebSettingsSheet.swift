@@ -8,7 +8,7 @@ struct WebSettingsSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section {
+                NeonSection {
                     Toggle("Online helper", isOn: $web.helperEnabled)
                         .accessibilityIdentifier("settings.helper")
                     Toggle("Flights", isOn: $web.flightsEnabled)
@@ -17,7 +17,7 @@ struct WebSettingsSheet: View {
                 } footer: {
                     Text("With the helper off, the Web tab says so and nothing else in Loupe changes. Only flight searches ever go online.")
                 }
-                Section {
+                NeonSection {
                     if web.hasKey {
                         Button("Remove key", role: .destructive) { confirmRemove = true }
                             .accessibilityIdentifier("settings.removeKey")
@@ -28,6 +28,7 @@ struct WebSettingsSheet: View {
                     Text("Stored in the Keychain, this device only. Removing it deletes it from the Keychain.")
                 }
             }
+            .neonList()
             .navigationTitle("Web settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

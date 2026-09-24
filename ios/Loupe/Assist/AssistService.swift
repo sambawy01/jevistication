@@ -137,8 +137,13 @@ final class AssistService: ObservableObject {
     func draftReply(_ req: AssistRequest, confirmed: Bool, itemId: String, to: String, originalSubject: String) async throws -> ReplyDraft {
         guard confirmed else { throw AssistError.notConfirmed }
         guard req.feature == .emailReply else { throw AssistError.config("Wrong request.") }
-        let r = try await client().chat(req.messages, model: req.model, schema: EmailReplyWorkflow.schema,
+        let job = ActivityCenter.shared.start("llm_job", title: "act.title.drafts", view: "assist", total: 1, stage: "act.stage.asking")
+        let r: ChatResult
+        do {
+            r = try await client().chat(req.messages, model: req.model, schema: EmailReplyWorkflow.schema,
                                         maxTokens: EmailReplyWorkflow.maxTokens, validate: EmailReplyWorkflow.validate)
+        } catch { job.finish("error", "act.res.llm", ["done": 0, "errors": 1]); throw error }
+        job.finish("done", "act.res.llm", ["done": 1, "errors": 0])
         return EmailReplyWorkflow.draft(from: r.object, originalSubject: originalSubject, to: to, itemId: itemId, provider: req.provider)
     }
 
@@ -168,10 +173,15 @@ final class AssistService: ObservableObject {
     func secondOpinion(_ req: AssistRequest, confirmed: Bool, input i: OpinionInput) async throws -> SecondOpinion {
         guard confirmed else { throw AssistError.notConfirmed }
         guard req.feature == .secondOpinion else { throw AssistError.config("Wrong request.") }
-        let r = try await client().chat(req.messages, model: req.model,
+        let job = ActivityCenter.shared.start("llm_job", title: "act.title.secondOpinion", view: "assist", total: 1, stage: "act.stage.asking")
+        let r: ChatResult
+        do {
+            r = try await client().chat(req.messages, model: req.model,
                                         schema: SecondOpinionWorkflow.schema(questionId: i.judgmentId, options: i.options),
                                         maxTokens: SecondOpinionWorkflow.maxTokens,
                                         validate: { SecondOpinionWorkflow.validate($0, questionId: i.judgmentId, options: i.options) })
+        } catch { job.finish("error", "act.res.llm", ["done": 0, "errors": 1]); throw error }
+        job.finish("done", "act.res.llm", ["done": 1, "errors": 0])
         let o = SecondOpinionWorkflow.opinion(from: r.object, questionId: i.judgmentId, options: i.options, layaAnswer: i.layaAnswer, provider: req.provider)
         opinions[i.key] = o
         return o

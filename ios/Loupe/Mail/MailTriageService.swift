@@ -45,14 +45,29 @@ final class MailTriageService: ObservableObject {
             if rerun { rerun = false; Task { await run() } }
         }
         let all = items()
+        // The run's live view (Station's Email loop): fetch, read, the category / reply / phishing answers, gates.
+        let job = ActivityCenter.shared.start("email_run", title: "act.title.mail", view: "email", stage: "act.stage.fetching")
         let corrections = ledger.correctionIndex()
         let raws = Self.rawSources(all)
         // Opt-in online checks (PRODUCT.md §4a): nil, and no request at all, while every switch is off.
         let context = await online.context(items: all, raws: raws)
         onlineStatus = context == nil ? nil : online.status
-        summary = await ModelWork.run(.sweep) {
+        job.stage("act.stage.classifying")
+        let result = await ModelWork.run(.sweep) {
             MailTriage.shared.summariseOnline(items: all, raws: raws, corrections: corrections, online: context)
         }
+        summary = result
+        // One report per email: its category key and verdicts only (never a sender or subject).
+        let pace = ActivityCenter.slowPace
+        let rows = result.rows
+        job.progress(0, of: rows.count)
+        for (i, r) in rows.enumerated() {
+            job.email(category: r.categoryKey, phishing: r.phishing, unsure: r.categoryWeak, needsReply: r.needsReply)
+            job.progress(i + 1, of: rows.count)
+            if pace > 0 { try? await Task.sleep(nanoseconds: UInt64(pace * 1e9)) }
+        }
+        job.finish("done", "act.res.email", ["emails": rows.count, "flagged": rows.filter { $0.phishing }.count,
+                                             "uncertain": rows.filter { $0.categoryWeak }.count])
         // Triage and site checks are rules on iPhone either way; Model settings' use_laya off says so on screen.
         settings.recordRun(Features.shared.EMAIL, layaOff: !settings.useLaya(Features.shared.EMAIL))
         settings.recordRun(Features.shared.BROWSER, layaOff: !settings.useLaya(Features.shared.BROWSER))

@@ -11,7 +11,7 @@ struct WebTabView: View {
                     .padding(.horizontal, 16)
                     .padding(.vertical, 12)
             }
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle("Web")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {

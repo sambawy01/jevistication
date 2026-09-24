@@ -13,7 +13,7 @@ struct AssistSettingsView: View {
 
     var body: some View {
         Form {
-            Section {
+            NeonSection {
                 Toggle("Use a writing assistant", isOn: $draft.enabled)
                     .accessibilityIdentifier("assist.enabled")
                 Text(assist.statusLine).font(.footnote).foregroundStyle(Palette.inkSoft)
@@ -21,7 +21,7 @@ struct AssistSettingsView: View {
             } footer: {
                 Text("Off by default. Off, nothing is sent anywhere and Loupe stays fully offline. On, it can draft a reply to an email or give a second opinion on a judgment — each time you see exactly what will be sent, to whom, and confirm first. Judgments never depend on it.")
             }
-            Section("Provider (your own)") {
+            NeonSection("Provider (your own)") {
                 Picker("Type", selection: $draft.kind) {
                     ForEach(AssistProviderKind.allCases) { Text($0.title).tag($0) }
                 }
@@ -38,13 +38,13 @@ struct AssistSettingsView: View {
                         .accessibilityIdentifier("assist.key")
                 }
             }
-            Section("Replies") {
+            NeonSection("Replies") {
                 Picker("Tone", selection: $draft.tone) {
                     Text("Friendly").tag("friendly"); Text("Formal").tag("formal"); Text("Brief").tag("brief")
                 }
                 TextField("Signature (optional)", text: $draft.signature, axis: .vertical)
             }
-            Section {
+            NeonSection {
                 Button("Save") { save() }.accessibilityIdentifier("assist.save")
                 if let message { Text(message).font(.footnote).foregroundStyle(Palette.inkSoft) }
                 Button("Turn off and remove key", role: .destructive) {
@@ -55,7 +55,7 @@ struct AssistSettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("Writing assistant")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { draft = assist.config }
@@ -102,7 +102,7 @@ struct AssistPreview: View {
             .padding(8)
             .background(Palette.track, in: RoundedRectangle(cornerRadius: 8))
             Button("Send to \(request.provider)", action: send)
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.neonPrimary)
                 .accessibilityIdentifier("assist.send")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -146,7 +146,7 @@ struct ReplyDraftSheet: View {
                 }
                 .padding(16)
             }
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .navigationTitle("Reply draft")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { task?.cancel(); dismiss() } } }
@@ -200,7 +200,7 @@ struct ReplyDraftSheet: View {
                     }
                     .buttonStyle(.bordered).accessibilityIdentifier("assist.copy")
                     Button("Open in Mail") { composing = true }
-                        .buttonStyle(.borderedProminent).accessibilityIdentifier("assist.openMail")
+                        .buttonStyle(.neonPrimary).accessibilityIdentifier("assist.openMail")
                         .disabled(!MFMailComposeViewController.canSendMail())
                 }
                 if !MFMailComposeViewController.canSendMail() {
@@ -209,7 +209,7 @@ struct ReplyDraftSheet: View {
             } else {
                 HStack {
                     Button("Approve draft") { Task { await approve() } }
-                        .buttonStyle(.borderedProminent).accessibilityIdentifier("assist.approve")
+                        .buttonStyle(.neonPrimary).accessibilityIdentifier("assist.approve")
                     Text(queued == nil ? "" : "Waiting in Review").font(.caption).foregroundStyle(Palette.inkSoft)
                 }
             }

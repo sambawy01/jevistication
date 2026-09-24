@@ -153,12 +153,12 @@ struct MailSetupView: View {
 
     var body: some View {
         Form {
-            Section {
+            NeonSection {
                 Text("Mail is Online: Loupe connects from this iPhone straight to your mail server over TLS and reads your inbox without marking anything read. We never see it. Every message it brings back is labelled Online, and turning Mail off stops all requests.")
                     .font(.footnote)
             }
             if let account = sources.mailAccount {
-                Section("Mailbox") {
+                NeonSection("Mailbox") {
                     LabeledContent("Server", value: account.host)
                     LabeledContent("User", value: account.username)
                     LabeledContent("Sign-in", value: account.auth == .appPassword ? "App password (in the Keychain)" : "OAuth token (in the Keychain)")
@@ -166,7 +166,7 @@ struct MailSetupView: View {
                         .accessibilityIdentifier("mail.remove")
                 }
             }
-            Section("App password") {
+            NeonSection("App password") {
                 Picker("Provider", selection: $preset) {
                     ForEach(MailPreset.all) { Text($0.name).tag($0) }
                 }
@@ -186,7 +186,7 @@ struct MailSetupView: View {
                 .disabled(saving || username.isEmpty || password.isEmpty || host.isEmpty)
                 .accessibilityIdentifier("mail.save")
             }
-            Section("Sign in with your provider") {
+            NeonSection("Sign in with your provider") {
                 ForEach(OAuthProvider.allCases) { provider in
                     switch sources.deps.oauth.availability(provider) {
                     case .ready:
@@ -202,9 +202,10 @@ struct MailSetupView: View {
                 }
             }
             if let error {
-                Section { Text(error).font(.footnote).foregroundStyle(Palette.dangerText) }
+                NeonSection { Text(error).font(.footnote).foregroundStyle(Palette.dangerText) }
             }
         }
+        .neonList()
         .navigationTitle("Mail")
     }
 

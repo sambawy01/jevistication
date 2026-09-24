@@ -95,6 +95,8 @@ extension SourcesService {
         inboxBusy = true
         inboxProblem = nil
         defer { inboxBusy = false }
+        // The import's live run (a Folder Scan of what was shared): counts only, never a name.
+        let job = ActivityCenter.shared.start("inbox", title: "act.title.inbox", view: "sources", stage: "act.stage.importing")
         let outcome: Result<InboxBatch, Error> = await withCheckedContinuation { cont in
             queue.async { cont.resume(returning: Result { try work() }) }
         }
@@ -102,9 +104,18 @@ extension SourcesService {
         case .success(let batch):
             inboxBatches = inbox?.batches() ?? []
             revision += 1
+            let items = inboxItems(batch).count
+            let skipped = inboxSkipped(batch).count
+            job.stage("act.stage.finishing")
+            job.count("read", items)
+            job.gate("accepted", items)
+            job.gate("skipped", skipped)
+            job.progress(items + skipped, of: items + skipped)
+            job.finish("done", "act.res.inbox", ["items": items])
             return batch
         case .failure(let error):
             inboxProblem = "The import failed: \(error.localizedDescription)"
+            job.finish("error", "act.res.failed")
             return nil
         }
     }

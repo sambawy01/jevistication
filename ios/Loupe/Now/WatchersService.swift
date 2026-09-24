@@ -47,6 +47,8 @@ final class WatchersService: ObservableObject {
         running = true
         defer { running = false }
         let all = items()
+        let job = ActivityCenter.shared.start("watchers", title: "act.title.watchers", view: "watchers", total: all.count,
+                                              stage: "act.stage.starting")
         // Model settings: with the watchers' Laya off the mechanical half runs alone.
         let policy = settings.policy(Features.shared.WATCHERS)
         let backend: Backend? = policy.useLaya && model.isInstalled ? await model.backend() : nil
@@ -59,6 +61,7 @@ final class WatchersService: ObservableObject {
                                                     sampleSourceIds: [SourcesService.sampleId],
                                                     corrections: corrections)
         }
+        Self.report(job, result: result, items: all.count, laya: backend != nil)
         let keys = Set(result.findings.map(\.key))
         let before = Set(seen.stringArray(forKey: Self.seenKey) ?? [])
         newCount = keys.subtracting(before).count
@@ -95,6 +98,25 @@ final class WatchersService: ObservableObject {
     }
 
     func item(_ id: String) -> SourceItem? { items().first { $0.id == id } }
+
+    /// The run's live view: one step per watcher (its id), items read, each finding flagged for you. Ids and
+    /// numbers only.
+    static func report(_ job: LiveJob, result: WatcherSummary, items: Int, laya: Bool) {
+        let byWatcher = Dictionary(grouping: result.findings, by: { "\($0.watcher)".lowercased() })
+        for (id, fs) in byWatcher.sorted(by: { $0.key < $1.key }) {
+            job.stage("act.stage.watcher", ["watcher": id])
+            job.step(id, key: "act.stage.watcher", state: "done", done: fs.count, total: fs.count)
+        }
+        let checked = Int(result.itemsChecked)
+        job.count("read", checked)
+        job.meta(["reads_budget": 40, "reads_used": laya ? min(40, checked) : 0])
+        job.gate("flagged", result.findings.count)
+        job.count("to_you", result.findings.count)
+        job.gate("accepted", max(0, checked - result.findings.count))
+        job.gate("skipped", max(0, items - checked))
+        job.progress(items, of: items)
+        job.finish("done", "act.res.watchers", ["new": result.findings.count, "found": result.findings.count])
+    }
 
     nonisolated static func isoDay(_ date: Date) -> String {
         let f = DateFormatter()

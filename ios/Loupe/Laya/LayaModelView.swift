@@ -14,6 +14,7 @@ struct LayaModelView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                LiveRunSection(view: "setup", whileRunning: true)
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Laya, on this phone").font(Typeface.display(28)).foregroundStyle(Palette.ink)
@@ -38,7 +39,7 @@ struct LayaModelView: View {
             }
             .padding(16)
         }
-        .background(Palette.ground.ignoresSafeArea())
+        .neonGround()
         .navigationTitle("On-device model")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("model.screen")
@@ -93,7 +94,7 @@ struct LayaModelView: View {
             case .paused(let p):
                 ProgressView(value: p) { Text("Paused at \(Int(p * 100))%") }.tint(Palette.inkSoft)
                 HStack {
-                    Button("Resume") { model.startDownload() }.buttonStyle(.borderedProminent)
+                    Button("Resume") { model.startDownload() }.buttonStyle(.neonPrimary)
                         .accessibilityIdentifier("model.resume")
                         .disabled(!model.hostConfigured)
                     Spacer()
@@ -116,7 +117,7 @@ struct LayaModelView: View {
             Button { if model.hasConsent { model.startDownload() } else { showConsent = true } } label: {
                 Label("Download (\(sizeText))", systemImage: "arrow.down.circle.fill").frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.neonPrimary)
             .accessibilityIdentifier("model.download")
             Toggle("Allow mobile data", isOn: $model.allowsCellular).font(.footnote)
                 .accessibilityIdentifier("model.cellular")
@@ -224,7 +225,7 @@ struct ModelConsentView: View {
                         Button { onAgree() } label: {
                             Text("Download \(DeliveryError.bytes(bytes))").frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.neonPrimary)
                         .accessibilityIdentifier("consent.agree")
                     } else {
                         Text("This build has no model host configured, so nothing can be downloaded yet.")
@@ -236,7 +237,7 @@ struct ModelConsentView: View {
                 }
                 .padding(20)
             }
-            .background(Palette.ground.ignoresSafeArea())
+            .neonGround()
             .accessibilityIdentifier("consent.screen")
         }
     }

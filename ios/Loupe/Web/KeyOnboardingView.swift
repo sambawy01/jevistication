@@ -34,7 +34,7 @@ struct KeyOnboardingView: View {
             } label: {
                 Text("Add key").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.neonPrimary)
             .accessibilityIdentifier("web.onboarding.addKey")
         }
         .card()
@@ -60,12 +60,12 @@ struct KeyOnboardingView: View {
                 Task { await web.addKey(key) }
             } label: {
                 HStack {
-                    if web.keyCheck == .checking { ProgressView().tint(.white) }
+                    if web.keyCheck == .checking { ProgressView().tint(Palette.onAccent) }
                     Text(web.keyCheck == .checking ? "Checking with Duffel…" : "Verify and save")
                 }
                 .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.neonPrimary)
             .disabled(key.isEmpty || web.keyCheck == .checking)
             Text("Verifying makes one health check and one small test search.")
                 .font(.footnote).foregroundStyle(Palette.inkSoft)
