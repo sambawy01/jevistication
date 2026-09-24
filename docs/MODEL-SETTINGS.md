@@ -42,6 +42,7 @@ on the phone.** `reload` is `["global.memory_mode", "global.idle_unload_min"]`.
 | `use_calibration` | bool | true | Kept and shown. **No calibration is fitted on iPhone yet**, so on and off both use raw confidence today (identity recalibrator, as before). |
 | `rules_first` | bool | true | Off: the exact-duplicate rule no longer answers before Laya in sweeps. The per-judgment "Always baseline" still answers (it is the judgment's own override). |
 | `baseline_switch` | bool | true | The automatic baseline (e45e806). Off: Laya keeps answering under Auto. The per-judgment Auto / Always baseline / Always Laya choice still wins. |
+| `bias_correction` | `contextual` \| `domain` \| `off` | `off` | **Added 2026-09-24 (Station, after `baseline_switch`).** Station's answer re-weighting; Station measured both methods worse (clear-cut 1,035 and 1,019 of 1,621 vs 1,090 shipped; yes-rate on negatives 24% → 44% / 48%), hence `off`. **iPhone implements `off` only:** the other two are stored and shown as "Loupe Station only" and run as `off` (`EngineSettings.effectiveBiasCorrection`). |
 | `text_chars_english` | 200..20000 | 1400 | Kept for parity; **unused on iPhone** (no English model). |
 | `text_chars_multilingual` | 200..20000 | 2400 | The TextState budget for any feature whose `text_chars` is `"global"`. |
 
@@ -72,6 +73,8 @@ on the phone.** `reload` is `["global.memory_mode", "global.idle_unload_min"]`.
 |---|---|---|---|
 | `scan.read_content` | bool | true | Off: the privacy check reads names, folders and exact duplicates (hash from the scan) only. |
 | `scan.content_budget_s` | 1..600 | 60 | Kept for parity, **no effect**: the phone reads each file once when Sources scans it, within the extractor's own limits. |
+| `scan.ocr` | bool | true | **Added 2026-09-24 (Station).** On-device Apple Vision OCR (`.accurate`, automatic language detection — needed for Arabic and mixed Arabic/Latin). Governs Photos (off: metadata only; on = the old behaviour) and **scanned PDFs** from Files and the Share inbox (a PDF whose PDFKit text has fewer than 12 letters/digits). Mail attachments: the phone's MIME reader lists attachments by name only and reads no attachment content, so there is nothing for OCR there yet (Station OCRs them); watchers read the same scanned items, so they follow this key. Read when a scan starts (`OcrPolicy.current()`). The bundled **sample** scan never OCRs, so its items stay identical to the desktop scanner's. |
+| `scan.ocr_max_pages` | 1..20 | 3 | **Added 2026-09-24 (Station).** Pages of a scanned PDF read by OCR (rendered at about 2×, longest side ≤ 2,400 px). |
 | `browser.time_limit_s` | 1..60 | 5 | Kept for parity, **no effect**: Laya does not read pages on iPhone. |
 | `browser.queue_size` | 0..10 | 2 | Kept for parity, **no effect**: as above. |
 | `game.max_decisions_per_s` | null \| 0.5..60 | null | **Added (iPhone).** null = no cap (every decision the session asks for, as before). A number: a requested decision waits until the cap allows it; the safety override still steers. Read every tick. |
@@ -80,6 +83,7 @@ on the phone.** `reload` is `["global.memory_mode", "global.idle_unload_min"]`.
 
 - **Added feature ids:** `judgments`, `flights`, `game` (each with `use_laya`, `routing`, `text_chars`).
 - **Added key:** `features.game.max_decisions_per_s`.
+- **Mirrored from Station 2026-09-24:** `global.bias_correction`, `features.scan.ocr`, `features.scan.ocr_max_pages`.
 - **Renamed:** none. Every Station key keeps its name, type, range and default.
 
 ## Applying changes
@@ -110,5 +114,7 @@ Every default reproduces what the app did before, checked against the code (test
 4. **`scan.content_budget_s`, `browser.time_limit_s`, `browser.queue_size`:** the phone has nothing
    they could limit; "no limit" (the old behaviour) is not a value in Station's ranges, so they
    keep Station's defaults and are marked Loupe Station only.
-5. **A judgment threshold equal to its shape's starting value** is treated as "not set on Measure",
+5. **`scan.ocr = true` on scanned PDFs** is new behaviour (the phone did not OCR PDFs before); it
+   matches Station's default. Photos were already OCR'd, so on changes nothing there.
+6. **A judgment threshold equal to its shape's starting value** is treated as "not set on Measure",
    so a non-null `accept_confidence` replaces it.

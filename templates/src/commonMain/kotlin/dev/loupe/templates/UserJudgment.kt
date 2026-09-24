@@ -71,7 +71,8 @@ data class UserJudgment(
 
     /** The judgment as the engine would run it with the criteria shown ([on]) or not. */
     fun choiceWithCriteria(on: Boolean): Judgment.Choice =
-        Judgment.Choice(id, question, shape.candidates, onFailure, if (on) optionCriteria() else emptyMap())
+        Judgment.Choice(id, question, shape.candidates, onFailure, if (on) optionCriteria() else emptyMap(),
+            ordinal = shape is Shape.Ordinal)
 
     /**
      * Per-option descriptions derived from the three-part criteria, for [criteriaInPrompt]:

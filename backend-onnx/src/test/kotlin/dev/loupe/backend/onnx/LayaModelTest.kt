@@ -53,6 +53,21 @@ class LayaModelTest {
     }
 
     @Test
+    fun `the DJL tokenizer matches laya 0_3_20 on English, Arabic, Egyptian, Franco, Spanish and French`() {
+        val cases = LayaModelTest::class.java.getResourceAsStream("/laya/tokenizer.json")!!
+            .bufferedReader(Charsets.UTF_8).use { com.google.gson.JsonParser.parseReader(it).asJsonObject["cases"].asJsonArray }
+        tokenizerOrSkip().use { encoder ->
+            for (c in cases) {
+                val o = c.asJsonObject
+                val text = o["text"].asString
+                val ids = o["ids"].asJsonArray.map { it.asLong }.toLongArray()
+                assertContentEquals(ids, encoder.encode(text), "${o["lang"].asString}: \"${text.take(60)}\"")
+            }
+            println("DJL tokenizer: ${cases.size()} multilingual strings identical to laya 0.3.20")
+        }
+    }
+
+    @Test
     fun `the whole Kotlin input path rebuilds upstream's sequences`() {
         tokenizerOrSkip().use { encoder ->
             val prompt = LayaPrompt(encoder, LayaSpecialTokens.MULTILINGUAL, fixture.maxLen, fixture.headMaxLen)
@@ -92,6 +107,37 @@ class LayaModelTest {
         val criteria = LayaFixture.loadCriteria()
         val report = parity(graphOrSkip("int8"), criteria)
         val confidentFlips = report.disagreed.filter { id -> criteria.cases.single { it.id == id }.referenceMargin >= NEAR_TIE }
+        assertTrue(confidentFlips.isEmpty(), "INT8 flipped confident answers: $confidentFlips")
+        assertTrue(report.maxAbsError < 0.15, "max |p - p_torch| = ${report.maxAbsError}")
+    }
+
+    @Test
+    fun `a score is sent highest level first and rebuilds the reference sequence`() {
+        val reversed = LayaFixture.load("/laya/score-reversed.json")
+        tokenizerOrSkip().use { encoder ->
+            val tokenizer = LayaTokenizer(LayaPrompt(encoder, LayaSpecialTokens.MULTILINGUAL, reversed.maxLen, reversed.headMaxLen))
+            for (case in reversed.cases) {
+                val judgment = Judgment.Choice(case.id, case.question, case.candidates, descriptions = case.descriptionMap, ordinal = true)
+                val encoded = ChoiceScoring.encode(tokenizer, TensorNames.LAYA, judgment,
+                    TextState.build(listOf(case.id to case.state), 1_000_000))
+                assertContentEquals(case.inputIds, encoded.inputIds, case.id)
+                assertContentEquals(case.markerPositions, encoded.markerPositions, case.id)
+            }
+        }
+    }
+
+    @Test
+    fun `reversed score - FP32 matches the reference mapped back to written order`() {
+        val report = parity(graphOrSkip("fp32"), LayaFixture.load("/laya/score-reversed.json"), ordinal = true)
+        assertEquals(0, report.disagreed.size, "argmax disagreements: ${report.disagreed}")
+        assertTrue(report.maxAbsError < 1e-4, "max |p - p_torch| = ${report.maxAbsError}")
+    }
+
+    @Test
+    fun `reversed score - INT8 agrees wherever the reference is not a near-tie`() {
+        val reversed = LayaFixture.load("/laya/score-reversed.json")
+        val report = parity(graphOrSkip("int8"), reversed, ordinal = true)
+        val confidentFlips = report.disagreed.filter { id -> reversed.cases.single { it.id == id }.referenceMargin >= NEAR_TIE }
         assertTrue(confidentFlips.isEmpty(), "INT8 flipped confident answers: $confidentFlips")
         assertTrue(report.maxAbsError < 0.15, "max |p - p_torch| = ${report.maxAbsError}")
     }
@@ -182,7 +228,7 @@ class LayaModelTest {
 
     private class Parity(val agreements: Int, val disagreed: List<String>, val maxAbsError: Double)
 
-    private fun parity(graph: java.nio.file.Path, fixture: LayaFixture = this.fixture): Parity {
+    private fun parity(graph: java.nio.file.Path, fixture: LayaFixture = this.fixture, ordinal: Boolean = false): Parity {
         tokenizerOrSkip().use { encoder ->
             val tokenizer = LayaTokenizer(
                 LayaPrompt(encoder, LayaSpecialTokens.MULTILINGUAL, fixture.maxLen, fixture.headMaxLen),
@@ -191,7 +237,7 @@ class LayaModelTest {
                 var worst = 0.0
                 val disagreed = mutableListOf<String>()
                 for (case in fixture.cases) {
-                    val judgment = Judgment.Choice(case.id, case.question, case.candidates, descriptions = case.descriptionMap)
+                    val judgment = Judgment.Choice(case.id, case.question, case.candidates, descriptions = case.descriptionMap, ordinal = ordinal)
                     // A budget wide enough that TextState keeps the text verbatim; the model's own
                     // token budget is what this test exercises.
                     val scores = backend.score(judgment, TextState.build(listOf(case.id to case.state), 1_000_000)).masses

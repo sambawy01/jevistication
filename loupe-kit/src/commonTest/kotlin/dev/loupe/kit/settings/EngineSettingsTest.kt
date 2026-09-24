@@ -18,10 +18,10 @@ class EngineSettingsTest {
     /** Station's schema v1 `settings` object with every default (the relayed schema, key for key). */
     private val stationDefaults = """
         {"global":{"routing":"auto","memory_mode":"balanced","idle_unload_min":10,"accept_confidence":null,
-          "use_calibration":true,"rules_first":true,"baseline_switch":true,"text_chars_english":1400,
+          "use_calibration":true,"rules_first":true,"baseline_switch":true,"bias_correction":"off","text_chars_english":1400,
           "text_chars_multilingual":2400},
          "features":{
-          "scan":{"use_laya":true,"routing":null,"text_chars":null,"read_content":true,"content_budget_s":60},
+          "scan":{"use_laya":true,"routing":null,"text_chars":null,"read_content":true,"content_budget_s":60,"ocr":true,"ocr_max_pages":3},
           "email":{"use_laya":true,"routing":null,"text_chars":null},
           "browser":{"use_laya":true,"routing":null,"text_chars":null,"time_limit_s":5,"queue_size":2},
           "watchers":{"use_laya":true,"routing":null,"text_chars":null},
@@ -218,5 +218,23 @@ class EngineSettingsTest {
             assertEquals(spec.default, EngineSettings.validate(spec, spec.default), spec.key)
         }
         assertEquals(EngineSettings.SPECS.size, EngineSettings.SPECS.map { it.key }.toSet().size)
+    }
+
+    @Test
+    fun biasCorrectionAndOcrKeysMirrorStation() {
+        val d = EngineSettings.DEFAULTS
+        assertEquals("off", d.biasCorrection)
+        assertTrue(d.ocr)
+        assertEquals(3, d.ocrMaxPages)
+        val s = EngineSettingsStore(null)
+        s.put("""{"global":{"bias_correction":"contextual"},"features":{"scan":{"ocr":false,"ocr_max_pages":99}}}""")
+        assertEquals("contextual", s.current.biasCorrection)
+        assertEquals("off", s.current.effectiveBiasCorrection)
+        assertEquals(false, s.current.ocr)
+        assertEquals(20, s.current.ocrMaxPages)
+        s.put("""{"global":{"bias_correction":"platt"}}""")
+        s.put("""{"features":{"scan":{"ocr_max_pages":0}}}""")
+        assertEquals("contextual", s.current.biasCorrection)
+        assertEquals(1, s.current.ocrMaxPages)
     }
 }

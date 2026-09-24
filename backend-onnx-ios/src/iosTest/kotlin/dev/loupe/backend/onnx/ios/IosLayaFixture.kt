@@ -89,6 +89,17 @@ class IosLayaFixture private constructor(root: JsonObject) {
         fun golden(): IosLayaFixture = load("golden.json")
         fun criteria(): IosLayaFixture = load("criteria.json")
 
+        /** tokenizer.json: (language, text, laya 0.3.20 ids) — see tools/make-laya-tokenizer-fixture.py. */
+        fun tokenizerStrings(): List<Triple<String, String, LongArray>> {
+            val dir = env("LOUPE_FIXTURES_DIR") ?: error("LOUPE_FIXTURES_DIR is not set (run through Gradle)")
+            val text = NSString.stringWithContentsOfFile("$dir/tokenizer.json", NSUTF8StringEncoding, null)
+                ?: error("cannot read fixture $dir/tokenizer.json")
+            return Json.parseToJsonElement(text).jsonObject["cases"]!!.jsonArray.map {
+                val o = it.jsonObject
+                Triple(o.string("lang"), o.string("text"), o["ids"]!!.jsonArray.longs())
+            }
+        }
+
         fun env(name: String): String? = getenv(name)?.toKString()?.takeIf { it.isNotEmpty() }
 
         fun modelsDir(): String? = env("LOUPE_MODELS_DIR")

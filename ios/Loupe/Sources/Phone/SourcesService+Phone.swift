@@ -173,7 +173,8 @@ extension SourcesService {
             switch s {
             case .photos:
                 let cacheId = PhoneSourceIds.shared.PHOTOS
-                let producer = PhotosProducer(library: deps.photos, recognizer: deps.recognizer)
+                var producer = PhotosProducer(library: deps.photos, recognizer: deps.recognizer)
+                producer.ocr = { OcrPolicy.current() }
                 let cached = library.cached(sourceId: cacheId)?.result
                 let prior = deps.state.state(s.rawValue)
                 let out = await Task.detached(priority: .utility) { await producer.scan(cached: cached, state: prior) }.value

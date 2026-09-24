@@ -87,7 +87,7 @@ struct MailProducer {
             try m.raw.write(to: folder.appendingPathComponent("\(sync.uidValidity).\(m.uid).eml"), options: [.atomic, .completeFileProtection])
         }
         let root = SourceRoot(id: PhoneSourceIds.shared.MAIL, type: .mailExport, path: folder.path, idPrefix: "mail:\(account.key)/")
-        var result = try SourceScanner(extractors: AppleExtractors()).scan(sources: [root], observer: NullScanObserver())
+        var result = try SourceScanner(extractors: AppleExtractors.live()).scan(sources: [root], observer: NullScanObserver())
         result = PhoneItems.companion.labelOnline(result: result, from: account.host, fetchedIso: ISOStamp.now(now()))
         if sync.remaining > 0 {
             result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched: \(sync.remaining) older message\(sync.remaining == 1 ? "" : "s") — Loupe reads the newest \(maxPerSync) at a time, then only new mail")], unavailable: result.unavailable)

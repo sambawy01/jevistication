@@ -16,7 +16,7 @@ huggingface-hub==1.3.0
 humanfriendly==10.0
 idna==3.20
 jinja2==3.1.6
-laya @ git+https://github.com/NandhaKishorM/laya@c7527708f9f5220c669d8aa385077cd28d04708a
+laya @ git+https://github.com/NandhaKishorM/laya@23a17522aa4942da6cce53a995a275760320b691
 markdown-it-py==4.2.0
 markupsafe==3.0.3
 mdurl==0.1.2

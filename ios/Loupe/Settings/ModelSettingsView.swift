@@ -127,7 +127,7 @@ struct SettingRowView: View {
                 set: { model.setChoice(row.key, $0.isEmpty ? nil : $0) })) {
                 if spec.kind == .nullableEnum { Text(MS.t("v.followGlobal")).tag("") }
                 ForEach(spec.choices, id: \.self) { c in
-                    Text(spec.name == "memory_mode" ? MS.t("mem.\(c)") : MS.t("route.\(c)")).tag(c)
+                    Text(ModelSettingsModel.choiceLabel(spec, c)).tag(c)
                 }
             }
             .disabled(!row.appliesOnPhone)

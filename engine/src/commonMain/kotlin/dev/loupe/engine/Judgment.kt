@@ -61,6 +61,14 @@ sealed interface Judgment {
          * a non-empty map is part of [criteriaHash]; an empty one leaves the hash as it was.
          */
         val descriptions: Map<String, String> = emptyMap(),
+        /**
+         * The candidates are ordinal levels written lowest first (a [Score], or a score-shaped user
+         * judgment). A backend may present them in another order and map its answer back — Laya
+         * reads score levels highest first (`LayaRuntimeRules.REVERSE_SCORE_ON`, upstream #131).
+         * A runtime rule, not wording: it is **not** part of [criteriaHash], so the written
+         * question keeps its hash on every app.
+         */
+        val ordinal: Boolean = false,
     ) : Judgment {
         init {
             require(id.isNotBlank()) { "judgment id must not be blank" }
@@ -179,7 +187,7 @@ sealed interface Judgment {
         val candidates: List<String> = range.map(Int::toString)
 
         /** The equivalent [Choice]; everything defers to it. */
-        val asChoice: Choice = Choice(id, question, candidates, onFailure)
+        val asChoice: Choice = Choice(id, question, candidates, onFailure, ordinal = true)
 
         override val criteriaHash: String get() = asChoice.criteriaHash
 

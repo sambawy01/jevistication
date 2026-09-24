@@ -91,7 +91,7 @@ final class BookmarkStore {
 /// Items are keyed `files:<location id>/<relative path>`, so a rescan on open replaces them in place.
 struct FilesProducer {
     let store: BookmarkStore
-    var extractors = AppleExtractors()
+    var extractors = AppleExtractors.live()
 
     func scan() throws -> PhoneScanOutput {
         var roots: [SourceRoot] = []
@@ -133,7 +133,7 @@ struct FilesProducer {
 
 extension SharedInbox {
     /// Everything in the inbox, read by the common scanner as the `shared` source.
-    static func scan(folder: URL, extractors: AppleExtractors = AppleExtractors()) throws -> PhoneScanOutput {
+    static func scan(folder: URL, extractors: AppleExtractors = AppleExtractors.live()) throws -> PhoneScanOutput {
         let root = SourceRoot(id: PhoneSourceIds.shared.SHARED, type: .folder, path: folder.path, idPrefix: "shared:")
         let result = try SourceScanner(extractors: extractors).scan(sources: [root], observer: NullScanObserver())
         return PhoneScanOutput(result: result)

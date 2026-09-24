@@ -19,10 +19,15 @@ object ChoiceScoring {
      * a model answer, and feeding them anyway would still produce numbers.
      */
     fun encode(tokenizer: Tokenizer, names: TensorNames, judgment: Judgment.Choice, state: TextState): TokenizedInput {
+        // A score is sent highest level first where LayaRuntimeRules says so; [scored] maps back.
+        val reverse = LayaRuntimeRules.reversesScore(judgment)
+        val candidates = if (reverse) judgment.candidates.reversed() else judgment.candidates
         val encoded = if (judgment.descriptions.isEmpty()) {
-            tokenizer.encode(judgment.question, state.text, judgment.candidates)
+            tokenizer.encode(judgment.question, state.text, candidates)
         } else {
-            tokenizer.encodeDescribed(judgment.question, state.text, judgment.candidates, judgment.descriptionList)
+            val descriptions = judgment.descriptionList
+            tokenizer.encodeDescribed(judgment.question, state.text, candidates,
+                if (reverse) descriptions.reversed() else descriptions)
         }
         require((names.markerPositions == null) == (encoded.markerPositions == null)) {
             if (names.markerPositions == null) {
@@ -40,14 +45,19 @@ object ChoiceScoring {
         return encoded
     }
 
-    /** The graph's one row of [logits] as a [Scored], with the tokenizer's report of any cuts. */
+    /**
+     * The graph's one row of [logits] as a [Scored], with the tokenizer's report of any cuts. The
+     * logits are in the order [encode] sent the options; a reversed score is mapped back to the
+     * written order here, so masses are always keyed by the judgment's own labels.
+     */
     fun scored(logits: FloatArray, judgment: Judgment.Choice, encoded: TokenizedInput): Scored {
         require(logits.size == judgment.candidates.size) {
             "model produced ${logits.size} logits but judgment '${judgment.id}' declares " +
                 "${judgment.candidates.size} candidates"
         }
+        val written = if (LayaRuntimeRules.reversesScore(judgment)) logits.reversedArray() else logits
         return Scored(
-            softmax(logits, judgment.candidates),
+            softmax(written, judgment.candidates),
             modelContext = encoded.stateCut,
             optionCriteria = encoded.optionCut,
         )

@@ -70,7 +70,7 @@ class LayaSequence(
 
 /**
  * Builds Laya's input for one Choice question — a byte-for-byte mirror of upstream's
- * `laya.common.build_sequence` (github.com/NandhaKishorM/laya, commit `c7527708`), as called by
+ * `laya.common.build_sequence` (github.com/NandhaKishorM/laya, commit `23a17522`, v0.3.20; unchanged from `c7527708`), as called by
  * `Agent.system_one` for a `choice` question whose criteria are a bare label list:
  *
  * ```

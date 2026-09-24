@@ -21,7 +21,7 @@ under Apache-2.0, with this evidence kept as the basis the owner weighed. The to
 | Artifact | Declared | Status |
 |---|---|---|
 | `convaiinnovations/laya-multilingual` @ `052592a1` | `license: apache-2.0` | **Adopted** — primary (2026-09-23). **Cleared for shipping by owner decision 2026-09-23**; training-data notes below (risk 12, closed) |
-| `NandhaKishorM/laya` (code) @ `c7527708` | Apache-2.0, SPDX `Apache-2.0` | Reference implementation; used by the export tool only, not shipped |
+| `NandhaKishorM/laya` (code) @ `23a17522` (v0.3.20; was `c7527708`, 0.3.6, until 2026-09-24) | Apache-2.0, SPDX `Apache-2.0`; LICENSE byte-identical between the two commits | Reference implementation; used by the export tool only, not shipped |
 | `jhu-clsp/mmBERT-base` @ `c5955035` | `license: mit` | Backbone of the primary. **Tokenizer is Gemma 2's — see below** |
 | `knowledgator/gliclass-modern-base-v2.0` | `license: apache-2.0` | Verified; **superseded** as primary 2026-09-23 |
 | `Qwen/Qwen3-0.6B` | `license: apache-2.0` + `license_link` | **Adopted** — second backend |
@@ -49,7 +49,7 @@ under Apache-2.0, with this evidence kept as the basis the owner weighed. The to
 (SHA-256 `609d8f4c…b5b6f`) hashes match the Hub's LFS object ids and are pinned in
 `tools/export-laya-onnx.py`, which refuses a mismatch. The repository carries no LICENSE file of
 its own; the grant is the frontmatter. The code repository `NandhaKishorM/laya` (commit
-`c7527708`) is Apache-2.0: GitHub reports SPDX `Apache-2.0`, and its LICENSE was compared word for
+`c7527708`, and `23a17522` = v0.3.20 since 2026-09-24 with an unchanged LICENSE) is Apache-2.0: GitHub reports SPDX `Apache-2.0`, and its LICENSE was compared word for
 word against the canonical text — 1,413 words against 1,581, **the whole difference being the
 non-normative "How to apply" appendix**; Sections 1–9 are identical. (This is the count that
 exposed openJev's truncated licence; here it comes out clean.) The card's `commercial-use` tag is

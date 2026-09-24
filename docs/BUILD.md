@@ -574,6 +574,27 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-24 — Issue #8: Laya 0.3.20 (Station leads, the phone follows), score levels highest
+  first, bias_correction and OCR settings.** Reference package pinned to `laya @ 23a17522` (v0.3.20).
+  The PyPI wheel (sha256 `6039e802…`, Station's) is byte-identical to that commit's `laya/`.
+  Checkpoint unchanged (`9d628fd9…`). The upstream diff touches `build_sequence` (a tokenizer-side
+  48-token cap, reuse of `state_ids`, the empty-room left-truncation fix) and the head
+  (training-only checkpointing, a RoPE config shim that is a no-op on transformers 5). **Graph and
+  sequences unchanged:** regenerated golden 34/34 and criteria 8/8 input ids are identical, with
+  torch probabilities within 1e-8, so the ONNX files are **not** re-exported and the SHA-256 pins in
+  `LayaModelStore`/`models.json` stand. Parity against the new reference: FP32 34/34 and 8/8
+  (max Δp 2.5e-6); INT8 33/34 (the same `en-sentiment-5` near-tie) and 8/8; int8-partial 33/34 and
+  8/8. The export stays FP32 on CPU (0.3.20's fp16 autocast is MPS/CUDA only at 5+ rows; Station
+  forces fp32). **Tokenizer:** new `tools/make-laya-tokenizer-fixture.py` writes `tokenizer.json`
+  with 21 en/ar/arz/Franco/es/fr/mixed strings; DJL reproduces 21/21 (iOS test added).
+  **`REVERSE_SCORE_ON`** (Station, upstream #131): `LayaRuntimeRules` in `backend-laya-common`
+  sends score levels highest first and maps them back in `ChoiceScoring`, via
+  `Judgment.Choice.ordinal`, which is not in the criteria hash. The fixture `score-reversed.json`
+  (5 cases) matches FP32 5/5 and INT8 5/5. **Settings:** `global.bias_correction` (off; iPhone runs
+  off only), `features.scan.ocr` / `ocr_max_pages` (Vision OCR of Photos and scanned PDFs; the
+  sample scan stays without OCR). **Re-measure:** `docs/LAYA-UPGRADE-MEASURE.md`. Synthetic data:
+  only `urgency` changes (21/45 sample answers; agreement with the keyword rule 15 → 10), and Laya
+  beats its keyword baseline on the examples for 6 of 55 templates. No accuracy claim.
 - **2026-09-24 — Google Safe Browsing moved to API v5 local-list mode (v4 shuts down 2027-03-31).**
   `ios/Loupe/Online/SafeBrowsing.swift`: `hashLists:batchGet` for `se-4b`/`mw-4b`/`uws-4b` (Rice-delta
   decoding, removals then additions, SHA-256 checksum, `minimumWaitDuration`), v5 URL canonicalisation
@@ -1094,6 +1115,8 @@ after 1, 6 needs 3, 4 and 5.
 | 17 | Drone mascot (alternate) | **Done 2026-09-24 (simulator)** — Loupe Station's orb-drone (`mascot.js` / `mascot.css` @ `ea7697a`) rebuilt natively in SceneKit behind the same `MascotView(state:)` (`MascotKind` robot \| drone; no call site changed): orb, glass visor face texture, pill / ^ ^ eyes, beacon, seam, tilted orbit ring, Station's light/dark mood colours, hover bob, hop, halo breathe/flash, dashed spinning ring. Station's six moods mapped onto our eight states (table in `DroneRig.swift`); same pause rules, Reduce Motion stills, VoiceOver hidden, bundled `MascotDrone` PNG fallback. Me → Appearance → Mascot: Robot (default) / Drone, persisted, live. 60 fps with eight live drones on the simulator |
 
 **Epic #7 is complete on the simulator** except these owner-blocked items: an iPhone (device fps/latency, battery/thermal for passive mode, Diagnostics run), an Apple developer account (Team ID, App Group for the Share Extension on a device), the model host for delivery, and Google/Microsoft OAuth client IDs for mail/calendar sign-in.
+
+**Issue #8 (Laya upgrade):** steps 0–3, 5 (score reversal) and 6 are done on the desktop/simulator (2026-09-24). Step 4 (neutral A/B labels) was dropped: Station measured it worse. Step 7 (Core ML) is still open.
 
 ### Proving milestones
 

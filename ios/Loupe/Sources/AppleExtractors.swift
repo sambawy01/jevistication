@@ -2,17 +2,49 @@ import Foundation
 import ImageIO
 import LoupeKit
 import PDFKit
+import UIKit
+
+/// Model settings' `features.scan.ocr` / `ocr_max_pages` (Loupe Station's keys), read when a file is read.
+struct OcrPolicy: Equatable {
+    var enabled: Bool
+    var maxPages: Int
+
+    /// No OCR: what the bundled sample scan uses, so its items stay identical to the desktop scanner's.
+    static let off = OcrPolicy(enabled: false, maxPages: 0)
+
+    init(enabled: Bool, maxPages: Int) {
+        self.enabled = enabled
+        self.maxPages = maxPages
+    }
+
+    init(_ settings: EngineSettings) {
+        self.init(enabled: settings.ocr, maxPages: Int(settings.ocrMaxPages))
+    }
+
+    /// The settings now (thread-safe: the store is not main-actor bound).
+    static func current() -> OcrPolicy { OcrPolicy(ModelSettingsService.sharedStore.current) }
+}
 
 /// The iPhone's platform readers for LoupeKit's common scanner (epic #7 child 2): PDF text layers
 /// through PDFKit, image metadata (dimensions, camera, EXIF date, GPS presence) through ImageIO.
-/// The JVM uses PDFBox and metadata-extractor for the same two calls. Pixels are never read and
-/// there is no OCR here, as on the desktop. Called on the scan's background queue.
+/// The JVM uses PDFBox and metadata-extractor for the same two calls. A scanned PDF (no text layer)
+/// is read with on-device Vision OCR, up to `ocr_max_pages` pages, when [ocr] says so — as Loupe
+/// Station does; the default is no OCR (the sample scan, parity with the desktop). Called on the
+/// scan's background queue.
 final class AppleExtractors: NSObject, PlatformExtractors {
     private let timeZone: TimeZone
+    private let ocr: () -> OcrPolicy
+    private let recognizer: TextRecognizing
 
-    init(timeZone: TimeZone = .current) {
+    init(timeZone: TimeZone = .current, ocr: @escaping () -> OcrPolicy = { .off },
+         recognizer: TextRecognizing = VisionTextRecognizer()) {
         self.timeZone = timeZone
+        self.ocr = ocr
+        self.recognizer = recognizer
     }
+
+    /// The phone's sources (Files, Share inbox, Mail attachments): OCR as Model settings say.
+    static func live() -> AppleExtractors { AppleExtractors(ocr: { OcrPolicy.current() }) }
 
     func readPdf(path: String) -> PdfInfo {
         guard let doc = PDFDocument(url: URL(fileURLWithPath: path)) else {
@@ -27,11 +59,38 @@ final class AppleExtractors: NSObject, PlatformExtractors {
         let attributes = doc.documentAttributes
         let created = attributes?[PDFDocumentAttribute.creationDateAttribute] as? Date
         let producer = attributes?[PDFDocumentAttribute.producerAttribute] as? String
-        return PdfInfo(text: (doc.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+        var text = (doc.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if Self.looksScanned(text), doc.pageCount > 0 {
+            let policy = ocr()
+            if policy.enabled && policy.maxPages > 0 {
+                let recognised = ocrPages(doc, maxPages: policy.maxPages)
+                if !recognised.isEmpty { text = recognised }
+            }
+        }
+        return PdfInfo(text: text,
                        pages: Int32(doc.pageCount),
                        createdIso: created.map(isoDay),
                        producer: producer,
                        error: nil)
+    }
+
+    /// Fewer than 12 letters or digits: PDFKit found no real text layer (a scan).
+    static func looksScanned(_ text: String) -> Bool { text.filter { $0.isLetter || $0.isNumber }.count < 12 }
+
+    /// The first [maxPages] pages rendered (about 2x, longest side at most 2,400 px) and read by Vision.
+    private func ocrPages(_ doc: PDFDocument, maxPages: Int) -> String {
+        var pages: [String] = []
+        for i in 0..<min(doc.pageCount, maxPages) {
+            guard let page = doc.page(at: i) else { continue }
+            let bounds = page.bounds(for: .mediaBox)
+            guard bounds.width > 0, bounds.height > 0 else { continue }
+            let scale = min(2.0, 2_400 / max(bounds.width, bounds.height))
+            let image = page.thumbnail(of: CGSize(width: bounds.width * scale, height: bounds.height * scale), for: .mediaBox)
+            guard let png = image.pngData() else { continue }
+            let t = recognizer.recognize(png).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !t.isEmpty { pages.append(t) }
+        }
+        return pages.joined(separator: "\n\n")
     }
 
     func readImage(path: String) -> ImageInfo {

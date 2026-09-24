@@ -61,7 +61,7 @@ final class SourcesService: ObservableObject {
             library = nil
             problem = "The sources cache could not be opened: \(error.localizedDescription)"
         }
-        inbox = library == nil ? nil : try? Inbox(home: home.path, extractors: AppleExtractors())
+        inbox = library == nil ? nil : try? Inbox(home: home.path, extractors: AppleExtractors.live())
         inboxBatches = inbox?.batches() ?? []
         if let library {
             sampleEnabled = library.isEnabled(sourceId: Self.sampleId, default: true)

@@ -98,6 +98,7 @@ final class ModelSettingsModel: ObservableObject {
     private func note(_ spec: SettingSpec) -> String? {
         switch spec.name {
         case "routing": return MS.t("route.phone")
+        case "bias_correction": return MS.t("bias.phone")
         case "memory_mode", "idle_unload_min": return MS.t("applies.\(spec.name)")
         default: break
         }
@@ -108,6 +109,15 @@ final class ModelSettingsModel: ObservableObject {
         return nil
     }
 
+    /// An enum choice as the screen says it.
+    static func choiceLabel(_ spec: SettingSpec, _ choice: String) -> String {
+        switch spec.name {
+        case "memory_mode": return MS.t("mem.\(choice)")
+        case "bias_correction": return MS.t("bias.\(choice)")
+        default: return MS.t("route.\(choice)")
+        }
+    }
+
     /// A value as the screen says it.
     static func text(_ spec: SettingSpec, _ value: JsonValue, _ settings: EngineSettings) -> String {
         let num = (value as? JsonValueNum).flatMap { Double($0.text) }
@@ -116,8 +126,7 @@ final class ModelSettingsModel: ObservableObject {
         case .bool_:
             return MS.t((value as? JsonValueBool)?.value == true ? "v.on" : "v.off")
         case .enum_:
-            if spec.name == "memory_mode" { return MS.t("mem.\(str ?? "")") }
-            return MS.t("route.\(str ?? "")")
+            return choiceLabel(spec, str ?? "")
         case .nullableEnum:
             guard let str else { return MS.t("route.follow", ["route": MS.t("route.\(settings.routing)")]) }
             return MS.t("route.\(str)")
@@ -135,7 +144,7 @@ final class ModelSettingsModel: ObservableObject {
             switch spec.name {
             case "idle_unload_min": return num == 0 ? MS.t("unit.never") : MS.t("unit.min", ["n": MS.number(num)])
             case "content_budget_s", "time_limit_s": return MS.t("unit.s", ["n": MS.number(num)])
-            case "queue_size": return MS.t("unit.pages", ["n": MS.number(num)])
+            case "queue_size", "ocr_max_pages": return MS.t("unit.pages", ["n": MS.number(num)])
             default: return MS.t("unit.chars", ["n": MS.number(num)])
             }
         }
@@ -147,7 +156,7 @@ final class ModelSettingsModel: ObservableObject {
     static func step(_ spec: SettingSpec) -> Double {
         switch spec.name {
         case "accept_confidence": return 0.05
-        case "idle_unload_min", "time_limit_s", "queue_size": return 1
+        case "idle_unload_min", "time_limit_s", "queue_size", "ocr_max_pages": return 1
         case "content_budget_s": return 5
         case "max_decisions_per_s": return 0.5
         default: return 100   // characters

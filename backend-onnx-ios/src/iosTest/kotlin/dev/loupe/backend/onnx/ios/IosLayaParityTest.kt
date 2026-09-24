@@ -65,6 +65,18 @@ class IosLayaParityTest {
     }
 
     @Test
+    fun theRustTokenizerMatchesLaya0320OnSixLanguageStrings() {
+        val encoder = tokenizerOrNull() ?: return
+        encoder.use {
+            val cases = IosLayaFixture.tokenizerStrings()
+            for ((lang, text, ids) in cases) {
+                assertContentEquals(ids, encoder.encode(text), "$lang: \"${text.take(60)}\"")
+            }
+            println("iOS Rust tokenizer: ${cases.size} multilingual strings identical to laya 0.3.20")
+        }
+    }
+
+    @Test
     fun theSharedPromptRebuildsUpstreamSequencesOnIos() {
         val encoder = tokenizerOrNull() ?: return
         encoder.use {
@@ -85,7 +97,12 @@ class IosLayaParityTest {
     @Test
     fun int8OnIosSelectsTheSameAnswersAsTheJvmOnCriteria() = assertParity("criteria", IosLayaFixture.criteria())
 
-    private fun assertParity(name: String, fixture: IosLayaFixture) {
+    /** Station's REVERSE_SCORE_ON: levels sent highest first, answers mapped back (score-reversed.json). */
+    @Test
+    fun int8OnIosSelectsTheSameAnswersAsTheJvmOnReversedScores() =
+        assertParity("score-reversed", IosLayaFixture.load("score-reversed.json"), ordinal = true)
+
+    private fun assertParity(name: String, fixture: IosLayaFixture, ordinal: Boolean = false) {
         val graph = graphOrNull("int8") ?: return
         val encoder = tokenizerOrNull() ?: return
         encoder.use {
@@ -97,7 +114,7 @@ class IosLayaParityTest {
                 val flippedVsTorch = mutableListOf<String>()
                 var elapsedMs = 0.0
                 for (case in fixture.cases) {
-                    val judgment = Judgment.Choice(case.id, case.question, case.candidates, descriptions = case.descriptionMap)
+                    val judgment = Judgment.Choice(case.id, case.question, case.candidates, descriptions = case.descriptionMap, ordinal = ordinal)
                     val state = TextState.build(listOf(case.id to case.state), 1_000_000)
                     val start = TimeSource.Monotonic.markNow()
                     val masses = backend.score(judgment, state).masses

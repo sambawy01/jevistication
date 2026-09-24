@@ -8,7 +8,7 @@
 #
 # The reference implementation is the Laya authors' own package, installed from GitHub at a pinned
 # commit, so the parity check compares ONNX against *their* forward pass, not a reimplementation.
-laya @ git+https://github.com/NandhaKishorM/laya@c7527708f9f5220c669d8aa385077cd28d04708a
+laya @ git+https://github.com/NandhaKishorM/laya@23a17522aa4942da6cce53a995a275760320b691
 torch==2.8.0
 transformers==5.0.0
 safetensors==0.7.0

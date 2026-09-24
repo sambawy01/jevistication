@@ -42,6 +42,8 @@ protocol TextRecognizing {
 }
 
 /// Vision `VNRecognizeTextRequest`: `.accurate`, language correction on, on-device only.
+/// `.accurate` is required for Arabic (`ar-SA` is not read at `.fast`), and
+/// `automaticallyDetectsLanguage` (iOS 16+) lets one image mix Arabic and Latin script.
 struct VisionTextRecognizer: TextRecognizing {
     func recognize(_ data: Data) -> String {
         let request = VNRecognizeTextRequest()
@@ -142,6 +144,8 @@ struct PhotosProducer {
     let recognizer: TextRecognizing
     var maxPerScan = 300
     var extractors = AppleExtractors()
+    /// `features.scan.ocr`: off reads a photo's metadata only. Default on (what the app did before).
+    var ocr: () -> OcrPolicy = { OcrPolicy(enabled: true, maxPages: 1) }
 
     func scan(cached: ScanResult?, state: [String: String], cancelled: () -> Bool = { false }) async -> PhoneScanOutput {
         let assets = library.allAssets()
@@ -156,6 +160,7 @@ struct PhotosProducer {
         let pending = assets.filter { !have.contains($0.localId) || edited.contains($0.localId) }
         let batch = pending.prefix(maxPerScan)
         let builder = PhoneItems()
+        let ocrOn = ocr().enabled
         var fresh: [SourceItem] = []
         var skipped: [Skipped] = []
         var processed = 0
@@ -167,7 +172,7 @@ struct PhotosProducer {
                 continue
             }
             let info = extractors.readImage(data: data)
-            let text = recognizer.recognize(data)
+            let text = ocrOn ? recognizer.recognize(data) : ""
             let created = asset.created.map { ISOStamp.local($0) }
             let dims = info.facts["dimensions"] ?? (asset.pixelWidth > 0 ? "\(asset.pixelWidth)x\(asset.pixelHeight)" : nil)
             fresh.append(builder.photo(localId: asset.localId, name: asset.fileName, ocrText: text, createdIso: created,

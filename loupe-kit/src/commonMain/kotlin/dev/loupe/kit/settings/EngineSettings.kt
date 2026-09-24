@@ -176,6 +176,11 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
     val useCalibration: Boolean get() = bool("global.use_calibration")
     val rulesFirst: Boolean get() = bool("global.rules_first")
     val baselineSwitch: Boolean get() = bool("global.baseline_switch")
+    /** `global.bias_correction` as stored (`contextual`, `domain`, `off`). */
+    val biasCorrection: String get() = string("global.bias_correction") ?: BIAS_OFF
+
+    /** What the phone runs: always `off` — Station's contextual and domain calibration are not implemented here. */
+    val effectiveBiasCorrection: String get() = BIAS_OFF
     val textCharsEnglish: Int get() = number("global.text_chars_english")?.toInt() ?: 1_400
     val textCharsMultilingual: Int get() = number("global.text_chars_multilingual")?.toInt() ?: 2_400
 
@@ -206,6 +211,11 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
     }
 
     val readContent: Boolean get() = bool("features.scan.read_content")
+    /** `features.scan.ocr`: on-device Vision OCR of photos and scanned PDFs (Files, Share inbox). */
+    val ocr: Boolean get() = bool("features.scan.ocr")
+
+    /** `features.scan.ocr_max_pages`: pages of a scanned PDF read by OCR when PDFKit finds no text. */
+    val ocrMaxPages: Int get() = number("features.scan.ocr_max_pages")?.toInt() ?: 3
     val contentBudgetS: Double get() = number("features.scan.content_budget_s") ?: 60.0
     val browserTimeLimitS: Double get() = number("features.browser.time_limit_s") ?: 5.0
     val browserQueueSize: Int get() = number("features.browser.queue_size")?.toInt() ?: 2
@@ -268,6 +278,12 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
         const val MEMORY_LOW = "low"
         val MEMORY_MODES: List<String> = listOf(MEMORY_FULL, MEMORY_BALANCED, MEMORY_LOW)
 
+        const val BIAS_CONTEXTUAL = "contextual"
+        const val BIAS_DOMAIN = "domain"
+        const val BIAS_OFF = "off"
+        /** Station's order. Only [BIAS_OFF] is implemented on iPhone. */
+        val BIAS_CORRECTIONS: List<String> = listOf(BIAS_CONTEXTUAL, BIAS_DOMAIN, BIAS_OFF)
+
         /** [textCharsMode] values. */
         const val TEXT_BUILTIN = "builtin"
         const val TEXT_GLOBAL = "global"
@@ -316,6 +332,8 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
                 note = "No calibration is fitted on iPhone yet, so on and off both use Laya's raw confidence today."))
             add(global("rules_first", SettingKind.BOOL, b(true)))
             add(global("baseline_switch", SettingKind.BOOL, b(true)))
+            add(global("bias_correction", SettingKind.ENUM, s(BIAS_OFF), choices = BIAS_CORRECTIONS,
+                note = "iPhone implements Off only; Contextual and Domain are Loupe Station only and run as Off here."))
             add(global("text_chars_english", SettingKind.INT, n(1_400), 200.0, 20_000.0, onPhone = OnPhone.DESKTOP_ONLY,
                 note = "iPhone has no English model, so this limit is unused here."))
             add(global("text_chars_multilingual", SettingKind.INT, n(2_400), 200.0, 20_000.0))
@@ -324,6 +342,8 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
             add(feature(Features.SCAN, "read_content", SettingKind.BOOL, b(true)))
             add(feature(Features.SCAN, "content_budget_s", SettingKind.NUMBER, n(60), 1.0, 600.0, onPhone = OnPhone.DESKTOP_ONLY,
                 note = "iPhone reads each file once, when Sources scans it, within the extractor's own limits."))
+            add(feature(Features.SCAN, "ocr", SettingKind.BOOL, b(true)))
+            add(feature(Features.SCAN, "ocr_max_pages", SettingKind.INT, n(3), 1.0, 20.0))
             addAll(common(Features.EMAIL))
             addAll(common(Features.BROWSER))
             add(feature(Features.BROWSER, "time_limit_s", SettingKind.NUMBER, n(5), 1.0, 60.0, onPhone = OnPhone.DESKTOP_ONLY,
