@@ -127,7 +127,7 @@ Only while the user turned the source on. Online reasons count as deterministic 
 | `online_domain_new_halfyear` | `…_domain_new_halfyear` | 8 | < 180 days (only the strongest age bucket counts) |
 | `online_cert_new` | `sender_cert_new`, `link_cert_new` | 20 | CT `first_seen` < 7 days before now |
 | `online_phish_list_url` / `_host` / `_domain` | `sender_phish_list`, `link_phish_list` | 60 | on a downloaded list (OpenPhish; PhishTank keyless): exact URL (host + path + query), else the host unless path-shared (`PATH_SHARED_HOSTS`, shorteners), else a listed bare registrable domain the host sits under (never a shared host) |
-| `online_safe_browsing` | `link_safe_browsing` | 60 | Google Safe Browsing (Update API v4, the user's own key) lists the URL |
+| `online_safe_browsing` | `link_safe_browsing` | 60 | Google Safe Browsing (API v5 local-list mode: hash-prefix lists on the phone, `hashes:search` only on a prefix hit; the user's own key) lists the URL |
 
 - A helper answer with `sources: []` means **no facts**: nothing is scored and it is never labelled
   "checked". A date in the future, or unparseable, is ignored.

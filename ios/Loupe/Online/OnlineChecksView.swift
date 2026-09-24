@@ -47,7 +47,7 @@ struct OnlineChecksView: View {
                     .disabled(keyDraft.isEmpty)
                     if let keyError { Text(keyError).font(.caption).foregroundStyle(Palette.dangerText) }
                 }
-                Text("Online · Google, with your own key (kept in this iPhone's Keychain, never sent anywhere else). Downloads Google's list of hash prefixes; only when a link matches it locally are short hash prefixes sent to Google — never the link itself.")
+                Text("Online · Google, with your own key (kept in this iPhone's Keychain, never sent anywhere else). Uses Safe Browsing API v5: downloads Google's lists of hash prefixes and matches your links on this phone. Only hash prefixes leave the phone — when a link matches the list, its 4-byte hash prefixes are sent to Google to confirm; never the link, its domain or a full hash.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             } header: { Text("Online · Google Safe Browsing") }
             if let status = online.status {

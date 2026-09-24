@@ -202,29 +202,39 @@ final class OnlineChecksTests: XCTestCase {
         s.update(OnlinePhishingSettings(safeBrowsing: true))
         let url = "http://paypal.account-verify.example/login"
         let full = SafeBrowsingClient.hash("paypal.account-verify.example/login")
-        let prefix = full.prefix(4)
         FakeOnline.handler = { req, _ in
-            if req.url!.path.hasSuffix("threatListUpdates:fetch") {
-                let o: [String: Any] = ["listUpdateResponses": [["threatType": "SOCIAL_ENGINEERING", "responseType": "FULL_UPDATE", "newClientState": "s1",
-                                                                  "additions": [["compressionType": "RAW", "rawHashes": ["prefixSize": 4, "rawHashes": Data(prefix).base64EncodedString()]]]]]]
-                return (200, try! JSONSerialization.data(withJSONObject: o))
+            if req.url!.path.hasSuffix("hashLists:batchGet") {
+                return (200, SBFixtures.batch(["se-4b": [SafeBrowsingClient.prefix(full)], "mw-4b": [], "uws-4b": []]))
             }
-            let o: [String: Any] = ["matches": [["threatType": "SOCIAL_ENGINEERING", "threat": ["hash": full.base64EncodedString()]]]]
-            return (200, try! JSONSerialization.data(withJSONObject: o))
+            return (200, SBFixtures.search([full]))
         }
         let maybe = await s.context(items: Self.sample, raws: raws)
         let ctx = try XCTUnwrap(maybe)
         XCTAssertEqual(ctx.safeBrowsingHits, [url])
-        XCTAssertEqual(FakeOnline.requests.count, 2)
+        XCTAssertEqual(FakeOnline.requests.map { $0.url!.path }, ["/v5/hashLists:batchGet", "/v5/hashes:search"])
         for (r, b) in zip(FakeOnline.requests, FakeOnline.bodies) {
             XCTAssertEqual(r.url?.host, "safebrowsing.googleapis.com")
-            XCTAssertTrue(r.url?.query?.contains("key=\(key)") ?? false)
-            let text = String(decoding: b, as: UTF8.self)
-            XCTAssertFalse(text.contains("paypal"), "no URL or host is ever sent: \(text)")
+            XCTAssertEqual(r.httpMethod, "GET")
+            XCTAssertEqual(r.value(forHTTPHeaderField: "X-Goog-Api-Key"), key)
+            XCTAssertFalse(r.url!.absoluteString.contains(key), "the key is never in the URL")
+            XCTAssertTrue(b.isEmpty)
+            let text = r.url!.absoluteString.lowercased()
+            XCTAssertFalse(text.contains("paypal") || text.contains("example"), "no URL or host is ever sent: \(text)")
         }
+        let q = try XCTUnwrap(URLComponents(url: FakeOnline.requests[1].url!, resolvingAgainstBaseURL: false)?.queryItems)
+        XCTAssertEqual(q.map(\.name), ["hashPrefixes"], "only the one prefix that hit the local list")
+        XCTAssertEqual(Data(base64Encoded: q[0].value!), full.prefix(4))
         let summary = MailTriage.shared.summariseOnline(items: Self.sample, raws: raws, corrections: [:], online: ctx)
         let paypal = try XCTUnwrap(summary.rows.first { $0.itemId.hasSuffix("phishing-paypal.eml") })
         XCTAssertTrue(paypal.signals.contains { $0.code == "link_safe_browsing" })
+    }
+
+    func testSafeBrowsingOffSendsNothingEvenWithAKey() async {
+        let s = service(key: "AIzaSyTESTKEY_0123456789abcdef")
+        s.update(OnlinePhishingSettings(safeBrowsing: false))
+        let ctx = await s.context(items: Self.sample, raws: raws)
+        XCTAssertNil(ctx)
+        XCTAssertEqual(FakeOnline.requests.count, 0)
     }
 
     func testTurningASwitchOffForgetsItsData() async {

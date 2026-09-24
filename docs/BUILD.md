@@ -574,6 +574,13 @@ their acceptance criteria are met; entries here record increments toward them.
   *Note:* D2 says there is no overall accuracy; the Me line is the owner's request, pooled only over
   corrected model answers and gated, with per-judgment figures on each Measure screen.
 
+- **2026-09-24 — Google Safe Browsing moved to API v5 local-list mode (v4 shuts down 2027-03-31).**
+  `ios/Loupe/Online/SafeBrowsing.swift`: `hashLists:batchGet` for `se-4b`/`mw-4b`/`uws-4b` (Rice-delta
+  decoding, removals then additions, SHA-256 checksum, `minimumWaitDuration`), v5 URL canonicalisation
+  and host-suffix/path-prefix expressions (eTLD+1 from the pinned PSL), `hashes:search` only for
+  uncached local prefix hits, results cached per prefix for `cacheDuration`. Key sent as
+  `X-Goog-Api-Key`, never in the URL; §4a rules unchanged. Shapes checked against Google's v5
+  discovery document. `SafeBrowsingV5Tests` (Google's canonicalisation vectors and Rice example).
 - **2026-09-24 — One phishing formula, automatic baseline, online phishing checks (owner decisions
   A–D).** Uncommitted pending review.
   - **A · One phishing / site formula** for Loupe and Loupe Station, written down in

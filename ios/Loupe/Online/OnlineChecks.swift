@@ -12,8 +12,9 @@ import LoupeKit
 ///   the helper has not deployed the route: "online checks not available yet".
 /// - Phishing lists: OpenPhish's community feed (and PhishTank's keyless list, its own switch),
 ///   downloaded to the phone and matched on the phone. Nothing per link leaves it.
-/// - Google Safe Browsing (Update API v4) with the user's own key from the Keychain: a local list of
-///   hash prefixes; only on a local match are 4-byte prefixes sent to Google, never a URL.
+/// - Google Safe Browsing (API v5, local-list mode; `SafeBrowsing.swift`) with the user's own key from
+///   the Keychain: a local list of hash prefixes; only on a local match are 4-byte prefixes sent to
+///   Google, never a URL.
 struct OnlinePhishingSettings: Equatable {
     var domainFacts = false
     var feeds = false
@@ -156,127 +157,6 @@ final class PhishingFeeds {
     func remove() { try? FileManager.default.removeItem(at: dir) }
 }
 
-// MARK: - Google Safe Browsing (Update API v4, the user's own key)
-
-final class SafeBrowsingClient {
-    static let base = URL(string: "https://safebrowsing.googleapis.com/v4/")!
-    static let threatTypes = ["MALWARE", "SOCIAL_ENGINEERING", "UNWANTED_SOFTWARE"]
-    private let dir: URL
-    private let session: URLSession
-    private let key: () -> String?
-
-    /// Per threat type: the client state Google gave and the sorted hash prefixes.
-    struct ListState: Codable { var state: String; var prefixes: [Data] }
-    private(set) var lists: [String: ListState] = [:]
-
-    init(dir: URL, session: URLSession, key: @escaping () -> String?) {
-        self.dir = dir
-        self.session = session
-        self.key = key
-        if let d = try? Data(contentsOf: dir.appendingPathComponent("lists.json")),
-           let l = try? JSONDecoder().decode([String: ListState].self, from: d) { lists = l }
-    }
-
-    private var client: [String: String] { ["clientId": "loupe-ios", "clientVersion": "0.1.0"] }
-
-    private func post(_ path: String, _ body: [String: Any]) async throws -> [String: Any] {
-        guard let k = key(), !k.isEmpty else { throw OnlineCheckError.badKey }
-        var comps = URLComponents(url: Self.base.appendingPathComponent(path), resolvingAgainstBaseURL: false)!
-        comps.queryItems = [URLQueryItem(name: "key", value: k)]
-        var r = URLRequest(url: comps.url!, timeoutInterval: 30)
-        r.httpMethod = "POST"
-        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.httpBody = try JSONSerialization.data(withJSONObject: body)
-        let data: Data, response: URLResponse
-        do { (data, response) = try await session.data(for: r) } catch { throw OnlineCheckError.offline }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 else { throw OnlineCheckError.from(status: status, data: data) }
-        return (try? JSONSerialization.jsonObject(with: data) as? [String: Any]) ?? [:]
-    }
-
-    /// `threatListUpdates:fetch`: full or partial updates of the local prefix lists (RAW compression).
-    func update() async throws {
-        let reqs: [[String: Any]] = Self.threatTypes.map { t in
-            ["threatType": t, "platformType": "ANY_PLATFORM", "threatEntryType": "URL",
-             "state": lists[t]?.state ?? "", "constraints": ["supportedCompressions": ["RAW"]]]
-        }
-        let resp = try await post("threatListUpdates:fetch", ["client": client, "listUpdateRequests": reqs])
-        for u in resp["listUpdateResponses"] as? [[String: Any]] ?? [] {
-            guard let t = u["threatType"] as? String else { continue }
-            var prefixes = (u["responseType"] as? String) == "FULL_UPDATE" ? [] : (lists[t]?.prefixes ?? [])
-            for rem in u["removals"] as? [[String: Any]] ?? [] {
-                let idx = ((rem["rawIndices"] as? [String: Any])?["indices"] as? [Int]) ?? []
-                for i in Set(idx).sorted(by: >) where i < prefixes.count { prefixes.remove(at: i) }
-            }
-            for add in u["additions"] as? [[String: Any]] ?? [] {
-                guard let raw = add["rawHashes"] as? [String: Any], let size = raw["prefixSize"] as? Int, size > 0,
-                      let b64 = raw["rawHashes"] as? String, let bytes = Data(base64Encoded: b64) else { continue }
-                var i = 0
-                while i + size <= bytes.count { prefixes.append(bytes.subdata(in: i..<(i + size))); i += size }
-            }
-            prefixes.sort { $0.lexicographicallyPrecedes($1) }
-            lists[t] = ListState(state: u["newClientState"] as? String ?? "", prefixes: prefixes)
-        }
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        try JSONEncoder().encode(lists).write(to: dir.appendingPathComponent("lists.json"), options: .atomic)
-    }
-
-    /// Host-suffix / path-prefix expressions of [url] (simplified Safe Browsing canonicalisation).
-    static func expressions(_ url: String) -> [String] {
-        guard let c = URLComponents(string: url), var host = c.host?.lowercased() else { return [] }
-        while host.hasSuffix(".") { host.removeLast() }
-        let path = c.percentEncodedPath.isEmpty ? "/" : c.percentEncodedPath
-        let query = c.percentEncodedQuery.map { "?" + $0 } ?? ""
-        var hosts = [host]
-        let labels = host.split(separator: ".")
-        if labels.count > 2 && Int(labels.last!) == nil {
-            for n in stride(from: min(5, labels.count - 1), through: 2, by: -1) { hosts.append(labels.suffix(n).joined(separator: ".")) }
-        }
-        var paths = [path + query, path]
-        var acc = "/"
-        paths.append(acc)
-        for comp in path.split(separator: "/").dropLast().prefix(3) { acc += comp + "/"; paths.append(acc) }
-        var out: [String] = []
-        for h in hosts.prefix(5) { for p in paths where !out.contains(h + p) { out.append(h + p) } }
-        return out
-    }
-
-    static func hash(_ s: String) -> Data { Data(SHA256.hash(data: Data(s.utf8))) }
-
-    private func localMatches(_ hash: Data) -> [Data] {
-        lists.values.flatMap { l in l.prefixes.filter { hash.starts(with: $0) } }
-    }
-
-    /// The URLs Google lists as dangerous. Only prefixes that already match the local list are
-    /// sent (`fullHashes:find`), never a URL; with no local match nothing is sent.
-    func dangerous(_ urls: [String]) async throws -> Set<String> {
-        var byPrefix: [Data: [(String, Data)]] = [:]
-        for u in urls {
-            for e in Self.expressions(u) {
-                let h = Self.hash(e)
-                for p in localMatches(h) { byPrefix[p, default: []].append((u, h)) }
-            }
-        }
-        if byPrefix.isEmpty { return [] }
-        let body: [String: Any] = [
-            "client": client,
-            "clientStates": lists.values.map(\.state),
-            "threatInfo": ["threatTypes": Self.threatTypes, "platformTypes": ["ANY_PLATFORM"], "threatEntryTypes": ["URL"],
-                           "threatEntries": byPrefix.keys.map { ["hash": $0.base64EncodedString()] }],
-        ]
-        let resp = try await post("fullHashes:find", body)
-        let full = Set((resp["matches"] as? [[String: Any]] ?? []).compactMap { ($0["threat"] as? [String: Any])?["hash"] as? String }.compactMap { Data(base64Encoded: $0) })
-        var out = Set<String>()
-        for pairs in byPrefix.values { for (u, h) in pairs where full.contains(h) { out.insert(u) } }
-        return out
-    }
-
-    func remove() {
-        lists = [:]
-        try? FileManager.default.removeItem(at: dir)
-    }
-}
-
 // MARK: - The service
 
 @MainActor
@@ -312,7 +192,7 @@ final class OnlineChecksService: ObservableObject {
             .appendingPathComponent("online-phishing"))
         facts = DomainFactsClient(base: base, session: s)
         feeds = PhishingFeeds(dir: root.appendingPathComponent("feeds"), session: s, now: now)
-        safeBrowsing = SafeBrowsingClient(dir: root.appendingPathComponent("safe-browsing"), session: s, key: { key.read() })
+        safeBrowsing = SafeBrowsingClient(dir: root.appendingPathComponent("safe-browsing"), session: s, key: { key.read() }, now: now)
         settings = OnlinePhishingSettings.load(defaults)
         keySet = key.read() != nil
     }
