@@ -11,6 +11,12 @@ import dev.loupe.persistence.JsonValue
  * PSL answers (host control with the full PSL; the online-facts domain with ICANN only).
  */
 internal object PhishingVectors {
+    /** v1.1 vectors whose verdict v1.2 changes by design (docs/PHISHING-FORMULA.md changelog). */
+    val V12_CHANGES: Map<String, Map<String, JsonValue>> = mapOf(
+        "online-feed-host" to mapOf("level" to JsonValue.Str("caution"), "score" to JsonValue.Num("45")),     // v1.1: danger 60
+        "online-feed-domain" to mapOf("level" to JsonValue.Str("caution"), "score" to JsonValue.Num("30")),   // v1.1: danger 60
+    )
+
     data class Outcome(
         val id: String,
         val level: String,
@@ -47,7 +53,10 @@ internal object PhishingVectors {
         }.orEmpty()
         val feeds = (o["feeds"] as? JsonValue.Obj)?.fields?.mapValues { strings(it.value) }
         val sb = strings(o["safeBrowsing"]).toSet()
-        return OnlineContext(now, facts, feeds?.let(::FeedIndex), sb, safeBrowsingFetchedAt = now, feedsFetchedAt = now)
+        // A "phishingdb" feed goes through the phone's Phishing.Database index, the others through FeedIndex.
+        val plain = feeds?.filterKeys { it != PhishingDb.SOURCE }?.takeIf { it.isNotEmpty() }?.let(::FeedIndex)
+        val pdb = feeds?.get(PhishingDb.SOURCE)?.let { PhishingDb.build(listOf(it.joinToString("\n")), emptyList(), now) }
+        return OnlineContext(now, facts, plain, sb, safeBrowsingFetchedAt = now, feedsFetchedAt = now, phishingDb = pdb)
     }
 
     fun run(v: Vector, now: String): Outcome {
@@ -85,7 +94,10 @@ internal object PhishingVectors {
 
     /** Differences between [actual] and the vector's `expect` (empty when they agree). */
     fun check(v: Vector, actual: Outcome): List<String> {
-        val e = v.expect ?: return listOf("${v.id}: no expect")
+        val e0 = v.expect ?: return listOf("${v.id}: no expect")
+        // Formula v1.2 list strength moves exactly these two v1.1 vectors (the file stays the byte-for-byte
+        // v1.1 copy, as in Station's tests/test_phishing_vectors.py V12_CHANGES).
+        val e = V12_CHANGES[v.id]?.let { ch -> JsonValue.Obj(LinkedHashMap(e0.fields).also { it.putAll(ch) }) } ?: e0
         val out = mutableListOf<String>()
         if (e.str("level") != actual.level) out += "${v.id}: level ${actual.level}, expected ${e.str("level")}"
         if (e.str("score")?.toInt() != actual.score) out += "${v.id}: score ${actual.score}, expected ${e.str("score")}"

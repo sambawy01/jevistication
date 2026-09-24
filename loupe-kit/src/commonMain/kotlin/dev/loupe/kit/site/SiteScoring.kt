@@ -1,5 +1,7 @@
 package dev.loupe.kit.site
 
+import kotlinx.datetime.Clock
+
 /*
  * Combine deterministic signals (and, when present, Laya's reading of the page) into one score,
  * level and reasons.
@@ -30,8 +32,20 @@ data class SiteReason(val code: String, val text: String, val weight: Int, val s
 /** A Laya answer to one `wf-page-risk` question, as data: a yes/no ([yes]) or a choice ([choice]). */
 data class LayaPageAnswer(val p: Double, val yes: Boolean? = null, val choice: String? = null, val weak: Boolean = false)
 
-/** Station's verdict for one page: score 0-100, level safe / caution / danger, reasons, gates. */
-data class SiteVerdict(val score: Int, val level: String, val reasons: List<SiteReason>, val gates: List<String>)
+/**
+ * Station's verdict for one page: score 0-100, level safe / caution / danger, reasons, gates, and
+ * (formula v1.2) the [facts] shown next to it, the Laya cues that were [notCounted] and the [context].
+ */
+data class SiteVerdict(
+    val score: Int,
+    val level: String,
+    val reasons: List<SiteReason>,
+    val gates: List<String>,
+    val facts: List<SiteFact> = emptyList(),
+    val notCounted: List<NotCounted> = emptyList(),
+    val context: SiteContextInfo = SiteContextInfo("none", false, null),
+    val formula: String = SiteContext.FORMULA_VERSION,
+)
 
 object SiteScoring {
     const val SAFE_BELOW = 30
@@ -63,12 +77,19 @@ object SiteScoring {
     val IMPOSTOR_LOGIN = Triple("impostor_login", 20, "It asks for a password or card details on that look-alike address.")
     val PRESSURE_LOGIN = Triple("pressure_login", 10, "It asks for a password or card details while pressuring you to act fast.")
 
+    // Formula v1.2 (docs/PHISHING-FORMULA.md §5, §5c, §6.1).
+    val DNSBL_WEIGHTS: Map<String, Pair<Int, String>> = linkedMapOf(
+        "online_dnsbl_phish" to (Dnsbl.W_DNSBL_PHISH to "The domain {domain} is on a blocklist of phishing or malware domains."),
+        "online_dnsbl_spam" to (Dnsbl.W_DNSBL_SPAM to "The domain {domain} is on a blocklist of spam and abuse domains."),
+    )
+    val DNSBL_RISK_CODES: Set<String> = DNSBL_WEIGHTS.keys
     val REASON_TEXT: Map<String, String> = LinkedHashMap<String, String>().apply {
         SiteSignals.WEIGHTS.forEach { (code, wt) -> put(code, wt.second) }
         LAYA_POINTS.values.forEach { (code, _, text) -> put(code, text) }
         put(IMPOSTOR_LOGIN.first, IMPOSTOR_LOGIN.third)
         put(PRESSURE_LOGIN.first, PRESSURE_LOGIN.third)
         OnlineSignals.PAGE_WEIGHTS.forEach { (code, wt) -> put(code, wt.second) }
+        DNSBL_WEIGHTS.forEach { (code, wt) -> put(code, wt.second) }
         put("user_trusted", "You marked this site as trusted.")
         put("known_good", "This is the real website of a well-known company.")
     }
@@ -99,10 +120,29 @@ object SiteScoring {
         return out
     }
 
+    const val LIST_HOST_W = 45
+    const val LIST_DOMAIN_W = 30
+    val LIST_CORROBORATORS: Set<String> = IMPOSTOR_CODES + setOf(
+        "brand_mismatch", "brand_mismatch_login", "brand_in_domain", "brand_in_path", "online_domain_new_week",
+        "online_domain_new_month", "online_cert_new", "online_safe_browsing",
+    ) + DNSBL_RISK_CODES
+
+    /** The blocklist reason for a page (§5c), or null: the strongest listing of the lookup domain. */
+    fun dnsblReason(site: SiteFacts?): SiteReason? {
+        if (site == null || site.domain.isEmpty()) return null
+        val (cat, source) = Dnsbl.strongest(site.dnsbl) ?: return null
+        val code = if (cat == "phish") "online_dnsbl_phish" else "online_dnsbl_spam"
+        val (w, text) = DNSBL_WEIGHTS.getValue(code)
+        val p = linkedMapOf("domain" to site.domain, "online_source" to (OnlineSignals.SOURCE_NAMES[source] ?: source))
+        site.dnsblFetchedAt?.let { p["fetched_at"] = it }
+        return SiteReason(code, fillTemplate(text, p), w, "online", p)
+    }
+
     /**
      * The verdict for one page. [laya] is null when Laya did not run (always, on the phone today);
      * [online] the reasons from the opt-in online checks ([OnlineSignals.pageReasons]; empty when
-     * they are off), ignored on a known-good domain.
+     * they are off), ignored on a known-good domain. [site] (formula v1.2, opt-in) is the lookup
+     * domain's cached facts; [nowIso] the instant ages are measured against.
      */
     fun combine(
         det: List<SiteSignal>,
@@ -110,52 +150,113 @@ object SiteScoring {
         laya: Map<String, LayaPageAnswer>? = null,
         allowlisted: Boolean = false,
         online: List<SiteReason> = emptyList(),
+        site: SiteFacts? = null,
+        nowIso: String? = null,
     ): SiteVerdict {
         if (allowlisted) {
             return SiteVerdict(0, "safe", listOf(SiteReason("user_trusted", REASON_TEXT.getValue("user_trusted"), 0, "user")), listOf("user_trusted"))
         }
+        val now = OnlineSignals.instant(nowIso) ?: Clock.System.now()
+        val known = facts.knownGood
+        val siteFacts = if (known) null else site
         val reasons = det.map { SiteReason(it.code, it.text, it.weight, it.source, it.params) }.toMutableList()
         val codes = det.map { it.code }.toMutableSet()
         val gates = mutableListOf<String>()
         if ((facts.password || facts.card) && (codes intersect IMPOSTOR_CODES).isNotEmpty()) {
             reasons += SiteReason(IMPOSTOR_LOGIN.first, IMPOSTOR_LOGIN.third, IMPOSTOR_LOGIN.second, "page")
+            codes += IMPOSTOR_LOGIN.first
         }
         // Online facts count as deterministic evidence (never on a well-known brand's own domain).
-        val onlineReasons = if (facts.knownGood) emptyList() else online.distinctBy { it.code }
+        val onlineReasons = (if (known) emptyList() else online.distinctBy { it.code }).toMutableList()
+        dnsblReason(siteFacts)?.let { onlineReasons += it }
+        val onlineCodes = onlineReasons.map { it.code }.toSet()
+        // v1.2 list strength: only an exact URL is "danger" alone.
+        val listCorroborated = ((codes + onlineCodes) intersect LIST_CORROBORATORS).isNotEmpty() || facts.password || facts.card
+        var uncorroboratedDomainHit = false
+        for (i in onlineReasons.indices) {
+            val r = onlineReasons[i]
+            if ((r.code == "online_phish_list_host" || r.code == "online_phish_list_domain") && !listCorroborated) {
+                onlineReasons[i] = r.copy(weight = if (r.code == "online_phish_list_host") LIST_HOST_W else LIST_DOMAIN_W,
+                    params = r.params + ("list_strength" to "uncorroborated"))
+                if (r.code == "online_phish_list_domain") uncorroboratedDomainHit = true
+            }
+        }
         reasons += onlineReasons
-        codes += onlineReasons.map { it.code }
+        codes += onlineCodes
         val detPoints = reasons.sumOf { it.weight }
+        val riskCodes = SiteSignals.RISK_CODES + OnlineSignals.PAGE_RISK_CODES + DNSBL_RISK_CODES
+        val hasRisk = (codes intersect riskCodes).isNotEmpty()
+        val ctx = SiteContext.evaluate(codes, facts, siteFacts, now)
+        val years: String? = ctx.ageDays?.takeIf { it >= 365 }?.let { (it / 365.25).toInt().toString() }
 
-        val layaReasons = mutableListOf<LayaReason>()
-        if (laya != null && !facts.knownGood) {
+        var layaReasons = mutableListOf<LayaReason>()
+        val notCounted = mutableListOf<NotCounted>()
+        if (laya != null && !known) {
             layaReasons += layaPoints(laya)
             if ((facts.password || facts.card) && layaReasons.any { it.reason.code == "laya_urgency" && it.strong }) {
                 layaReasons += LayaReason(SiteReason(PRESSURE_LOGIN.first, PRESSURE_LOGIN.third, PRESSURE_LOGIN.second, "laya"), true)
             }
         }
-        var layaTotal = minOf(LAYA_CAP, layaReasons.sumOf { it.reason.weight })
-        val strong = layaReasons.filter { it.strong }.map { it.reason.code }.toSet()
-        if (codes.isEmpty() && (strong intersect SCAM_CUES).size < 2 && layaTotal > LAYA_ONLY_CAP) {
-            layaTotal = LAYA_ONLY_CAP
-            gates += "laya_only_cap"
+        fun drop(r: SiteReason, why: String, whyParams: Map<String, String?>) {
+            val wp = whyParams.filterValues { it != null }.mapValues { it.value!! }
+            notCounted += NotCounted(r.code, r.text, r.weight, why, fillTemplate(SiteContext.WHY_TEXT.getValue(why), wp))
         }
+        // v1.2 payment context: a card request (and, on an established domain, a sign-in) is expected
+        val kept = mutableListOf<LayaReason>()
+        for (lr in layaReasons) {
+            val r = lr.reason
+            when {
+                r.code == "laya_asks_payment" && ctx.paymentExpected ->
+                    if (ctx.tier == "established") drop(r, "payment_expected_age", mapOf("years" to years))
+                    else drop(r, "payment_expected_processor", mapOf("provider" to ctx.processor))
+                r.code == "laya_asks_sign_in" && ctx.signInExpected -> drop(r, "sign_in_expected_age", mapOf("years" to years))
+                else -> kept += lr
+            }
+        }
+        // v1.2 corroboration: content cues count only when something else backs them
+        if (kept.isNotEmpty()) {
+            val strongScam = kept.filter { it.strong }.map { it.reason.code }.toSet() intersect SCAM_CUES
+            val weighted = reasons.any { it.weight > 0 }
+            val corroborated = when {
+                hasRisk -> true
+                ctx.tier == "established" -> false
+                ctx.tier == "weak" -> strongScam.size >= 2
+                else -> weighted || strongScam.size >= 2
+            }
+            if (!corroborated) {
+                for (lr in kept) {
+                    if (ctx.tier == "established") drop(lr.reason, "uncorroborated_established", mapOf("years" to years))
+                    else drop(lr.reason, "uncorroborated", emptyMap())
+                }
+                kept.clear()
+                gates += "laya_uncorroborated"
+            }
+        }
+        layaReasons = kept
+        val layaTotal = minOf(LAYA_CAP, layaReasons.sumOf { it.reason.weight })
+        val strong = layaReasons.filter { it.strong }.map { it.reason.code }.toSet()
+
         var score = minOf(100, detPoints + layaTotal)
-        val hasRisk = (codes intersect (SiteSignals.RISK_CODES + OnlineSignals.PAGE_RISK_CODES)).isNotEmpty()
-        val strongAsk = (facts.password || facts.card) && (strong intersect CREDENTIAL_ASKS).isNotEmpty() && !facts.knownGood
+        val strongAsk = (facts.password || facts.card) && (strong intersect CREDENTIAL_ASKS).isNotEmpty() && !known
         if (score >= DANGER_AT && !hasRisk && !strongAsk) {
             score = NO_RISK_CAP
             gates += "no_deterministic_risk"
+        }
+        if (score >= DANGER_AT && uncorroboratedDomainHit && (codes intersect (riskCodes - "online_phish_list_domain")).isEmpty()) {
+            score = NO_RISK_CAP                  // v1.2: a registrable-domain list match alone is caution at most
+            gates += "list_domain_uncorroborated_cap"
         }
         val weighed = (reasons + layaReasons.map { it.reason }).filter { it.weight > 0 }.map { it.code }.toSet()
         if (score >= DANGER_AT && weighed.isNotEmpty() && weighed.all { it in OnlineSignals.PAGE_AGE_CODES }) {
             score = NO_RISK_CAP                  // a young domain (or certificate) alone is never "danger"
             gates += "online_age_only_cap"
         }
-        if (facts.knownGood && reasons.isEmpty()) {
+        if (known && reasons.isEmpty()) {
             reasons += SiteReason("known_good", REASON_TEXT.getValue("known_good"), 0, "url")
         }
         val all = (reasons + layaReasons.map { it.reason }).sortedByDescending { it.weight }
-        return SiteVerdict(score, levelFor(score), all, gates)
+        val shown = if (known) emptyList() else SiteContext.siteFacts(siteFacts, ctx, now)
+        return SiteVerdict(score, levelFor(score), all, gates, shown, notCounted, SiteContextInfo(ctx.tier, ctx.paymentExpected, ctx.processor))
     }
 
     /** Signals then verdict for [page]: Station's `url_and_page_signals` + `combine`. */
@@ -165,9 +266,11 @@ object SiteScoring {
         allowlisted: Boolean = false,
         config: SiteConfig = SiteConfig.DEFAULT,
         online: List<SiteReason> = emptyList(),
+        site: SiteFacts? = null,
+        nowIso: String? = null,
     ): SiteVerdict {
         val (sig, facts) = SiteSignals.urlAndPageSignals(page, config)
-        return combine(sig, facts, laya, allowlisted, online)
+        return combine(sig, facts, laya, allowlisted, online, site, nowIso)
     }
 }
 
@@ -183,6 +286,18 @@ data class SiteCheckResult(val url: String, val verdict: SiteVerdict) {
     /** The reasons that carry weight, strongest first, as plain lines (online ones say so). */
     val lines: List<String>
         get() = verdict.reasons.filter { it.weight > 0 }.map { r -> if (r.source == "online") "${OnlineSignals.label(r.params)}: ${r.text}" else r.text }
+
+    /** Formula v1.2 display: "Warning signs" when the level warns, else "Small things noticed". */
+    val linesTitle: String get() = if (warn) "Warning signs" else "Small things noticed"
+
+    /** "Reassuring facts" (tone good), as plain lines. */
+    val reassuringFacts: List<String> get() = verdict.facts.filter { it.tone == "good" }.map { it.text }
+
+    /** Other facts (tone neutral): true, but never reassurance. */
+    val otherFacts: List<String> get() = verdict.facts.filter { it.tone != "good" }.map { it.text }
+
+    /** "Also noticed (not counted)": each cue with why it did not count. */
+    val notCountedLines: List<String> get() = verdict.notCounted.map { "${it.text} ${it.whyText}" }
 
     val levelTitle: String
         get() = when (verdict.level) {
@@ -205,8 +320,13 @@ object SiteCheck {
     fun checkUrl(url: String): SiteCheckResult = check(PageFacts(url))
 
     /** [checkUrl] with the opt-in online facts for its domain, when the caller has them. */
-    fun checkUrl(url: String, online: OnlineContext?): SiteCheckResult =
-        check(PageFacts(url), online = online?.let { OnlineSignals.pageReasons(url, it) }.orEmpty())
+    fun checkUrl(url: String, online: OnlineContext?): SiteCheckResult {
+        if (online == null) return checkUrl(url)
+        val page = PageFacts(url)
+        val domain = OnlineSignals.lookupDomainOfUrl(url)
+        val verdict = SiteScoring.verdict(page, online = OnlineSignals.pageReasons(url, online), site = online.site(domain), nowIso = online.nowIso)
+        return SiteCheckResult(url, verdict)
+    }
 
     private val URL_RE = Regex("""(?:https?://|www\.)[^\s<>"'()\[\]{}]{3,2000}""", RegexOption.IGNORE_CASE)
 

@@ -153,3 +153,41 @@ its sources".
   `scan/content.py` (10 000 members, ratio 200 above 4 MB). Ported tests from `tests/test_items.py`.
   The DEFLATE decoder (`Inflate.kt`) is written for this repository from RFC 1951, in the manner of
   zlib's public `puff.c` reference decoder; no zlib code is included and no dependency was added.
+
+---
+
+## Phishing.Database (data downloaded at run time)
+
+- **Upstream:** https://github.com/Phishing-Database/Phishing.Database, files from
+  https://phish.co.za/latest/. Downloaded by the iPhone app when "Known-phishing lists" is on; matched
+  on the phone. Not bundled. Bundled notice: `ios/Loupe/Resources/Licences/Phishing.Database-MIT.txt`.
+- **Provenance caveat:** the project aggregates upstream sources it does not all name; the origin of
+  its entries has not been confirmed. Hits are shown as "Phishing.Database", never as a named authority.
+- Also run-time and off by default: OpenPhish (personal, non-commercial only), Spamhaus DBL, SURBL,
+  URIBL (non-commercial, low-volume terms; see docs/PHISHING-FORMULA.md §5c).
+
+```
+MIT License
+
+Copyright (c) 2018-2025 Mitchell Krog - @mitchellkrogza
+Copyright (c) 2018-2025 Nissar Chababy - @funilrys
+Copyright (c) 2018-2025 Phishing.Database Contributors - @Phishing-Database
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

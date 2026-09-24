@@ -1,0 +1,33 @@
+Phishing.Database (phishing links and domains)
+https://github.com/Phishing-Database/Phishing.Database
+Files downloaded by this iPhone from https://phish.co.za/latest/ when "Known-phishing lists" is on
+(Phishing.Database is on by default once the lists are on). Matched on this phone only; nothing about
+your links is sent.
+
+Provenance: Phishing.Database aggregates several upstream sources that the project does not all name,
+so the origin of every entry has not been confirmed. A match is shown as evidence with its source
+("Phishing.Database"), never as the verdict of a named authority.
+
+MIT License
+
+Copyright (c) 2018-2025 Mitchell Krog - @mitchellkrogza
+Copyright (c) 2018-2025 Nissar Chababy - @funilrys
+Copyright (c) 2018-2025 Phishing.Database Contributors - @Phishing-Database
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

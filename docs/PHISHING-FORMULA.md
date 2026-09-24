@@ -1,11 +1,16 @@
 # The phishing / site formula
 
-*Formula version 1.1 — decided by the owner 2026-09-24 (decisions A and C). One formula for Loupe
+*Formula version 1.2 (site facts) — **approved by the owner 2026-09-24; implemented in Loupe Station;
+mobile ported** (`loupe-kit` `dev.loupe.kit.site`, 2026-09-24: all 51 v1.2 vectors pass on the JVM and
+the iOS simulator). Version 1.1 was decided by the owner 2026-09-24 (decisions A
+and C); 55 of the 57 v1.1 vectors give the same verdict under v1.2; the two list-strength vectors (`online-feed-host`, `online-feed-domain`) move from danger to caution by design. One formula for Loupe
 (iPhone, desktop, engine callers) and Loupe Station. It replaces the engine's `SiteFraud` rules and
 Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they differed.*
 
 - **Reference implementation:** `loupe-kit` — `dev.loupe.kit.site` (`SiteSignals`, `SiteScoring`,
-  `OnlineSignals`, `Hosts`, `Brands`) for pages and links, `dev.loupe.kit.mail.Phishing` for email.
+  `OnlineSignals`, `SiteContext` (v1.2 tiers, payment context, facts), `Dns` (v1.2 DNS facts and
+  blocklists), `PhishingLists` (list matching, `shared_hosts.json`, Phishing.Database), `Hosts`,
+  `Brands`) for pages and links, `dev.loupe.kit.mail.Phishing` for email.
   The engine keeps a thin API (`OriginFacts`, `SiteFraud`, `Impersonation`: facts only, no verdict).
 - **Test vectors:** [`phishing-vectors.json`](phishing-vectors.json) — 45 pages/links and 12 emails,
   each with the expected level, score, weighted signal codes and (pages) both PSL answers. Loupe runs
@@ -15,6 +20,23 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
   code stays `safe`.
 
 **Changelog**
+- **v1.2 (approved 2026-09-24):** *site facts that reduce false alarms and add real evidence.* New opt-in
+  inputs: DNS / email-authentication facts (§5b), domain blocklists (DNSBL, §5c), the hosts of a page's
+  frames and scripts (§5d). New rules: a blocklist listing is a risk signal (`online_dnsbl_phish` 60,
+  `online_dnsbl_spam` 35; error codes are never a listing); legitimacy tiers (§5d); the payment-context
+  rule (a card request is expected on an established domain or a known payment processor's checkout);
+  Laya's content cues need corroboration (§6.1); rule 4 exception: a card-only form posting to a known
+  payment processor is not "elsewhere". Outputs: `facts` (reassuring / neutral, weight 0) and
+  `notCounted` (cues that did not count, with the reason). New vectors
+  [`phishing-vectors-v1.2.json`](phishing-vectors-v1.2.json) (51 pages); `phishing-vectors.json` (v1.1, 57)
+  stays the v1.1 file. **List strength** (§5): only an exact-URL list hit is "danger" alone; a host hit
+  counts 45 and a registrable-domain hit 30 unless corroborated, and an uncorroborated domain hit never
+  reaches "danger" (the big domain lists, e.g. Phishing.Database's ~450k names, are noisy). This changes
+  two v1.1 vectors, `online-feed-host` (danger 60 → caution 45) and `online-feed-domain` (danger 60 →
+  caution 30); the other 55 give the same verdict. Email (`link_phish_list`, `sender_phish_list`) is
+  unchanged in v1.2. Trigger: the owner's report on a restaurant site (`mazibeach.com`,
+  2026-09-24) that showed "No warning signs found" with "won something or money back" and "asks for card
+  details" listed under *Why*.
 - **v1.1 (2026-09-24):** rule 3 treats Japanese (Han + Hiragana + Katakana) and Korean (Han +
   Hangul) as one script set each; the lowest level is displayed "No warning signs found"; the
   shared-hosting count is 12 non-PSL names (`run.app` is already a PSL suffix). New vectors
@@ -80,6 +102,9 @@ googleapis.com's age says nothing about who runs the page. Vectors: `github-page
    page's: **strong** when the form has a password or card field (`password_posts_elsewhere` 30,
    risk), **weak** for any other form (`form_posts_elsewhere` 5). A password/card form on https that
    posts over http: `password_posts_http` 25. Only the first offending form counts.
+   **v1.2 exception:** a form with a card field and **no** password field whose action's registrable
+   domain is a known payment processor (§5d `PAYMENT_PROCESSORS`) is that processor's checkout, not
+   "elsewhere" (the next form is checked). A password posting to a processor still counts.
 5. **Host control.** Mode (a) decides who controls a host. Station's shared-hosting list keeps two
    uses: `shared_hosting_login` 15 (a password/card form on any shared-hosting host), and — for the
    **twelve names the PSL does not list** (`000webhostapp.com`, `godaddysites.com`, `strikingly.com`,
@@ -140,7 +165,7 @@ Only while the user turned the source on. Online reasons count as deterministic 
 | `online_domain_new_month` | `…_domain_new_month` | 20 | < 30 days |
 | `online_domain_new_halfyear` | `…_domain_new_halfyear` | 8 | < 180 days (only the strongest age bucket counts) |
 | `online_cert_new` | `sender_cert_new`, `link_cert_new` | 20 | CT `first_seen` < 7 days before now |
-| `online_phish_list_url` / `_host` / `_domain` | `sender_phish_list`, `link_phish_list` | 60 | on a downloaded list (OpenPhish; PhishTank keyless): exact URL (host + path + query), else the host unless path-shared (`PATH_SHARED_HOSTS`, shorteners), else a listed bare registrable domain the host sits under (never a shared host) |
+| `online_phish_list_url` / `_host` / `_domain` | `sender_phish_list`, `link_phish_list` | 60 | on a downloaded list (Phishing.Database, on by default once the lists are on; OpenPhish, off by default; PhishTank keyless): exact URL (normalised as Station's `feeds.normalize`: trailing "/" dropped) (host + path + query), else the host unless path-shared (`PATH_SHARED_HOSTS`, shorteners), else a listed bare registrable domain the host sits under (never a shared host) |
 | `online_safe_browsing` | `link_safe_browsing` | 60 | Google Safe Browsing (API v5 local-list mode: hash-prefix lists on the phone, `hashes:search` only on a prefix hit; the user's own key) lists the URL |
 
 - A helper answer with `sources: []` means **no facts**: nothing is scored and it is never labelled
@@ -149,6 +174,91 @@ Only while the user turned the source on. Online reasons count as deterministic 
   a page is capped at 59 (gate `online_age_only_cap`: never "danger"), an email at 49 and never
   flagged. Station's `domain_expiring` (+5) is **not** in the formula.
 - Online weights ≥ 15 count as risk (`online_domain_new_halfyear` does not).
+- **List strength (v1.2, pages).** `online_phish_list_url` stays 60. `online_phish_list_host` counts **45**
+  and `online_phish_list_domain` **30** unless corroborated; corroborated they count 60. Corroboration:
+  a password or card field on the page, or any of the impostor codes of §4, `brand_mismatch`,
+  `brand_mismatch_login`, `brand_in_domain`, `brand_in_path`, `online_domain_new_week`,
+  `online_domain_new_month`, `online_cert_new`, `online_safe_browsing`, `online_dnsbl_phish`,
+  `online_dnsbl_spam`. An uncorroborated domain hit with no other risk code is capped at 59 (gate
+  `list_domain_uncorroborated_cap`), so Laya's cues next to it reach "caution" at most. Both remain
+  risk codes (they corroborate Laya and disqualify the legitimacy tiers of §5d). Which hosts may match by
+  host or domain at all is still decided by the shared-host suppression (`PATH_SHARED_HOSTS`, the
+  `shared_hosts.json` list, shorteners, brands' own domains): there only the exact URL counts.
+
+## 5b. DNS and email-authentication facts (v1.2, opt-in, off by default)
+
+Asked of the device's **own system resolver** only (no DNS-over-HTTPS provider, no third party), for the
+online-facts domain `d` of §2 mode (b) (none → no DNS facts), cached per domain (6 h; 15 min when four or
+more questions failed), 1.5 s per resolver, 3 s per question:
+
+| Question | Fact | Value |
+|---|---|---|
+| `d A` with the **AD** bit requested (RFC 6840) | `exists`, `dnssec` | NXDOMAIN → the name does not exist (then mx = spf = false, dmarc = absent); AD set on NOERROR → `dnssec` true |
+| `d MX` | `mx` | at least one MX that is not the null MX `0 .` (RFC 7505) |
+| `d TXT` | `spf` | exactly one record starting `v=spf1` (case-insensitive); two or more is an SPF error → false |
+| `_dmarc.d TXT` | `dmarc` | the one `v=DMARC1` record's `p=` → `reject` / `quarantine` / `none`; no record → `absent`; several records or a missing / unknown `p=` → `invalid` (RFC 7489 §6.6.3) |
+| `default._bimi.d TXT` | `bimi` | a record starting `v=BIMI1` |
+
+A failed question (timeout, SERVFAIL, REFUSED, a malformed answer) makes that fact **unknown**, never
+"no". **mail-ready** = `mx` ∧ `spf` ∧ `dmarc ∈ {quarantine, reject}`. These are **weak** legitimacy
+facts: registrars publish MX + SPF + `p=quarantine` for new domains by default (GoDaddy did for
+`mazibeach.com`), and a scammer can publish them too. They never add or remove points by themselves and
+never clear a list hit, a blocklist listing or a look-alike (§5d).
+
+## 5c. Domain blocklists (DNSBL, v1.2, opt-in, off by default, one switch per list)
+
+`<d>.<zone>` A questions through the same resolver, for the online-facts domain `d`:
+
+| List | Zone | Test point | Listed: phish class | Listed: spam class | Not a listing |
+|---|---|---|---|---|---|
+| Spamhaus DBL | `dbl.spamhaus.org` | `dbltest.com` → `127.0.1.2` | `127.0.1.4` phish, `.5` malware, `.6` botnet C&C, `.104/.105/.106` abused-legit variants | `127.0.1.2` spam, `.102`, `.103` | `127.0.1.255` (IP queries prohibited), `127.255.255.252/254/255` (typo, **public resolver**, excessive queries), any other `127.0.1.x` |
+| SURBL | `multi.surbl.org` | `test.surbl.org` → any listing (seen: `127.0.0.254`) | bits 8 PH, 16 MW | bits 64 ABUSE, 128 CR | `127.0.0.1` (access blocked), bit 1, last octet 0; bits 4 DM / 32 CT alone are informational → clean |
+| URIBL | `multi.uribl.com` | `test.uribl.com` → exactly `127.0.0.14` | — | bits 2 black, 8 red | `127.0.0.1` (query refused), `127.0.0.255`, bits above 8; bit 4 grey alone → clean |
+
+- **NXDOMAIN → clean.** SERVFAIL, REFUSED, timeout, NOERROR without an A record, an answer outside
+  `127.0.0.0/8` (a hijacking resolver), or any code not in the table → **unavailable**. Unavailable is
+  **never** listed.
+- Each zone's **test point is asked first** (cached 1 h). When it does not answer as documented, the zone
+  is unavailable for every domain and no domain is asked (URIBL refused `1.1.1.1` / `8.8.8.8` with
+  `127.0.0.1` on 2026-09-24; Spamhaus answered `127.255.255.254`).
+- Page codes: `online_dnsbl_phish` **60** (any phish-class listing), else `online_dnsbl_spam` **35**;
+  one code per page, the strongest; source "Online", with the list as `online_source`. Both are risk
+  codes. Never applied to a known-good domain (like every online fact).
+- Licences (checked 2026-09-24): Spamhaus DNSBL public mirrors — free for non-commercial use by small and
+  medium organisations, from your own resolver or an ECS resolver
+  (https://www.spamhaus.org/blocklists/dnsbl-fair-use-policy/); SURBL — free under 1,000 users /
+  250,000 messages a day, never embedded in a paid product (https://www.surbl.org/usage-policy); URIBL —
+  low-volume public lookups, heavy users refused (https://uribl.com/about.shtml,
+  https://uribl.com/refused.shtml). A product that is sold needs each operator's paid feed; the switch
+  says so, like OpenPhish.
+
+## 5d. Legitimacy tiers and the payment context (v1.2)
+
+Inputs: the page codes so far (§4, §5, §5c, `impostor_login`), the scheme, the online-facts domain `d`
+and its registration age `age` (days from RDAP `created` to `now`; unknown when the source is off, the
+date is unreadable or in the future), the DNS facts (§5b), and `processor`:
+
+- **`PAYMENT_PROCESSORS`** (registrable domain, mode a → name): `stripe.com`, `stripe.network` Stripe;
+  `paypal.com`, `paypalobjects.com` PayPal; `braintreegateway.com`, `braintree-api.com`,
+  `braintreepayments.com` Braintree; `adyen.com`, `adyenpayments.com` Adyen; `checkout.com`
+  Checkout.com; `paymob.com` Paymob; `atfawry.com`, `fawry.com` Fawry; `squareup.com`,
+  `squarecdn.com` Square; `shopify.com`, `shopifyinc.com` Shopify; `kashier.io` Kashier;
+  `geidea.net` Geidea; `paytabs.com` PayTabs. (WooCommerce is covered by its gateway's frames.)
+- **`processor`** = the first processor among the page's **embeds** (the host names of its `iframe[src]`
+  and `script[src]` on other hosts, at most 40, as the extension sends them), else among its card
+  forms' action hosts; only on https and only when no disqualifying code is present.
+- **Disqualifying codes (`DISQUALIFY`)**: the impostor codes of §4 (`homograph_brand`, `lookalike_brand`,
+  `brand_domain_in_subdomain`, `brand_in_subdomain`, `brand_in_domain_bait`, `brand_other_tld`,
+  `mixed_script`, `userinfo_in_url`) and `brand_in_domain`, `brand_in_path`, `brand_mismatch`,
+  `brand_mismatch_login`, `impostor_login`, `shared_hosting`, `shared_hosting_login`, `data_url`,
+  `ip_host`, `http_password`, `http_card`, `password_posts_elsewhere`, `password_posts_http`,
+  `online_cert_new`, `online_domain_new_week`, `online_domain_new_month`, every list / Safe Browsing
+  code and both blocklist codes.
+- **disqualified** = a DISQUALIFY code, or not https, or no online-facts domain.
+- **tier** = `established` when not disqualified and `age ≥ 365`; else `weak` when not disqualified,
+  `age` unknown or `≥ 180`, and (mail-ready or `dnssec`); else `none`.
+- **payment expected** = no DISQUALIFY code ∧ https ∧ (tier `established` ∨ `processor`).
+- **sign-in expected** = tier `established`.
 
 ## 6. Scoring
 
@@ -156,7 +266,9 @@ Only while the user turned the source on. Online reasons count as deterministic 
 
 ```
 det   = Σ weights of the signals (+ impostor_login) + Σ online weights (not on a known domain)
-laya  = min(40, Laya points)          (25 when no deterministic signal and < 2 strong scam cues)
+        + the blocklist code (v1.2, §5c)
+laya  = min(40, counted Laya points)  (v1.2: see "Laya cues" below; v1.1 capped at 25 when no
+                                       deterministic signal and < 2 strong scam cues)
 score = min(100, det + laya)
 if score ≥ 60 and no risk code (page ≥15 or online ≥15) and no strong credential ask: score = 59
 if score ≥ 60 and every weighted code is an online age code:                          score = 59
@@ -164,6 +276,40 @@ level = danger ≥ 60 · caution ≥ 30 · safe < 30        (safe is displayed "
 ```
 A user-trusted site is safe with the reason `user_trusted`. A known-good domain with no reasons gets
 the info reason `known_good` (weight 0).
+
+**Laya cues (v1.2).** Laya's page answers (`laya_*` and `pressure_login`; strong = confident) are
+content-only cues. In order:
+1. *Payment context:* when **payment expected**, `laya_asks_payment` is not counted (why
+   `payment_expected_age` {years} on an established domain, else `payment_expected_processor`
+   {provider}); when **sign-in expected**, `laya_asks_sign_in` is not counted (`sign_in_expected_age`).
+2. *Corroboration:* the remaining cues count only when backed by something else — any **risk code**
+   (page ≥ 15, online ≥ 15, blocklist) always; otherwise by tier: `established` → never; `weak` → two
+   or more strong scam cues (`laya_urgency`, `laya_prize`, `laya_asks_payment`, `laya_asks_install`,
+   `laya_asks_claim`, `pressure_login`); `none` → any weighted signal or two or more strong scam cues.
+   Uncorroborated cues are not counted (why `uncorroborated`, or `uncorroborated_established` {years}),
+   gate `laya_uncorroborated`. v1.1 counted them up to 25, which never reached "caution" either: no
+   level changes.
+3. The strong-credential-ask exception to the no-risk cap uses counted cues only.
+
+**Outputs (v1.2).** `reasons` = counted reasons (+ info reasons of weight 0); `notCounted` =
+`[{code, why, why_params}]`; `facts` = `[{code, tone: good | neutral, params}]`, weight 0:
+
+| Fact | When | Tone |
+|---|---|---|
+| `fact_domain_age_years` {years, date} | `age ≥ 365` | good |
+| `fact_domain_age_months` {months, date} | `180 ≤ age < 365` (younger: the age *warning* covers it) | neutral |
+| `fact_cert_issuer` {issuer, year} / `fact_cert_first_seen` {year} | a first certificate is known (issuer = the helper's first `issuers` entry) | good when ≥ 90 days old, else neutral |
+| `fact_payment_processor` {provider} | `processor` | good |
+| `fact_mail_setup` | `mx` ∧ `spf` | good |
+| `fact_dmarc_enforced` {policy} / `fact_dmarc_monitor` | `dmarc` reject/quarantine / none | good / neutral |
+| `fact_dnssec`, `fact_bimi` | true | good |
+| `fact_dnsbl_clean` {lists} / `fact_dnsbl_unavailable` {lists} | lists answering clean / unavailable | good / neutral |
+
+Every fact is **neutral** (never reassurance) when a DISQUALIFY code is present or the page is not on
+https: "Registered 12 years ago" next to a look-alike is true but must not reassure. Display: a
+"No warning signs found" verdict shows its counted reasons as *small things noticed*, not as warning
+signs; reassuring facts and other facts get their own sections; `notCounted` goes in a collapsed "Also
+noticed (not counted)" with the why text.
 
 ### 6.2 Email profile
 
@@ -226,6 +372,15 @@ vector has `url` and optionally `title`, `password`, `card`, `forms: [{action, p
 `links: [[href, text]]`, `contacts: [{name, addresses}]`, `online`. `expect` gives `level`, `score`,
 `signals` (the weighted codes, any order) and `hostControl` / `onlineDomain` (pages) or `flag`
 (emails). Ages are measured against `now`. A change to the formula changes the version and the file.
+
+**v1.2 vectors** (`docs/phishing-vectors-v1.2.json`): `{formula, version: "1.2", extends: {version: "1.1",
+file, vectors: 57}, psl, now, testPoints, pages}`. A v1.2 page vector may add `embeds: [hosts]`,
+`laya: {cue code: "strong" | "weak"}` (a port without a page model injects the cues as given),
+`online.facts[d].issuers`, `online.dns: true` (the DNS source is on), `online.dnsbl: [list ids]` and
+`online.answers: {"<name> <TYPE>": {rcode: NOERROR | NXDOMAIN | SERVFAIL | REFUSED | TIMEOUT, answers,
+ad}}` — the raw resolver answers, so a port runs its own DNS-fact and blocklist parsing; a question not
+listed is NXDOMAIN, except the zones' test points, which default to the file's `testPoints`. `expect`
+adds `notCounted`, `facts`, `reassuring` (the good-tone facts), `tier`, `paymentExpected`.
 
 ## 9. Before / after (2026-09-24, pinned PSL `2026-09-21_18-50-07_UTC`)
 

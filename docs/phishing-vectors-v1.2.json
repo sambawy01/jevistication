@@ -1,0 +1,1945 @@
+{
+ "formula": "loupe-phishing-formula",
+ "version": "1.2",
+ "extends": {
+  "version": "1.1",
+  "file": "phishing-vectors.json",
+  "vectors": 57,
+  "note": "every v1.1 vector gives the same verdict under v1.2"
+ },
+ "psl": "2026-09-21_18-50-07_UTC",
+ "now": "2026-09-24T12:00:00Z",
+ "testPoints": {
+  "spamhaus_dbl": {
+   "rcode": "NOERROR",
+   "answers": [
+    "127.0.1.2"
+   ]
+  },
+  "surbl": {
+   "rcode": "NOERROR",
+   "answers": [
+    "127.0.0.254"
+   ]
+  },
+  "uribl": {
+   "rcode": "NOERROR",
+   "answers": [
+    "127.0.0.14"
+   ]
+  }
+ },
+ "pages": [
+  {
+   "id": "old-shop-card-request",
+   "note": "A card form on an 11-year-old shop: the card request is expected, nothing counts.",
+   "url": "https://shop.oldstore.example/checkout",
+   "card": true,
+   "laya": {
+    "laya_asks_payment": "strong"
+   },
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2015-02-10T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [
+     "laya_asks_payment"
+    ],
+    "facts": [
+     "fact_domain_age_years"
+    ],
+    "reassuring": [
+     "fact_domain_age_years"
+    ],
+    "tier": "established",
+    "paymentExpected": true,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "old-shop-card-and-prize",
+   "note": "An established shop: the card request is expected and the prize cue alone is not backed by anything.",
+   "url": "https://shop.oldstore.example/offer",
+   "card": true,
+   "laya": {
+    "laya_asks_payment": "strong",
+    "laya_prize": "strong"
+   },
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2015-02-10T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [
+     "laya_asks_payment",
+     "laya_prize"
+    ],
+    "facts": [
+     "fact_domain_age_years"
+    ],
+    "reassuring": [
+     "fact_domain_age_years"
+    ],
+    "tier": "established",
+    "paymentExpected": true,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "old-shop-certificate-fact",
+   "note": "Established, with certificate facts: two reassuring facts, no warnings.",
+   "url": "https://www.oldstore.example/",
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap",
+       "crt.sh"
+      ],
+      "created": "2015-02-10T00:00:00Z",
+      "first_seen": "2019-05-01T00:00:00Z",
+      "issuers": [
+       "Let's Encrypt",
+       "Sectigo Limited"
+      ],
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_cert_issuer",
+     "fact_domain_age_years"
+    ],
+    "reassuring": [
+     "fact_cert_issuer",
+     "fact_domain_age_years"
+    ],
+    "tier": "established",
+    "paymentExpected": true,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "new-domain-card-and-prize",
+   "note": "A 4-day-old domain asking for a card with a prize: the young domain is a risk signal, so both cues count.",
+   "url": "https://win-now-shop.example/claim",
+   "card": true,
+   "laya": {
+    "laya_asks_payment": "strong",
+    "laya_prize": "strong"
+   },
+   "online": {
+    "facts": {
+     "win-now-shop.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2026-09-20T09:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 60,
+    "signals": [
+     "laya_asks_payment",
+     "laya_prize",
+     "online_domain_new_week"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "win-now-shop.example",
+    "onlineDomain": "win-now-shop.example"
+   }
+  },
+  {
+   "id": "new-domain-card-with-stripe",
+   "note": "A known processor does not excuse a domain under 30 days old.",
+   "url": "https://fresh-deals.example/pay",
+   "card": true,
+   "embeds": [
+    "js.stripe.com"
+   ],
+   "laya": {
+    "laya_asks_payment": "strong"
+   },
+   "online": {
+    "facts": {
+     "fresh-deals.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2026-09-20T09:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 45,
+    "signals": [
+     "laya_asks_payment",
+     "online_domain_new_week"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "fresh-deals.example",
+    "onlineDomain": "fresh-deals.example"
+   }
+  },
+  {
+   "id": "stripe-checkout-age-unknown",
+   "note": "Card fields in a Stripe frame, domain age not checked: the card request is expected.",
+   "url": "https://tickets.example/checkout",
+   "card": true,
+   "embeds": [
+    "js.stripe.com",
+    "m.stripe.network",
+    "cdn.example.net"
+   ],
+   "laya": {
+    "laya_asks_payment": "strong"
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [
+     "laya_asks_payment"
+    ],
+    "facts": [
+     "fact_payment_processor"
+    ],
+    "reassuring": [
+     "fact_payment_processor"
+    ],
+    "tier": "none",
+    "paymentExpected": true,
+    "hostControl": "tickets.example",
+    "onlineDomain": "tickets.example"
+   }
+  },
+  {
+   "id": "paymob-halfyear-domain",
+   "note": "Paymob's frame on a 4-month-old domain (not under 30 days): expected.",
+   "url": "https://beach-club.example/reserve",
+   "card": true,
+   "embeds": [
+    "accept.paymob.com"
+   ],
+   "laya": {
+    "laya_asks_payment": "weak"
+   },
+   "online": {
+    "facts": {
+     "beach-club.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2026-05-20T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 8,
+    "signals": [
+     "online_domain_new_halfyear"
+    ],
+    "notCounted": [
+     "laya_asks_payment"
+    ],
+    "facts": [
+     "fact_payment_processor"
+    ],
+    "reassuring": [
+     "fact_payment_processor"
+    ],
+    "tier": "none",
+    "paymentExpected": true,
+    "hostControl": "beach-club.example",
+    "onlineDomain": "beach-club.example"
+   }
+  },
+  {
+   "id": "processor-on-free-host",
+   "note": "A Stripe frame on a free site-builder address still counts: shared hosting disqualifies.",
+   "url": "https://cheap-shoes.wordpress.com/pay",
+   "card": true,
+   "embeds": [
+    "js.stripe.com"
+   ],
+   "laya": {
+    "laya_asks_payment": "strong"
+   },
+   "expect": {
+    "level": "caution",
+    "score": 35,
+    "signals": [
+     "laya_asks_payment",
+     "shared_hosting",
+     "shared_hosting_login"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "wordpress.com",
+    "onlineDomain": null
+   }
+  },
+  {
+   "id": "old-domain-card-posts-elsewhere",
+   "note": "An established domain whose card form posts to an unrelated site: rule 4 fires and the card cue counts.",
+   "url": "https://shop.oldstore.example/pay",
+   "forms": [
+    {
+     "action": "https://collector.evil.ru/c.php",
+     "card": true
+    }
+   ],
+   "laya": {
+    "laya_asks_payment": "strong"
+   },
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2015-02-10T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 40,
+    "signals": [
+     "laya_asks_payment",
+     "password_posts_elsewhere"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_domain_age_years"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "card-form-posts-to-processor",
+   "note": "A card form posting to the processor's own checkout (v1.2 rule 4 exception): not 'elsewhere'.",
+   "url": "https://shop.example/pay",
+   "forms": [
+    {
+     "action": "https://checkout.stripe.com/c/pay",
+     "card": true
+    }
+   ],
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_payment_processor"
+    ],
+    "reassuring": [
+     "fact_payment_processor"
+    ],
+    "tier": "none",
+    "paymentExpected": true,
+    "hostControl": "shop.example",
+    "onlineDomain": "shop.example"
+   }
+  },
+  {
+   "id": "password-form-posts-to-processor",
+   "note": "The exception is for card forms only: a password posting to stripe.com is still elsewhere.",
+   "url": "https://shop.example/login",
+   "forms": [
+    {
+     "action": "https://checkout.stripe.com/c/pay",
+     "password": true
+    }
+   ],
+   "expect": {
+    "level": "caution",
+    "score": 30,
+    "signals": [
+     "password_posts_elsewhere"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "shop.example",
+    "onlineDomain": "shop.example"
+   }
+  },
+  {
+   "id": "old-domain-http-card",
+   "note": "Established but served over http: the card request is not excused.",
+   "url": "http://oldstore.example/checkout",
+   "card": true,
+   "laya": {
+    "laya_asks_payment": "strong"
+   },
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2015-02-10T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 40,
+    "signals": [
+     "http_card",
+     "laya_asks_payment"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_domain_age_years"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "established-sign-in",
+   "note": "A sign-in form on an established domain: the sign-in cue is expected.",
+   "url": "https://portal.oldstore.example/login",
+   "password": true,
+   "laya": {
+    "laya_asks_sign_in": "strong"
+   },
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2014-03-01T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [
+     "laya_asks_sign_in"
+    ],
+    "facts": [
+     "fact_domain_age_years"
+    ],
+    "reassuring": [
+     "fact_domain_age_years"
+    ],
+    "tier": "established",
+    "paymentExpected": true,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "established-lookalike-login",
+   "note": "Age never clears a look-alike: an old paypa1.com is still danger.",
+   "url": "https://paypa1.com/signin",
+   "password": true,
+   "laya": {
+    "laya_asks_sign_in": "strong"
+   },
+   "online": {
+    "facts": {
+     "paypa1.com": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2014-03-01T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 75,
+    "signals": [
+     "impostor_login",
+     "laya_asks_sign_in",
+     "lookalike_brand"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_domain_age_years"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "paypa1.com",
+    "onlineDomain": "paypa1.com"
+   }
+  },
+  {
+   "id": "laya-prize-alone-no-facts",
+   "note": "One confident prize cue and nothing else (v1.1: safe 15): not counted.",
+   "url": "https://resort.example/",
+   "laya": {
+    "laya_prize": "strong"
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [
+     "laya_prize"
+    ],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "laya-two-cues-no-facts",
+   "note": "Two confident scam cues with no facts back each other up (unchanged from v1.1).",
+   "url": "https://resort.example/",
+   "laya": {
+    "laya_prize": "strong",
+    "laya_urgency": "strong"
+   },
+   "expect": {
+    "level": "caution",
+    "score": 30,
+    "signals": [
+     "laya_prize",
+     "laya_urgency"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "laya-prize-with-weak-signal",
+   "note": "A weak deterministic signal (.xyz) corroborates on a tier-none site (as in v1.1).",
+   "url": "https://resort.xyz/",
+   "laya": {
+    "laya_prize": "strong",
+    "laya_urgency": "strong"
+   },
+   "expect": {
+    "level": "caution",
+    "score": 38,
+    "signals": [
+     "laya_prize",
+     "laya_urgency",
+     "suspicious_tld"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.xyz",
+    "onlineDomain": "resort.xyz"
+   }
+  },
+  {
+   "id": "mail-ready-prize-alone",
+   "note": "Weak legitimacy (MX, SPF, DMARC reject): one cue is not counted.",
+   "url": "https://resort.example/",
+   "laya": {
+    "laya_prize": "strong"
+   },
+   "online": {
+    "dns": true,
+    "answers": {
+     "resort.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "resort.example MX": {
+      "answers": [
+       "10 mx.resort.example"
+      ]
+     },
+     "resort.example TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.resort.example TXT": {
+      "answers": [
+       "v=DMARC1; p=reject; rua=mailto:dmarc@resort.example"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [
+     "laya_prize"
+    ],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "reassuring": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "tier": "weak",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "mail-ready-weak-signal-does-not-corroborate",
+   "note": "Weak legitimacy: a weak signal (.xyz) no longer backs a single cue.",
+   "url": "https://resort.xyz/",
+   "laya": {
+    "laya_prize": "strong"
+   },
+   "online": {
+    "dns": true,
+    "answers": {
+     "resort.xyz A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "resort.xyz MX": {
+      "answers": [
+       "10 mx.resort.xyz"
+      ]
+     },
+     "resort.xyz TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.resort.xyz TXT": {
+      "answers": [
+       "v=DMARC1; p=reject; rua=mailto:dmarc@resort.xyz"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 8,
+    "signals": [
+     "suspicious_tld"
+    ],
+    "notCounted": [
+     "laya_prize"
+    ],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "reassuring": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "tier": "weak",
+    "paymentExpected": false,
+    "hostControl": "resort.xyz",
+    "onlineDomain": "resort.xyz"
+   }
+  },
+  {
+   "id": "mail-ready-two-cues",
+   "note": "Weak legitimacy: two confident scam cues still count.",
+   "url": "https://resort.example/",
+   "laya": {
+    "laya_prize": "strong",
+    "laya_urgency": "strong"
+   },
+   "online": {
+    "dns": true,
+    "answers": {
+     "resort.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "resort.example MX": {
+      "answers": [
+       "10 mx.resort.example"
+      ]
+     },
+     "resort.example TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.resort.example TXT": {
+      "answers": [
+       "v=DMARC1; p=reject; rua=mailto:dmarc@resort.example"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 30,
+    "signals": [
+     "laya_prize",
+     "laya_urgency"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "reassuring": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "tier": "weak",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dmarc-none-is-not-mail-ready",
+   "note": "p=none only monitors: no weak tier, the cue is judged as on a tier-none site.",
+   "url": "https://resort.example/",
+   "laya": {
+    "laya_prize": "strong"
+   },
+   "online": {
+    "dns": true,
+    "answers": {
+     "resort.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "resort.example MX": {
+      "answers": [
+       "10 mx.resort.example"
+      ]
+     },
+     "resort.example TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.resort.example TXT": {
+      "answers": [
+       "v=DMARC1; p=none; rua=mailto:dmarc@resort.example"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [
+     "laya_prize"
+    ],
+    "facts": [
+     "fact_dmarc_monitor",
+     "fact_mail_setup"
+    ],
+    "reassuring": [
+     "fact_mail_setup"
+    ],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dnssec-weak-tier",
+   "note": "A DNSSEC-validated answer (AD bit) is weak legitimacy.",
+   "url": "https://resort.example/",
+   "laya": {
+    "laya_prize": "strong"
+   },
+   "online": {
+    "dns": true,
+    "answers": {
+     "resort.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": true
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [
+     "laya_prize"
+    ],
+    "facts": [
+     "fact_dnssec"
+    ],
+    "reassuring": [
+     "fact_dnssec"
+    ],
+    "tier": "weak",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "young-restaurant-site-mazi-like",
+   "note": "Modelled on the owner's report (mazibeach.com): a 2-month-old domain with registrar-default mail DNS; the young-domain signal corroborates Laya's cues, still no warning level.",
+   "url": "https://mazi-restaurant.example/reserve",
+   "laya": {
+    "laya_prize": "strong",
+    "laya_asks_payment": "weak"
+   },
+   "online": {
+    "facts": {
+     "mazi-restaurant.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2026-07-24T13:20:57Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    },
+    "dns": true,
+    "answers": {
+     "mazi-restaurant.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "mazi-restaurant.example MX": {
+      "answers": [
+       "10 mx.mazi-restaurant.example"
+      ]
+     },
+     "mazi-restaurant.example TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.mazi-restaurant.example TXT": {
+      "answers": [
+       "v=DMARC1; p=quarantine; rua=mailto:dmarc@mazi-restaurant.example"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 28,
+    "signals": [
+     "laya_asks_payment",
+     "laya_prize",
+     "online_domain_new_halfyear"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "reassuring": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "mazi-restaurant.example",
+    "onlineDomain": "mazi-restaurant.example"
+   }
+  },
+  {
+   "id": "established-urgency-with-risk",
+   "note": "Established, but a risk signal (password over http) backs the urgency cue.",
+   "url": "http://portal.oldstore.example/login",
+   "password": true,
+   "laya": {
+    "laya_urgency": "strong"
+   },
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2014-03-01T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 55,
+    "signals": [
+     "http_password",
+     "laya_urgency",
+     "pressure_login"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_domain_age_years"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "dmarc-reject-does-not-clear-list-hit",
+   "note": "Perfect mail DNS on a listed phishing URL: still danger.",
+   "url": "https://login-check.example/verify?id=7",
+   "online": {
+    "feeds": {
+     "openphish": [
+      "https://login-check.example/verify?id=7"
+     ]
+    },
+    "dns": true,
+    "answers": {
+     "login-check.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": true
+     },
+     "login-check.example MX": {
+      "answers": [
+       "10 mx.login-check.example"
+      ]
+     },
+     "login-check.example TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.login-check.example TXT": {
+      "answers": [
+       "v=DMARC1; p=reject; rua=mailto:dmarc@login-check.example"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 60,
+    "signals": [
+     "online_phish_list_url"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_dnssec",
+     "fact_mail_setup"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "login-check.example",
+    "onlineDomain": "login-check.example"
+   }
+  },
+  {
+   "id": "dmarc-reject-does-not-clear-lookalike",
+   "note": "Perfect mail DNS on a brand look-alike with a password field: still danger.",
+   "url": "https://paypa1.com/signin",
+   "password": true,
+   "online": {
+    "dns": true,
+    "answers": {
+     "paypa1.com A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "paypa1.com MX": {
+      "answers": [
+       "10 mx.paypa1.com"
+      ]
+     },
+     "paypa1.com TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.paypa1.com TXT": {
+      "answers": [
+       "v=DMARC1; p=reject; rua=mailto:dmarc@paypa1.com"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 65,
+    "signals": [
+     "impostor_login",
+     "lookalike_brand"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_mail_setup"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "paypa1.com",
+    "onlineDomain": "paypa1.com"
+   }
+  },
+  {
+   "id": "dnsbl-dbl-phish",
+   "note": "Spamhaus DBL 127.0.1.4 (phish domain): danger on its own.",
+   "url": "https://bad-bank-help.example/",
+   "online": {
+    "dnsbl": [
+     "spamhaus_dbl"
+    ],
+    "answers": {
+     "bad-bank-help.example.dbl.spamhaus.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.1.4"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 60,
+    "signals": [
+     "online_dnsbl_phish"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "bad-bank-help.example",
+    "onlineDomain": "bad-bank-help.example"
+   }
+  },
+  {
+   "id": "dnsbl-dbl-abused-legit-malware",
+   "note": "DBL 127.0.1.105 (abused legit malware): a phish-class listing.",
+   "url": "https://hacked-blog.example/",
+   "online": {
+    "dnsbl": [
+     "spamhaus_dbl"
+    ],
+    "answers": {
+     "hacked-blog.example.dbl.spamhaus.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.1.105"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 60,
+    "signals": [
+     "online_dnsbl_phish"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "hacked-blog.example",
+    "onlineDomain": "hacked-blog.example"
+   }
+  },
+  {
+   "id": "dnsbl-surbl-abuse",
+   "note": "SURBL 127.0.0.64 (ABUSE): a spam-class listing, caution.",
+   "url": "https://pills-cheap.example/",
+   "online": {
+    "dnsbl": [
+     "surbl"
+    ],
+    "answers": {
+     "pills-cheap.example.multi.surbl.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.0.64"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 35,
+    "signals": [
+     "online_dnsbl_spam"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "pills-cheap.example",
+    "onlineDomain": "pills-cheap.example"
+   }
+  },
+  {
+   "id": "dnsbl-uribl-black",
+   "note": "URIBL 127.0.0.2 (black): spam-class.",
+   "url": "https://pills-cheap.example/",
+   "online": {
+    "dnsbl": [
+     "uribl"
+    ],
+    "answers": {
+     "pills-cheap.example.multi.uribl.com A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.0.2"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 35,
+    "signals": [
+     "online_dnsbl_spam"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "pills-cheap.example",
+    "onlineDomain": "pills-cheap.example"
+   }
+  },
+  {
+   "id": "dnsbl-uribl-grey-only",
+   "note": "URIBL grey (bulk senders) is not a listing.",
+   "url": "https://newsletter.example/",
+   "online": {
+    "dnsbl": [
+     "uribl"
+    ],
+    "answers": {
+     "newsletter.example.multi.uribl.com A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.0.4"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_dnsbl_clean"
+    ],
+    "reassuring": [
+     "fact_dnsbl_clean"
+    ],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "newsletter.example",
+    "onlineDomain": "newsletter.example"
+   }
+  },
+  {
+   "id": "dnsbl-dbl-public-resolver",
+   "note": "DBL 127.255.255.254 (query through a public resolver) is unavailable, never listed.",
+   "url": "https://resort.example/",
+   "online": {
+    "dnsbl": [
+     "spamhaus_dbl"
+    ],
+    "answers": {
+     "resort.example.dbl.spamhaus.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.255.255.254"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_dnsbl_unavailable"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dnsbl-dbl-ip-query-code",
+   "note": "DBL 127.0.1.255 ('IP queries prohibited') is unavailable.",
+   "url": "https://resort.example/",
+   "online": {
+    "dnsbl": [
+     "spamhaus_dbl"
+    ],
+    "answers": {
+     "resort.example.dbl.spamhaus.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.1.255"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_dnsbl_unavailable"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dnsbl-surbl-blocked",
+   "note": "SURBL 127.0.0.1 ('your access is blocked') is unavailable.",
+   "url": "https://resort.example/",
+   "online": {
+    "dnsbl": [
+     "surbl"
+    ],
+    "answers": {
+     "resort.example.multi.surbl.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.0.1"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_dnsbl_unavailable"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dnsbl-uribl-refused-test-point",
+   "note": "URIBL refuses the resolver (test point answers 127.0.0.1): the zone is unavailable and the domain's own 'listing' is ignored.",
+   "url": "https://resort.example/",
+   "online": {
+    "dnsbl": [
+     "uribl"
+    ],
+    "answers": {
+     "test.uribl.com.multi.uribl.com A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.0.1"
+      ]
+     },
+     "resort.example.multi.uribl.com A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.0.2"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_dnsbl_unavailable"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dnsbl-hijacked-answer",
+   "note": "An answer outside 127.0.0.0/8 (a resolver that answers everything) is unavailable.",
+   "url": "https://resort.example/",
+   "online": {
+    "dnsbl": [
+     "spamhaus_dbl"
+    ],
+    "answers": {
+     "resort.example.dbl.spamhaus.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "203.0.113.7"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_dnsbl_unavailable"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dnsbl-servfail",
+   "note": "SERVFAIL is unavailable.",
+   "url": "https://resort.example/",
+   "online": {
+    "dnsbl": [
+     "surbl"
+    ],
+    "answers": {
+     "resort.example.multi.surbl.org A": {
+      "rcode": "SERVFAIL",
+      "answers": []
+     }
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_dnsbl_unavailable"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dnsbl-clean-all-three",
+   "note": "NXDOMAIN on all three zones: one reassuring fact.",
+   "url": "https://resort.example/",
+   "online": {
+    "dnsbl": [
+     "spamhaus_dbl",
+     "surbl",
+     "uribl"
+    ]
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [
+     "fact_dnsbl_clean"
+    ],
+    "reassuring": [
+     "fact_dnsbl_clean"
+    ],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "resort.example",
+    "onlineDomain": "resort.example"
+   }
+  },
+  {
+   "id": "dnsbl-listed-beats-dmarc-and-age",
+   "note": "An established, mail-ready domain on DBL as phish: danger, and the card cue counts.",
+   "url": "https://shop.oldstore.example/pay",
+   "card": true,
+   "laya": {
+    "laya_asks_payment": "strong"
+   },
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2014-03-01T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    },
+    "dns": true,
+    "dnsbl": [
+     "spamhaus_dbl"
+    ],
+    "answers": {
+     "oldstore.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "oldstore.example MX": {
+      "answers": [
+       "10 mx.oldstore.example"
+      ]
+     },
+     "oldstore.example TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.oldstore.example TXT": {
+      "answers": [
+       "v=DMARC1; p=reject; rua=mailto:dmarc@oldstore.example"
+      ]
+     },
+     "oldstore.example.dbl.spamhaus.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.1.4"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 70,
+    "signals": [
+     "laya_asks_payment",
+     "online_dnsbl_phish"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_domain_age_years",
+     "fact_mail_setup"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "list-url-on-old-domain",
+   "note": "An exact-URL list hit stays danger, even on a 12-year-old domain with DMARC reject.",
+   "url": "https://oldstore.example/promo/verify?id=9",
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2014-03-01T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    },
+    "dns": true,
+    "answers": {
+     "oldstore.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "oldstore.example MX": {
+      "answers": [
+       "10 mx.oldstore.example"
+      ]
+     },
+     "oldstore.example TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.oldstore.example TXT": {
+      "answers": [
+       "v=DMARC1; p=reject; rua=mailto:dmarc@oldstore.example"
+      ]
+     }
+    },
+    "feeds": {
+     "phishingdb": [
+      "https://oldstore.example/promo/verify?id=9"
+     ]
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 60,
+    "signals": [
+     "online_phish_list_url"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_domain_age_years",
+     "fact_mail_setup"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "list-host-alone",
+   "note": "A host-level hit (another URL on this host is listed) with nothing else: caution 45.",
+   "url": "https://login-check.example/other",
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "https://login-check.example/verify?id=7"
+     ]
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 45,
+    "signals": [
+     "online_phish_list_host"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "login-check.example",
+    "onlineDomain": "login-check.example"
+   }
+  },
+  {
+   "id": "list-host-with-card-form",
+   "note": "A host-level hit corroborated by a card field: the full 60.",
+   "url": "https://login-check.example/pay",
+   "card": true,
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "https://login-check.example/verify?id=7"
+     ]
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 60,
+    "signals": [
+     "online_phish_list_host"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "login-check.example",
+    "onlineDomain": "login-check.example"
+   }
+  },
+  {
+   "id": "list-domain-alone",
+   "note": "A registrable-domain hit alone (the bare domain is listed, the page is on a subdomain): caution 30.",
+   "url": "https://shop.listed-domain.example/",
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "http://listed-domain.example/"
+     ]
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 30,
+    "signals": [
+     "online_phish_list_domain"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "listed-domain.example",
+    "onlineDomain": "listed-domain.example"
+   }
+  },
+  {
+   "id": "list-domain-old-domain-dmarc-reject",
+   "note": "Old domain, DMARC reject, a domain-level hit: caution, not danger (and no reassurance).",
+   "url": "https://shop.oldstore.example/",
+   "online": {
+    "facts": {
+     "oldstore.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2014-03-01T00:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    },
+    "dns": true,
+    "answers": {
+     "oldstore.example A": {
+      "answers": [
+       "192.0.2.10"
+      ],
+      "ad": false
+     },
+     "oldstore.example MX": {
+      "answers": [
+       "10 mx.oldstore.example"
+      ]
+     },
+     "oldstore.example TXT": {
+      "answers": [
+       "v=spf1 include:_spf.example.net -all"
+      ]
+     },
+     "_dmarc.oldstore.example TXT": {
+      "answers": [
+       "v=DMARC1; p=reject; rua=mailto:dmarc@oldstore.example"
+      ]
+     }
+    },
+    "feeds": {
+     "phishingdb": [
+      "http://oldstore.example/"
+     ]
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 30,
+    "signals": [
+     "online_phish_list_domain"
+    ],
+    "notCounted": [],
+    "facts": [
+     "fact_dmarc_enforced",
+     "fact_domain_age_years",
+     "fact_mail_setup"
+    ],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "oldstore.example",
+    "onlineDomain": "oldstore.example"
+   }
+  },
+  {
+   "id": "list-domain-with-laya-cues",
+   "note": "Laya's cues count next to a list hit, but an uncorroborated domain hit is capped below danger.",
+   "url": "https://shop.listed-domain.example/win",
+   "laya": {
+    "laya_prize": "strong",
+    "laya_urgency": "strong",
+    "laya_asks_claim": "strong"
+   },
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "http://listed-domain.example/"
+     ]
+    }
+   },
+   "expect": {
+    "level": "caution",
+    "score": 59,
+    "signals": [
+     "laya_asks_claim",
+     "laya_prize",
+     "laya_urgency",
+     "online_phish_list_domain"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "listed-domain.example",
+    "onlineDomain": "listed-domain.example"
+   }
+  },
+  {
+   "id": "list-domain-new-domain",
+   "note": "A domain-level hit on a 4-day-old domain: corroborated, full weight, danger.",
+   "url": "https://shop.listed-domain.example/",
+   "online": {
+    "facts": {
+     "listed-domain.example": {
+      "sources": [
+       "rdap"
+      ],
+      "created": "2026-09-20T09:00:00Z",
+      "fetched_at": "2026-09-24T11:00:00Z"
+     }
+    },
+    "feeds": {
+     "phishingdb": [
+      "http://listed-domain.example/"
+     ]
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 95,
+    "signals": [
+     "online_domain_new_week",
+     "online_phish_list_domain"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "listed-domain.example",
+    "onlineDomain": "listed-domain.example"
+   }
+  },
+  {
+   "id": "list-domain-lookalike",
+   "note": "A domain-level hit on a brand look-alike: corroborated, danger.",
+   "url": "https://www.paypa1.com/",
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "http://paypa1.com/"
+     ]
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 100,
+    "signals": [
+     "lookalike_brand",
+     "online_phish_list_domain"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "paypa1.com",
+    "onlineDomain": "paypa1.com"
+   }
+  },
+  {
+   "id": "list-domain-password-form",
+   "note": "A domain-level hit with a password field: corroborated, danger.",
+   "url": "https://shop.listed-domain.example/login",
+   "password": true,
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "http://listed-domain.example/"
+     ]
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 60,
+    "signals": [
+     "online_phish_list_domain"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "listed-domain.example",
+    "onlineDomain": "listed-domain.example"
+   }
+  },
+  {
+   "id": "list-domain-dnsbl",
+   "note": "A domain-level hit and a blocklist listing: corroborated, danger.",
+   "url": "https://shop.listed-domain.example/",
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "http://listed-domain.example/"
+     ]
+    },
+    "dnsbl": [
+     "spamhaus_dbl"
+    ],
+    "answers": {
+     "listed-domain.example.dbl.spamhaus.org A": {
+      "rcode": "NOERROR",
+      "answers": [
+       "127.0.1.2"
+      ]
+     }
+    }
+   },
+   "expect": {
+    "level": "danger",
+    "score": 95,
+    "signals": [
+     "online_dnsbl_spam",
+     "online_phish_list_domain"
+    ],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "listed-domain.example",
+    "onlineDomain": "listed-domain.example"
+   }
+  },
+  {
+   "id": "list-shared-host-suppressed",
+   "note": "shared_hosts.json stays authoritative: another page on a shared host (mailchi.mp) does not match by host.",
+   "url": "https://mailchi.mp/other/newsletter",
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "https://mailchi.mp/abc/phish"
+     ]
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "mailchi.mp",
+    "onlineDomain": "mailchi.mp"
+   }
+  },
+  {
+   "id": "list-shared-domain-suppressed",
+   "note": "shared_hosts.json: a bare shared-host domain on the list (weebly.com) never flags pages under it.",
+   "url": "https://www.weebly.com/pricing",
+   "online": {
+    "feeds": {
+     "phishingdb": [
+      "http://weebly.com/"
+     ]
+    }
+   },
+   "expect": {
+    "level": "safe",
+    "score": 0,
+    "signals": [],
+    "notCounted": [],
+    "facts": [],
+    "reassuring": [],
+    "tier": "none",
+    "paymentExpected": false,
+    "hostControl": "weebly.com",
+    "onlineDomain": null
+   }
+  }
+ ]
+}

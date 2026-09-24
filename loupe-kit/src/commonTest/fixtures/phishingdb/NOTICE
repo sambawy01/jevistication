@@ -1,0 +1,9 @@
+Trimmed samples of Phishing.Database files (phishing-links-ACTIVE.txt: every 1,500th line;
+phishing-domains-ACTIVE.txt: the first 40 lines), fetched once on 2026-09-24 from
+https://phish.co.za/latest/ (domains via the project's GitHub copy) for offline tests.
+
+Phishing.Database, https://github.com/Phishing-Database/Phishing.Database, MIT License
+Copyright (c) 2018-2025 Mitchell Krog - @mitchellkrogza
+Copyright (c) 2018-2025 Nissar Chababy - @funilrys
+Copyright (c) 2018-2025 Phishing.Database Contributors - @Phishing-Database
+(Full licence text: macos/packaging/THIRD_PARTY_NOTICES.md, "Data sources".)

@@ -1044,6 +1044,22 @@ their acceptance criteria are met; entries here record increments toward them.
   and masking format, when they arrive, may change the wording.
 
 ---
+- **2026-09-24 — Phishing formula v1.2 ported to mobile; Phishing.Database; Show-where aligned (owner
+  decisions A, B, C; not yet committed).** `loupe-kit` `dev.loupe.kit.site`: `SiteContext` (tiers,
+  payment processors + `embeds`, the card-form-to-processor rule-4 exception, facts / not-counted),
+  `Dns` (wire format, DNS facts, Spamhaus DBL / SURBL / URIBL with test points cached 1 h; error codes
+  never "listed"), list strength (URL 60, host 45, domain 30 capped at 59, 60 when corroborated),
+  `PhishingLists` (Station's `feeds.normalize`, `shared_hosts.json` copied verbatim from Station
+  4cb9026 into `loupe-kit/data/` and generated into Kotlin, Phishing.Database index). All 51 v1.2
+  vectors pass on JVM and iOS sim; the 57 v1.1 vectors pass with `online-feed-host` → caution 45 and
+  `online-feed-domain` → caution 30 (override table, as Station's `V12_CHANGES`; the v1.1 file stays
+  byte-identical). iOS: DNS via `res_9_nsend` (system resolver, no DoH), Phishing.Database downloader
+  (conditional GET, 3 s gaps, sanity check, atomic swap, last good copy; NEW hourly, ACTIVE 1–168 h,
+  default 6), OpenPhish now off by default, DNS facts and blocklists off by default; link checks show
+  "Warning signs", "Reassuring facts", "Also noticed (not counted)". Privacy: Station's `card_check`,
+  `mask_value`, `masked_context` and row shape; Station's 10 true / 15 false card fixtures and the
+  IMG_1507 case pass. MIT notice for Phishing.Database in Me → Licences and THIRD_PARTY_NOTICES.md.
+  Not verified: DNS answers on a real device (tests use fakes).
 
 ## Where the build stands
 

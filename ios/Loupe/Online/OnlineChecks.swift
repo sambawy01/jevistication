@@ -10,32 +10,81 @@ import LoupeKit
 /// - Domain facts: `POST {helper}/v1/domain-facts {"domain": d}` on loupe-web-helper, for the ICANN
 ///   registrable domain only (PRIVATE suffixes off; hosting-platform pages are never sent). A 404 means
 ///   the helper has not deployed the route: "online checks not available yet".
-/// - Phishing lists: OpenPhish's community feed (and PhishTank's keyless list, its own switch),
-///   downloaded to the phone and matched on the phone. Nothing per link leaves it.
+/// - Phishing lists: Phishing.Database (MIT; on by default once the lists are on; `PhishingDatabase.swift`),
+///   OpenPhish's community feed (off by default: personal, non-commercial use only) and PhishTank's
+///   keyless list, each with its own switch, downloaded to the phone and matched on the phone.
+///   Nothing per link leaves it.
+/// - Formula v1.2 site facts (off by default): DNS facts (MX, SPF, DMARC, DNSSEC, BIMI) and the domain
+///   blocklists (Spamhaus DBL, SURBL, URIBL; non-commercial licences), asked of this phone's own
+///   resolver only (`SiteDns.swift`), for ICANN registrable domains of links.
 /// - Google Safe Browsing (API v5, local-list mode; `SafeBrowsing.swift`) with the user's own key from
 ///   the Keychain: a local list of hash prefixes; only on a local match are 4-byte prefixes sent to
 ///   Google, never a URL.
 struct OnlinePhishingSettings: Equatable {
     var domainFacts = false
+    /// "Known-phishing lists": the master switch for the downloaded lists.
     var feeds = false
+    /// OpenPhish's community feed: off by default (free for personal, non-commercial use only).
+    var openPhish = false
     var phishTank = false
+    /// Phishing.Database (MIT): on by default whenever the lists are on (owner decision B).
+    var phishingDb = true
+    /// How often the large Phishing.Database ACTIVE files are refreshed, 1–168 hours (NEW files: hourly).
+    var refreshHours = 6
     var safeBrowsing = false
+    /// Formula v1.2 §5b: MX / SPF / DMARC / DNSSEC / BIMI from this phone's own resolver.
+    var dnsFacts = false
+    /// Formula v1.2 §5c: domain blocklists over DNS (master switch; each list non-commercial, low volume).
+    var dnsbl = false
+    var dnsblSpamhaus = true
+    var dnsblSurbl = true
+    var dnsblUribl = true
 
-    var anyOn: Bool { domainFacts || feeds || safeBrowsing }
+    var anyOn: Bool { domainFacts || feeds || safeBrowsing || dnsFacts || dnsbl }
+
+    /// The lists downloaded while "Known-phishing lists" is on.
+    var lists: [String] {
+        guard feeds else { return [] }
+        return (openPhish ? ["openphish"] : []) + (phishTank ? ["phishtank"] : []) + (phishingDb ? ["phishingdb"] : [])
+    }
+
+    /// The blocklists asked while the blocklist switch is on, in Dnsbl.ZONES order.
+    var dnsblLists: [String] {
+        guard dnsbl else { return [] }
+        return (dnsblSpamhaus ? ["spamhaus_dbl"] : []) + (dnsblSurbl ? ["surbl"] : []) + (dnsblUribl ? ["uribl"] : [])
+    }
 
     static let keys = (domainFacts: "online.phishing.domainFacts", feeds: "online.phishing.feeds",
-                       phishTank: "online.phishing.phishtank", safeBrowsing: "online.phishing.safeBrowsing")
+                       openPhish: "online.phishing.openphish", phishTank: "online.phishing.phishtank",
+                       phishingDb: "online.phishing.phishingdb", refreshHours: "online.phishing.refreshHours",
+                       safeBrowsing: "online.phishing.safeBrowsing", dnsFacts: "online.phishing.dnsFacts",
+                       dnsbl: "online.phishing.dnsbl", dnsblSpamhaus: "online.phishing.dnsbl.spamhaus",
+                       dnsblSurbl: "online.phishing.dnsbl.surbl", dnsblUribl: "online.phishing.dnsbl.uribl")
 
     static func load(_ d: UserDefaults) -> OnlinePhishingSettings {
-        OnlinePhishingSettings(domainFacts: d.bool(forKey: keys.domainFacts), feeds: d.bool(forKey: keys.feeds),
-                               phishTank: d.bool(forKey: keys.phishTank), safeBrowsing: d.bool(forKey: keys.safeBrowsing))
+        func flag(_ k: String, _ fallback: Bool) -> Bool { (d.object(forKey: k) as? Bool) ?? fallback }
+        let hours = (d.object(forKey: keys.refreshHours) as? Int) ?? Int(PhishingDb.shared.DEFAULT_REFRESH_HOURS)
+        return OnlinePhishingSettings(
+            domainFacts: flag(keys.domainFacts, false), feeds: flag(keys.feeds, false), openPhish: flag(keys.openPhish, false),
+            phishTank: flag(keys.phishTank, false), phishingDb: flag(keys.phishingDb, true),
+            refreshHours: Int(PhishingDb.shared.clampRefreshHours(h: Int32(hours))), safeBrowsing: flag(keys.safeBrowsing, false),
+            dnsFacts: flag(keys.dnsFacts, false), dnsbl: flag(keys.dnsbl, false), dnsblSpamhaus: flag(keys.dnsblSpamhaus, true),
+            dnsblSurbl: flag(keys.dnsblSurbl, true), dnsblUribl: flag(keys.dnsblUribl, true))
     }
 
     func save(_ d: UserDefaults) {
         d.set(domainFacts, forKey: Self.keys.domainFacts)
         d.set(feeds, forKey: Self.keys.feeds)
+        d.set(openPhish, forKey: Self.keys.openPhish)
         d.set(phishTank, forKey: Self.keys.phishTank)
+        d.set(phishingDb, forKey: Self.keys.phishingDb)
+        d.set(refreshHours, forKey: Self.keys.refreshHours)
         d.set(safeBrowsing, forKey: Self.keys.safeBrowsing)
+        d.set(dnsFacts, forKey: Self.keys.dnsFacts)
+        d.set(dnsbl, forKey: Self.keys.dnsbl)
+        d.set(dnsblSpamhaus, forKey: Self.keys.dnsblSpamhaus)
+        d.set(dnsblSurbl, forKey: Self.keys.dnsblSurbl)
+        d.set(dnsblUribl, forKey: Self.keys.dnsblUribl)
     }
 }
 
@@ -172,6 +221,8 @@ final class OnlineChecksService: ObservableObject {
     private let defaults: UserDefaults
     private let facts: DomainFactsClient
     let feeds: PhishingFeeds
+    let phishingDb: PhishingDatabaseStore
+    let siteFacts: SiteFactsLookup
     let safeBrowsing: SafeBrowsingClient
     private let now: () -> Date
     /// In memory only, never on disk: facts per domain for 6 hours (the helper keeps its own cache).
@@ -183,7 +234,9 @@ final class OnlineChecksService: ObservableObject {
          key: KeyStore = KeychainStore(service: "dev.loupe.app.safebrowsing", account: "google-safe-browsing-key"),
          dir: URL? = nil,
          base: URL = HelperEndpoint.base,
-         now: @escaping () -> Date = Date.init) {
+         now: @escaping () -> Date = Date.init,
+         resolver: DnsQuery? = nil,
+         pause: @escaping (Double) async -> Void = { s in try? await Task.sleep(nanoseconds: UInt64(s * 1_000_000_000)) }) {
         self.defaults = defaults
         self.key = key
         self.now = now
@@ -192,6 +245,8 @@ final class OnlineChecksService: ObservableObject {
             .appendingPathComponent("online-phishing"))
         facts = DomainFactsClient(base: base, session: s)
         feeds = PhishingFeeds(dir: root.appendingPathComponent("feeds"), session: s, now: now)
+        phishingDb = PhishingDatabaseStore(dir: root.appendingPathComponent("phishingdb"), session: s, now: now, pause: pause)
+        siteFacts = resolver.map { SiteFactsLookup(resolver: $0, now: now) } ?? SiteFactsLookup(now: now)
         safeBrowsing = SafeBrowsingClient(dir: root.appendingPathComponent("safe-browsing"), session: s, key: { key.read() }, now: now)
         settings = OnlinePhishingSettings.load(defaults)
         keySet = key.read() != nil
@@ -208,10 +263,12 @@ final class OnlineChecksService: ObservableObject {
 
     func update(_ next: OnlinePhishingSettings) {
         var s = next
-        if !s.feeds { s.phishTank = false }
+        s.refreshHours = Int(PhishingDb.shared.clampRefreshHours(h: Int32(clamping: s.refreshHours)))
         settings = s
         s.save(defaults)
-        if !s.feeds { feeds.remove() }
+        if !s.feeds || (!s.openPhish && !s.phishTank) { feeds.remove() }
+        if !s.feeds || !s.phishingDb { phishingDb.remove() }
+        if !s.dnsFacts && !s.dnsbl { siteFacts.forget() }
         if !s.safeBrowsing { safeBrowsing.remove() }
         if !s.domainFacts { cache = [:] }
         status = s.anyOn ? nil : "Online checks are off: nothing is sent."
@@ -284,8 +341,9 @@ final class OnlineChecksService: ObservableObject {
 
         var index: FeedIndex?
         var feedsAt: String?
+        var pdb: PhishingDbIndex?
         if s.feeds {
-            let lists = s.phishTank ? ["openphish", "phishtank"] : ["openphish"]
+            let lists = s.lists.filter { $0 != "phishingdb" }
             for l in lists {
                 do { try await feeds.refresh(l) } catch { notes.append("Phishing list \(l): could not download (\(error)).") }
             }
@@ -295,6 +353,34 @@ final class OnlineChecksService: ObservableObject {
                 feedsAt = lists.compactMap { feeds.fetchedAt($0) }.min().map { Self.iso.string(from: $0) }
                 notes.append("Online · " + entries.keys.sorted().map { $0 == "openphish" ? "OpenPhish" : "PhishTank" }.joined(separator: ", ") +
                              " list on this phone · \(entries.values.map(\.count).reduce(0, +)) entries · fetched \(feedsAt ?? at)")
+            }
+            if s.phishingDb {
+                if let error = await phishingDb.refresh(refreshHours: s.refreshHours) {
+                    notes.append("Phishing.Database: could not update (\(error)); the last good copy is kept.")
+                }
+                let store = phishingDb
+                pdb = await Task.detached(priority: .utility) { store.loadedIndex() }.value
+                if let pdb {
+                    notes.append("Online · Phishing.Database list on this phone · \(pdb.linkCount) links, \(pdb.hostCount) hosts · list date \(pdb.listDate ?? at)")
+                }
+            }
+            if lists.isEmpty && !s.phishingDb { notes.append("Phishing lists: every list is off.") }
+        }
+
+        // Formula v1.2 site facts: DNS and the blocklists, through this phone's own resolver only.
+        var dnsOut: [String: DnsFacts] = [:]
+        var blOut: [String: [String: DnsblResult]] = [:]
+        if s.dnsFacts || !s.dnsblLists.isEmpty {
+            let domains = Array(MailTriage.shared.onlineLookups(items: items, raws: raws, max: 20))
+            let lookup = siteFacts, dnsOn = s.dnsFacts, lists = s.dnsblLists
+            let r = await Task.detached(priority: .utility) { lookup.lookup(domains: domains, dns: dnsOn, lists: lists, at: at) }.value
+            dnsOut = r.dns
+            blOut = r.dnsbl
+            if r.noAnswer { notes.append("DNS: this network's resolver did not answer; DNS facts skipped.") }
+            if dnsOn { notes.append("Online · DNS (this phone's resolver) · \(dnsOut.count) domain\(dnsOut.count == 1 ? "" : "s") · fetched \(at)") }
+            if !lists.isEmpty {
+                let names = lists.compactMap { Dnsbl.shared.zone(id: $0)?.name }.joined(separator: ", ")
+                notes.append("Online · Domain blocklists (\(names)) · \(blOut.count) domain\(blOut.count == 1 ? "" : "s") · fetched \(at)")
             }
         }
 
@@ -316,6 +402,7 @@ final class OnlineChecksService: ObservableObject {
         }
         status = notes.joined(separator: "\n")
         return OnlineContext(nowIso: at, facts: factsOut, feeds: index, safeBrowsingHits: hits,
-                             safeBrowsingFetchedAt: s.safeBrowsing ? at : nil, feedsFetchedAt: feedsAt)
+                             safeBrowsingFetchedAt: s.safeBrowsing ? at : nil, feedsFetchedAt: feedsAt,
+                             phishingDb: pdb, dns: dnsOut, dnsbl: blOut, dnsblFetchedAt: blOut.isEmpty ? nil : at)
     }
 }

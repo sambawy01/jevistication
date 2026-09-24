@@ -180,13 +180,52 @@ struct MailTriageView: View {
                     }
                     Text(l.check.url).font(Typeface.mono(12)).foregroundStyle(Palette.ink).lineLimit(2)
                     if let item = ItemIndex.item(l.itemId) { ItemRefHeader(item: item) }
-                    ForEach(Array(l.check.lines.enumerated()), id: \.offset) { _, line in
-                        Text("• " + line).font(.caption).foregroundStyle(Palette.ink)
-                    }
+                    SiteVerdictSections(check: l.check)
                     Button("Open") { openItem = mail.item(l.itemId) }.font(.caption.weight(.semibold)).buttonStyle(.borderless)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .card()
+            }
+        }
+    }
+}
+
+/// A site verdict's groups (formula v1.2): "Warning signs" (or "Small things noticed" when the level
+/// does not warn), "Reassuring facts", other facts, and the collapsed "Also noticed (not counted)".
+struct SiteVerdictSections: View {
+    let check: SiteCheckResult
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if !check.lines.isEmpty {
+                Text(check.linesTitle).font(.caption.weight(.semibold)).foregroundStyle(check.warn ? Palette.warnText : Palette.inkSoft)
+                    .accessibilityIdentifier("site.warnings")
+                ForEach(Array(check.lines.enumerated()), id: \.offset) { _, line in
+                    Text("• " + line).font(.caption).foregroundStyle(Palette.ink)
+                }
+            }
+            if !check.reassuringFacts.isEmpty {
+                Text("Reassuring facts").font(.caption.weight(.semibold)).foregroundStyle(Palette.okText)
+                    .accessibilityIdentifier("site.reassuring")
+                ForEach(Array(check.reassuringFacts.enumerated()), id: \.offset) { _, line in
+                    Text("• " + line).font(.caption).foregroundStyle(Palette.ink)
+                }
+            }
+            if !check.otherFacts.isEmpty {
+                Text("Other facts").font(.caption.weight(.semibold)).foregroundStyle(Palette.inkSoft)
+                ForEach(Array(check.otherFacts.enumerated()), id: \.offset) { _, line in
+                    Text("• " + line).font(.caption).foregroundStyle(Palette.inkSoft)
+                }
+            }
+            if !check.notCountedLines.isEmpty {
+                DisclosureGroup("Also noticed (not counted)") {
+                    ForEach(Array(check.notCountedLines.enumerated()), id: \.offset) { _, line in
+                        Text("• " + line).font(.caption).foregroundStyle(Palette.inkSoft)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .font(.caption.weight(.semibold))
+                .accessibilityIdentifier("site.notCounted")
             }
         }
     }

@@ -8,8 +8,10 @@ final class FakeOnline: URLProtocol {
     nonisolated(unsafe) static var requests: [URLRequest] = []
     nonisolated(unsafe) static var bodies: [Data] = []
     nonisolated(unsafe) static var handler: (URLRequest, Data) -> (Int, Data) = { _, _ in (500, Data()) }
+    /// Response headers per request (ETag, Last-Modified, Content-Type), or none.
+    nonisolated(unsafe) static var headers: (URLRequest) -> [String: String]? = { _ in nil }
 
-    static func reset() { requests = []; bodies = []; handler = { _, _ in (500, Data()) } }
+    static func reset() { requests = []; bodies = []; handler = { _, _ in (500, Data()) }; headers = { _ in nil } }
 
     static func read(_ stream: InputStream) -> Data {
         stream.open(); defer { stream.close() }
@@ -26,7 +28,7 @@ final class FakeOnline: URLProtocol {
         Self.requests.append(request)
         Self.bodies.append(body)
         let (status, data) = Self.handler(request, body)
-        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didReceive: HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: Self.headers(request))!, cacheStoragePolicy: .notAllowed)
         client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
@@ -171,7 +173,7 @@ final class OnlineChecksTests: XCTestCase {
 
     func testListsAreDownloadedOnceAndMatchedOnThePhone() async throws {
         let s = service()
-        s.update(OnlinePhishingSettings(feeds: true))
+        s.update(OnlinePhishingSettings(feeds: true, openPhish: true, phishingDb: false))
         FakeOnline.handler = { req, _ in
             req.url == PhishingFeeds.openPhishURL ? (200, Data("http://paypal.account-verify.example/login\nhttps://other.example/x\n".utf8)) : (404, Data())
         }
@@ -239,7 +241,7 @@ final class OnlineChecksTests: XCTestCase {
 
     func testTurningASwitchOffForgetsItsData() async {
         let s = service()
-        s.update(OnlinePhishingSettings(feeds: true))
+        s.update(OnlinePhishingSettings(feeds: true, openPhish: true, phishingDb: false))
         FakeOnline.handler = { _, _ in (200, Data("http://x.example/\n".utf8)) }
         _ = await s.context(items: Self.sample, raws: raws)
         XCTAssertNotNil(s.feeds.fetchedAt("openphish"))

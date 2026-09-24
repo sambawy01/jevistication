@@ -405,6 +405,14 @@ logic and wording from the same repository and commit (`laya_studio/workflows/{e
 `llm/{client,providers}.py`, `mail/drafts.py`, `static/js/{assist,llm-settings}.js`). Same owner, so no
 licence obligation; no vendor SDK or new dependency (URLSession, MessageUI). Adopted.
 
+## Phishing lists and blocklists (run-time data) — checked 2026-09-24
+
+Phishing.Database: MIT (notice in THIRD_PARTY_NOTICES.md and Me → Licences); aggregates unnamed
+upstreams, provenance unconfirmed. OpenPhish community feed: personal non-commercial only, off by
+default. Spamhaus DBL / SURBL / URIBL: non-commercial, low-volume public use only, off by default; a
+sold product needs each operator's paid feed. `loupe-kit/data/shared_hosts.json`: the owner's own
+Loupe Station file (commit 4cb9026), copied verbatim.
+
 ## Rejected
 
 ### NanoJev — weights and dataset declare no licence

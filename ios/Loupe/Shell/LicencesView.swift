@@ -7,6 +7,7 @@ struct LicencesView: View {
         Notice(id: "ios", title: "ONNX Runtime and the tokenizer (Laya on iOS)", file: "THIRD_PARTY_NOTICES-ios"),
         Notice(id: "rajdhani", title: "Rajdhani font (SIL OFL 1.1)", file: "OFL-Rajdhani"),
         Notice(id: "jbmono", title: "JetBrains Mono font (SIL OFL 1.1)", file: "OFL-JetBrainsMono"),
+        Notice(id: "phishingdb", title: "Phishing.Database list (MIT)", file: "Phishing.Database-MIT"),
     ]
 
     var body: some View {

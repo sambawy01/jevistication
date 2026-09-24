@@ -50,7 +50,7 @@ data class FeedHit(val list: String, val how: String)
  * (unless unrelated people publish under it at the path level: [PATH_SHARED_HOSTS]), or a listed
  * bare registrable domain the host sits under (never a shared host).
  */
-class FeedIndex(entries: Map<String, List<String>>) {
+class FeedIndex(entries: Map<String, List<String>>) : PhishingList {
     private val urls = HashMap<String, String>()
     private val hosts = HashMap<String, String>()
     private val domains = HashMap<String, String>()
@@ -58,45 +58,41 @@ class FeedIndex(entries: Map<String, List<String>>) {
     /** How many list entries were read, per list. */
     val counts: Map<String, Int> = entries.mapValues { it.value.size }
 
+    override val source: String = entries.keys.firstOrNull() ?: "feeds"
+
     init {
         for ((list, lines) in entries) {
             for (raw in lines) {
-                val key = urlKey(raw) ?: continue
-                urls.getOrPut(key.first) { list }
-                hosts.getOrPut(key.second) { list }
-                val reg = Hosts.registrableDomain(key.second)
-                if (reg != null && key.third && (key.second == reg || key.second == "www.$reg")) domains.getOrPut(reg) { list }
+                val (key, host, root) = ListUrls.normalize(raw) ?: continue
+                if (Hosts.isPrivateHost(host)) continue
+                urls.getOrPut(key) { list }
+                hosts.getOrPut(host) { list }
+                val reg = Hosts.registrableDomain(host)
+                if (root && reg != null && (host == reg || host == "www.$reg") && !ListUrls.isSuppressed(reg)) domains.getOrPut(reg) { list }
             }
         }
     }
 
-    fun match(url: String): FeedHit? {
-        val key = urlKey(url) ?: return null
-        urls[key.first]?.let { return FeedHit(it, "url") }
-        val host = key.second
-        if (!pathShared(host)) hosts[host]?.let { return FeedHit(it, "host") }
-        val reg = Hosts.registrableDomain(host) ?: return null
-        if (!pathShared(reg) && !Hosts.isSharedHosting(host)) domains[reg]?.let { return FeedHit(it, "domain") }
+    /**
+     * Station's `FeedIndex.match` with v1.2's shared-host list: the exact URL always counts; a
+     * host or registrable-domain match never on a shared host ([ListUrls.isSuppressed]).
+     */
+    override fun match(url: String): FeedHit? {
+        val (key, host, _) = ListUrls.normalize(url) ?: return null
+        urls[key]?.let { return FeedHit(it, "url") }
+        if (ListUrls.isSuppressed(host)) return null
+        hosts[host]?.let { return FeedHit(it, "host") }
+        val reg = Hosts.registrableDomain(host) ?: host
+        if (!Hosts.isSharedHosting(host) && !ListUrls.isSuppressed(reg)) domains[reg]?.let { return FeedHit(it, "domain") }
         return null
     }
-
-    private fun pathShared(host: String): Boolean =
-        host in PATH_SHARED_HOSTS || PATH_SHARED_HOSTS.any { host.endsWith(".$it") } || Hosts.registrableDomain(host) in PATH_SHARED_HOSTS
 
     companion object {
         /**
          * (host + path + query, host, bare) for a URL: scheme and fragment ignored, host lowercased
          * and in ASCII, `bare` when the entry has no path beyond "/" and no query.
          */
-        internal fun urlKey(url: String): Triple<String, String, Boolean>? {
-            val t = url.trim()
-            if (t.isEmpty()) return null
-            val u = ParsedUrl.parse(if ("://" in t) t else "http://$t") ?: return null
-            if (u.host.isEmpty()) return null
-            val path = u.path.ifEmpty { "/" }
-            val q = if (u.query.isEmpty()) "" else "?${u.query}"
-            return Triple(u.host + path + q, u.host, path == "/" && u.query.isEmpty())
-        }
+        internal fun urlKey(url: String): Triple<String, String, Boolean>? = ListUrls.normalize(url)
 
         /** OpenPhish's community feed: one URL per line. */
         fun parseOpenPhish(text: String): List<String> =
@@ -132,7 +128,32 @@ class OnlineContext(
     val safeBrowsingHits: Set<String> = emptySet(),
     val safeBrowsingFetchedAt: String? = null,
     val feedsFetchedAt: String? = null,
-)
+    /** Phishing.Database, loaded on the phone (owner decision B). */
+    val phishingDb: PhishingDbIndex? = null,
+    /** Formula v1.2 §5b: DNS facts per lookup domain (the DNS source on). */
+    val dns: Map<String, DnsFacts> = emptyMap(),
+    /** Formula v1.2 §5c: blocklist answers per lookup domain (the lists on). */
+    val dnsbl: Map<String, Map<String, DnsblResult>> = emptyMap(),
+    val dnsblFetchedAt: String? = null,
+) {
+    /** The strongest list hit for [url] (url, then host, then domain) across the lists on this phone. */
+    fun listHit(url: String): FeedHit? {
+        val hits = listOfNotNull(feeds?.match(url), phishingDb?.match(url))
+        return hits.minByOrNull { OnlineSignals.FEED_KINDS.indexOf(it.how) }
+    }
+
+    /** The v1.2 site facts for a lookup [domain], or null when nothing is known about it. */
+    fun site(domain: String?): SiteFacts? {
+        if (domain == null) return null
+        val reg = facts[domain]
+        val d = dns[domain]
+        val bl = dnsbl[domain]
+        return SiteFacts(domain, reg, d, bl, dnsblFetchedAt)
+    }
+
+    /** When the list hits were fetched ([feedsFetchedAt], or Phishing.Database's list date). */
+    fun listFetchedAt(hit: FeedHit): String? = if (hit.list == PhishingDb.SOURCE) phishingDb?.listDate ?: feedsFetchedAt else feedsFetchedAt
+}
 
 object OnlineSignals {
     const val W_DOMAIN_7D = 35
@@ -142,6 +163,8 @@ object OnlineSignals {
     const val W_LISTED = 60
     const val W_SAFE_BROWSING = 60
     const val CERT_NEW_DAYS = 7
+    /** List hit kinds, strongest first. */
+    val FEED_KINDS: List<String> = listOf("url", "host", "domain")
 
     /** Page (browser / link) codes. */
     val PAGE_WEIGHTS: Map<String, Pair<Int, String>> = linkedMapOf(
@@ -179,7 +202,8 @@ object OnlineSignals {
     /** Where a fact came from, in words, for the "Online" label. */
     val SOURCE_NAMES: Map<String, String> = mapOf(
         "helper" to "Loupe web helper (RDAP, certificate logs)", "openphish" to "OpenPhish", "phishtank" to "PhishTank",
-        "safe_browsing" to "Google Safe Browsing",
+        "safe_browsing" to "Google Safe Browsing", "phishingdb" to "Phishing.Database", "dns" to "DNS",
+        "dnsbl" to "Domain blocklists", "spamhaus_dbl" to "Spamhaus DBL", "surbl" to "SURBL", "uribl" to "URIBL",
     )
 
     /**
@@ -245,9 +269,9 @@ object OnlineSignals {
         val u = ParsedUrl.parse(url) ?: return emptyList()
         if (u.host.isEmpty()) return emptyList()
         val out = mutableListOf<SiteReason>()
-        ctx.feeds?.match(url)?.let { hit ->
+        ctx.listHit(url)?.let { hit ->
             val code = "online_phish_list_${hit.how}"
-            out += reason(code, PAGE_WEIGHTS, mapOf("host" to u.host, "domain" to (u.registrable ?: u.host), "list" to (SOURCE_NAMES[hit.list] ?: hit.list)), hit.list, ctx.feedsFetchedAt)
+            out += reason(code, PAGE_WEIGHTS, mapOf("host" to u.host, "domain" to (u.registrable ?: u.host), "list" to (SOURCE_NAMES[hit.list] ?: hit.list)), hit.list, ctx.listFetchedAt(hit))
         }
         if (url in ctx.safeBrowsingHits) out += reason("online_safe_browsing", PAGE_WEIGHTS, emptyMap(), "safe_browsing", ctx.safeBrowsingFetchedAt)
         val domain = lookupDomain(u.host)
@@ -271,8 +295,8 @@ object OnlineSignals {
         fun add(r: SiteReason) { if (seen.add(r.code)) out += r }
         if (senderDomain != null) {
             val d = lookupDomain(senderDomain)
-            ctx.feeds?.match("http://$senderDomain/")?.let { hit ->
-                add(reason("sender_phish_list", MAIL_WEIGHTS, mapOf("domain" to senderDomain), hit.list, ctx.feedsFetchedAt))
+            ctx.listHit("http://$senderDomain/")?.let { hit ->
+                add(reason("sender_phish_list", MAIL_WEIGHTS, mapOf("domain" to senderDomain), hit.list, ctx.listFetchedAt(hit)))
             }
             val f = d?.let { ctx.facts[it] }
             if (d != null && f != null) for (k in ageKinds(f, ctx.nowIso)) add(reason("sender_$k", MAIL_WEIGHTS, mapOf("domain" to d), "helper", f.fetchedAt))
@@ -281,7 +305,7 @@ object OnlineSignals {
             val u = ParsedUrl.parse(url) ?: continue
             if (u.host.isEmpty()) continue
             val reg = u.registrable ?: u.host
-            ctx.feeds?.match(url)?.let { hit -> add(reason("link_phish_list", MAIL_WEIGHTS, mapOf("domain" to reg), hit.list, ctx.feedsFetchedAt)) }
+            ctx.listHit(url)?.let { hit -> add(reason("link_phish_list", MAIL_WEIGHTS, mapOf("domain" to reg), hit.list, ctx.listFetchedAt(hit))) }
             if (url in ctx.safeBrowsingHits) add(reason("link_safe_browsing", MAIL_WEIGHTS, emptyMap(), "safe_browsing", ctx.safeBrowsingFetchedAt))
             val d = lookupDomain(u.host) ?: continue
             val f = ctx.facts[d] ?: continue

@@ -54,6 +54,8 @@ data class PageFacts(
      * check (`OriginFacts.brandMatchesOrigin`).
      */
     val claimedBrand: String? = null,
+    /** Formula v1.2: the hosts of the page's frames and scripts (at most 40 are read). */
+    val embeds: List<String> = emptyList(),
 )
 
 /** What scoring needs besides the signals. */
@@ -68,6 +70,8 @@ data class PageVerdictFacts(
     val password: Boolean,
     val card: Boolean,
     val sharedHosting: Boolean,
+    /** Formula v1.2: the payment processor among the page's embeds or card-form targets, or null. */
+    val paymentProcessor: String? = null,
 )
 
 /** Reference lists for one assessment: brands, known-good domains, suspicious TLDs, shorteners. */
@@ -353,10 +357,12 @@ object SiteSignals {
             val action = ParsedUrl.parse(f.action ?: "") ?: continue
             if (action.host.isEmpty()) continue                         // posts back to this page
             val target = Hosts.registrableDomain(action.host) ?: action.host
-            if (target != reg) {
+            if (target != reg && !(f.card && !f.password && SiteContext.processorForHost(action.host) != null)) {
+                // formula v1.2: a card form posting to a known payment processor is that processor's checkout
                 out += SiteSignal("password_posts_elsewhere", mapOf("target" to target), source = "page")
                 break
             }
+            if (target != reg) continue
             if (action.scheme == "http" && u.scheme == "https") {
                 out += SiteSignal("password_posts_http", source = "page")
                 break
@@ -434,6 +440,7 @@ object SiteSignals {
             host = u.host, unicodeHost = u.unicodeHost, registrable = u.registrable, scheme = u.scheme, path = u.path,
             knownGood = knownGood, brandClaim = claimName, password = hasPassword, card = hasCard,
             sharedHosting = Hosts.isSharedHosting(u.host),
+            paymentProcessor = SiteContext.pageProcessor(page.embeds, page.forms),
         )
         // one signal per code (the first wording wins; they share a weight)
         val seen = mutableSetOf<String>()
