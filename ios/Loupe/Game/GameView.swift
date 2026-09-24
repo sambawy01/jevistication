@@ -271,6 +271,8 @@ struct GameView: View {
             case .opening:
                 Label("Checking and opening Laya… the baseline flies meanwhile.", systemImage: "hourglass")
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
+            case .baseline where ModelSettingsService.shared.wasLayaOff(Features.shared.GAME):
+                LayaOffBanner(feature: Features.shared.GAME)
             case .baseline(let reason):
                 VStack(alignment: .leading, spacing: 6) {
                     Text(reason).font(.footnote).foregroundStyle(Palette.ink)

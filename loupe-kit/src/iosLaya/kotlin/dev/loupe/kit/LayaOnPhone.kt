@@ -85,3 +85,20 @@ object LayaOnPhone {
         class Failed(val message: String) : Opened()
     }
 }
+
+/**
+ * Laya under Model settings' memory mode: [first] is the verified open the app just made; a reload
+ * after an unload opens [variant] from [directory] again (verifying the files), all in Kotlin so no
+ * exception crosses into Swift.
+ */
+fun LayaOnPhone.memory(first: LayaOnDevice, directory: String, variant: String): dev.loupe.kit.settings.ModelMemory {
+    fun wrap(laya: LayaOnDevice) = object : dev.loupe.kit.settings.LoadedModel {
+        override val backend: Backend get() = laya.backend
+        override fun close() { runCatching { laya.close() } }
+    }
+    val memory = dev.loupe.kit.settings.ModelMemory({
+        runCatching { LayaModelStore(directory, variant).open() }.getOrNull()?.let(::wrap)
+    })
+    memory.install(wrap(first))
+    return memory
+}

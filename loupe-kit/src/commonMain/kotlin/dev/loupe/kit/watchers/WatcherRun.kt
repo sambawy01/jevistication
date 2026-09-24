@@ -15,6 +15,8 @@ import dev.loupe.engine.OriginFacts
 import dev.loupe.engine.Probability
 import dev.loupe.engine.RecurringCharge
 import dev.loupe.engine.RecurringMoney
+import dev.loupe.kit.settings.Features
+import dev.loupe.kit.settings.RunPolicy
 import dev.loupe.kit.site.PageFacts
 import dev.loupe.kit.site.SiteScoring
 import dev.loupe.kit.site.SiteVerdict
@@ -57,6 +59,8 @@ data class WatcherReport(
     val fraud: List<FraudFinding>,
     val emailsChecked: Int,
     val linksChecked: Int,
+    /** `features.watchers.use_laya` was off: the expiry radar's Laya half did not run (the banner). */
+    val layaOff: Boolean = false,
 )
 
 /**
@@ -80,6 +84,9 @@ data class WatcherReport(
  */
 object WatcherRun {
     /** "Schengen requires six months of passport validity" — the spec's own example rule. */
+    /** The expiry radar's built-in acceptance threshold. */
+    const val EXPIRY_THRESHOLD: Double = 0.5
+
     val SIX_MONTHS: ValidityRule = ValidityRule("six months of validity (e.g. Schengen passports)", 6)
 
     private val EXPIRY_WORDS = Regex("""\b(expir\w*|valid until|valid to|valid thru|renewal date|4b\.)""", RegexOption.IGNORE_CASE)
@@ -93,7 +100,16 @@ object WatcherRun {
     )
     private val INSTITUTIONAL_NAME = Regex("""\b(security|support|billing|account|team|bank|service)\b""", RegexOption.IGNORE_CASE)
 
-    fun run(items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule = SIX_MONTHS): WatcherReport {
+    fun run(items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule = SIX_MONTHS): WatcherReport =
+        run(items, today, backend, rule, RunPolicy.defaults(Features.WATCHERS))
+
+    /**
+     * [run] under Model settings (`features.watchers`): with `use_laya` off the backend is not used
+     * (the mechanical half runs alone and [WatcherReport.layaOff] is set); `accept_confidence`
+     * replaces the radar's 0.5 threshold and `text_chars` its 4,000-character budget.
+     */
+    fun run(items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule, policy: RunPolicy): WatcherReport {
+        val model = backend.takeIf { policy.useLaya }
         val book = addressBook(items)
         val texty = items.filter { it.hasText && it.duplicateOf == null && it.kind != ItemKind.CONTACT }
         val emails = texty.filter { it.kind == ItemKind.EMAIL && it.email?.fromAddress != null }
@@ -103,7 +119,7 @@ object WatcherRun {
             today = today,
             rule = rule,
             expiryCandidates = candidates,
-            expiryAlerts = backend?.let { expiryAlerts(candidates.map { c -> c.item }, it, today, rule) },
+            expiryAlerts = model?.let { expiryAlerts(candidates.map { c -> c.item }, it, today, rule, policy) },
             recurring = RecurringMoney.census(charges.map { it.second }, today),
             chargesFound = charges.size,
             termChanges = termChanges(texty),
@@ -111,8 +127,13 @@ object WatcherRun {
             fraud = fraud(emails),
             emailsChecked = emails.size,
             linksChecked = emails.sumOf { it.email!!.links.size },
+            layaOff = !policy.useLaya,
         )
     }
+
+    /** [runIso] under Model settings. */
+    fun runIsoWith(items: List<SourceItem>, todayIso: String, backend: Backend?, policy: RunPolicy): WatcherReport =
+        run(items, LocalDate.parse(todayIso), backend, SIX_MONTHS, policy)
 
     /** For Swift, which does not see kotlinx-datetime comfortably: [todayIso] is `yyyy-MM-dd`. */
     fun runIso(items: List<SourceItem>, todayIso: String, backend: Backend?): WatcherReport =
@@ -138,11 +159,14 @@ object WatcherRun {
      * arithmetic decides whether it breaches the rule. A non-persisting re-check — these decisions
      * are not written to the user's ledger.
      */
-    private fun expiryAlerts(candidates: List<SourceItem>, backend: Backend, today: LocalDate, rule: ValidityRule): List<ExpiryAlert> {
+    private fun expiryAlerts(candidates: List<SourceItem>, backend: Backend, today: LocalDate, rule: ValidityRule, policy: RunPolicy): List<ExpiryAlert> {
         if (candidates.isEmpty()) return emptyList()
         val template = TemplateLibrary.byId("document-type")!!
         val judgment = (template.instantiate("watcher-document-type") as Template.InstantiateResult.Created).judgment.choice
-        val engine = DecisionEngine(backend, Probability.of(0.5))
+        val engine = DecisionEngine(
+            backend, Probability.of(policy.threshold(EXPIRY_THRESHOLD)),
+            stateBudget = policy.budget(DecisionEngine.DEFAULT_STATE_BUDGET),
+        )
         return ExpiryRadar.scan(candidates.map { it.toItem() }, judgment, engine, rule, today, judgment.candidates.toSet() - "none of these")
     }
 

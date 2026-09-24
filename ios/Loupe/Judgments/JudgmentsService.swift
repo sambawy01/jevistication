@@ -55,13 +55,16 @@ final class JudgmentsService: ObservableObject {
     let ledger: LedgerService
     private let items: () -> [SourceItem]
     private let model: JudgmentModelProvider
+    private let settings: ModelSettingsSource
     private var bridge: SweepBridge?
     private var loaded = false
 
-    init(ledger: LedgerService, items: @escaping () -> [SourceItem], model: JudgmentModelProvider) {
+    init(ledger: LedgerService, items: @escaping () -> [SourceItem], model: JudgmentModelProvider,
+         settings: ModelSettingsSource = ModelSettingsService.shared) {
         self.ledger = ledger
         self.items = items
         self.model = model
+        self.settings = settings
     }
 
     var running: Bool { sweep?.running == true }
@@ -172,22 +175,28 @@ final class JudgmentsService: ObservableObject {
     /// unless `rerunAll`. Laya runs on a background queue; rows go to the ledger as it goes.
     func startSweep(_ id: String, rerunAll: Bool = false) async {
         guard let j = judgment(id), !running else { return }
-        guard model.isInstalled else {
-            gate = .notInstalled
-            notice = "The model is not installed, so nothing was judged."
-            return
+        // Model settings, read now: a change applies to the next run, with no restart.
+        let policy = settings.policy(Features.shared.JUDGMENTS)
+        var backend: Backend?
+        if policy.useLaya {
+            guard model.isInstalled else {
+                gate = .notInstalled
+                notice = "The model is not installed, so nothing was judged."
+                return
+            }
+            guard let b = await model.backend() else {
+                gate = model.failure.map { .failed($0) } ?? .notInstalled
+                return
+            }
+            backend = b
+            gate = .ready
         }
-        guard let backend = await model.backend() else {
-            gate = model.failure.map { .failed($0) } ?? .notInstalled
-            return
-        }
-        gate = .ready
         let all = items()
         if all.isEmpty {
             notice = "No items scanned yet. Turn on the sample in Sources."
             return
         }
-        let plan = JudgmentResults.shared.plan(all: ledger.allRows(), judgment: j, items: all, rerunAll: rerunAll)
+        let plan = JudgmentResults.shared.planFor(all: ledger.allRows(), judgment: j, items: all, rerunAll: rerunAll, layaOn: policy.useLaya)
         // Decision B: under Auto the baseline answers once it wins on the user's corrections.
         let auto = AutoBaseline.shared.verdict(all: ledger.allRows(), judgment: j, corrections: corrections, items: all).automatic
         let ledger = self.ledger
@@ -197,11 +206,12 @@ final class JudgmentsService: ObservableObject {
         self.bridge = bridge
         sweep = SweepProgress(judgmentId: j.id, total: Int32(plan.toJudge.count), done: 0, withoutText: plan.withoutText,
                               alreadyDecided: plan.alreadyDecided, mechanical: 0, unusable: 0, elapsedMillis: 0,
-                              medianMillis: nil, running: true, cancelled: false, error: nil)
+                              medianMillis: nil, running: true, cancelled: false, error: nil, layaOff: !policy.useLaya, noRule: 0)
         // On the one model thread, as foreground work: a passive sort in progress yields to it.
         let end: SweepProgress = await ModelWork.run(.foreground) {
-            JudgmentSweep(backend: backend).run(judgment: j, plan: plan, observer: bridge, autoBaseline: auto)
+            JudgmentSweep(backend: backend).runWith(judgment: j, plan: plan, observer: bridge, autoBaseline: auto, policy: policy)
         }
+        settings.recordRun(Features.shared.JUDGMENTS, layaOff: end.layaOff)
         ledger.flush()
         self.bridge = nil
         sweep = end
@@ -210,6 +220,9 @@ final class JudgmentsService: ObservableObject {
             notice = "The run stopped: \(e). What ran is saved."
         } else if end.cancelled {
             notice = "Cancelled after \(end.done) of \(end.total); what ran is saved."
+        } else if end.layaOff {
+            notice = "Finished with Laya off: \(end.done - end.noRule) item(s) answered by rules" +
+                (end.noRule > 0 ? ", \(end.noRule) left for a run with Laya (no rule covers them)." : ".")
         } else {
             notice = "Finished: \(end.done) item(s) judged."
         }

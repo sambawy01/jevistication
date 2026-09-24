@@ -94,6 +94,7 @@ final class SortService: ObservableObject {
     let conditions: DeviceConditions
     private let defaults: UserDefaults
     private let lane: ModelLane
+    private let settings: ModelSettingsSource
     private var bridge: CoordinatorBridge?
     /// Counts carried across a preempted run and its resumption, so the card shows the whole run.
     private var carried: (sorted: Int, needYou: Int)?
@@ -103,7 +104,9 @@ final class SortService: ObservableObject {
     static let lastKey = "sort.last"
 
     init(ledger: LedgerService, judgments: @escaping () -> [UserJudgment], items: @escaping () -> [SourceItem],
-         model: JudgmentModelProvider, conditions: DeviceConditions, defaults: UserDefaults, lane: ModelLane) {
+         model: JudgmentModelProvider, conditions: DeviceConditions, defaults: UserDefaults, lane: ModelLane,
+         settings: ModelSettingsSource = ModelSettingsService.shared) {
+        self.settings = settings
         self.ledger = ledger
         self.judgments = judgments
         self.items = items
@@ -123,8 +126,18 @@ final class SortService: ObservableObject {
     func run(_ trigger: SortTrigger) async -> Outcome {
         guard !running else { return .busy }
         if let b = conditions.blocker { return skip(Self.words(b) + " Sorting waits.") }
-        guard model.isInstalled, let backend = await model.backend() else {
-            return skip("The model is not installed, so nothing was sorted.")
+        // Model settings for this run: with judgments' Laya off the rules sort without the model
+        // (the watchers still use it when it is on for them and installed).
+        let snapshot = settings.current
+        let sweepsUseLaya = snapshot.useLaya(feature: Features.shared.JUDGMENTS)
+        var backend: Backend?
+        if sweepsUseLaya {
+            guard model.isInstalled, let b = await model.backend() else {
+                return skip("The model is not installed, so nothing was sorted.")
+            }
+            backend = b
+        } else if snapshot.useLaya(feature: Features.shared.WATCHERS), model.isInstalled {
+            backend = await model.backend()
         }
         let js = judgments()
         if js.isEmpty { return skip("No judgments yet. Add one in Judgments, then sort.") }
@@ -150,9 +163,14 @@ final class SortService: ObservableObject {
         // Queued without a claim: a sweep is the lowest priority and never makes anything wait.
         let result: CoordinatorResult = await withCheckedContinuation { c in
             ModelWork.queue.async {
-                c.resume(returning: coordinator.run(judgments: js, items: all, ledger: rows, todayIso: today, observer: bridge, corrections: corrections))
+                let r = coordinator.runWith(judgments: js, items: all, ledger: rows, todayIso: today, observer: bridge,
+                                            corrections: corrections, settings: snapshot)
+                ModelWork.runEnded()
+                c.resume(returning: r)
             }
         }
+        settings.recordRun(Features.shared.JUDGMENTS, layaOff: !sweepsUseLaya)
+        if result.watchers != nil { settings.recordRun(Features.shared.WATCHERS, layaOff: result.layaOff.contains(Features.shared.WATCHERS)) }
         ledger.flush()
         afterRun?()
         self.bridge = nil

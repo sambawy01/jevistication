@@ -31,9 +31,12 @@ final class PrivacyService: ObservableObject {
     let files: PrivacyFileActions
     private let photos: PhotoDeleting
     private let rescan: () async -> Void
+    private let settings: ModelSettingsSource
 
     init(ledger: LedgerService, items: @escaping () -> [SourceItem], locator: PrivacyLocating,
-         files: PrivacyFileActions, photos: PhotoDeleting, rescan: @escaping () async -> Void = {}) {
+         files: PrivacyFileActions, photos: PhotoDeleting, rescan: @escaping () async -> Void = {},
+         settings: ModelSettingsSource = ModelSettingsService.shared) {
+        self.settings = settings
         self.ledger = ledger
         self.items = items
         self.locator = locator
@@ -56,9 +59,13 @@ final class PrivacyService: ObservableObject {
         }
         let all = items()
         let corrections = ledger.correctionIndex()
+        // Model settings (`features.scan`): read_content off checks names, folders and duplicates only.
+        let readContent = settings.current.readContent
         summary = await ModelWork.run(.sweep) {
-            PrivacyCheck.shared.summariseToday(items: all, sampleSourceIds: [SourcesService.sampleId], corrections: corrections)
+            PrivacyCheck.shared.summariseWith(items: all, sampleSourceIds: [SourcesService.sampleId], corrections: corrections, readContent: readContent)
         }
+        // The check is rules on iPhone either way; use_laya off says so on screen, as Station's Folder Scan.
+        settings.recordRun(Features.shared.SCAN, layaOff: !settings.useLaya(Features.shared.SCAN))
     }
 
     func access(_ f: PrivacyFinding) -> PrivacyAccess { locator.access(for: f.itemId) }

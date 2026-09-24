@@ -19,8 +19,25 @@ enum ModelWork {
             queue.async {
                 let value = work()
                 claim.release()
+                runEnded()
                 c.resume(returning: value)
             }
         }
+    }
+
+    /// Laya under Model settings' memory mode, once opened (set by `LayaModel`).
+    static let memory = MemoryHolder()
+
+    /// After a run, on the model queue: `memory_mode = low` frees Laya straight away.
+    static func runEnded() {
+        guard let m = memory.get() else { return }
+        _ = m.afterRun(mode: ModelSettingsService.sharedStore.current.memoryMode, laneFree: lane.isFree())
+    }
+
+    final class MemoryHolder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var value: ModelMemory?
+        func set(_ m: ModelMemory?) { lock.lock(); value = m; lock.unlock() }
+        func get() -> ModelMemory? { lock.lock(); defer { lock.unlock() }; return value }
     }
 }

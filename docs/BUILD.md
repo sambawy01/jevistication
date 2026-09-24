@@ -581,6 +581,24 @@ their acceptance criteria are met; entries here record increments toward them.
   uncached local prefix hits, results cached per prefix for `cacheDuration`. Key sent as
   `X-Goog-Api-Key`, never in the URL; §4a rules unchanged. Shapes checked against Google's v5
   discovery document. `SafeBrowsingV5Tests` (Google's canonicalisation vectors and Rice example).
+- **2026-09-24 — Model settings on the iPhone, matching Loupe Station (schema v1).** Owner "Go":
+  both apps expose Laya's parameters the same way, after Station's Folder Scan ran with Laya
+  silently off. Shared `dev.loupe.kit.settings`: `EngineSettings` (Station's keys, types, enums,
+  ranges and defaults, plus feature ids `judgments`, `flights`, `game` and the key
+  `features.game.max_decisions_per_s`), validation and clamping, reset / reset_all, Station's GET/PUT
+  bodies, `engine_settings.json` in Application Support via `:persistence`, and `ModelMemory`
+  (`memory_mode` full / balanced / low as Laya's load-unload policy, `idle_unload_min` on a 30 s tick,
+  reload on next use, never under a decision). Consumers read a `RunPolicy` at each run:
+  `JudgmentSweep` (use_laya off → rules only, `mechanical:laya-off`, no model needed;
+  accept_confidence, text_chars, rules_first, baseline_switch), `SweepCoordinator`, `WatcherRun`,
+  `FlightJudge`, `PrivacyCheck` (read_content), the game pilot's budget and a decisions-per-second
+  cap. iOS: Me → Model settings (global + per-feature rows with value, default, trade-off, Reset;
+  Restore all with confirmation; EN + AR, RTL, Station's Arabic reused), and "Laya was off for this
+  run — answers come from rules only. Turn it on" on each feature's screen. Defaults equal the old
+  behaviour except `memory_mode` (balanced, owner decision; the phone used to keep Laya loaded).
+  No env/MDM on iOS. Full key list and mapping: `docs/MODEL-SETTINGS.md`. Tests:
+  `EngineSettingsTest`, `SettingsConsumersTest`, `ModelMemoryTest` (JVM + iOS simulator),
+  `LoupeTests/ModelSettingsTests.swift`, `LoupeUITests/ModelSettingsUITests.swift`.
 - **2026-09-24 — One phishing formula, automatic baseline, online phishing checks (owner decisions
   A–D).** Uncommitted pending review.
   - **A · One phishing / site formula** for Loupe and Loupe Station, written down in

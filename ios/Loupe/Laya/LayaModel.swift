@@ -19,7 +19,11 @@ final class LayaModel: ObservableObject {
         case failed(String)
     }
 
-    static let shared = LayaModel()
+    static let shared: LayaModel = {
+        let m = LayaModel()
+        m.startMemoryTicks()
+        return m
+    }()
 
     static let variantKey = "laya.variant"
     static let cellularKey = "laya.download.cellular"
@@ -37,7 +41,12 @@ final class LayaModel: ObservableObject {
     let directory: String?
     private let defaults: UserDefaults
     private(set) var downloader: ModelDownloader?
-    private var opened: LayaOnDevice?
+    /// Laya once opened, under Model settings' memory mode (LoupeKit `ModelMemory`): it may be
+    /// freed and is reloaded by the next decision. Nil until the first open.
+    private var memory: ModelMemory?
+    /// The settings the memory policy reads (the app's; tests pass their own).
+    var settings: () -> EngineSettings = { ModelSettingsService.sharedStore.current }
+    private var ticker: Timer?
 
     init(directory: String? = LayaOnPhone.shared.directory(),
          manifest: Result<ModelManifest, ModelManifest.Problem> = ModelManifest.bundled(),
@@ -92,7 +101,7 @@ final class LayaModel: ObservableObject {
 
     /// Re-reads whether the files are present; does not hash them.
     func refresh() {
-        if opened != nil { status = .ready; return }
+        if memory != nil { status = .ready; return }
         switch status {
         case .downloading, .verifying, .paused: return
         default: break
@@ -103,15 +112,17 @@ final class LayaModel: ObservableObject {
     /// The backend, verifying and opening on first use (off the main thread). Nil when not installed
     /// or when a file does not match its pin — the status then says why.
     func backend() async -> Backend? {
-        if let opened { return opened.backend }
+        if let memory { return memory.backend }
         guard let dir = directory, isInstalled else { status = .notInstalled; return nil }
         status = .checking
         let variant = variantID
         let result = await Task.detached(priority: .userInitiated) { LayaOnPhone.shared.open(directory: dir, variant: variant) }.value
         if let ready = result as? LayaOnPhone.OpenedReady {
-            opened = ready.laya
+            let m = LayaOnPhone.shared.memory(first: ready.laya, directory: dir, variant: variant)
+            memory = m
+            ModelWork.memory.set(m)
             status = .ready
-            return ready.laya.backend
+            return m.backend
         }
         status = .failed((result as? LayaOnPhone.OpenedFailed)?.message ?? "Could not open the model.")
         return nil
@@ -138,8 +149,7 @@ final class LayaModel: ObservableObject {
     /// Picks the graph variant (the downloaded files of the other one are kept until Remove).
     func select(variant id: String) {
         guard let m = manifest, let v = m.variant(id), id != variantID, !(downloader?.isActive ?? false) else { return }
-        opened?.close()
-        opened = nil
+        forgetMemory()
         variantID = id
         defaults.set(id, forKey: Self.variantKey)
         downloader?.select(v)
@@ -149,8 +159,7 @@ final class LayaModel: ObservableObject {
     /// Removes every model file and the partial download (and closes Laya). Everything else in
     /// Loupe keeps working. A new download asks for consent again.
     func remove() {
-        opened?.close()
-        opened = nil
+        forgetMemory()
         if let d = downloader {
             d.deleteModel()
         } else if let dir = directory {
@@ -158,6 +167,48 @@ final class LayaModel: ObservableObject {
         }
         status = .notInstalled
         refresh()
+    }
+
+    // MARK: Memory (Model settings' memory_mode and idle_unload_min)
+
+    /// True while Laya is in memory (it may have been freed since it was opened).
+    var isLoaded: Bool { memory?.isLoaded ?? false }
+
+    /// Frees Laya for good, on the model thread (never under a decision).
+    private func forgetMemory() {
+        guard let m = memory else { return }
+        memory = nil
+        ModelWork.memory.set(nil)
+        ModelWork.queue.async { m.forget() }
+    }
+
+    /// `memory_mode` or `idle_unload_min` changed: `full` loads Laya now (if it was opened before),
+    /// `low` frees it now if nothing is using the model; `balanced` waits for the next tick.
+    func memorySettingsChanged(_ s: EngineSettings) {
+        guard let m = memory else { return }
+        switch s.memoryMode {
+        case EngineSettings.companion.MEMORY_FULL:
+            ModelWork.queue.async { _ = m.ensureLoaded() }
+        case EngineSettings.companion.MEMORY_LOW:
+            ModelWork.queue.async { if ModelWork.lane.isFree() { _ = m.unload() } }
+        default:
+            maintainNow()
+        }
+        objectWillChange.send()
+    }
+
+    /// The 30-second memory tick (Station's "within 30 seconds"), on the model thread.
+    func maintainNow() {
+        guard let m = memory else { return }
+        let s = settings()
+        ModelWork.queue.async { _ = m.maintainWith(settings: s, laneFree: ModelWork.lane.isFree()) }
+    }
+
+    private func startMemoryTicks() {
+        ticker?.invalidate()
+        ticker = Timer.scheduledTimer(withTimeInterval: ModelMemory.companion.TICK_SECONDS, repeats: true) { _ in
+            Task { @MainActor in LayaModel.shared.maintainNow() }
+        }
     }
 
     private func apply(_ phase: ModelDownloader.Phase) {

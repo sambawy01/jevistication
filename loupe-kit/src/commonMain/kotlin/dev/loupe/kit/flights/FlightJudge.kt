@@ -153,9 +153,11 @@ class FlightJudge(
     /** The starting threshold for a two-option judgment (`UserJudgment.defaultThreshold`). */
     private val threshold: Double = DEFAULT_THRESHOLD,
     private val recalibrator: Recalibrator = Recalibrator.Identity,
+    /** Characters of offer text ([FlightState.BUDGET] unless `features.flights.text_chars` says otherwise). */
+    private val budget: Int = FlightState.BUDGET,
 ) {
     /** For Swift, which does not see Kotlin default arguments. */
-    constructor(backend: Backend) : this(backend, DEFAULT_THRESHOLD, Recalibrator.Identity)
+    constructor(backend: Backend) : this(backend, DEFAULT_THRESHOLD, Recalibrator.Identity, FlightState.BUDGET)
 
     fun judge(judgment: Judgment.Choice, offer: FlightFacts): OfferVerdict = decide(judgment, offer).verdict
 
@@ -168,7 +170,7 @@ class FlightJudge(
      * no rows; they are not model decisions.
      */
     fun decide(judgment: Judgment.Choice, offer: FlightFacts): FlightDecision {
-        val state = FlightState.of(offer)
+        val state = FlightState.of(offer, budget)
         val itemId = itemId(offer.id)
         val scored = runCatching { backend.score(judgment, state) }
         val raw = scored.mapCatching { judgment.validate(it.masses) }
@@ -217,6 +219,14 @@ class FlightJudge(
 
     companion object {
         const val DEFAULT_THRESHOLD: Double = 0.80
+
+        /**
+         * A judge under Model settings (`features.flights`): `accept_confidence` replaces the 0.80
+         * starting threshold and `text_chars` the 480-character budget. (`use_laya` off is the app's:
+         * it then ranks by the rules and asks no judge.)
+         */
+        fun forPolicy(backend: Backend, policy: dev.loupe.kit.settings.RunPolicy): FlightJudge =
+            FlightJudge(backend, policy.threshold(DEFAULT_THRESHOLD), Recalibrator.Identity, policy.budget(FlightState.BUDGET))
 
         /** The ledger source for flight offers (epic #6): offers come from Duffel via the helper. */
         const val SOURCE: String = "web:duffel"

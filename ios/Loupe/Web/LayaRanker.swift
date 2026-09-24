@@ -8,6 +8,8 @@ import LoupeKit
 struct LayaRanker: OfferRanker {
     let name = "Laya"
     let backend: Backend
+    /// Model settings for flights (threshold, text budget); the defaults are the old behaviour.
+    var policy: RunPolicy = RunPolicy.companion.defaults(feature: Features.shared.FLIGHTS)
 
     enum Failure: Error, Equatable {
         /// C2's lint refused the priorities text; the reasons are shown to the user.
@@ -35,7 +37,7 @@ struct LayaRanker: OfferRanker {
         }
         // Judge in the rule ranking's order, so a tie in Laya's answer falls back to the baseline.
         let baseline = RuleBasedRanker().rank(offers, by: p)
-        let judge = FlightJudge(backend: backend)
+        let judge = FlightJudge.companion.forPolicy(backend: backend, policy: policy)
         var verdicts: [OfferVerdict] = []
         var rows: [LedgerRow] = []
         progress(0, baseline.count)

@@ -8,6 +8,7 @@ struct MeView: View {
     @ObservedObject private var judgments = JudgmentsService.shared
     @ObservedObject private var assist = AssistService.shared
     @ObservedObject private var online = OnlineChecksService.shared
+    @ObservedObject private var settings = ModelSettingsService.shared
     @State private var exporting = false
     @State private var exportError: String?
     @State private var shared: SharedFile?
@@ -26,6 +27,10 @@ struct MeView: View {
                         row("Laya model", layaStatus)
                     }
                     .accessibilityIdentifier("me.model")
+                    NavigationLink { ModelSettingsView() } label: {
+                        row(MS.t("title"), settings.settings.changed.isEmpty ? "defaults" : "\(settings.settings.changed.count) changed")
+                    }
+                    .accessibilityIdentifier("me.modelSettings")
                     #if DEBUG || LOUPE_DIAGNOSTICS
                     if Self.showDiagnostics {
                         NavigationLink { DiagnosticsView() } label: { row("Diagnostics", "device check") }

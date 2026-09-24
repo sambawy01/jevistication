@@ -143,8 +143,22 @@ object JudgmentResults {
         judgment: UserJudgment,
         items: List<SourceItem>,
         rerunAll: Boolean,
+    ): SweepPlan = planFor(all, judgment, items, rerunAll, layaOn = true)
+
+    /**
+     * [plan] under Model settings: with Laya on ([layaOn]), items a rule answered while Laya was off
+     * (`mechanical:laya-off`) are not counted as decided, so Laya judges them on the next run.
+     */
+    fun planFor(
+        all: List<LedgerRow>,
+        judgment: UserJudgment,
+        items: List<SourceItem>,
+        rerunAll: Boolean,
+        layaOn: Boolean,
     ): SweepPlan {
-        val decided = if (rerunAll) emptySet() else effectiveRows(all, judgment, emptyMap()).mapNotNull { it.itemId }.toSet()
+        val decided = if (rerunAll) emptySet() else effectiveRows(all, judgment, emptyMap())
+            .filter { !(layaOn && it.resolvedBy == dev.loupe.engine.ResolvedBy.Mechanical(JudgmentSweep.LAYA_OFF_CHECK)) }
+            .mapNotNull { it.itemId }.toSet()
         val withText = items.filter { it.hasText }
         val todo = withText.filter { it.id !in decided }
         return SweepPlan(todo, items.size - withText.size, withText.size - todo.size)

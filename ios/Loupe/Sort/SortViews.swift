@@ -31,6 +31,7 @@ struct SortSection: View {
                 Text(notice).font(.footnote).foregroundStyle(Palette.inkSoft)
                     .accessibilityIdentifier("me.sort.notice")
             }
+            LayaOffBanner(feature: Features.shared.JUDGMENTS)
             if let last = sort.last {
                 Text("Last run: \(last.line)\(last.finished ? "" : " (stopped early)") · \(last.at.formatted(.relative(presentation: .named)))")
                     .font(.footnote).foregroundStyle(Palette.ink)

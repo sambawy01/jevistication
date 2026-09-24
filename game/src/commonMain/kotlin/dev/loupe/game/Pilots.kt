@@ -146,6 +146,8 @@ fun closestLegal(preferred: Action, legal: List<Action>): Action {
 class ModelPilot(
     private val backend: Backend,
     val question: String = QUESTION,
+    /** Characters of state (Model settings' `features.game.text_chars`; [STATE_BUDGET] by default). */
+    private val stateBudget: Int = STATE_BUDGET,
 ) : Pilot {
     override val name: String = "model"
 
@@ -160,7 +162,7 @@ class ModelPilot(
             candidates = legal.map { it.label },
             onFailure = FailurePosture.NULL_ACTION,
         )
-        val state = TextState.build(listOf("river" to StateText.describe(observation)), STATE_BUDGET)
+        val state = TextState.build(listOf("river" to StateText.describe(observation)), stateBudget)
         val started = GameClock.nanoTime()
         val validated = runCatching { judgment.validate(backend.score(judgment, state).masses) }
         val latency = GameClock.nanoTime() - started

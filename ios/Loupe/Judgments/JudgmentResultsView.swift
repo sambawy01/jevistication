@@ -16,6 +16,7 @@ struct JudgmentResultsView: View {
             if let j = service.judgment(judgmentId) {
                 LazyVStack(alignment: .leading, spacing: 12) {
                     header(j)
+                    LayaOffBanner(feature: Features.shared.JUDGMENTS)
                     modelCard(j)
                     if let s = service.sweep, s.judgmentId == j.id { sweepCard(s) }
                     criteriaCard(j)

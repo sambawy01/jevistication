@@ -46,6 +46,7 @@ struct MailTriageView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Loupe Station's mail rules, read on this iPhone: a category from keyword rules, and a phishing verdict only from evidence a scam cannot hide — the sender's domain, the name it shows, where replies go, the mail server's checks and where links really go. The wording alone never flags an email.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
+                LayaOffBanner(feature: Features.shared.EMAIL)
                 if let notice = mail.notice {
                     HStack {
                         Text(notice).font(.caption).foregroundStyle(Palette.inkSoft)
@@ -167,6 +168,7 @@ struct MailTriageView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Links in your items").font(Typeface.display(20)).foregroundStyle(Palette.ink)
                 .accessibilityIdentifier("mail.section.links")
+            LayaOffBanner(feature: Features.shared.BROWSER)
             Text("Site checks on web links found outside mail: one verdict from the phishing formula Loupe shares with Loupe Station, with the signals behind it.")
                 .font(.caption).foregroundStyle(Palette.inkSoft)
             ForEach(Array(links.enumerated()), id: \.offset) { _, l in

@@ -1,4 +1,5 @@
 import SwiftUI
+import LoupeKit
 
 struct ResultsView: View {
     @EnvironmentObject private var web: WebModel
@@ -117,7 +118,9 @@ struct ResultsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(rulesText(why)).font(.footnote).foregroundStyle(Palette.ink)
                     .accessibilityIdentifier("results.rulesOnly")
-                if case .prioritiesRefused = why {} else {
+                if case .layaOff = why {
+                    LayaOffBanner(feature: Features.shared.FLIGHTS)
+                } else if case .prioritiesRefused = why {} else {
                     NavigationLink("Get the on-device model") { LayaModelView() }
                         .font(.footnote.weight(.semibold))
                         .accessibilityIdentifier("results.getModel")
@@ -140,6 +143,8 @@ struct ResultsView: View {
             return "Ranked by the rules only: the on-device model could not be used (\(m))."
         case .prioritiesRefused(let reasons):
             return "Ranked by the rules only: Laya cannot use these priorities (\(reasons.joined(separator: "; ")))."
+        case .layaOff:
+            return "Ranked by the rules only: Laya is off for flights in Model settings."
         }
     }
 

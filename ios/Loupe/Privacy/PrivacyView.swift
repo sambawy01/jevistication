@@ -40,6 +40,7 @@ struct PrivacyView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Loupe Station's checks for ID numbers, card numbers, IBANs, contact lists, keys and tokens, and exact duplicate files. Read on this iPhone; nothing leaves it. Values are masked: only a first character is ever shown.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
+                LayaOffBanner(feature: Features.shared.SCAN)
                 if let notice = privacy.notice { noticeRow(notice) }
                 if let s = privacy.summary {
                     if s.findings.isEmpty {
@@ -67,6 +68,14 @@ struct PrivacyView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if privacy.summary == nil { await privacy.run() } }
         .refreshable { await privacy.run() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { Task { await privacy.run() } } label: { Image(systemName: "arrow.clockwise") }
+                    .disabled(privacy.running)
+                    .accessibilityLabel("Check again")
+                    .accessibilityIdentifier("privacy.rerun")
+            }
+        }
         .onDisappear { privacy.commitPending() }
         .sheet(item: $openItem) { ItemTextView(item: $0) }
         .sheet(item: $moving) { f in

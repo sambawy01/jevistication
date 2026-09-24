@@ -201,6 +201,17 @@ object PrivacyCheck {
     fun summariseToday(items: List<SourceItem>, sampleSourceIds: Set<String>, corrections: Map<CorrectionKey, String>): PrivacySummary =
         summarise(items, sampleSourceIds, corrections)
 
+    /**
+     * [summariseToday] under Model settings: with `features.scan.read_content` off only names,
+     * folders and exact duplicates (by the hash taken at scan time) are checked — no text is read,
+     * so the personal-data and secret rules find nothing in file contents. On is what always ran.
+     */
+    fun summariseWith(items: List<SourceItem>, sampleSourceIds: Set<String>, corrections: Map<CorrectionKey, String>, readContent: Boolean): PrivacySummary =
+        summarise(if (readContent) items else withoutContent(items), sampleSourceIds, corrections)
+
+    /** The items with their text withheld (`read_content` off). */
+    fun withoutContent(items: List<SourceItem>): List<SourceItem> = items.map { it.copy(text = "", hasText = false, textTruncated = false) }
+
     /** "Mark safe": remembered as an appended correction, never rewritten. */
     fun markSafe(finding: PrivacyFinding, at: String): CorrectionRecord =
         CorrectionRecord(JUDGMENT_ID, CRITERIA, finding.key, SAFE, at, false)

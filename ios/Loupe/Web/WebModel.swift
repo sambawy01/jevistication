@@ -15,7 +15,7 @@ final class WebModel: ObservableObject {
         case rulesOnly(RulesReason)
         case cancelled
     }
-    enum RulesReason: Equatable { case modelNotInstalled, modelFailed(String), prioritiesRefused([String]) }
+    enum RulesReason: Equatable { case modelNotInstalled, modelFailed(String), prioritiesRefused([String]), layaOff }
 
     // Settings (persisted, local only)
     @Published var helperEnabled: Bool { didSet { defaults.set(helperEnabled, forKey: "web.helperEnabled") } }
@@ -48,6 +48,7 @@ final class WebModel: ObservableObject {
     private let ledger: LedgerService
     private var rankTask: Task<Void, Never>?
     private let defaults: UserDefaults
+    private let settings: ModelSettingsSource
     private var bag: Set<AnyCancellable> = []
 
     init(helper: FlightsHelper, keys: KeyStore, connectivity: Connectivity,
@@ -55,7 +56,9 @@ final class WebModel: ObservableObject {
          laya: @escaping () async -> Backend? = { await LayaModel.shared.backend() },
          ledger: LedgerService = .shared,
          fixtureMode: Bool = false, autoSearch: Bool = false,
-         defaults: UserDefaults = .standard) {
+         defaults: UserDefaults = .standard,
+         settings: ModelSettingsSource = ModelSettingsService.shared) {
+        self.settings = settings
         self.defaults = defaults
         self.helperEnabled = defaults.object(forKey: "web.helperEnabled") as? Bool ?? true
         self.flightsEnabled = defaults.object(forKey: "web.flightsEnabled") as? Bool ?? true
@@ -156,6 +159,10 @@ final class WebModel: ObservableObject {
     private func startLayaRanking(_ offers: [Offer]) {
         rankTask?.cancel()
         let priorities = self.priorities
+        // Model settings (`features.flights`), read per search: off, the rules rank and Laya is not opened.
+        let policy = settings.policy(Features.shared.FLIGHTS)
+        settings.recordRun(Features.shared.FLIGHTS, layaOff: !policy.useLaya)
+        guard policy.useLaya else { finishRules(.layaOff); return }
         ranking = .running(done: 0, total: offers.count)
         rankTask = Task { [weak self, laya] in
             guard let backend = await laya() else {
@@ -165,7 +172,7 @@ final class WebModel: ObservableObject {
                 self?.finishRules(failed.map { .modelFailed($0) } ?? .modelNotInstalled)
                 return
             }
-            let ranker = LayaRanker(backend: backend)
+            let ranker = LayaRanker(backend: backend, policy: policy)
             let ledger = self?.ledger
             // On the one model thread, as foreground work: a passive sort in progress yields to it.
             let work = Task.detached(priority: .userInitiated) { () -> Result<[RankedOffer], Error> in

@@ -90,6 +90,7 @@ final class GameController: ObservableObject {
     private let backendProvider: @MainActor () async -> Backend?
     private let modelInstalled: @MainActor () -> Bool
     private let executor: PilotExecutor
+    private let settings: ModelSettingsSource
     private let returnToSimulation: (@escaping () -> Void) -> Void
 
     private let hitHaptic = UIImpactFeedbackGenerator(style: .light)
@@ -106,7 +107,9 @@ final class GameController: ObservableObject {
          backendProvider: @escaping @MainActor () async -> Backend? = { await LayaModel.shared.backend() },
          modelInstalled: @escaping @MainActor () -> Bool = { LayaModel.shared.isInstalled },
          executor: PilotExecutor = QueuePilotExecutor.shared,
-         returnToSimulation: @escaping (@escaping () -> Void) -> Void = { w in DispatchQueue.main.async(execute: w) }) {
+         returnToSimulation: @escaping (@escaping () -> Void) -> Void = { w in DispatchQueue.main.async(execute: w) },
+         settings: ModelSettingsSource = ModelSettingsService.shared) {
+        self.settings = settings
         self.mode = mode
         self.seed = seed
         self.backendProvider = backendProvider
@@ -137,6 +140,13 @@ final class GameController: ObservableObject {
             pilot = .you
             begin(session: GameSessions.shared.human(seed: seed), scheduler: nil, shadow: nil)
         case .watch:
+            // Model settings (`features.game`), read at each start: off, the baseline flies.
+            let layaOn = settings.useLaya(Features.shared.GAME)
+            settings.recordRun(Features.shared.GAME, layaOff: !layaOn)
+            if !layaOn {
+                flyBaseline(reason: MS.t("banner.game"))
+                return
+            }
             if !modelInstalled() {
                 flyBaseline(reason: "The Laya model isn't on this phone, so the baseline autopilot is flying.")
                 return
@@ -168,8 +178,14 @@ final class GameController: ObservableObject {
         // While Laya flies, the game holds the model lane: a passive sort pauses (and resumes after).
         modelClaim?.release()
         modelClaim = ModelWork.lane.claim(priority: .game)
-        let decider = GameSessions.shared.modelDecider(backend: backend)
+        let policy = settings.policy(Features.shared.GAME)
+        let decider = GameSessions.shared.modelDeciderWithBudget(backend: backend, stateBudget: Int32(policy.budget(builtIn: ModelPilot.companion.STATE_BUDGET)))
         let scheduler = PilotScheduler(decider: decider, executor: executor, returnToSimulation: returnToSimulation)
+        let source = settings
+        // Read live on the simulation (main) thread, so a change applies mid-run.
+        scheduler.maxPerSecond = { [weak source] in
+            MainActor.assumeIsolated { source?.current.gameMaxDecisionsPerS?.doubleValue }
+        }
         begin(session: GameSessions.shared.hosted(seed: seed, decider: decider,
                                                   decisionInterval: GameSession.companion.DEFAULT_DECISION_INTERVAL),
               scheduler: scheduler,

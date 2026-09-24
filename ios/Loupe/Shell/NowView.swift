@@ -150,6 +150,7 @@ struct NowView: View {
                 .padding(.horizontal, 4)
             }
             if let summary = watchers.summary, !(sources.scanning || watchers.running) || !summary.findings.isEmpty {
+                LayaOffBanner(feature: Features.shared.WATCHERS)
                 if summary.findings.isEmpty {
                     if summary.itemsChecked == 0 {
                         HonestEmptyState(
@@ -171,7 +172,8 @@ struct NowView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Findings").font(Typeface.display(24)).foregroundStyle(Palette.ink)
                         Spacer()
-                        Text(summary.modelRan ? "Laya + arithmetic" : "Mechanical only · model not installed")
+                        Text(summary.modelRan ? "Laya + arithmetic"
+                             : ModelSettingsService.shared.wasLayaOff(Features.shared.WATCHERS) ? "Mechanical only · Laya off" : "Mechanical only · model not installed")
                             .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                     }
                     .padding(.horizontal, 4)

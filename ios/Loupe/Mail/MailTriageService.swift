@@ -22,8 +22,11 @@ final class MailTriageService: ObservableObject {
     private let ledger: LedgerService
     private let items: () -> [SourceItem]
     private let online: OnlineChecksService
+    private let settings: ModelSettingsSource
 
-    init(ledger: LedgerService, items: @escaping () -> [SourceItem], online: OnlineChecksService = .shared) {
+    init(ledger: LedgerService, items: @escaping () -> [SourceItem], online: OnlineChecksService = .shared,
+         settings: ModelSettingsSource = ModelSettingsService.shared) {
+        self.settings = settings
         self.ledger = ledger
         self.items = items
         self.online = online
@@ -50,6 +53,9 @@ final class MailTriageService: ObservableObject {
         summary = await ModelWork.run(.sweep) {
             MailTriage.shared.summariseOnline(items: all, raws: raws, corrections: corrections, online: context)
         }
+        // Triage and site checks are rules on iPhone either way; Model settings' use_laya off says so on screen.
+        settings.recordRun(Features.shared.EMAIL, layaOff: !settings.useLaya(Features.shared.EMAIL))
+        settings.recordRun(Features.shared.BROWSER, layaOff: !settings.useLaya(Features.shared.BROWSER))
     }
 
     /// The `.eml` source of each mail item the phone can read (one file per message: the sample's

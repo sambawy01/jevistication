@@ -5,6 +5,8 @@ import dev.loupe.engine.LedgerRow
 import dev.loupe.kit.judgments.JudgmentResults
 import dev.loupe.kit.judgments.JudgmentSweep
 import dev.loupe.kit.measure.AutoBaseline
+import dev.loupe.kit.settings.EngineSettings
+import dev.loupe.kit.settings.Features
 import dev.loupe.persistence.CorrectionKey
 import dev.loupe.kit.judgments.SweepObserver
 import dev.loupe.kit.judgments.SweepPlan
@@ -80,6 +82,8 @@ data class CoordinatorResult(
     val watchers: WatcherReport?,
     /** The first sweep error, if any judgment's sweep failed (the others still ran). */
     val error: String?,
+    /** Features that ran with `use_laya` off (`judgments`, `watchers`): their screens show the banner. */
+    val layaOff: List<String> = emptyList(),
 ) {
     val finished: Boolean get() = stopped == null
 }
@@ -109,7 +113,7 @@ interface CoordinatorObserver {
  * claim, and if so stops with [StopReason.PREEMPTED]: foreground work and the game never wait more
  * than one item for the model.
  */
-class SweepCoordinator(private val backend: Backend, private val lane: ModelLane) {
+class SweepCoordinator(private val backend: Backend?, private val lane: ModelLane) {
 
     /** The per-judgment plans for a run, skipping what is already decided under the current wording. */
     fun plans(judgments: List<UserJudgment>, items: List<SourceItem>, ledger: List<LedgerRow>): List<Pair<UserJudgment, SweepPlan>> {
@@ -125,16 +129,39 @@ class SweepCoordinator(private val backend: Backend, private val lane: ModelLane
         todayIso: String,
         observer: CoordinatorObserver,
         corrections: Map<CorrectionKey, String> = emptyMap(),
+    ): CoordinatorResult = runWith(judgments, items, ledger, todayIso, observer, corrections, EngineSettings.DEFAULTS)
+
+    /**
+     * [run] under Model settings: `features.judgments` for every sweep, `features.watchers` for the
+     * watchers (with its `use_laya` off the expiry radar's model half does not run). The backend may
+     * be null only when neither feature uses Laya.
+     */
+    fun runWith(
+        judgments: List<UserJudgment>,
+        items: List<SourceItem>,
+        ledger: List<LedgerRow>,
+        todayIso: String,
+        observer: CoordinatorObserver,
+        corrections: Map<CorrectionKey, String>,
+        settings: EngineSettings,
     ): CoordinatorResult {
+        val sweepPolicy = settings.policy(Features.JUDGMENTS)
+        val watchPolicy = settings.policy(Features.WATCHERS)
+        val layaOff = listOfNotNull(
+            Features.JUDGMENTS.takeIf { !sweepPolicy.useLaya && judgments.isNotEmpty() },
+            Features.WATCHERS.takeIf { !watchPolicy.useLaya },
+        )
         val mark = TimeSource.Monotonic.markNow()
-        val plans = plans(judgments, items, ledger)
+        val judgeable = items.filter { it.kind != ItemKind.CONTACT }
+        val plans = judgments.map { it to JudgmentResults.planFor(ledger, it, judgeable, rerunAll = false, layaOn = sweepPolicy.useLaya) }
         val total = plans.sumOf { it.second.toJudge.size }
         val skipped = plans.sumOf { it.second.alreadyDecided }
         val latencies = ArrayList<Long>()
-        val timed = Backend { j, state ->
+        val model = backend
+        val timed: Backend? = if (model == null) null else Backend { j, state ->
             val t0 = TimeSource.Monotonic.markNow()
             try {
-                backend.score(j, state)
+                model.score(j, state)
             } finally {
                 latencies += t0.elapsedNow().inWholeNanoseconds
             }
@@ -163,7 +190,7 @@ class SweepCoordinator(private val backend: Backend, private val lane: ModelLane
             val base = doneBefore
             // Decision B: under Auto, the baseline answers once it wins on the user's corrections.
             val auto = AutoBaseline.verdict(ledger, judgment, corrections, items).automatic
-            val end: SweepProgress = JudgmentSweep(timed).run(judgment, plan, autoBaseline = auto, observer = object : SweepObserver {
+            val end: SweepProgress = JudgmentSweep(timed).runWith(judgment, plan, autoBaseline = auto, policy = sweepPolicy, observer = object : SweepObserver {
                 override fun onSweepProgress(progress: SweepProgress) {
                     observer.onCoordinatorProgress(progress(judgment.id, base + progress.done, running = true))
                 }
@@ -186,7 +213,7 @@ class SweepCoordinator(private val backend: Backend, private val lane: ModelLane
         var report: WatcherReport? = null
         if (stopped == null) {
             observer.onCoordinatorProgress(progress(null, doneBefore, running = true, watching = true))
-            report = runCatching { WatcherRun.runIso(items, todayIso, timed) }
+            report = runCatching { WatcherRun.runIsoWith(items, todayIso, timed, watchPolicy) }
                 .onFailure { if (error == null) error = "watchers: ${it.message ?: it::class.simpleName}" }
                 .getOrNull()
         }
@@ -195,6 +222,6 @@ class SweepCoordinator(private val backend: Backend, private val lane: ModelLane
         } ?: 0
         val last = progress(null, doneBefore, running = false)
         observer.onCoordinatorProgress(last)
-        return CoordinatorResult(last, SortSummary(sorted, needYou, skipped, findings), stopped, report, error)
+        return CoordinatorResult(last, SortSummary(sorted, needYou, skipped, findings), stopped, report, error, layaOff)
     }
 }

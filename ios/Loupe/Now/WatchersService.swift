@@ -24,9 +24,12 @@ final class WatchersService: ObservableObject {
     private let items: () -> [SourceItem]
     private let model: JudgmentModelProvider
     private let seen: UserDefaults
+    private let settings: ModelSettingsSource
     private static let seenKey = "watchers.seenKeys"
 
-    init(ledger: LedgerService, items: @escaping () -> [SourceItem], model: JudgmentModelProvider, seen: UserDefaults) {
+    init(ledger: LedgerService, items: @escaping () -> [SourceItem], model: JudgmentModelProvider, seen: UserDefaults,
+         settings: ModelSettingsSource = ModelSettingsService.shared) {
+        self.settings = settings
         self.ledger = ledger
         self.items = items
         self.model = model
@@ -44,12 +47,14 @@ final class WatchersService: ObservableObject {
         running = true
         defer { running = false }
         let all = items()
-        let backend: Backend? = model.isInstalled ? await model.backend() : nil
+        // Model settings: with the watchers' Laya off the mechanical half runs alone.
+        let policy = settings.policy(Features.shared.WATCHERS)
+        let backend: Backend? = policy.useLaya && model.isInstalled ? await model.backend() : nil
         let todayIso = Self.isoDay(today)
         let corrections = ledger.correctionIndex()
         // On the one model thread (the expiry radar may ask Laya); foreground, so a sort yields.
         let result: WatcherSummary = await ModelWork.run(.foreground) {
-            let report = WatcherRun.shared.runIso(items: all, todayIso: todayIso, backend: backend)
+            let report = WatcherRun.shared.runIsoWith(items: all, todayIso: todayIso, backend: backend, policy: policy)
             return WatcherFindings.shared.summarise(report: report, items: all,
                                                     sampleSourceIds: [SourcesService.sampleId],
                                                     corrections: corrections)
@@ -58,6 +63,7 @@ final class WatchersService: ObservableObject {
         let before = Set(seen.stringArray(forKey: Self.seenKey) ?? [])
         newCount = keys.subtracting(before).count
         seen.set(Array(before.union(keys)).sorted(), forKey: Self.seenKey)
+        settings.recordRun(Features.shared.WATCHERS, layaOff: !policy.useLaya)
         summary = result
     }
 

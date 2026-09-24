@@ -21,6 +21,10 @@ object GameSessions {
     /** The Laya pilot over [backend] — the same [ModelPilot] the desktop game flies. */
     fun modelDecider(backend: Backend): HostedDecider = HostedDecider(ModelPilot(backend))
 
+    /** [modelDecider] with a state budget in characters (Model settings' `features.game.text_chars`). */
+    fun modelDeciderWithBudget(backend: Backend, stateBudget: Int): HostedDecider =
+        HostedDecider(ModelPilot(backend, ModelPilot.QUESTION, stateBudget))
+
     /** The baseline behind a [HostedDecider], for a host that wants one code path for both. */
     fun baselineDecider(): HostedDecider = HostedDecider(BaselinePilot())
 

@@ -27,6 +27,11 @@ final class PilotScheduler {
     private(set) var inFlight = false
     private(set) var dispatched = 0
     private(set) var landed = 0
+    /// Model settings' `features.game.max_decisions_per_s`, read every tick (nil = no cap): a
+    /// requested decision waits until the cap allows it; the safety override still steers meanwhile.
+    var maxPerSecond: () -> Double? = { nil }
+    var now: () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    private var lastDispatch: TimeInterval?
 
     init(decider: HostedDecider,
          executor: PilotExecutor = QueuePilotExecutor.shared,
@@ -38,7 +43,10 @@ final class PilotScheduler {
 
     /// Call after every `session.tick()`, on the simulation thread.
     func afterTick() {
-        guard !inFlight, !decider.closed, let observation = decider.take() else { return }
+        guard !inFlight, !decider.closed else { return }
+        if let cap = maxPerSecond(), cap > 0, let last = lastDispatch, now() - last < 1 / cap { return }
+        guard let observation = decider.take() else { return }
+        lastDispatch = now()
         inFlight = true
         dispatched += 1
         let decider = self.decider
