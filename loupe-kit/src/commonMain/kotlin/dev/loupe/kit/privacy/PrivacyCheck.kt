@@ -111,11 +111,17 @@ object PrivacyCheck {
         }
     }
 
+    /** One clean chip per signal: "Payment card ×1" (owner 2026-09-24: no nested previews). */
+    fun chip(sg: PiiSignal): String = PiiRules.chip(sg.type, if (sg.distinct != 0) sg.distinct else sg.count)
+
     private fun title(sg: PiiSignal): String = when (sg.type) {
         "contact_list" -> "Looks like a contact list"
         "payroll_headers" -> "Payroll column headers"
-        else -> signalText(sg).replaceFirstChar { it.uppercase() }
+        else -> chip(sg)
     }
+
+    /** Text read by OCR (a photo, a scanned PDF): the card rule is stricter for it. */
+    fun isOcr(item: SourceItem): Boolean = PrivacyEvidence.isOcr(item.kind == ItemKind.IMAGE, item.facts["text"])
 
     /** Every finding in [items], before the user's verdicts. */
     fun findings(items: List<SourceItem>, sampleSourceIds: Set<String>, today: LocalDate = PiiRules.systemToday()): List<PrivacyFinding> {
@@ -144,11 +150,11 @@ object PrivacyCheck {
             }
 
             // ---- personal and business data in the text
-            val signals = if (item.hasText) PiiCollector(today).also { it.scan(item.text) }.signals() else emptyList()
+            val signals = if (item.hasText) PiiCollector(today, isOcr(item)).also { it.scan(item.text) }.signals() else emptyList()
             val personal = signals.filter { it.type in PiiRules.PERSONAL_SIGNALS }
             val business = signals.filter { it.type in PiiRules.BUSINESS_SIGNALS }
             if (personal.isNotEmpty()) {
-                val message = "Personal data: " + personal.joinToString(", ") { signalText(it) }
+                val message = "Personal data: " + personal.joinToString(", ") { chip(it) }
                 for (sg in personal) {
                     out += finding(sg.type, groupFor(sg.type), "personal_exposed", title(sg), sg.previews, message)
                 }
@@ -161,7 +167,7 @@ object PrivacyCheck {
                 }
             }
             if (business.isNotEmpty()) {
-                val message = "Business data: " + business.joinToString(", ") { signalText(it) }
+                val message = "Business data: " + business.joinToString(", ") { chip(it) }
                 for (sg in business) {
                     out += finding(sg.type, groupFor(sg.type), "business_exposed", title(sg), sg.previews, message)
                 }

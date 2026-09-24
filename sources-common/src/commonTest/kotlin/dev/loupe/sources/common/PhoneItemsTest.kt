@@ -21,7 +21,7 @@ class PhoneItemsTest {
         assertEquals(PhoneSourceIds.PHOTOS, i.sourceId)
         assertEquals(ItemKind.IMAGE, i.kind)
         assertTrue(i.hasText)
-        assertEquals("Screenshot: IMG_0042.PNG\n\nReceipt\nTotal £12.40 paid by card", i.text)
+        assertEquals("Screenshot (text recognised): IMG_0042.PNG\n\nReceipt\nTotal £12.40 paid by card", i.text)
         assertEquals("yes", i.facts["screenshot"])
         assertEquals(LocalDate(2026, 9, 1), i.date)
         assertEquals(DateOrigin.PHOTO_CREATED, i.dateOrigin)

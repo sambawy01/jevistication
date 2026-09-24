@@ -1012,6 +1012,37 @@ their acceptance criteria are met; entries here record increments toward them.
   **Trap found:** `"\r\n"` is one Swift `Character`, so a `Character` check for CR/LF in an IMAP
   quoted string misses it — check `unicodeScalars`.
 
+- **2026-09-24 — Verify every item a result names (owner rule).** **Owner rule, 2026-09-24,
+  confirmed by the owner: any result that refers to a file must give the user a way to verify
+  it — the extracted evidence, or a way to open the file.** Prompted by Loupe Station: "Personal
+  data: 1 payment card number" on IMG_1507.HEIC (OCR) that could not be checked, a garbled chip
+  ("payment card number ×1 (2… (payment card number))") and the photo filed as "Code / Tech".
+  Audited and fixed on the iPhone: privacy check, Now's watcher findings, mail triage (messages
+  and site checks on links), judgment results (row and detail), the Unsure queue, the Review queue
+  (watcher proposals find their item through the finding) and the Inbox (through the shared item sheet). Each row
+  shows the item (thumbnail, name, source/folder, dated with its origin) and `ItemActions`: open
+  the original (PhotoKit asset; Files, the Send to Loupe inbox and the sample through Quick Look —
+  documents and pictures only, never scripts, code, HTML or executables), Share, and for mail
+  "Open in Mail" (`message://` with the Message-ID read from the `.eml` on tap) or the headers to
+  find it. Privacy findings add **Show where**: shared `PrivacyEvidence` re-derives each match on
+  tap — masked value (`•••• •••• •••• 1234` + brand; IBAN, ID, passport, phone, email masked alike),
+  a masked context line and the checks it passed — and for a picture Vision runs again and the
+  matching line's box is drawn over it. Nothing is stored: the evidence lives in view state only
+  (XCTest checks the container and defaults). Shared rules: `CardRules` — OCR'd text (photos,
+  anything whose text fact says OCR) needs Luhn + 13–19 digits + a known IIN and must not be part
+  of a longer digit run, a date/time, a phone number, an IMEI, a tracking/order number or hex, and
+  needs a card word nearby (card, visa, mastercard, amex, exp, expiry, valid thru, CVV, بطاقة, …) or
+  strict 4-4-4-4 / 4-6-5 grouping; files keep Station's rule. Chips are one clean format
+  (`Payment card ×1`; previews no longer nest the label). An OCR'd photo's text now starts
+  "Photo (text recognised): name", so a judgment or category question reads a picture, not code.
+  Tests: `EvidenceTest` (9: false/true positives in Latin and Arabic script, masking, evidence,
+  chips, the OCR receipt photo; JVM + iOS sim), XCTest `ItemReferenceTests` (7: open policy, open
+  plans with fakes, resolver, evidence box, no persistence), UI `PrivacyShowWhereUITests` (a
+  rendered test-card photo, DEBUG `-LoupeFixtures -LoupePrivacyPhotoDemo`: masked value and the
+  box). Not done: a model-level test that Laya no longer answers "code" for a receipt photo (needs
+  the model; gated); scanned-PDF OCR is not yet marked in its text; Station's own evidence shape
+  and masking format, when they arrive, may change the wording.
+
 ---
 
 ## Where the build stands

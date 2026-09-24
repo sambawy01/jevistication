@@ -118,6 +118,7 @@ struct MailTriageView: View {
             }
             Text(r.subject.isEmpty ? "(no subject)" : r.subject).font(.headline).foregroundStyle(Palette.ink)
             Text(r.sender).font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+            if let item = ItemIndex.item(r.itemId) { ItemRefHeader(item: item); ItemActions(item: item) }
             let labels = r.labels.filter { $0 != MailClassify.shared.PHISHING_LABEL }
             if !labels.isEmpty {
                 Text(labels.map { $0.replacingOccurrences(of: "Laya/", with: "") + (r.weakLabels.contains($0) ? " (weak rule)" : "") }.joined(separator: " · "))
@@ -178,6 +179,7 @@ struct MailTriageView: View {
                         Text(l.itemName).font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft).lineLimit(1)
                     }
                     Text(l.check.url).font(Typeface.mono(12)).foregroundStyle(Palette.ink).lineLimit(2)
+                    if let item = ItemIndex.item(l.itemId) { ItemRefHeader(item: item) }
                     ForEach(Array(l.check.lines.enumerated()), id: \.offset) { _, line in
                         Text("• " + line).font(.caption).foregroundStyle(Palette.ink)
                     }

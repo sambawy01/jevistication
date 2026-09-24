@@ -178,7 +178,7 @@ struct NowView: View {
                     }
                     .padding(.horizontal, 4)
                     ForEach(Array(summary.findings.enumerated()), id: \.element.key) { i, f in
-                        FindingCard(finding: f, index: i,
+                        FindingCard(finding: f, index: i, item: ItemIndex.item(f.itemId),
                                     onVerdict: { watchers.answer(f, $0) },
                                     onOpen: { openItem = watchers.item(f.itemId) })
                     }

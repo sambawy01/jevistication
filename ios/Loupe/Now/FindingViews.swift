@@ -60,6 +60,7 @@ struct HeroFindingCard: View {
 struct FindingCard: View {
     let finding: WatcherFinding
     let index: Int
+    var item: SourceItem? = nil
     let onVerdict: (FindingVerdict) -> Void
     let onOpen: () -> Void
 
@@ -78,6 +79,7 @@ struct FindingCard: View {
                 .foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("finding.title.\(index)")
+            if let item { ItemRefHeader(item: item) }
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(finding.evidence.enumerated()), id: \.offset) { _, line in
                     Text(line)
@@ -166,6 +168,7 @@ struct CensusCard: View {
 /// "Open item": what the watchers read, verbatim.
 struct ItemTextView: View {
     let item: SourceItem
+    var finding: PrivacyFinding? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -178,6 +181,8 @@ struct ItemTextView: View {
                     if let imported = item.facts["imported"] {
                         Pill(text: imported, color: Palette.inkSoft)
                     }
+                    ItemRefHeader(item: item)
+                    ItemActions(item: item, finding: finding)
                     Text(item.location).font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                     Text(item.text)
                         .font(Typeface.mono(13))

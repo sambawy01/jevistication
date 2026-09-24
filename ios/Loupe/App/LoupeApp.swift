@@ -54,6 +54,7 @@ struct LaunchOptions {
     var sortDemo = false         // -LoupeSortDemo (DEBUG, with -LoupeFixtures): passive sort with a stand-in scorer
     var inboxDemo = false        // -LoupeInboxDemo (DEBUG, with -LoupeFixtures): import a statement CSV into the Inbox
     var fakeAssistant = false    // -LoupeFakeAssistant (DEBUG): a configured writing assistant whose provider is an in-app fake (no network)
+    var privacyPhotoDemo = false // -LoupePrivacyPhotoDemo (DEBUG, with -LoupeFixtures): a rendered test-card photo as an OCR'd item
     var reviewDemo = false       // -LoupeReviewDemo (DEBUG, with -LoupeFixtures): a duplicate pair in the (throwaway) inbox, Files on
 
     static let current: LaunchOptions = {
@@ -74,6 +75,7 @@ struct LaunchOptions {
         o.queueDemo = args.contains("-LoupeQueueDemo") && o.fixtureMode
         o.sortDemo = args.contains("-LoupeSortDemo") && o.fixtureMode
         o.reviewDemo = args.contains("-LoupeReviewDemo") && o.fixtureMode
+        o.privacyPhotoDemo = args.contains("-LoupePrivacyPhotoDemo") && o.fixtureMode
         o.fakeAssistant = args.contains("-LoupeFakeAssistant")
         o.inboxDemo = args.contains("-LoupeInboxDemo") && o.fixtureMode
         if let i = args.firstIndex(of: "-LoupeOpen"), i + 1 < args.count { o.openScreen = args[i + 1] }

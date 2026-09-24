@@ -38,7 +38,7 @@ struct PrivacyView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Loupe Station's checks for ID numbers, card numbers, IBANs, contact lists, keys and tokens, and exact duplicate files. Read on this iPhone; nothing leaves it. Values are masked: only a first character is ever shown.")
+                Text("Loupe Station's checks for ID numbers, card numbers, IBANs, contact lists, keys and tokens, and exact duplicate files. Read on this iPhone; nothing leaves it. Values are masked; \"Show where\" finds a value again when you tap it and never saves it.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
                 LayaOffBanner(feature: Features.shared.SCAN)
                 if let notice = privacy.notice { noticeRow(notice) }
@@ -132,6 +132,7 @@ struct PrivacyView: View {
                 if f.sample { Pill(text: "Sample", color: Palette.inkSoft) }
             }
             Text(f.title).font(.headline).foregroundStyle(Palette.ink)
+            if let item = ItemIndex.item(f.itemId) { ItemRefHeader(item: item) }
             Text(f.location).font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
             VStack(alignment: .leading, spacing: 3) {
                 ForEach(Array(f.previews.enumerated()), id: \.offset) { _, p in
@@ -144,6 +145,7 @@ struct PrivacyView: View {
             actions(f)
         }
         .card()
+        .accessibilityElement(children: .contain)   // the row's id must not replace its buttons' ids
         .accessibilityIdentifier("privacy.finding.\(f.key)")
     }
 
@@ -151,7 +153,8 @@ struct PrivacyView: View {
         let access = privacy.access(f)
         let target = privacy.access(for: privacy.target(f))
         HStack(spacing: 8) {
-            Button { openItem = privacy.item(f.itemId) } label: { Label("Open", systemImage: "doc.text") }
+            Button { openItem = privacy.item(f.itemId) } label: { Label("Text", systemImage: "doc.text") }
+                .accessibilityLabel("What Loupe read")
             Button { privacy.markSafe(f) } label: { Label("Mark safe", systemImage: "checkmark.shield") }
                 .accessibilityIdentifier("privacy.safe")
             switch target {
@@ -165,6 +168,10 @@ struct PrivacyView: View {
             }
         }
         .buttonStyle(.bordered).controlSize(.small).font(.caption.weight(.semibold))
+        if f.duplicates == nil, let item = ItemIndex.item(f.itemId) {
+            // Owner rule 2026-09-24: open the item itself, share it, and "Show where" (masked, re-derived).
+            ItemActions(item: item, finding: f)
+        }
         if case .suggestOnly(let why) = target, case .suggestOnly = access {
             Text("Suggestion only: \(why)").font(.caption2).foregroundStyle(Palette.inkSoft)
         }

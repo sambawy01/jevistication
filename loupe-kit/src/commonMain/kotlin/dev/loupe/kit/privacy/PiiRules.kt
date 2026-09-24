@@ -21,7 +21,8 @@ import kotlinx.datetime.todayIn
  *   egypt_national_id  14 digits: century (2/3), valid birth date, valid governorate code
  *   passport_number    a passport-number shape within a few words after "passport" / "جواز"
  *   iban               IBAN with a valid mod-97 checksum (and the country's length when known)
- *   card_number        13-19 digit card number with a known network prefix and a valid Luhn check
+ *   card_number        13-19 digit card number with a known network prefix and a valid Luhn check;
+ *                      OCR'd text also passes [CardRules] (Loupe's stricter rule, owner 2026-09-24)
  *   email / phone      addresses and phone numbers (Egyptian +20 / 01x mobiles, international +...)
  *   contact_list       many distinct emails/phones in one file: looks like a customer or contact list
  *   payroll_headers    3+ salary/payroll column-header terms incl. a salary term (English and Arabic)
@@ -248,9 +249,21 @@ object PiiRules {
     // ------------------------------------------------------------------------ previews / masking
     /** At most the first character, then an ellipsis and what it is. Never the value. */
     fun preview(kind: String, value: String): String {
+        // Loupe's one change to Station's format: no "(label)" suffix. The finding's title already
+        // names the kind, and the suffix nested inside chips ("×1 (2… (payment card number))").
         val first = value.take(1)
-        return if (kind == "email") "$first…@… (${LABELS.getValue(kind)})" else "$first… (${LABELS.getValue(kind)})"
+        return if (kind == "email") "$first…@…" else "$first…"
     }
+
+    /** Short names for chips and titles: "Payment card ×1". */
+    val CHIP_LABELS: Map<String, String> = mapOf(
+        "egypt_national_id" to "Egyptian national ID", "passport_number" to "Passport number", "iban" to "IBAN",
+        "card_number" to "Payment card", "email" to "Email address", "phone" to "Phone number",
+        "contact_list" to "Contact list", "payroll_headers" to "Payroll headers",
+    )
+
+    /** One clean chip: "Payment card ×1". Never nests a preview or another label. */
+    fun chip(type: String, n: Int): String = "${CHIP_LABELS[type] ?: LABELS[type] ?: type} ×$n"
 
     private val MASKS: List<Pair<Any, String>> = listOf(
         EMAIL to "[email]", IBAN to "[iban]", NID to "[national-id]", PHONE_EG to "[phone]",
@@ -279,7 +292,7 @@ object PiiRules {
  * Scan windows of a stream; accept matches starting in [lo, hi) so overlaps don't double count.
  * Keeps only per-type counts, hashed distinct sets (in memory) and redacted previews.
  */
-class PiiCollector(private val today: LocalDate = PiiRules.systemToday()) {
+class PiiCollector(private val today: LocalDate = PiiRules.systemToday(), private val ocr: Boolean = false) {
     private val counts = LinkedHashMap<String, Int>()
     private val distinct = HashMap<String, MutableSet<String>>()
     private val previews = HashMap<String, MutableList<String>>()
@@ -332,7 +345,10 @@ class PiiCollector(private val today: LocalDate = PiiRules.systemToday()) {
         for (m in matches(PiiRules.CARD)) {
             if (free(m.range.first, m.range.last + 1)) {
                 val digits = m.groupValues[1].filter { it in '0'..'9' }
-                if (PiiRules.cardOk(digits) && !PiiRules.validEgyptNid(digits, today)) {
+                // OCR'd text (a photo, a scanned page) must also pass the stricter card rule.
+                if (PiiRules.cardOk(digits) && !PiiRules.validEgyptNid(digits, today) &&
+                    (!ocr || CardRules.judge(window, m.range, digits, true).ok)
+                ) {
                     taken += m.range
                     add("card_number", digits, m.range.first)
                 }

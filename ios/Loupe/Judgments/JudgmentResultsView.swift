@@ -204,6 +204,7 @@ struct ResultRowView: View {
             }
             Text(result.status(judgment: judgment)).font(.footnote.weight(.medium)).foregroundStyle(tone).lineLimit(2)
             ConfidenceBar(value: result.unusable ? 0 : result.topMass, threshold: judgment.threshold, color: tone)
+            if let item = result.item { ItemRefHeader(item: item) }
             HStack(spacing: 6) {
                 Text(source).font(Typeface.mono(10)).foregroundStyle(Palette.inkSoft).lineLimit(1)
                 Spacer()
@@ -252,6 +253,12 @@ struct ResultDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 Text(result.item?.name ?? result.itemId).font(Typeface.display(24)).foregroundStyle(Palette.ink)
+                if let item = result.item {
+                    ItemRefHeader(item: item)
+                    ItemActions(item: item)
+                } else {
+                    Text("This item is no longer scanned, so it cannot be opened.").font(.caption).foregroundStyle(Palette.inkSoft)
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     Caption(text: result.mechanical ? "What the rule said" : "What the model said (raw)")
                     ForEach(result.masses(judgment: judgment), id: \.first) { pair in

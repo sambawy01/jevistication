@@ -127,6 +127,12 @@ private struct ReviewRow: View {
     let retry: () -> Void
     let undo: () -> Void
 
+    /// A watcher proposal names its finding; the finding names the item.
+    private var watcherItemId: String? {
+        guard let key = item.proposal["finding_key"] else { return nil }
+        return WatchersService.shared.summary?.findings.first { $0.key == key }?.itemId
+    }
+
     private var verb: String { ReviewRegistry.shared.action(type: item.actionType)?.verb ?? "Approve" }
 
     var body: some View {
@@ -143,6 +149,10 @@ private struct ReviewRow: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                         .accessibilityIdentifier("review.title")
+                    if let ref = ItemIndex.item(item.actionParams["item_id"] ?? item.proposal["item_id"] ?? watcherItemId) {
+                        ItemRefHeader(item: ref)
+                        ItemActions(item: ref)
+                    }
                     if !item.inputSummary.isEmpty {
                         Text(item.inputSummary).font(.caption).foregroundStyle(Palette.inkSoft).lineLimit(4)
                     }

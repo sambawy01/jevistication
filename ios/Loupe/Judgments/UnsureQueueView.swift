@@ -66,7 +66,8 @@ struct UnsureQueueView: View {
             }
             Text(e.judgment.title).font(.caption).foregroundStyle(Palette.inkSoft)
             Text(e.judgment.question).font(.headline).foregroundStyle(Palette.blue)
-            Text(e.item.name).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+            ItemRefHeader(item: e.item)
+            ItemActions(item: e.item)
             Text(String(e.item.text.prefix(600)))
                 .font(.footnote).foregroundStyle(Palette.inkSoft).lineLimit(8)
                 .frame(maxWidth: .infinity, alignment: .leading)

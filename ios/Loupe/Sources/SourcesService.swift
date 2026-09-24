@@ -142,7 +142,17 @@ final class SourcesService: ObservableObject {
         return library.items(sourceIds: [Self.sampleId], defaultEnabled: true)
             + library.items(sourceIds: phoneIds, defaultEnabled: true)   // already filtered by each source's switch
             + (inbox?.items() ?? [])                                      // empty when the Inbox is off
+            + debugItems
     }
+
+    #if DEBUG
+    private var debugItems: [SourceItem] {
+        if LaunchOptions.current.privacyPhotoDemo, DemoItems.extra.isEmpty { DemoItems.installPhotoDemo() }
+        return DemoItems.extra
+    }
+    #else
+    private var debugItems: [SourceItem] { [] }
+    #endif
 
     /// Items a judgment reads: every source that is on, less contact cards (facts, not documents).
     func judgeableItems() -> [SourceItem] {

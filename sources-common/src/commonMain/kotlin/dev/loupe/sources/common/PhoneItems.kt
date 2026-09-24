@@ -61,7 +61,9 @@ class PhoneItems(private val maxTextChars: Int) {
         facts["text"] = if (hasText) "read on this iPhone (Vision OCR)" else "no text found by on-device OCR"
         val taken = takenIso?.let(::day)
         val created = createdIso?.let(::day)
-        val header = (if (screenshot) "Screenshot" else "Photo") + ": $name"
+        // Owner rule 2026-09-24: the state says the text came from OCR of a picture, so a category
+        // question reads "a photo of a receipt", not a code file or a document typed as text.
+        val header = photoHeader(name, screenshot)
         return item(
             id = "photos:$localId", sourceId = PhoneSourceIds.PHOTOS, kind = ItemKind.IMAGE, path = "photos/$localId",
             name = name, text = if (hasText) "$header\n\n$text" else "", hasText = hasText, sizeBytes = sizeBytes,
@@ -158,6 +160,15 @@ class PhoneItems(private val maxTextChars: Int) {
     }
 
     companion object {
+        /** What a judgment reads first for an OCR'd photo: "Photo (text recognised): IMG_1507.HEIC". */
+        const val OCR_MARK: String = "(text recognised)"
+
+        fun photoHeader(name: String, screenshot: Boolean): String = (if (screenshot) "Screenshot" else "Photo") + " $OCR_MARK: $name"
+
+        /** True when [text] is a photo's OCR text as built by [photo]. */
+        fun isRecognisedPhotoText(text: String): Boolean =
+            (text.startsWith("Photo $OCR_MARK: ") || text.startsWith("Screenshot $OCR_MARK: "))
+
         /** `yyyy-MM-dd` from an ISO date or date-time; null if it is not one. */
         fun day(iso: String): LocalDate? = runCatching { LocalDate.parse(iso.take(10)) }.getOrNull()
 

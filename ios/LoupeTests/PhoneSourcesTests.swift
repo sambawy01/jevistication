@@ -381,7 +381,7 @@ final class PhoneSourcesTests: XCTestCase {
         let shot = try XCTUnwrap(s.items().first { $0.id == "photos:A" })
         XCTAssertTrue(shot.hasText)
         XCTAssertEqual(shot.facts["screenshot"], "yes")
-        XCTAssertTrue(shot.text.hasPrefix("Screenshot: A.PNG\n\nRECEIPT"))
+        XCTAssertTrue(shot.text.hasPrefix("Screenshot (text recognised): A.PNG\n\nRECEIPT"))
         XCTAssertFalse(try XCTUnwrap(s.items().first { $0.id == "photos:B" }).hasText)
 
         // Incremental: nothing new, nothing re-read. Then B is edited, C added, A deleted.
