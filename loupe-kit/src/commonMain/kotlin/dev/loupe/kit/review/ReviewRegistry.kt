@@ -62,7 +62,18 @@ object ReviewRegistry {
     const val JUDGMENT = "judgment"
     /** Epic #7 child 16: a reply draft the opt-in writing assistant wrote (Station's `email_reply`). */
     const val EMAIL_REPLY = "email_reply"
-    val FEATURES: List<String> = listOf(PRIVACY, MAIL, WATCHER, JUDGMENT, EMAIL_REPLY)
+
+    /**
+     * The agent tier (docs/AGENT.md): actions prepared from an item the on-device engine flagged.
+     *
+     * Its own feature, and its own kinds, rather than borrowing [EMAIL_REPLY]'s: the shipped
+     * writing-assistant path must keep the exact shape it has, and an agent proposal carries one
+     * field the assistant's does not -- `evidence`, the on-device decision that justified spending
+     * a call on the item at all. The queue is the agent's only output: it prepares, a person
+     * approves, and the handler runs in the app as for every other action.
+     */
+    const val AGENT = "agent"
+    val FEATURES: List<String> = listOf(PRIVACY, MAIL, WATCHER, JUDGMENT, EMAIL_REPLY, AGENT)
 
     fun featureTitle(feature: String): String = when (feature) {
         PRIVACY -> "Privacy check"
@@ -70,6 +81,7 @@ object ReviewRegistry {
         WATCHER -> "Watchers"
         JUDGMENT -> "Judgments"
         EMAIL_REPLY -> "Reply drafts"
+        AGENT -> "Agent"
         else -> feature
     }
 
@@ -96,6 +108,27 @@ object ReviewRegistry {
             ReviewField("shape", true, 10, listOf("yes_no", "pick", "score")), ReviewField("options", true, 20_000),
             ReviewField("invariant", false, 2_000), ReviewField("pack", false, 80),
         )),
+        // The agent tier's four kinds. Every one carries `provider` (so the result can be labelled
+        // Online and name its source) and `evidence` (the on-device decision behind it), because an
+        // agent proposal with neither cannot be shown honestly and so must not be queued.
+        ReviewKind("agent_reminder", listOf(
+            ReviewField("item_id", true, 1_000), ReviewField("when", true, 30), ReviewField("text", true, 200),
+            ReviewField("because", false, 400), ReviewField("provider", true, 200), ReviewField("evidence", true, 300),
+        )),
+        ReviewKind("agent_event", listOf(
+            ReviewField("item_id", true, 1_000), ReviewField("start", true, 30), ReviewField("end", false, 30),
+            ReviewField("subject", true, 300), ReviewField("location", false, 300), ReviewField("because", false, 400),
+            ReviewField("provider", true, 200), ReviewField("evidence", true, 300),
+        )),
+        ReviewKind("agent_note", listOf(
+            ReviewField("item_id", true, 1_000), ReviewField("headline", true, 300), ReviewField("detail", false, 2_000),
+            ReviewField("provider", true, 200), ReviewField("evidence", true, 300),
+        )),
+        ReviewKind("agent_reply", listOf(
+            ReviewField("item_id", true, 1_000), ReviewField("to", false, 300), ReviewField("subject", true, 300),
+            ReviewField("body", true, 10_000), ReviewField("language", false, 60), ReviewField("warnings", false, 1_000),
+            ReviewField("notes", false, 1_000), ReviewField("provider", true, 200), ReviewField("evidence", true, 300),
+        )),
     ).associateBy { it.name }
 
     private val actions: Map<String, ReviewAction> = listOf(
@@ -106,6 +139,13 @@ object ReviewRegistry {
         ReviewAction("judgment.add", listOf("judgment"), emptySet(), reversible = true, verb = "Add judgment") { p ->
             JudgmentBook.findings(judgmentInput(p)).map { "proposal: ${it.message}" }.distinct()
         },
+        // The agent tier. `agent.draft` runs nothing: approving records the draft, exactly as the
+        // writing assistant's does -- Loupe never sends it or files it into a mailbox. The other
+        // three hand the approved item to the platform (local notifications, the calendar).
+        ReviewAction("agent.draft", listOf("agent_reply"), emptySet(), reversible = false, verb = "Keep draft"),
+        ReviewAction("agent.remind", listOf("agent_reminder"), emptySet(), reversible = true, verb = "Add reminder"),
+        ReviewAction("agent.calendar", listOf("agent_event"), emptySet(), reversible = true, verb = "Add to calendar"),
+        ReviewAction("agent.note", listOf("agent_note"), emptySet(), reversible = true, verb = "Keep"),
     ).associateBy { it.type }
 
     fun kind(name: String): ReviewKind? = kinds[name]

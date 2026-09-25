@@ -11,6 +11,7 @@ include("sources-common")
 include("sources-desktop")
 include("loupe-desktop")
 include("loupe-kit")
+include("agent")
 
 // Laya on iOS: ONNX Runtime and the Hugging Face tokenizer through cinterop. Needs macOS and the
 // native pieces ios-native/build.sh produces (gitignored); without them the module is left out and
