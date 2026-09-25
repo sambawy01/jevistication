@@ -160,6 +160,13 @@ class AgentSession internal constructor(
         )
     }
 
+    /**
+     * A failed run for a failure that happened outside [receive] — a transport that could not
+     * reach the provider, or a session that could not start. Internal so that [runTo] can report
+     * one in the same shape as everything else.
+     */
+    internal fun failedRun(failure: AgentFailure): AgentRun = failed(failure)
+
     private fun failed(failure: AgentFailure): AgentRun = AgentRun(
         proposals = emptyList(),
         actions = emptyList(),

@@ -47,3 +47,16 @@ kotlin {
 tasks.named<Test>("jvmTest") {
     useJUnitPlatform()
 }
+
+// A way to point the tier at a real provider and read exactly what happens:
+//   ./gradlew :agent:demo --args="path/to/message.txt"
+// with LOUPE_AGENT_BASE_URL, LOUPE_AGENT_MODEL and LOUPE_AGENT_KEY in the environment. The key is
+// read from the environment and never from a flag, because a flag is visible in `ps`.
+tasks.register<JavaExec>("demo") {
+    group = "application"
+    description = "Runs the agent tier against a real provider, previewing every call first."
+    mainClass.set("dev.loupe.agent.AgentDemo")
+    classpath = kotlin.targets.getByName("jvm").compilations.getByName("main").output.allOutputs +
+        configurations.getByName("jvmRuntimeClasspath")
+    standardInput = System.`in`
+}

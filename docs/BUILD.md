@@ -1284,7 +1284,20 @@ their acceptance criteria are met; entries here record increments toward them.
   hosted one would break the offline guarantee and it is right, so the provider never answers a
   judgment and the calibration story survives intact. Design record and the honest list of what is
   *not* built (no transport, no action handlers, no key-store binding, no tier entitlement, no UI)
-  in [`AGENT.md`](AGENT.md). Note for whoever runs CI on this branch: `.github/workflows/ci.yml`
+  in [`AGENT.md`](AGENT.md).
+- **2026-09-25 — The agent tier can now actually call a provider (`agent-tier`).** `AgentTransport`
+  is the seam, `AgentRetry` is the when-to-try-again policy as a pure function (one retry, only on
+  429/5xx, honouring `Retry-After`, capped at 20s), and `AgentSession.runTo` drives a whole run
+  through a transport while keeping the never-throws contract — a transport that throws becomes an
+  `AgentFailure.Unreachable` run, not an exception out of a screen. `JvmAgentTransport` is
+  `java.net.http` and nothing else, with `Redirect.NEVER` so a 30x can never carry the user's key to
+  a host they never named. `JvmTransportTest` exercises the real wire against a loopback
+  `com.sun.net.httpserver` — headers, body, 429 with `Retry-After`, 401, an HTML answer, a redirect —
+  with no dependency and no traffic leaving the machine. `./gradlew :agent:demo` points the tier at a
+  real provider, previewing every call and waiting for `yes` before anything is sent. Verified end to
+  end against a local OpenAI-compatible fake: one reminder prepared, and the never list refused the
+  other two (a "completely safe" note and a draft carrying a one-time code). 122 tests in `:agent`,
+  green. Note for whoever runs CI on this branch: `.github/workflows/ci.yml`
   triggers on push to `main` and on pull requests to `main`, so `agent-tier` gets no independent
   green until a PR is opened.
 

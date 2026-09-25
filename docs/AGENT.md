@@ -167,10 +167,24 @@ than promised and walked back.
 `:loupe-kit` gained the `agent` review feature with four kinds and four actions, **additively** —
 the shipped `email_reply` path is untouched.
 
+Also built: `AgentTransport` (the seam), `AgentRetry` (when to try again, as a pure function),
+`AgentSession.runTo` (the whole tier in one call, still never throwing), `JvmAgentTransport`
+(`java.net.http`, `Redirect.NEVER` so a 30x can never carry the key to a host the user never named)
+and `AgentDemo`.
+
+`./gradlew :agent:demo --args="message.txt"` with `LOUPE_AGENT_BASE_URL`, `LOUPE_AGENT_MODEL` and
+`LOUPE_AGENT_KEY` in the environment points the tier at a real provider. It prints the send preview
+and waits for `yes`, so the first thing it proves is that nothing leaves without a confirmation,
+then prints the egress record, each prepared action, and every refusal by rule. It writes nothing:
+no ledger, no queue, no files. `JvmTransportTest` runs the same path against a loopback
+`com.sun.net.httpserver`, so the wire is tested against a real socket with no key and no traffic
+leaving the machine.
+
 **Not built, and deliberately named rather than implied:**
 
-1. **No transport.** Nothing here opens a socket. The desktop and the iPhone each need ~40 lines to
-   post an `AgentCall` and hand back an `AgentHttpResponse`.
+1. **No iOS transport.** `JvmAgentTransport` covers the desktop. The iPhone needs the same ~30
+   lines over `URLSession` — or it can keep using its existing `ChatClient.swift` and call into
+   `AgentWire`/`AgentSession` for everything above the socket.
 2. **No action handlers.** `agent.remind`, `agent.calendar` and `agent.note` are registered, so the
    queue accepts and tracks them, but approving one needs the platform code that actually schedules
    the notification or writes the calendar entry (EventKit on iOS).
