@@ -7,12 +7,22 @@ struct InboxCard: View {
     @ObservedObject var sources: SourcesService
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("Inbox", systemImage: "tray.and.arrow.down").font(.headline)
-            Text(summary).font(.footnote).foregroundStyle(Palette.inkSoft)
-                .accessibilityIdentifier("sources.inbox.summary")
+        HStack(spacing: 12) {
+            SourceGlyph(id: "inbox", on: sources.inboxEnabled && !sources.inboxBatches.isEmpty)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text("Inbox").font(Typeface.display(22)).foregroundStyle(Palette.ink)
+                    SourceBadge(online: false)
+                }
+                Text(summary).font(.footnote).foregroundStyle(Palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                    .accessibilityIdentifier("sources.inbox.summary")
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right").foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
         }
-        .padding(.vertical, 4)
+        .card()
     }
 
     private var summary: String {

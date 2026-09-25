@@ -34,6 +34,10 @@ final class SourcesService: ObservableObject {
     @Published var inboxBatches: [InboxBatch] = []
     @Published var inboxBusy = false
     @Published var inboxProblem: String?
+    /// The live scan of each source being read (key: "sample" or a phone source id), kept a few seconds after it
+    /// finishes for the settle. Set once at the start and once at the end, so the Sources screen itself does not
+    /// redraw per item; the live display observes the `LiveScan` alone (~12 Hz).
+    @Published private(set) var liveScans: [String: LiveScan] = [:]
 
     var scanning: Bool { progress != nil || phone.values.contains { $0.scanning } }
 
@@ -84,6 +88,7 @@ final class SourcesService: ObservableObject {
         Task { await collectShared() }
         #if DEBUG
         if LaunchOptions.current.inboxDemo { Task { await seedInboxDemo() } }
+        if let s = SourcesDemo.autoScan { Task { await setPhoneEnabled(s, true) } }
         #endif
     }
 
@@ -102,12 +107,14 @@ final class SourcesService: ObservableObject {
         progress = Progress(seen: 0, total: 0, current: "")
         problem = nil
         let run = SourceScanRun(source: "sample")
-        let observer = Observer { [weak self] p in
+        let live = beginLive("sample", ScanPipeline.of("sample"))
+        let feed = live.feed
+        feed.status("Listing the sample files")
+        // Progress goes to the live run and the live display only; publishing it here would redraw every screen
+        // that observes this service once per file.
+        let observer = Observer { p in
             run.scanned(p)
-            Task { @MainActor in
-                guard let self, self.progress != nil else { return }
-                self.progress = Progress(seen: Int(p.filesSeen), total: Int(p.filesTotal), current: p.current)
-            }
+            feed.scanned(p)
         }
         queue.async {
             let outcome = Result { () -> CachedScan in
@@ -121,10 +128,36 @@ final class SourcesService: ObservableObject {
                     self.sampleScan = scan; self.revision += 1
                     run.ocrCount(Self.ocrItems(scan.result))
                     run.finish(items: scan.result.items.count, skipped: scan.result.skipped.count)
+                    feed.finish(saved: scan.result.items.count)
                 case .failure(let error):
                     self.problem = "Scan failed: \(error.localizedDescription)"
                     run.fail()
+                    feed.fail()
                 }
+                self.settle(live)
+            }
+        }
+    }
+
+    // MARK: Live scans
+
+    /// How long a finished scan's summary stays before the card returns to rest.
+    static let settleSeconds: TimeInterval = 4
+
+    /// Starts the live display of one scan.
+    func beginLive(_ key: String, _ pipeline: ScanPipeline) -> LiveScan {
+        let live = LiveScan(pipeline: pipeline)
+        liveScans[key] = live
+        return live
+    }
+
+    /// After the settle, the card returns to rest (only if no newer scan of that source started meanwhile).
+    func settle(_ live: LiveScan) {
+        let key = live.source
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.settleSeconds) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.liveScans[key]?.id == live.id else { return }
+                self.liveScans[key] = nil
             }
         }
     }

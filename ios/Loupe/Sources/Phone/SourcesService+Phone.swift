@@ -14,6 +14,10 @@ struct PhoneSourceState: Equatable {
     var problem: String?
     /// A line of detail: "12 screenshots", "3 locations", "Online · imap.mail.me.com".
     var detail: String?
+    /// Photos not read yet (newest first, 300 a scan), for the card's coverage ring. nil: nothing pending known.
+    var pending: Int?
+    /// Items with text (photos: text found by OCR).
+    var withText = 0
 }
 
 /// Everything the phone sources touch, injectable so tests use fakes (no PhotoKit, EventKit,
@@ -36,7 +40,7 @@ struct PhoneDependencies {
 
     static func live(home: URL) -> PhoneDependencies {
         PhoneDependencies(
-            photos: PhotoKitLibrary(), recognizer: VisionTextRecognizer(), events: EventKitReader(),
+            photos: livePhotos(), recognizer: VisionTextRecognizer(), events: EventKitReader(),
             contacts: ContactsReader(), bookmarks: BookmarkStore(home: home),
             // Under -LoupeFixtures the inbox is a throwaway folder beside the throwaway ledger.
             inbox: { LaunchOptions.current.fixtureMode ? fixtureInbox(home) : SharedInbox.folder() },
@@ -49,6 +53,53 @@ struct PhoneDependencies {
             },
             makeTransport: { NWIMAPTransport(host: $0.host, port: $0.port) },
             oauth: .fromBundle(), state: PhoneStateStore(home: home))
+    }
+}
+
+/// PhotoKit; in DEBUG with `-LoupeFixtures -LoupePhotosDemo`, a library of rendered fixture pictures instead
+/// (Vision still reads them for real), so UI tests and screenshots need no real photos.
+private func livePhotos() -> PhotoLibraryReading {
+    #if DEBUG
+    if let demo = SourcesDemo.photoLibrary() { return demo }
+    #endif
+    return PhotoKitLibrary()
+}
+
+/// Forwards the common scanner's progress to the live run and the live display. For Mail the display shows each
+/// message's subject (read from the fetched `.eml` header on this iPhone) rather than its file name.
+final class FeedObserver: NSObject, ScanObserver {
+    let run: ScanObserver
+    let feed: ScanFeed
+    let mailSubjects: Bool
+    init(run: ScanObserver, feed: ScanFeed, mailSubjects: Bool) {
+        self.run = run; self.feed = feed; self.mailSubjects = mailSubjects
+    }
+    func onProgress(progress: ScanProgress) {
+        run.onProgress(progress: progress)
+        feed.scanned(progress, label: mailSubjects ? MailSubject.read(progress.current) : nil)
+    }
+    func isCancelled() -> Bool { false }
+}
+
+/// The Subject header of a fetched message: the first 16 KB of the file, unfolded, RFC 2047 decoded.
+enum MailSubject {
+    static func read(_ path: String) -> String? {
+        guard path.hasSuffix(".eml"), let h = FileHandle(forReadingAtPath: path) else { return nil }
+        defer { try? h.close() }
+        guard let data = try? h.read(upToCount: 16_384) else { return nil }
+        return subject(in: String(decoding: data, as: UTF8.self))
+    }
+
+    static func subject(in raw: String) -> String? {
+        let head = raw.components(separatedBy: "\r\n\r\n").first.map { $0.components(separatedBy: "\n\n").first ?? $0 } ?? raw
+        let unfolded = head.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\n[ \t]+", with: " ", options: .regularExpression)
+        for line in unfolded.split(separator: "\n") where line.lowercased().hasPrefix("subject:") {
+            let v = line.dropFirst("subject:".count).trimmingCharacters(in: .whitespaces)
+            let decoded = MimeCodecs.shared.decodeHeader(value: v)
+            return decoded.isEmpty ? "(no subject)" : decoded
+        }
+        return "(no subject)"
     }
 }
 
@@ -105,6 +156,8 @@ extension SourcesService {
         st.unavailableCount = scans.reduce(0) { $0 + $1.result.unavailable.count }
         st.lastScan = scans.map { Date(timeIntervalSince1970: Double($0.scannedAtEpochMillis) / 1000) }.max()
         st.detail = detail(s, scans: scans)
+        st.withText = scans.reduce(0) { $0 + $1.result.items.filter(\.hasText).count }
+        st.pending = s == .photos ? deps.state.state(s.rawValue)[PhotosProducer.remainingKey].flatMap(Int.init) : nil
     }
 
     private func detail(_ s: PhoneSource, scans: [CachedScan]) -> String? {
@@ -171,72 +224,111 @@ extension SourcesService {
         phone[s, default: .init()].scanning = true
         phone[s, default: .init()].problem = nil
         defer { phone[s, default: .init()].scanning = false }
-        // The live run, centred in the Sources screen while this source is read (docs/LIVE-RUN-VIEW.md).
+        // The live run (the Activity dock, docs/LIVE-RUN-VIEW.md) and the live display in the source's card.
         let run = SourceScanRun(source: s.rawValue, stage: s == .mail ? "act.stage.connecting" : "act.stage.walking")
+        let account = s == .mail ? deps.mailAccounts.load() : nil
+        let live = beginLive(s.rawValue, ScanPipeline.of(s.rawValue, ocr: s == .photos ? OcrPolicy.current().enabled : true,
+                                                           mailHost: account?.host, gmail: account?.auth == .gmailAPI))
+        let feed = live.feed
         let obs = run.observer
+        let both = FeedObserver(run: obs, feed: feed, mailSubjects: s == .mail)
+        defer { settle(live) }
         do {
             switch s {
             case .photos:
+                feed.status("Listing your photos")
                 let cacheId = PhoneSourceIds.shared.PHOTOS
                 var producer = PhotosProducer(library: deps.photos, recognizer: deps.recognizer)
                 producer.ocr = { OcrPolicy.current() }
                 producer.onItem = { done, total, read, ocr in run.item(done: done, of: total, read: read, ocr: ocr) }
+                producer.onRead = { feed.item($0) }
+                producer.onListed = { feed.listed($0) }
+                #if DEBUG
+                producer.pace = SourcesDemo.photoPace
+                #endif
                 let cached = library.cached(sourceId: cacheId)?.result
                 let prior = deps.state.state(s.rawValue)
                 let out = await Task.detached(priority: .utility) { await producer.scan(cached: cached, state: prior) }.value
                 try store(out, as: cacheId, for: s)
             case .files:
+                feed.status("Listing your files")
                 let deps = self.deps
                 let (files, shared) = try await runOffMain {
-                    (try FilesProducer(store: deps.bookmarks).scan(observer: obs), try SharedInbox.scan(folder: deps.inbox()))
+                    (try FilesProducer(store: deps.bookmarks).scan(observer: both), try SharedInbox.scan(folder: deps.inbox()))
                 }
                 run.ocrCount(Self.ocrItems(files.result))
                 try store(files, as: PhoneSourceIds.shared.FILES, for: s)
                 try store(shared, as: PhoneSourceIds.shared.SHARED, for: s)
             case .calendar:
+                feed.status("Reading your calendar")
                 let deps = self.deps
-                let out = try await runOffMain { CalendarProducer(store: deps.events).scan() }
+                let out = try await runOffMain { () -> PhoneScanOutput in
+                    let out = CalendarProducer(store: deps.events).scan()
+                    Self.feedItems(out.result.items, to: feed)
+                    return out
+                }
                 try store(out, as: PhoneSourceIds.shared.CALENDAR, for: s)
             case .contacts:
+                feed.status("Reading your contacts")
                 let deps = self.deps
-                let out = try await runOffMain { try ContactsProducer(store: deps.contacts).scan() }
+                let out = try await runOffMain { () -> PhoneScanOutput in
+                    let out = try ContactsProducer(store: deps.contacts).scan()
+                    Self.feedItems(out.result.items, to: feed)
+                    return out
+                }
                 try store(out, as: PhoneSourceIds.shared.CONTACTS, for: s)
             case .mail:
-                guard let account = deps.mailAccounts.load() else {
+                guard let account else {
                     phone[s, default: .init()].problem = "Add a mailbox first: tap Mail, then enter your server and an app password."
                     run.fail()
+                    feed.fail()
                     return
+                }
+                feed.status("Connecting to \(account.host)")
+                let fetched = {
+                    run.job.stage("act.stage.walking")
+                    feed.fetched()
+                    feed.status("Reading the fetched mail")
                 }
                 if account.auth == .gmailAPI {
                     let token = try await oauthAccessToken(account)
                     let producer = GmailProducer(account: account, client: GmailClient(accessToken: token, session: deps.http),
                                                  cacheRoot: deps.mailCache)
-                    let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: obs,
-                                                      fetched: { run.job.stage("act.stage.walking") })
+                    let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched)
                     try store(out, as: PhoneSourceIds.shared.MAIL, for: s)
                     break
                 }
                 let credential = try await mailCredential(account)
                 let producer = MailProducer(account: account, credential: credential, cacheRoot: deps.mailCache,
                                             makeTransport: deps.makeTransport)
-                let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: obs,
-                                                  fetched: { run.job.stage("act.stage.walking") })
+                let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched)
                 try store(out, as: PhoneSourceIds.shared.MAIL, for: s)
             }
             let st = state(s)
             run.finish(items: st.itemCount, skipped: st.skippedCount)
+            feed.finish(saved: st.itemCount)
         } catch let failure as IMAPClient.Failure {
             let host = deps.mailAccounts.load()?.host ?? ""
             phone[s, default: .init()].problem = failure.recovery(host: host)
             Log.mail.error("mail scan failed: kind=\(String(describing: failure.kind), privacy: .public) server=\(IMAPClient.Failure.brief(failure.detail), privacy: .public)")
             run.fail()
+            feed.fail()
         } catch let failure as GmailClient.Failure {
             phone[s, default: .init()].problem = failure.recovery
             Log.mail.error("gmail scan failed: status=\(failure.status, privacy: .public)")
             run.fail()
+            feed.fail()
         } catch {
             phone[s, default: .init()].problem = "The scan failed: \(error.localizedDescription)"
             run.fail()
+            feed.fail()
+        }
+    }
+
+    /// Items read in one go (Calendar, Contacts) pass through the live display one by one, as read.
+    nonisolated static func feedItems(_ items: [SourceItem], to feed: ScanFeed) {
+        for (i, item) in items.enumerated() {
+            feed.item(ScanEvent(name: item.name, read: true, done: i + 1, total: items.count))
         }
     }
 

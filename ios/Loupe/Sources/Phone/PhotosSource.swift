@@ -39,6 +39,35 @@ protocol PhotoLibraryReading: AnyObject {
 /// On-device text recognition, behind a protocol so tests do not run Vision.
 protocol TextRecognizing {
     func recognize(_ data: Data) -> String
+    /// The recognised lines with Vision's normalised boxes (the live scan display lights them up). The default
+    /// splits `recognize` into lines without boxes, so the text is the same either way.
+    func recognizeLines(_ data: Data) -> [RecognizedLine]
+}
+
+/// One line of recognised text and where it is on the picture (normalised, origin bottom-left), when known.
+struct RecognizedLine: Equatable {
+    let text: String
+    let box: CGRect?
+}
+
+extension TextRecognizing {
+    func recognizeLines(_ data: Data) -> [RecognizedLine] {
+        let text = recognize(data)
+        guard !text.isEmpty else { return [] }
+        return text.split(separator: "\n", omittingEmptySubsequences: false).map { RecognizedLine(text: String($0), box: nil) }
+    }
+}
+
+/// A small thumbnail from image bytes already in memory (ImageIO, decoded at the small size only).
+enum ScanThumbnail {
+    static func make(_ data: Data, maxPixel: Int = 180) -> CGImage? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        let opts: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                     kCGImageSourceCreateThumbnailWithTransform: true,
+                                     kCGImageSourceShouldCacheImmediately: true,
+                                     kCGImageSourceThumbnailMaxPixelSize: maxPixel]
+        return CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary)
+    }
 }
 
 /// Vision `VNRecognizeTextRequest`: `.accurate`, language correction on, on-device only.
@@ -46,15 +75,20 @@ protocol TextRecognizing {
 /// `automaticallyDetectsLanguage` (iOS 16+) lets one image mix Arabic and Latin script.
 struct VisionTextRecognizer: TextRecognizing {
     func recognize(_ data: Data) -> String {
+        recognizeLines(data).map(\.text).joined(separator: "\n")
+    }
+
+    func recognizeLines(_ data: Data) -> [RecognizedLine] {
         let request = VNRecognizeTextRequest()
         request.recognitionLevel = .accurate
         request.usesLanguageCorrection = true
         request.automaticallyDetectsLanguage = true
         // Vision runs on the device; there is no server-side recognition in this API.
         let handler = VNImageRequestHandler(data: data, options: [:])
-        do { try handler.perform([request]) } catch { return "" }
-        let lines = (request.results ?? []).compactMap { $0.topCandidates(1).first?.string }
-        return lines.joined(separator: "\n")
+        do { try handler.perform([request]) } catch { return [] }
+        return (request.results ?? []).compactMap { o in
+            o.topCandidates(1).first.map { RecognizedLine(text: $0.string, box: o.boundingBox) }
+        }
     }
 }
 
@@ -140,6 +174,8 @@ final class PhotoKitLibrary: PhotoLibraryReading {
 /// token says were edited, and drops photos that are gone. "Scan again" continues where it stopped.
 struct PhotosProducer {
     static let tokenKey = "changeToken"
+    /// Photos not read yet after this scan (the Sources card's coverage ring).
+    static let remainingKey = "remaining"
     let library: PhotoLibraryReading
     let recognizer: TextRecognizing
     var maxPerScan = 300
@@ -148,6 +184,13 @@ struct PhotosProducer {
     var ocr: () -> OcrPolicy = { OcrPolicy(enabled: true, maxPages: 1) }
     /// Per photo: (done, total, read, text found by OCR). Drives the Sources live run.
     var onItem: @Sendable (Int, Int, Bool, Bool) -> Void = { _, _, _, _ in }
+    /// Per photo, for the live scan display: its name, text, boxes and a small thumbnail. nil: no display
+    /// is listening, so no thumbnail is made.
+    var onRead: (@Sendable (ScanEvent) -> Void)?
+    /// Called once with how many photos this scan will read.
+    var onListed: (@Sendable (Int) -> Void)?
+    /// Seconds to wait after each photo (DEBUG fixture scans only, so a scan can be watched; 0 in the app).
+    var pace: TimeInterval = 0
 
     func scan(cached: ScanResult?, state: [String: String], cancelled: () -> Bool = { false }) async -> PhoneScanOutput {
         let assets = library.allAssets()
@@ -161,6 +204,7 @@ struct PhotosProducer {
         }
         let pending = assets.filter { !have.contains($0.localId) || edited.contains($0.localId) }
         let batch = pending.prefix(maxPerScan)
+        onListed?(batch.count)
         let builder = PhoneItems()
         let ocrOn = ocr().enabled
         var fresh: [SourceItem] = []
@@ -172,11 +216,20 @@ struct PhotosProducer {
             guard let data = await library.imageData(localId: asset.localId) else {
                 skipped.append(Skipped(path: asset.fileName, reason: "not on this iPhone: the original is in iCloud only (Loupe does not download it)"))
                 onItem(processed, batch.count, false, false)
+                onRead?(ScanEvent(name: asset.fileName, read: false, done: processed, total: batch.count))
                 continue
             }
             let info = extractors.readImage(data: data)
-            let text = ocrOn ? recognizer.recognize(data) : ""
-            onItem(processed, batch.count, true, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            let lines = ocrOn ? recognizer.recognizeLines(data) : []
+            let text = lines.map(\.text).joined(separator: "\n")
+            let hasText = !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            onItem(processed, batch.count, true, hasText)
+            if let onRead {
+                onRead(ScanEvent(name: asset.fileName, read: true, textFound: hasText, text: text,
+                                 boxes: lines.compactMap(\.box), thumbnail: ScanThumbnail.make(data),
+                                 done: processed, total: batch.count))
+            }
+            if pace > 0 { try? await Task.sleep(nanoseconds: UInt64(pace * 1_000_000_000)) }
             let created = asset.created.map { ISOStamp.local($0) }
             let dims = info.facts["dimensions"] ?? (asset.pixelWidth > 0 ? "\(asset.pixelWidth)x\(asset.pixelHeight)" : nil)
             fresh.append(builder.photo(localId: asset.localId, name: asset.fileName, ocrText: text, createdIso: created,
@@ -192,6 +245,7 @@ struct PhotosProducer {
         }
         var out = PhoneScanOutput(result: .of(kept + fresh, skipped: skipped))
         if let token = library.currentToken() { out.state[Self.tokenKey] = token.base64EncodedString() }
+        out.state[Self.remainingKey] = String(max(0, remaining))
         return out
     }
 }

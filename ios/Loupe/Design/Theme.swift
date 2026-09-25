@@ -247,6 +247,9 @@ struct WorkingBorder: View {
                     AngularGradient(colors: [Palette.blueBright.opacity(0.35), Palette.cyan, Palette.blueBright.opacity(0.35), Palette.blueBright.opacity(0.35)],
                                     center: .center, angle: .degrees(a)),
                     lineWidth: 1.5)
+                    // Rendered by Metal: a turning angular gradient drawn by Core Graphics costs the main thread
+                    // several ms a frame (measured on the Sources scan, 2026-09-25).
+                    .drawingGroup()
             }
         }
     }

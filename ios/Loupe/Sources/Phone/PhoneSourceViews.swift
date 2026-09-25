@@ -3,44 +3,72 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
-/// One phone source in the Sources list.
+/// One phone source on the Sources page: its glyph, name, On device / Online badge and switch; what reading it
+/// means; then either the live scan display (while it is read, and for the settle), its resting numbers (count
+/// ring, detail, last scan, Scan again), or an invitation to the first scan.
 struct PhoneSourceRow: View {
     @ObservedObject var sources: SourcesService
     let source: PhoneSource
     @State private var picking = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     private var st: PhoneSourceState { sources.state(source) }
+    private var hue: Color { SourceLook.hue(source.id) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Toggle(isOn: Binding(get: { st.enabled }, set: { on in Task { await sources.setPhoneEnabled(source, on) } })) {
-                VStack(alignment: .leading, spacing: 2) {
+        let live = sources.liveScans[source.id]
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
+                SourceGlyph(id: source.id, on: st.enabled)
+                VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Label(source.title, systemImage: source.symbol).font(.headline)
-                        if source.isOnline { Pill(text: "Online", color: Palette.blue).accessibilityIdentifier("sources.phone.mail.online") }
+                        Text(source.title).font(Typeface.display(22)).foregroundStyle(Palette.ink)
+                        SourceBadge(online: source.isOnline)
+                            .accessibilityIdentifier(source.isOnline ? "sources.phone.mail.online" : "sources.phone.\(source.id).ondevice")
                     }
-                    Text(source.explainer).font(.footnote).foregroundStyle(Palette.inkSoft)
+                    Text(connectionLine)
+                        .font(Typeface.mono(11, weight: .medium))
+                        .foregroundStyle(st.enabled ? hue : Palette.inkSoft)
+                        .lineLimit(2)
                 }
+                Spacer(minLength: 8)
+                Toggle(source.title, isOn: Binding(get: { st.enabled }, set: { on in Task { await sources.setPhoneEnabled(source, on) } }))
+                    .labelsHidden()
+                    .accessibilityLabel(source.title)
+                    .accessibilityHint(st.enabled ? "Turns \(source.title) off; its items leave every judgment and watcher." : "Turns \(source.title) on and reads it.")
+                    .accessibilityIdentifier("sources.phone.\(source.id).toggle")
             }
-            .accessibilityIdentifier("sources.phone.\(source.id).toggle")
+            Text(source.explainer).font(.footnote).foregroundStyle(Palette.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
 
-            if st.enabled || st.itemCount > 0 { status }
+            if let live {
+                ScanDisplay(live: live)
+                    .transition(.opacity)
+            } else if st.enabled || st.itemCount > 0 {
+                rest
+            } else {
+                Label("Off. Turn it on to read \(source == .mail ? "your mailbox" : "your \(source.title.lowercased())"); \(source == .mail || source == .files ? "nothing is asked of iOS" : "iOS asks for permission once").",
+                      systemImage: "power")
+                    .font(.caption).foregroundStyle(Palette.inkSoft)
+            }
             if source == .files && st.enabled { filesControls }
             if source == .mail { mailLink }
             if let problem = st.problem {
                 Text(problem).font(.footnote).foregroundStyle(Palette.dangerText)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("sources.phone.\(source.id).problem")
                 if st.permission == .denied { settingsButton }
             } else if st.enabled, let recovery = st.permission.recovery(for: source) {
                 Text(recovery).font(.footnote).foregroundStyle(Palette.warnText)
+                    .fixedSize(horizontal: false, vertical: true)
                 if st.permission == .denied { settingsButton }
             }
-            if source == .photos && st.permission == .limited {
-                Button("Choose more photos") { PhotoKitLibrary.presentLimitedPicker() }
-                    .font(.footnote).buttonStyle(.borderless)
+            if source == .photos && st.permission == .limited && live == nil {
+                CardAction(title: "Choose more photos", symbol: "photo.badge.plus", hue: hue) { PhotoKitLibrary.presentLimitedPicker() }
             }
         }
-        .padding(.vertical, 4)
+        .card(active: live.map { !$0.finished } ?? false)
+        .animation(Motion.reduced(systemReduceMotion) ? .easeInOut(duration: 0.25) : .spring(response: 0.45, dampingFraction: 0.9), value: live?.id)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("sources.phone.\(source.id)")
         .sheet(isPresented: $picking) {
@@ -48,30 +76,40 @@ struct PhoneSourceRow: View {
         }
     }
 
-    @ViewBuilder private var status: some View {
-        if st.scanning {
-            ProgressView { Text("Reading…").font(.footnote).foregroundStyle(Palette.inkSoft) }
-                .accessibilityIdentifier("sources.phone.\(source.id).progress")
+    /// "Connected · Allowed", "Connected · Limited: only the photos you chose", "Not connected".
+    private var connectionLine: String {
+        guard st.enabled else { return st.itemCount > 0 ? "Off · \(st.itemCount.formatted()) items kept aside" : "Not connected" }
+        var parts = ["Connected"]
+        if st.permission != .notNeeded && st.permission != .notAsked { parts.append(st.permission.label) }
+        if source == .mail, sources.mailAccount == nil { parts = ["No mailbox yet"] }
+        return parts.joined(separator: " · ")
+    }
+
+    @ViewBuilder private var rest: some View {
+        if st.enabled && st.lastScan == nil && st.itemCount == 0 && st.permission.canRead && st.problem == nil
+            && !(source == .mail && sources.mailAccount == nil) && !(source == .files && sources.deps.bookmarks.all().isEmpty) {
+            FirstScanInvite(id: "phone.\(source.id)", title: source.title) { Task { await sources.scanPhone(source) } }
         } else {
-            if st.permission != .notNeeded && st.permission != .granted {
+            if st.permission != .notNeeded && st.permission != .granted && st.permission != .limited {
                 Text(st.permission.label).font(.footnote.weight(.semibold)).foregroundStyle(Palette.warnText)
                     .accessibilityIdentifier("sources.phone.\(source.id).permission")
             }
-            Text("\(st.itemCount) \(st.itemCount == 1 ? "item" : "items")" + extras)
-                .font(.subheadline)
-                .accessibilityIdentifier("sources.phone.\(source.id).count")
-            if let detail = st.detail { Text(detail).font(.footnote).foregroundStyle(Palette.inkSoft) }
-            HStack {
-                Text(st.lastScan.map { "Last scan \($0.formatted(date: .abbreviated, time: .shortened))" } ?? "Not scanned yet")
-                    .font(.footnote).foregroundStyle(Palette.inkSoft)
-                Spacer()
-                if st.enabled {
-                    Button("Scan again") { Task { await sources.scanPhone(source) } }
-                        .font(.footnote).buttonStyle(.borderless)
-                        .accessibilityIdentifier("sources.phone.\(source.id).rescan")
-                }
+            SourceRestStats(id: source.id, count: st.itemCount,
+                            countLine: "\(st.itemCount) \(st.itemCount == 1 ? "item" : "items")" + extras,
+                            countId: "sources.phone.\(source.id).count", detail: st.detail, coverage: coverage,
+                            lastScan: st.lastScan, on: st.enabled)
+            if st.enabled {
+                CardAction(title: "Scan again", symbol: "arrow.clockwise", hue: hue) { Task { await sources.scanPhone(source) } }
+                    .accessibilityIdentifier("sources.phone.\(source.id).rescan")
             }
         }
+    }
+
+    /// How much of what Loupe can see is read: Photos counts the photos still waiting; others read everything.
+    private var coverage: Double {
+        guard st.itemCount > 0 else { return 0 }
+        let pending = st.pending ?? 0
+        return Double(st.itemCount) / Double(st.itemCount + pending)
     }
 
     private var extras: String {
@@ -82,36 +120,43 @@ struct PhoneSourceRow: View {
     }
 
     private var settingsButton: some View {
-        Button("Open Settings") {
+        CardAction(title: "Open Settings", symbol: "gear", hue: Palette.warnText) {
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
         }
-        .font(.footnote).buttonStyle(.borderless)
     }
 
     @ViewBuilder private var filesControls: some View {
-        ForEach(sources.deps.bookmarks.all()) { loc in
-            HStack {
-                Label(loc.name, systemImage: loc.isFolder ? "folder" : "doc").font(.footnote)
-                Spacer()
-                Button(role: .destructive) { Task { await sources.removePicked(loc.id) } } label: {
-                    Image(systemName: "minus.circle")
+        VStack(alignment: .leading, spacing: 6) {
+            ForEach(sources.deps.bookmarks.all()) { loc in
+                HStack {
+                    Label(loc.name, systemImage: loc.isFolder ? "folder" : "doc").font(.footnote).foregroundStyle(Palette.ink)
+                    Spacer()
+                    Button(role: .destructive) { Task { await sources.removePicked(loc.id) } } label: {
+                        Image(systemName: "minus.circle").frame(minWidth: 44, minHeight: 44)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Stop reading \(loc.name)")
                 }
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Stop reading \(loc.name)")
             }
+            CardAction(title: "Add files or a folder", symbol: "plus", hue: hue) { picking = true }
+                .accessibilityIdentifier("sources.phone.files.add")
+            Text("Share anything to “Send to Loupe” from another app and it appears here on the next open.")
+                .font(.caption).foregroundStyle(Palette.inkSoft)
         }
-        Button { picking = true } label: { Label("Add files or a folder", systemImage: "plus") }
-            .font(.footnote).buttonStyle(.borderless)
-            .accessibilityIdentifier("sources.phone.files.add")
-        Text("Share anything to “Send to Loupe” from another app and it appears here on the next open.")
-            .font(.caption).foregroundStyle(Palette.inkSoft)
     }
 
     private var mailLink: some View {
         NavigationLink {
             MailSetupView(sources: sources)
         } label: {
-            Text(sources.mailAccount == nil ? "Add a mailbox" : "Mailbox settings").font(.footnote)
+            HStack {
+                Label(sources.mailAccount == nil ? "Add a mailbox" : "Mailbox settings", systemImage: "envelope.badge")
+                    .font(.footnote.weight(.semibold)).foregroundStyle(hue)
+                Spacer()
+                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.inkSoft)
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
         }
         .accessibilityIdentifier("sources.phone.mail.setup")
     }
