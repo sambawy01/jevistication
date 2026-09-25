@@ -152,7 +152,7 @@ class ModelPilot(
     override val name: String = "model"
 
     override fun decide(observation: Observation): PilotDecision {
-        val legal = observation.legal.actions
+        val legal = gates(observation, observation.legal.actions)
         if (legal.size == 1) {
             return PilotDecision(legal.single(), DecisionSource.MECHANICAL, observedTick = observation.tick)
         }
@@ -185,6 +185,45 @@ class ModelPilot(
     }
 
     companion object {
+        /**
+         * The fuel gate: when fuel is low and a depot is reachable, only moves that steer toward it
+         * (and never a shot at it once it is in line) are offered. The model zero-shot kept flying
+         * past depots and running dry; this is a rule, like the safety override, and the model
+         * still chooses among what is left.
+         */
+        fun fuelFocus(o: Observation, legal: List<Action>): List<Action> {
+            val d = o.depot ?: return legal
+            val thirsty = o.fuelPercent < 60 || (o.fuelPercent < 90 && d.ahead < 10)
+            if (!thirsty || abs(d.across) > d.ahead * 2 - 0.5) return legal
+            val want = when {
+                d.across < -0.4 -> -1
+                d.across > 0.4 -> 1
+                else -> 0
+            }
+            var focused = legal.filter { it.steer == want }.ifEmpty { legal }
+            if (abs(d.across) < 1.0) focused = focused.filter { !it.fire }.ifEmpty { focused }
+            return focused
+        }
+
+        /**
+         * The gun gate: with the gun ready and an enemy or bridge in line and in range, only the
+         * shooting moves are offered. Zero-shot, the model picked safe non-firing moves and dodged
+         * targets instead of shooting them.
+         */
+        fun fireFocus(o: Observation, legal: List<Action>): List<Action> {
+            if (!o.weaponReady) return legal
+            val enemyInLine = o.threats.any { abs(it.across) < 1.2 && it.ahead < 14 }
+            val bridgeClose = (o.bridgeAheadRows ?: Int.MAX_VALUE) < 12
+            if (!enemyInLine && !bridgeClose) return legal
+            return legal.filter { it.fire }.ifEmpty { legal }
+        }
+
+        /** Both gates, fuel first: a low tank outranks a target. */
+        fun gates(o: Observation, legal: List<Action>): List<Action> {
+            val fuel = fuelFocus(o, legal)
+            return if (fuel.size < legal.size) fuel else fireFocus(o, legal)
+        }
+
         const val JUDGMENT_ID: String = "game.river.move"
         const val QUESTION: String =
             "A plane flies up a river. Which move keeps it off the banks and away from enemies, " +

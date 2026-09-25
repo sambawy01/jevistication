@@ -11,6 +11,7 @@ import dev.loupe.kit.settings.RunPolicy
 import dev.loupe.sources.common.SourceItem
 import dev.loupe.templates.BaselineMode
 import dev.loupe.templates.MechanicalCheck
+import dev.loupe.templates.TransactionEvidence
 import dev.loupe.templates.UserJudgment
 import kotlin.time.TimeSource
 
@@ -170,8 +171,8 @@ class JudgmentSweep(private val backend: Backend?) {
         }
 
         /**
-         * [mechanical] under `rules_first`: off, the exact-duplicate rule no longer answers before
-         * Laya ("Always baseline" is the judgment's own override and still does).
+         * [mechanical] under `rules_first`: off, the exact-duplicate rule and the transaction-evidence
+         * gate no longer answer before Laya ("Always baseline" is the judgment's own override and still does).
          */
         fun mechanical(judgment: UserJudgment, item: SourceItem, rulesFirst: Boolean): Mechanical<String> {
             if (rulesFirst) return mechanical(judgment, item)
@@ -191,11 +192,13 @@ class JudgmentSweep(private val backend: Backend?) {
                 // "Always baseline": the dumb rule answers, the model is not asked; logged as mechanical.
                 return Mechanical.Resolved(baseline.answer(item.text), AutoBaseline.ALWAYS_CHECK)
             }
-            return if (judgment.mechanical == MechanicalCheck.EXACT_DUPLICATE && item.duplicateOf != null && positive != null) {
-                Mechanical.Resolved(positive, "exact-duplicate")
-            } else {
-                Mechanical.Deferred
+            if (judgment.mechanical == MechanicalCheck.EXACT_DUPLICATE && item.duplicateOf != null && positive != null) {
+                return Mechanical.Resolved(positive, "exact-duplicate")
             }
+            // The money judgments' evidence gate: no sign of a payment (or a shop's product page) is
+            // answered "no" by rule, so it never reaches the model or the Unsure queue.
+            TransactionEvidence.ruleAnswer(judgment, item.text)?.let { return Mechanical.Resolved(it, TransactionEvidence.CHECK) }
+            return Mechanical.Deferred
         }
     }
 }

@@ -44,7 +44,7 @@ class SweepCoordinatorTest {
         override fun stopReason(): StopReason? = stop ?: if ((progress.lastOrNull()?.done ?: 0) >= stopAfterRows) StopReason.EXPIRED else null
     }
 
-    private val items = (1..20).map { item("i$it", if (it % 4 == 0) "a receipt for £$it" else "note number $it") } +
+    private val items = (1..20).map { item("i$it", if (it % 4 == 0) "a receipt for £$it" else "note number $it about a payment") } +
         item("img", "", hasText = false)
 
     private fun twoJudgments(): List<UserJudgment> {

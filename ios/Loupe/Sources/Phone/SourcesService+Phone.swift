@@ -31,6 +31,8 @@ struct PhoneDependencies {
     var makeTransport: (MailAccount) -> IMAPTransport
     var oauth: OAuthConfig
     var state: PhoneStateStore
+    /// HTTPS for OAuth and the Gmail API (tests pass a session over a fake URLProtocol).
+    var http: URLSession = .shared
 
     static func live(home: URL) -> PhoneDependencies {
         PhoneDependencies(
@@ -205,6 +207,15 @@ extension SourcesService {
                     run.fail()
                     return
                 }
+                if account.auth == .gmailAPI {
+                    let token = try await oauthAccessToken(account)
+                    let producer = GmailProducer(account: account, client: GmailClient(accessToken: token, session: deps.http),
+                                                 cacheRoot: deps.mailCache)
+                    let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: obs,
+                                                      fetched: { run.job.stage("act.stage.walking") })
+                    try store(out, as: PhoneSourceIds.shared.MAIL, for: s)
+                    break
+                }
                 let credential = try await mailCredential(account)
                 let producer = MailProducer(account: account, credential: credential, cacheRoot: deps.mailCache,
                                             makeTransport: deps.makeTransport)
@@ -218,6 +229,10 @@ extension SourcesService {
             let host = deps.mailAccounts.load()?.host ?? ""
             phone[s, default: .init()].problem = failure.recovery(host: host)
             Log.mail.error("mail scan failed: kind=\(String(describing: failure.kind), privacy: .public) server=\(IMAPClient.Failure.brief(failure.detail), privacy: .public)")
+            run.fail()
+        } catch let failure as GmailClient.Failure {
+            phone[s, default: .init()].problem = failure.recovery
+            Log.mail.error("gmail scan failed: status=\(failure.status, privacy: .public)")
             run.fail()
         } catch {
             phone[s, default: .init()].problem = "The scan failed: \(error.localizedDescription)"
@@ -300,38 +315,56 @@ extension SourcesService {
         deps.state.set(PhoneSource.mail.rawValue, [:])
     }
 
-    /// Signs in with Google or Microsoft (only when a client ID is configured) and saves the account.
+    /// Signs in with Google (the Gmail API, read-only) or Microsoft (IMAP), only when a client ID is
+    /// configured, and saves the account.
     func signInMail(_ provider: OAuthProvider, username: String) async throws {
         guard case .ready(let clientId) = deps.oauth.availability(provider) else {
             if case .needsClientId(let why) = deps.oauth.availability(provider) { throw PhoneSourceError(why) }
             return
         }
-        let tokens = try await OAuthFlow(provider: provider, clientId: clientId).signIn(loginHint: username)
-        let account = MailAccount(host: provider.imapHost, port: 993, username: username,
-                                  auth: provider == .google ? .googleOAuth : .microsoftOAuth)
+        let tokens = try await OAuthFlow(provider: provider, clientId: clientId).signIn(loginHint: username, session: deps.http)
+        try await saveOAuthMail(provider, tokens: tokens, username: username)
+    }
+
+    /// After the browser step: for Google, the address comes from users.getProfile.
+    func saveOAuthMail(_ provider: OAuthProvider, tokens: OAuthTokens, username: String) async throws {
+        let account: MailAccount
+        switch provider {
+        case .google:
+            let profile = try await GmailClient(accessToken: tokens.accessToken, session: deps.http).profile()
+            account = MailAccount(host: GmailProducer.host, port: 443, username: profile.emailAddress, auth: .gmailAPI)
+        case .microsoft:
+            account = MailAccount(host: provider.imapHost, port: 993, username: username, auth: .microsoftOAuth)
+        }
         let json = String(decoding: try JSONEncoder().encode(tokens), as: UTF8.self)
         try await saveMail(account, secret: json)
     }
 
     private func mailCredential(_ account: MailAccount) async throws -> IMAPCredential {
-        guard let secret = deps.keychain(account).read(), !secret.isEmpty else {
-            throw PhoneSourceError("The mailbox password is missing from the Keychain. Remove the mailbox and add it again.")
-        }
-        switch account.auth {
-        case .appPassword:
-            return .password(secret)
-        case .googleOAuth, .microsoftOAuth:
-            let provider: OAuthProvider = account.auth == .googleOAuth ? .google : .microsoft
-            guard case .ready(let clientId) = deps.oauth.availability(provider) else {
-                throw PhoneSourceError("Needs a \(provider.name) OAuth client ID. Remove the mailbox and add it with an app password.")
+        if account.auth == .appPassword {
+            guard let secret = deps.keychain(account).read(), !secret.isEmpty else {
+                throw PhoneSourceError("The mailbox password is missing from the Keychain. Remove the mailbox and add it again.")
             }
-            let saved = try JSONDecoder().decode(OAuthTokens.self, from: Data(secret.utf8))
-            guard let refresh = saved.refreshToken else { return .oauthToken(saved.accessToken) }
-            let flow = OAuthFlow(provider: provider, clientId: clientId)
-            let fresh = try await flow.exchange(flow.refreshRequest(refreshToken: refresh))
-            let keep = OAuthTokens(accessToken: fresh.accessToken, refreshToken: fresh.refreshToken ?? refresh, expiresIn: fresh.expiresIn)
-            try deps.keychain(account).save(String(decoding: try JSONEncoder().encode(keep), as: UTF8.self))
-            return .oauthToken(keep.accessToken)
+            return .password(secret)
         }
+        return .oauthToken(try await oauthAccessToken(account))
+    }
+
+    /// A fresh access token from the refresh token kept in the Keychain (this device only).
+    func oauthAccessToken(_ account: MailAccount) async throws -> String {
+        guard let secret = deps.keychain(account).read(), !secret.isEmpty else {
+            throw PhoneSourceError("The mailbox sign-in is missing from the Keychain. Remove the mailbox and add it again.")
+        }
+        let provider: OAuthProvider = account.auth == .gmailAPI ? .google : .microsoft
+        guard case .ready(let clientId) = deps.oauth.availability(provider) else {
+            throw PhoneSourceError("Needs a \(provider.name) OAuth client ID. Remove the mailbox and add it with an app password.")
+        }
+        let saved = try JSONDecoder().decode(OAuthTokens.self, from: Data(secret.utf8))
+        guard let refresh = saved.refreshToken else { return saved.accessToken }
+        let flow = OAuthFlow(provider: provider, clientId: clientId)
+        let fresh = try await flow.exchange(flow.refreshRequest(refreshToken: refresh), session: deps.http)
+        let keep = OAuthTokens(accessToken: fresh.accessToken, refreshToken: fresh.refreshToken ?? refresh, expiresIn: fresh.expiresIn)
+        try deps.keychain(account).save(String(decoding: try JSONEncoder().encode(keep), as: UTF8.self))
+        return keep.accessToken
     }
 }

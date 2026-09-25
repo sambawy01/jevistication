@@ -9,7 +9,7 @@ import LoupeKit
 /// waits at most one item.
 enum ModelWork {
     static let lane = ModelLane()
-    static let queue = DispatchQueue(label: "dev.loupe.model", qos: .userInitiated)
+    static let queue = DispatchQueue(label: "com.loupe-ai.ios.model", qos: .userInitiated)
 
     /// Runs `work` on the model queue under a claim at `priority`, released when it returns.
     /// The claim is taken *before* queueing, so a running sweep yields to it at its next item.

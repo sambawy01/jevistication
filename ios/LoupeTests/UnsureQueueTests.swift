@@ -19,7 +19,7 @@ final class UnsureQueueTests: XCTestCase {
                    mime: "text/plain", date: nil, dateOrigin: nil, email: nil, facts: [:], duplicateOf: nil)
     }
 
-    private lazy var items: [SourceItem] = (0..<64).map { i in item("i\(i)", i % 2 == 0 ? "receipt total paid \(i)" : "lunch \(i)") }
+    private lazy var items: [SourceItem] = (0..<64).map { i in item("i\(i)", i % 2 == 0 ? "receipt total paid \(i)" : "lunch, about the payment \(i)") }
 
     private func service() -> JudgmentsService {
         let list = items

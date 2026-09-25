@@ -37,7 +37,7 @@ final class AssistService: ObservableObject {
         if LaunchOptions.current.fakeAssistant { return .fake() }
         #endif
         return AssistService(store: AssistSettingsStore(),
-                             key: LaunchOptions.current.ephemeralKey ? MemoryKeyStore() : KeychainStore(service: "dev.loupe.app.assistant", account: "provider-api-key"),
+                             key: LaunchOptions.current.ephemeralKey ? MemoryKeyStore() : KeychainStore(service: "com.loupe-ai.ios.assistant", account: "provider-api-key"),
                              session: AssistService.ephemeralSession())
     }()
 
@@ -247,8 +247,8 @@ final class FakeAssistantProtocol: URLProtocol {
 
 extension AssistService {
     static func fake() -> AssistService {
-        let defaults = UserDefaults(suiteName: "dev.loupe.app.fakeAssistant")!
-        defaults.removePersistentDomain(forName: "dev.loupe.app.fakeAssistant")
+        let defaults = UserDefaults(suiteName: "com.loupe-ai.ios.fakeAssistant")!
+        defaults.removePersistentDomain(forName: "com.loupe-ai.ios.fakeAssistant")
         let s = AssistService(store: AssistSettingsStore(defaults: defaults), key: MemoryKeyStore("sk-fake-key-for-ui-tests"),
                               session: ephemeralSession(protocols: [FakeAssistantProtocol.self]))
         s.update(AssistConfig(enabled: true, kind: .openAICompatible, baseURL: "https://assistant.invalid/v1", model: "fake-model", name: "Fake provider"))

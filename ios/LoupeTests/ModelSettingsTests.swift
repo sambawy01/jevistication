@@ -127,7 +127,7 @@ final class ModelSettingsTests: XCTestCase {
     func testJudgmentsSweepWithLayaOffUsesRulesWithoutTheModel() async throws {
         let settings = FakeSettings().off("judgments")
         let model = FakeModel(installed: false)
-        let s = JudgmentsService(ledger: LedgerService(home: home), items: { [self.item("r1", "Receipt total paid"), self.item("n1", "hello")] },
+        let s = JudgmentsService(ledger: LedgerService(home: home), items: { [self.item("r1", "Receipt total paid"), self.item("n1", "hello, about the payment")] },
                                  model: model, settings: settings)
         s.load()
         guard case .success(let id) = s.useTemplate("is-receipt") else { return XCTFail("refused") }
@@ -143,7 +143,7 @@ final class ModelSettingsTests: XCTestCase {
     func testJudgmentsSweepDefaultsAskLayaAsBefore() async {
         let settings = FakeSettings()
         let model = FakeModel(installed: true)
-        let s = JudgmentsService(ledger: LedgerService(home: home), items: { [self.item("r1", "Receipt total paid"), self.item("n1", "hello")] },
+        let s = JudgmentsService(ledger: LedgerService(home: home), items: { [self.item("r1", "Receipt total paid"), self.item("n1", "hello, about the payment")] },
                                  model: model, settings: settings)
         s.load()
         guard case .success(let id) = s.useTemplate("is-receipt") else { return XCTFail("refused") }

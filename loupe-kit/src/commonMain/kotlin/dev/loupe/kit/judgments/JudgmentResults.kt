@@ -8,6 +8,7 @@ import dev.loupe.persistence.CorrectionKey
 import dev.loupe.persistence.DataExport
 import dev.loupe.sources.common.SourceItem
 import dev.loupe.templates.Shape
+import dev.loupe.templates.TransactionEvidence
 import dev.loupe.templates.UserJudgment
 
 /**
@@ -38,7 +39,8 @@ data class ResultRow(
         get() {
             val check = mechanicalCheck ?: return null
             val copyOf = item?.duplicateOf?.let { " — a byte-identical copy of ${it.substringAfterLast('/')}" } ?: ""
-            return "Answered by rule: $check$copyOf; the model was not asked."
+            val said = if (check == TransactionEvidence.CHECK) "$check — no sign of a payment in it" else check
+            return "Answered by rule: $said$copyOf; the model was not asked."
         }
 
     /** The desktop's "Input was cut: read first N of M …" note, or null when the whole item was read. */

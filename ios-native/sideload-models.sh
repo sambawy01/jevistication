@@ -4,10 +4,10 @@
 # and checks both against the SHA-256 pins LayaModelStore enforces. The shipping app gets these
 # files through its own one-time, consented download instead; nothing here is used at runtime.
 #
-# Usage: ios-native/sideload-models.sh <bundle-id> [simulator udid | booted]
+# Usage: ios-native/sideload-models.sh [bundle-id (default com.loupe-ai.ios)] [simulator udid | booted]
 set -euo pipefail
 
-bundle="${1:?usage: $0 <bundle-id> [simulator udid | booted]}"
+bundle="${1:-com.loupe-ai.ios}"
 device="${2:-booted}"
 root="$(cd "$(dirname "$0")/.." && pwd)"
 

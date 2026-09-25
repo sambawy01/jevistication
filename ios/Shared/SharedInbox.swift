@@ -3,7 +3,7 @@ import Foundation
 /// "Send to Loupe": the Share Extension drops what was shared into an App Group folder; the app reads
 /// it as the `shared` source. Files keep their names; links and text become `.txt` files.
 enum SharedInbox {
-    static let appGroup = "group.dev.loupe.app"
+    static let appGroup = "group.com.loupe-ai.ios"
 
     /// The inbox folder: the App Group container when the entitlement is present, else a folder in
     /// the app's own container (a build without the App Group, e.g. an unsigned test run).

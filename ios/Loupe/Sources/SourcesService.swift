@@ -43,7 +43,7 @@ final class SourcesService: ObservableObject {
     let home: URL
     let deps: PhoneDependencies
     private let sampleRoot: URL?
-    let queue = DispatchQueue(label: "dev.loupe.sources", qos: .utility)
+    let queue = DispatchQueue(label: "com.loupe-ai.ios.sources", qos: .utility)
     private var started = false
 
     convenience init(home: URL, sampleRoot: URL?) {

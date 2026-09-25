@@ -60,16 +60,14 @@ final class GameUITests: XCTestCase {
     }
 
     /// Watch mode without the model: the baseline flies, with a note and a link to Me → Laya model.
-    func testWatchWithoutModelFliesBaselineWithNote() throws {
+    func testWatchWithoutModelFliesBaselineWithNote() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeGame", "watch"]
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeGame", "watch", "-LoupeNoModel"]
         app.launch()
         let rows = app.descendants(matching: .any)["game.rows"]
         XCTAssertTrue(rows.waitForExistence(timeout: 5))
         let note = app.descendants(matching: .any)["game.noModel"]
-        if !note.waitForExistence(timeout: 3) {
-            throw XCTSkip("the Laya model is installed on this simulator; the no-model note does not apply")
-        }
+        XCTAssertTrue(note.waitForExistence(timeout: 3))
         XCTAssertTrue(app.buttons["game.getModel"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["game.bars"].exists)
     }

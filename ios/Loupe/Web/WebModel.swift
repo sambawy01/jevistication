@@ -97,7 +97,7 @@ final class WebModel: ObservableObject {
                 forced = FixtureSearchHelper.Forced(rawValue: args[i + 1])
                 if i + 2 < args.count, let s = WebSector(rawValue: args[i + 2]) { only = [s] }
             }
-            let store = UserDefaults(suiteName: "dev.loupe.fixture.web.\(UUID().uuidString)") ?? .standard
+            let store = UserDefaults(suiteName: "com.loupe-ai.ios.fixture.web.\(UUID().uuidString)") ?? .standard
             if args.contains("-LoupeWebSourcesOn") { for s in WebSector.allCases { store.set(true, forKey: WebLibraryModel.key(s)) } }
             let lib = WebLibraryModel(helper: FixtureSearchHelper(forced: forced, sources: only), fixtureMode: true, defaults: store)
             let m = WebModel(helper: FixtureFlightsHelper(), keys: MemoryKeyStore("duffel_test_fixture_only_key"),
@@ -108,7 +108,7 @@ final class WebModel: ObservableObject {
         }
         if launch.ephemeralKey {
             return WebModel(helper: LiveFlightsHelper(installId: InstallID.value), keys: MemoryKeyStore(), connectivity: Connectivity(),
-                            defaults: UserDefaults(suiteName: "dev.loupe.ephemeral.\(UUID().uuidString)") ?? .standard)
+                            defaults: UserDefaults(suiteName: "com.loupe-ai.ios.ephemeral.\(UUID().uuidString)") ?? .standard)
         }
         #endif
         return WebModel(helper: LiveFlightsHelper(installId: InstallID.value), keys: KeychainStore(), connectivity: Connectivity())
@@ -262,7 +262,7 @@ final class WebModel: ObservableObject {
 }
 
 enum InstallID {
-    static let defaultsKey = "dev.loupe.installId"
+    static let defaultsKey = "com.loupe-ai.ios.installId"
     /// A random per-install UUID, used by the helper only as its rate-limit key.
     static func value(_ defaults: UserDefaults = .standard) -> String {
         if let v = defaults.string(forKey: defaultsKey), UUID(uuidString: v) != nil { return v }

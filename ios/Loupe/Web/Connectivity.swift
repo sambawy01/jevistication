@@ -13,7 +13,7 @@ final class Connectivity: ObservableObject {
             let online = path.status == .satisfied
             Task { @MainActor in self?.isOnline = online }
         }
-        monitor.start(queue: DispatchQueue(label: "dev.loupe.connectivity"))
+        monitor.start(queue: DispatchQueue(label: "com.loupe-ai.ios.connectivity"))
     }
 
     deinit { monitor.cancel() }

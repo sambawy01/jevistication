@@ -50,7 +50,7 @@ class AutoBaselineTest {
         Scored(mapOf(j.candidates[0] to 0.7, j.candidates[1] to 0.3))
     }
 
-    private val items = (0 until 48).map { i -> item("i$i", "#$i " + if (i % 2 == 0) "your receipt total paid" else "hello there") }
+    private val items = (0 until 48).map { i -> item("i$i", "#$i " + if (i % 2 == 0) "your receipt total paid" else "hello there, about the payment") }
 
     private fun receipt(): UserJudgment = (JudgmentBook.fromTemplate("is-receipt", emptyMap(), emptyList()) as BookResult.Created).judgment
 

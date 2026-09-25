@@ -45,7 +45,7 @@ protocol SortNotifying: AnyObject {
 /// decided row is already in the ledger). Scheduled only while the setting is on.
 @MainActor
 final class BackgroundSorter {
-    static let identifier = "dev.loupe.app.sort"
+    static let identifier = "com.loupe-ai.ios.sort"
     static let shared = BackgroundSorter(scheduler: SystemSortScheduler(), runner: SortService.shared,
                                          notifier: SystemSortNotifier())
 

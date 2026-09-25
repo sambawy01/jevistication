@@ -202,6 +202,30 @@ is ever built for its own sake.
 expiring, junk. Authored to the three-part template: the invariant, what breaks it, what looks
 similar but does not.
 
+**C1a · Rules and gates before the model (mechanical first).** A rule that can answer is asked
+before Laya, and its answer is logged as a mechanical row (`ResolvedBy.Mechanical(check)`): certain,
+never queued as Unsure, never counted as model evidence in calibration. The gates today:
+
+- `exact-duplicate` — a byte-identical copy (SHA-256) is a duplicate (`is-duplicate`).
+- `baseline` / `auto-baseline` / `laya-off` — the judgment's dumb baseline answers (decision B,
+  "Always baseline", or Laya switched off in Model settings).
+- `no-transaction-evidence` (`TransactionEvidence`, templates) — the money family (`is-receipt`,
+  `tax-receipt`, `warranty-proof`, `refund-issued`, `bill-unpaid`, `receipt-kind`). A document with
+  **no sign that money moved or is owed** is answered with the judgment's negative option ("not a
+  receipt", "not a purchase", …). Strong evidence always defers to Laya: receipt / invoice /
+  order-confirmation wording, amount paid / charged / due, a masked card number or "card ending",
+  an order / invoice / receipt number, a refund issued, a donation. Weak hints (bare "paid",
+  "total", "order", "VAT", a card brand) defer too — **unless** the text reads as a shop listing
+  (add to cart/basket, buy now, in stock, reviews, free delivery, product details), which is
+  negative evidence: a product page saved as a PDF prints a merchant, a price, "VAT included" and
+  "we accept Visa" without recording any payment. English and Arabic in full (Arabic normalised:
+  harakat and tatweel dropped, alef/yaa/taa-marbuta folded), core words in French, German and
+  Spanish. Known limit: a receipt in a language not covered, with no digits after a "total", is
+  answered "no" by rule — correct it and file the words. Applied to judgments made from those
+  templates, including ones saved before the gate existed (matched by template id); `rules_first`
+  off turns it off with the duplicate rule. Why: the owner's Unsure queue showed a Bugaboo stroller
+  product page (a Files PDF) under "Is this a receipt?" as an item Laya was torn on.
+
 **C2 · Plain-language authoring.** A written question compiles to typed questions with
 candidate criteria. Lint rejects text-judge phrasing — "rate 1–10", "explain why".
 *Accept:* a judgment written by someone who has not read the source produces a working, scored
@@ -986,7 +1010,7 @@ their acceptance criteria are met; entries here record increments toward them.
   not downloaded and are listed as skipped. **Files** — `UIDocumentPickerViewController` for files
   and folders, security-scoped bookmarks persisted (`sources/bookmarks.json`), re-scanned on every
   open through the common scanner; plus the **Share Extension "Send to Loupe"** (`LoupeShare`),
-  which copies shared files, links and text into the App Group `group.dev.loupe.app` inbox read as
+  which copies shared files, links and text into the App Group `group.com.loupe-ai.ios` inbox read as
   the `shared` source. **Calendar** — EventKit read-only (iOS 17 full access): title, times,
   attendees, organiser, recurrence, one item per occurrence, a year back to a year ahead.
   **Contacts** — CNContactStore: names, emails, phones as CONTACT items; the shared `WatcherRun`
@@ -1156,6 +1180,48 @@ their acceptance criteria are met; entries here record increments toward them.
   `email_run`, `feeds`, `mail_history`, and "Reading only" for imports and source scans. DEBUG `-LoupeDiag`
   prints `LOUPE-DIAG` lines (sample resolution, Laya open time, the Sources run's counters, the Gmail probe,
   who answered in every finished job) for `devicectl … launch --console`.
+- **2026-09-25 — iPhone: bundle ID `com.loupe-ai.ios`, and Gmail over the Gmail API, read-only (owner
+  decisions, 2026-09-25).** Every app identifier moved from `dev.loupe.app` to `com.loupe-ai.ios`: the app,
+  `com.loupe-ai.ios.share`, `.tests`, `.uitests`, `bundleIdPrefix`, the App Group `group.com.loupe-ai.ios`
+  (both entitlements, `SharedInbox`), the BGTask `com.loupe-ai.ios.sort`, background URLSession ids, Keychain
+  services (`com.loupe-ai.ios.mail`, `.assistant`, `.safebrowsing`, `.duffel`), UserDefaults suites, the log
+  subsystem, queue labels, the Microsoft redirect `msauth.com.loupe-ai.ios://auth`, and
+  `ios-native/sideload-models.sh` (now defaulting to it). KMP packages `dev.loupe.*` are unchanged. It installs
+  as a new app beside the old `dev.loupe.app`. Gmail: new `Loupe/Sources/Mail/Gmail.swift` — OAuth
+  (ASWebAuthenticationSession, PKCE S256, `state`, no secret) asks only for
+  `https://www.googleapis.com/auth/gmail.readonly` (the address comes from `users.getProfile`, so no
+  openid/email); the refresh token is in the Keychain (`WhenUnlockedThisDeviceOnly`); only GETs:
+  first pass `users.messages.list` (`labelIds=INBOX`, `q=newer_than:30d`, at most 200) with the historyId
+  taken from `users.getProfile` before listing, later passes `users.history.list`
+  (`historyTypes=messageAdded`, `labelId=INBOX`) from the stored historyId, a 404 there starting a fresh
+  pass; each message `users.messages.get?format=raw` → `.eml` → the shared MIME parser; labelled Online
+  (§4a), off by default. Shapes checked against Google's REST reference. The client ID is the build setting
+  `GOOGLE_IOS_CLIENT_ID` (the owner's iOS client `149960832358-…`, public, no secret) with the reversed ID as
+  a `CFBundleURLTypes` scheme from `GOOGLE_IOS_URL_SCHEME`; emptied, the Mail screen says it needs a Google
+  OAuth client ID. IMAP with app passwords stays for other providers and as the Gmail fallback. Tests:
+  `LoupeTests/GmailTests.swift` (fake URLProtocol with recorded-shape replies: sign-in → profile → first
+  pass → history incremental, expired historyId, 401, token exchange and refresh, no-client-ID) and the
+  OAuth URL test (scope, S256, redirect).
+- **2026-09-25 — Receipt evidence gate and plain-words Unsure captions.** Owner's report: a Files
+  PDF of a Bugaboo stroller product page sat in the Unsure queue under "Is this a receipt?",
+  captioned "picked because the model is torn". What Laya reads for a Files PDF: `File: <name>`, a
+  blank line, then PDFKit's whole text layer (Vision OCR of the first pages when the layer is
+  empty), cut to the first 4,000 characters (`text_chars`), with the question and the two options
+  ("a receipt or proof of purchase" / "not a receipt"); criteria are not in the prompt by default.
+  Fix 1: the `no-transaction-evidence` gate (C1a). Fix 2: `UnsureEntry.why` now reads "Laya wasn't
+  sure (52% yes) — your answer teaches it" and, for the audit arm, "a random check on an answer
+  Laya was sure of"; the phone's "audit" pill reads "spot check". Measured with real Laya
+  (`ReceiptGateMeasurementTest`, gated on `models/`) on the 45 synthetic sample text items plus six
+  hand-written ones (EN/AR product pages, EN/AR till receipts, an order email, an unpaid invoice),
+  labels by the person measuring — a direction, not an accuracy claim: current wording, model only
+  **34/51 (66.7%)**, 18 below threshold; current wording + gate **38/51 (74.5%)**, 27 answered by
+  rule with **0 wrong**, 10 below threshold. A sharpened wording ("Is this a receipt: a record that a
+  payment was completed?" / "a record of a completed payment" / "not a payment record") scored 37/51
+  alone but **38/51 with the gate — no gain** over the current wording, and it lowered Laya's yes on
+  the real Arabic receipt (0.46 → 0.32) and the order email (0.59 → 0.25); since a new wording also
+  restarts every user's calibration, the wording was **not** changed. Laya remains weak on real
+  receipts (the English till receipt: 0.11 yes under either wording) — the gate removes noise, it
+  does not make the model read receipts better.
 
 ## Where the build stands
 
@@ -1205,8 +1271,8 @@ Nothing below is deferred by choice; each needs something this environment does 
 | **A1** model runtime, fine-tune, latency | A real mid-range device — its acceptance criterion is a measurement on hardware. The weights and the ONNX export now exist (desktop), fine-tuning needs a labelled corpus and a GPU |
 | **A2** the second backend | Qwen3-0.6B weights. Laya runs; the runtime and the interface exist |
 | **B1–B9** every source | Android APIs: SAF, MediaStore, ML Kit, Gmail OAuth, calendar, contacts, notifications, WebView. *On the iPhone (epic #7 child 7, simulator):* B1 files (picker, bookmarks, share sheet), B2 mail (IMAP with an app password), B4 photos (PhotoKit + Vision OCR) and B5 calendar and contacts are built; B3 spreadsheets are read as CSV files only; B6 voice memos, B8 notifications (iOS offers none) and B9 are not built |
-| **B2 OAuth mail** (Gmail API / Outlook) | **Owner:** a Google OAuth client ID (iOS type) and a Microsoft Entra app registration (public client, IMAP.AccessAsUser.All), put in `ios/project.yml` as `LoupeGoogleOAuthClientID` / `LoupeMicrosoftOAuthClientID`. Empty today, so the app offers IMAP with an app password instead |
-| **"Send to Loupe" on a device** | The App Group `group.dev.loupe.app` registered on the owner's Apple developer account (the simulator runs it unsigned) |
+| **B2 OAuth mail** (Gmail API / Outlook) | Google: **done 2026-09-25** — the owner's iOS client in `ios/project.yml` (`GOOGLE_IOS_CLIENT_ID`), Gmail API `gmail.readonly`. **Owner:** a Microsoft Entra app registration (public client, IMAP.AccessAsUser.All) → `LoupeMicrosoftOAuthClientID`; empty today, so Outlook uses IMAP with an app password |
+| **"Send to Loupe" on a device** | The App Group `group.com.loupe-ai.ios` registered on the owner's Apple developer account (the simulator runs it unsigned) |
 | **D5** actions, preview, undo | Android. The desktop app shows **preview only** and never changes a file; undo exists for corrections |
 | **E1–E4** actuation | Android `AutofillService`, App Intents, accessibility, WebView |
 | **F1** passive mode | Android: WorkManager, charging and thermal constraints. iPhone: built on the simulator (epic #7 child 6); battery/thermal on a device needs a physical iPhone |
@@ -1748,7 +1814,7 @@ after 1, 6 needs 3, 4 and 5.
   pilot's executor moved onto the same queue. `SortService` (Run now, progress, cancel, thermal
   `.serious`/`.critical` and Low Power Mode gating before and during a run, auto-resume after
   preemption with counts carried across the pause, last run persisted), `BackgroundSorter`
-  (BGProcessingTask `dev.loupe.app.sort`, `requiresExternalPower`, no network, registered in
+  (BGProcessingTask `com.loupe-ai.ios.sort`, `requiresExternalPower`, no network, registered in
   `LoupeApp.init`, rescheduled each run, expiration handler stops at the next item, completes
   unsuccessfully when stopped so iOS offers another window), a local notification (permission asked
   only when the setting is turned on), Me → Sorting (toggle **off by default**, Run now, progress,

@@ -3,14 +3,17 @@ import CryptoKit
 import Foundation
 import UIKit
 
-/// OAuth for Gmail and Outlook mail (IMAP with SASL XOAUTH2), by the installed-app flow with PKCE
-/// (RFC 7636, S256) and a `state` check, through `ASWebAuthenticationSession`. **Gated:** it needs an
-/// OAuth client ID registered by the owner with Google / Microsoft. The IDs come from Info.plist keys
-/// `LoupeGoogleOAuthClientID` / `LoupeMicrosoftOAuthClientID`, which are EMPTY by default, and while
-/// they are empty the Mail screen says so and offers app-password IMAP instead. No client secret is
+/// OAuth for Gmail (the Gmail REST API, read-only scope) and Outlook mail (IMAP with SASL XOAUTH2), by
+/// the installed-app flow with PKCE (RFC 7636, S256) and a `state` check, through
+/// `ASWebAuthenticationSession`. **Gated:** it needs an OAuth client ID. The IDs come from Info.plist
+/// keys `LoupeGoogleOAuthClientID` (build setting `GOOGLE_IOS_CLIENT_ID`, its reversed form registered
+/// as a URL scheme from `GOOGLE_IOS_URL_SCHEME`) / `LoupeMicrosoftOAuthClientID`; while one is empty
+/// the Mail screen says so and offers app-password IMAP instead. No client secret is
 /// used or stored (public client).
 enum OAuthProvider: String, CaseIterable, Identifiable {
     case google, microsoft
+
+    static let gmailReadonly = "https://www.googleapis.com/auth/gmail.readonly"
 
     var id: String { rawValue }
     var name: String { self == .google ? "Google" : "Microsoft" }
@@ -27,9 +30,10 @@ enum OAuthProvider: String, CaseIterable, Identifiable {
             : "https://login.microsoftonline.com/common/oauth2/v2.0/token")!
     }
 
-    /// IMAP read access (Google has no narrower IMAP scope than full mail), plus a refresh token.
+    /// Google: the Gmail API's read-only scope and nothing else (least privilege; the address comes
+    /// from users.getProfile). Microsoft: IMAP read access plus a refresh token.
     var scopes: [String] {
-        self == .google ? ["https://mail.google.com/", "email"]
+        self == .google ? [Self.gmailReadonly]
             : ["https://outlook.office.com/IMAP.AccessAsUser.All", "offline_access", "email"]
     }
 
@@ -41,7 +45,7 @@ enum OAuthProvider: String, CaseIterable, Identifiable {
             let reversed = clientId.split(separator: ".").reversed().joined(separator: ".")
             return "\(reversed):/oauth2redirect"
         case .microsoft:
-            return "msauth.dev.loupe.app://auth"
+            return "msauth.com.loupe-ai.ios://auth"
         }
     }
 
@@ -183,7 +187,7 @@ struct OAuthFlow {
 
     /// Runs the browser sign-in and returns tokens. Only reachable when a client ID is configured.
     @MainActor
-    func signIn(loginHint: String?) async throws -> OAuthTokens {
+    func signIn(loginHint: String?, session urlSession: URLSession = .shared) async throws -> OAuthTokens {
         let pkce = PKCE.random()
         let state = PKCE.random().verifier
         let url = authorizationURL(pkce: pkce, state: state, loginHint: loginHint)
@@ -197,7 +201,7 @@ struct OAuthFlow {
             session.prefersEphemeralWebBrowserSession = true
             if !session.start() { cont.resume(throwing: PhoneSourceError("The sign-in window could not be opened.")) }
         }
-        return try await exchange(tokenRequest(code: try Self.code(from: callback, expectedState: state), pkce: pkce))
+        return try await exchange(tokenRequest(code: try Self.code(from: callback, expectedState: state), pkce: pkce), session: urlSession)
     }
 }
 

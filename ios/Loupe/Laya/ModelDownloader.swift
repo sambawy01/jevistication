@@ -274,8 +274,8 @@ final class ModelDownloader: DownloadTransportEvents {
 @MainActor
 final class BackgroundDownloadTransport: NSObject, DownloadTransport {
     static let shared = BackgroundDownloadTransport()
-    static let wifiIdentifier = "dev.loupe.app.model"
-    static let cellularIdentifier = "dev.loupe.app.model.cellular"
+    static let wifiIdentifier = "com.loupe-ai.ios.model"
+    static let cellularIdentifier = "com.loupe-ai.ios.model.cellular"
 
     weak var events: DownloadTransportEvents?
     /// Where a finished file is moved (synchronously, inside the delegate callback).

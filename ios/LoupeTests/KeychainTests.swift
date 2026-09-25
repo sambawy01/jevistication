@@ -6,7 +6,7 @@ final class KeychainTests: XCTestCase {
     var store: KeychainStore!
 
     override func setUp() {
-        store = KeychainStore(service: "dev.loupe.app.tests.\(UUID().uuidString)", account: "test")
+        store = KeychainStore(service: "com.loupe-ai.ios.tests.\(UUID().uuidString)", account: "test")
     }
     override func tearDown() { try? store.delete() }
 

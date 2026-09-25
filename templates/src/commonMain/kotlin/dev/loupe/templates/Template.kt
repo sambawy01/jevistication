@@ -178,6 +178,13 @@ data class TemplateExample(val text: String, val answer: String, val why: String
 enum class MechanicalCheck(val description: String) {
     /** A byte-identical copy of an item seen earlier is a duplicate — exact, by SHA-256. */
     EXACT_DUPLICATE("byte-identical copies are answered by SHA-256, without the model"),
+
+    /**
+     * A document with no sign that money moved or is owed (no receipt/invoice wording, no amount
+     * paid or due, no order number, no payment line) — or a shop's product listing — is answered
+     * with the negative option by rule. See [TransactionEvidence].
+     */
+    NO_TRANSACTION_EVIDENCE("documents with no sign of a payment (or shop product pages) are answered 'no' by rule, without the model"),
 }
 
 /**

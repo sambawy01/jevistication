@@ -190,7 +190,14 @@ struct MailSetupView: View {
                 ForEach(OAuthProvider.allCases) { provider in
                     switch sources.deps.oauth.availability(provider) {
                     case .ready:
-                        Button("Sign in with \(provider.name)") { Task { await signIn(provider) } }.disabled(saving)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Button("Sign in with \(provider.name)") { Task { await signIn(provider) } }.disabled(saving)
+                                .accessibilityIdentifier("mail.oauth.\(provider.id).signin")
+                            if provider == .google {
+                                Text("Online. Loupe asks Google only to read Gmail (read-only); it never changes, sends or deletes mail.")
+                                    .font(.footnote).foregroundStyle(Palette.inkSoft)
+                            }
+                        }
                     case .needsClientId(let why):
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Sign in with \(provider.name)").foregroundStyle(Palette.inkSoft)

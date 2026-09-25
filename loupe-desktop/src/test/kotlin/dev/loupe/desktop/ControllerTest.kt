@@ -108,8 +108,11 @@ class ControllerTest {
         val j = app.selectedJudgment!!
         runBlocking { app.sweep(j.id)!!.join() }
 
-        val queue = Analysis.queue(app.ledger, j, app.correctionIndex)
+        // Rule-answered rows never queue, so the sample leaves fewer model rows: a queue of 10 still
+        // has more rows behind it than it takes, which is where the audit arm draws from.
+        val queue = Analysis.queue(app.ledger, j, app.correctionIndex, size = 10)
         assertTrue(queue.isNotEmpty())
+        assertTrue(queue.none { it.row.isMechanical }, "a rule's answer is never queued")
         assertTrue(queue.any { it.reason == SelectionReason.AUDIT }, "the random audit arm is present")
         // The most informative entry comes first.
         assertTrue(queue.first().informativeness >= queue.filter { it.reason == SelectionReason.UNCERTAIN }.last().informativeness)
@@ -120,7 +123,8 @@ class ControllerTest {
         assertEquals(Analysis.MIN_FOR_RELIABILITY, before.correctionsNeededForReliability)
 
         // The user answers twelve items: the model's answer on most, a change on some.
-        val rows = Analysis.effectiveRows(app.ledger, j, app.correctionIndex).take(12)
+        // Model answers only: the evidence gate answers a sample document with no sign of a payment by rule.
+        val rows = Analysis.effectiveRows(app.ledger, j, app.correctionIndex).filter { !it.isMechanical }.take(12)
         rows.forEachIndexed { i, row ->
             val other = j.shape.candidates.first { it != row.distribution.argmax }
             val truth = if (i % 4 == 0) other else row.distribution.argmax
@@ -338,7 +342,7 @@ class ControllerTest {
         // Nothing corrected yet: the comparison refuses rather than measuring nothing.
         assertNull(app.compareCriteria(j.id))
         runBlocking { app.sweep(j.id)!!.join() }
-        Analysis.effectiveRows(app.ledger, j, app.correctionIndex).take(6).forEach { row ->
+        Analysis.effectiveRows(app.ledger, j, app.correctionIndex).filter { !it.isMechanical }.take(6).forEach { row ->
             app.correct(j.id, row.itemId!!, row.distribution.argmax, confirmed = true)
         }
         runBlocking { app.compareCriteria(j.id)!!.join() }

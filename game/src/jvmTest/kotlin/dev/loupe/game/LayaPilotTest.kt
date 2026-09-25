@@ -74,7 +74,7 @@ class LayaPilotTest {
     @Test
     fun `decision latency on this machine`() = withModel { backend, _ ->
         val pilot = ModelPilot(backend)
-        val observations = sampleObservations().filter { it.legal.actions.size > 1 }
+        val observations = sampleObservations().filter { ModelPilot.gates(it, it.legal.actions).size > 1 }
         repeat(10) { pilot.decide(observations[it % observations.size]) } // warm-up, not counted
         val stats = DecisionStats(window = 1_000)
         val started = System.nanoTime()

@@ -3,7 +3,7 @@ import LoupeKit
 
 /// A mailbox the user added. Not secret: the password or OAuth token lives in the Keychain.
 struct MailAccount: Codable, Equatable {
-    enum Auth: String, Codable { case appPassword, googleOAuth, microsoftOAuth }
+    enum Auth: String, Codable { case appPassword, gmailAPI, microsoftOAuth }
 
     var host: String
     var port: UInt16
@@ -14,7 +14,7 @@ struct MailAccount: Codable, Equatable {
     var key: String { BookmarkStore.stableId(URL(fileURLWithPath: "/\(username.lowercased())@\(host.lowercased())")) }
 
     func keychain() -> KeychainStore {
-        KeychainStore(service: "dev.loupe.app.mail", account: "\(auth.rawValue):\(username.lowercased())@\(host.lowercased())")
+        KeychainStore(service: "com.loupe-ai.ios.mail", account: "\(auth.rawValue):\(username.lowercased())@\(host.lowercased())")
     }
 }
 

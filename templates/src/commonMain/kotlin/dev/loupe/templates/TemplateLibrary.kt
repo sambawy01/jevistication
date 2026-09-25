@@ -83,6 +83,7 @@ object TemplateLibrary {
                 ex("Quote #118: garden fence replacement, estimated £1,450. Valid for 30 days.", "no", "A quote: nothing has been paid."),
                 ex("Your order has shipped! Tracking number 1Z999AA10123456784.", "no", "Evidence of dispatch, not of payment."),
             ),
+            mechanical = MechanicalCheck.NO_TRANSACTION_EVIDENCE,
         ),
         Template(
             id = "tax-receipt",
@@ -98,6 +99,7 @@ object TemplateLibrary {
             onFailure = NULL_ACTION,
             sources = setOf(EMAIL, DOCUMENT, PHOTO, SPREADSHEET),
             baseline = Keyword(listOf("donation", "gift aid", "invoice", "tax", "deductible", "professional fee"), "yes", "no"),
+            mechanical = MechanicalCheck.NO_TRANSACTION_EVIDENCE,
             examples = listOf(
                 ex("Thank you for your donation of £50.00 to Riverside Food Bank. Gift Aid declared.", "yes", "A donation with Gift Aid is a tax record."),
                 ex("Streamflix: your monthly plan £9.99 was charged.", "no", "Personal entertainment has no tax treatment."),
@@ -129,6 +131,7 @@ object TemplateLibrary {
                 ),
                 otherwise = "not a purchase",
             ),
+            mechanical = MechanicalCheck.NO_TRANSACTION_EVIDENCE,
             examples = listOf(
                 ex("Fresh Basket Market receipt: bread, eggs, apples. Total £8.20.", "groceries", "A food shop."),
                 ex("Northline Rail e-ticket, London to York, £42.00 paid.", "travel", "A ticket for a journey."),
@@ -148,6 +151,7 @@ object TemplateLibrary {
             onFailure = NULL_ACTION,
             sources = setOf(EMAIL, DOCUMENT),
             baseline = Keyword(listOf("refund issued", "refunded", "has been refunded", "refund of"), "yes", "no"),
+            mechanical = MechanicalCheck.NO_TRANSACTION_EVIDENCE,
             examples = listOf(
                 ex("We've refunded £24.99 to your card ending 1111. It can take 5 days to appear.", "yes", "Money returned, with an amount."),
                 ex("We have received your return and will inspect it within 7 days.", "no", "Received, not yet refunded."),
@@ -166,6 +170,7 @@ object TemplateLibrary {
             onFailure = LOUD,
             sources = setOf(EMAIL, DOCUMENT, PHOTO),
             baseline = Keyword(listOf("amount due", "payment due", "please pay", "overdue", "final notice", "due date"), "yes", "no"),
+            mechanical = MechanicalCheck.NO_TRANSACTION_EVIDENCE,
             examples = listOf(
                 ex("Invoice INV-2207 from Brightside Plumbing. Amount due £180.00 by 30 September 2026.", "yes", "Owed, with a due date."),
                 ex("Thanks — we received your payment of £180.00 for invoice INV-2207.", "no", "Paid."),
@@ -186,6 +191,7 @@ object TemplateLibrary {
             onFailure = NULL_ACTION,
             sources = setOf(EMAIL, DOCUMENT, PHOTO),
             baseline = Keyword(listOf("warranty", "guarantee", "serial number", "model no"), "yes", "no"),
+            mechanical = MechanicalCheck.NO_TRANSACTION_EVIDENCE,
             examples = listOf(
                 ex("Invoice: Kettle KX-200, serial 44A91, £39.99, sold by Homeware Direct, 12 March 2026.", "yes", "A durable good, a seller and a date."),
                 ex("Receipt: 1 x flat white £3.20.", "no", "A coffee needs no warranty."),

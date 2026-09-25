@@ -163,8 +163,8 @@ final class GameController: ObservableObject {
     init(mode: GameMode,
          seed: Int64 = 1,
          rush: Bool = false,
-         backendProvider: @escaping @MainActor () async -> Backend? = { await LayaModel.shared.backend() },
-         modelInstalled: @escaping @MainActor () -> Bool = { LayaModel.shared.isInstalled },
+         backendProvider: @escaping @MainActor () async -> Backend? = { LaunchOptions.current.noModel ? nil : await LayaModel.shared.backend() },
+         modelInstalled: @escaping @MainActor () -> Bool = { !LaunchOptions.current.noModel && LayaModel.shared.isInstalled },
          executor: PilotExecutor = QueuePilotExecutor.shared,
          returnToSimulation: @escaping (@escaping () -> Void) -> Void = { w in DispatchQueue.main.async(execute: w) },
          settings: ModelSettingsSource = ModelSettingsService.shared) {
@@ -366,8 +366,11 @@ final class GameController: ObservableObject {
             session.minInterval = 1
         }
         if runStart == nil { runStart = now }
+        let wasOver = world.over
         session.tick()
-        for event in world.events {
+        // Once the run is over the world stops stepping and never clears its last events;
+        // reading them again every frame replayed the crash haptic until the screen closed.
+        for event in (wasOver ? [] : world.events) {
             if let up = event as? GameEventLevelUp { levelUp(Int(up.level)) }
             if let d = event as? GameEventDestroyed {
                 pendingEffects.append((d.x, d.y, d.what == "bridge"))

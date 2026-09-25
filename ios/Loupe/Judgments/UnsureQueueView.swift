@@ -62,7 +62,7 @@ struct UnsureQueueView: View {
             HStack {
                 Text("\(position) of \(total) · \(e.why)").font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                 Spacer()
-                if e.isAudit { Pill(text: "audit", color: Palette.inkSoft) }
+                if e.isAudit { Pill(text: "spot check", color: Palette.inkSoft) }
             }
             Text(e.judgment.title).font(.caption).foregroundStyle(Palette.inkSoft)
             Text(e.judgment.question).font(.headline).foregroundStyle(Palette.blue)

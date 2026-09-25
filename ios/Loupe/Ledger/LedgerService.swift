@@ -17,7 +17,7 @@ final class LedgerService: ObservableObject, @unchecked Sendable {
     @MainActor @Published private(set) var problem: String?
 
     let home: URL
-    private let queue = DispatchQueue(label: "dev.loupe.ledger", qos: .utility)
+    private let queue = DispatchQueue(label: "com.loupe-ai.ios.ledger", qos: .utility)
     private var ledger: PhoneLedger?
 
     init(home: URL) {

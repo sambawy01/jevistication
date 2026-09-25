@@ -37,7 +37,7 @@ battery than one that does.
 |---|---|---|
 | Photos & screenshots | PhotoKit / MediaStore | OCR + object and scene labels + EXIF |
 | Files, Downloads, PDFs | document picker / SAF | text, metadata, extracted PDF content |
-| Email | Gmail / Outlook / IMAP OAuth | headers, body, sender history |
+| Email | Gmail API (read-only, `gmail.readonly`) / Outlook / IMAP | headers, body, sender history |
 | Spreadsheets & CSV | Sheets / Excel / local | row plus column context |
 | Calendar | EventKit / CalendarProvider | title, attendees, recurrence, history |
 | Contacts | Contacts framework | fields, interaction recency |

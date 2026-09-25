@@ -142,7 +142,7 @@ class JudgmentsSharedTest {
     @Test
     fun resultsMarkUnsureAndCountByWording() {
         val tax = created(JudgmentBook.fromTemplate("tax-receipt", emptyMap(), emptyList()))
-        val items = listOf(item("r", "a receipt"), item("n", "a note"), item("m", "maybe receipt"))
+        val items = listOf(item("r", "a receipt"), item("n", "a note about a payment"), item("m", "maybe receipt"))
         val rec = Recorder()
         // 0.6 sits below the 0.80 threshold for the "receipt" items: unsure; the note is 0.4/0.6 -> unsure too.
         JudgmentSweep(backend(p = 0.6)).run(tax, JudgmentResults.plan(emptyList(), tax, items, false), rec)
@@ -185,5 +185,51 @@ class JudgmentsSharedTest {
         assertEquals("could not judge", rows.first().status(j))
         assertEquals("no signal (not an all-clear)", JudgmentResults.shownAnswer(j, (j.shape as Shape.Binary).negative))
         assertEquals(FailurePosture.LOUD, j.onFailure)
+    }
+
+    @Test
+    fun receiptGateAnswersAProductPageByRuleAndKeepsItOutOfTheUnsureQueue() {
+        val receipt = created(JudgmentBook.fromTemplate("is-receipt", emptyMap(), emptyList()))
+        val items = listOf(
+            item("stroller", STROLLER_PAGE),
+            item("receipt", "John Lewis receipt No. 8841-2210-77. TOTAL £1,199.00. Paid by VISA ************4412"),
+            item("ar", "فاتورة ضريبية مبسطة\nرقم الفاتورة: 20931\nالإجمالي: ١٣٫٠٠ ريال\nطريقة الدفع: مدى"),
+        )
+        val calls = IntArray(1)
+        val rec = Recorder()
+        // A torn model (0.52 on everything) is what put the stroller in the Unsure queue.
+        val torn = Backend { j, _ -> calls[0]++; Scored(mapOf(j.candidates[0] to 0.52, j.candidates[1] to 0.48)) }
+        val end = JudgmentSweep(torn).run(receipt, JudgmentResults.plan(emptyList(), receipt, items, false), rec)
+        assertEquals(3, end.done)
+        assertEquals(1, end.mechanical)
+        assertEquals(2, calls[0], "the product page never reaches the model; the two receipts do")
+
+        val stroller = rec.rows.single { it.itemId == "stroller" }
+        assertEquals("not a receipt", stroller.distribution.argmax)
+        assertEquals(dev.loupe.engine.ResolvedBy.Mechanical(dev.loupe.templates.TransactionEvidence.CHECK), stroller.resolvedBy)
+        val note = JudgmentResults.rows(rec.rows, receipt, emptyMap(), items).single { it.itemId == "stroller" }.ruleNote!!
+        assertTrue("no sign of a payment" in note, note)
+
+        val queue = dev.loupe.kit.measure.JudgmentMeasure.queue(rec.rows, listOf(receipt), emptyMap(), items)
+        assertTrue(queue.none { it.itemId == "stroller" }, "a rule's answer is never an Unsure question")
+        assertEquals(setOf("receipt", "ar"), queue.map { it.itemId }.toSet())
+
+        // A model answer logged before the gate existed is dropped from the queue too.
+        val legacy = rec.rows.map { if (it.itemId == "stroller") it.copy(resolvedBy = dev.loupe.engine.ResolvedBy.Model, distribution = rec.rows.first { r -> r.itemId == "receipt" }.distribution) else it }
+        val legacyQueue = dev.loupe.kit.measure.JudgmentMeasure.queue(legacy, listOf(receipt), emptyMap(), items)
+        assertTrue(legacyQueue.none { it.itemId == "stroller" })
+    }
+
+    private companion object {
+        const val STROLLER_PAGE = """File: Bugaboo Donkey 5 Mono complete stroller.pdf
+
+Bugaboo Donkey 5 Mono complete stroller
+★★★★★ 4.8 (212 reviews)
+£1,199.00
+Pay in 3 interest-free payments of £399.67 with Klarna.
+Add to basket
+In stock – Free delivery on orders over £50
+Product details
+2-year warranty, extendable when you register."""
     }
 }

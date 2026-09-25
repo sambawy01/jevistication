@@ -115,11 +115,11 @@ final class LayaRankerTests: XCTestCase {
 }
 
 /// Runs the real Laya when it has been side-loaded into this simulator's app container
-/// (ios-native/sideload-models.sh dev.loupe.app booted); skips cleanly otherwise.
+/// (ios-native/sideload-models.sh com.loupe-ai.ios booted); skips cleanly otherwise.
 final class LayaOnDeviceTests: XCTestCase {
     func testRealModelRanksEveryFixtureOffer() throws {
         guard let dir = LayaOnPhone.shared.directory(), LayaOnPhone.shared.missing(directory: dir).isEmpty else {
-            throw XCTSkip("Laya is not side-loaded; run ios-native/sideload-models.sh dev.loupe.app booted")
+            throw XCTSkip("Laya is not side-loaded; run ios-native/sideload-models.sh com.loupe-ai.ios booted")
         }
         let opened = LayaOnPhone.shared.open(directory: dir)
         guard let ready = opened as? LayaOnPhone.OpenedReady else {

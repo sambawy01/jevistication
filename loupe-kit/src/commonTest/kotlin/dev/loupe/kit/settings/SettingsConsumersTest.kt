@@ -75,7 +75,7 @@ class SettingsConsumersTest {
 
     private val items = listOf(
         item("a", "your receipt total paid"),
-        item("b", "hello there"),
+        item("b", "hello there, about the payment"),
         item("c", "your receipt total paid", duplicateOf = "a"),
     )
 

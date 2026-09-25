@@ -126,7 +126,7 @@ struct LayaModelView: View {
                 Label("Model host not configured", systemImage: "link.badge.plus").font(.headline).foregroundStyle(Palette.amber)
                 Text("This build has no download host for the model, so it cannot download it and makes no request. For development, side-load it with ios-native/sideload-models.sh, then come back here.")
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
-                Text("ios-native/sideload-models.sh dev.loupe.app booted")
+                Text("ios-native/sideload-models.sh com.loupe-ai.ios booted")
                     .font(Typeface.mono(11)).textSelection(.enabled)
             }
             .accessibilityElement(children: .combine)

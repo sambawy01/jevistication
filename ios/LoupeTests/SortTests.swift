@@ -64,7 +64,7 @@ final class BackgroundSorterTests: XCTestCase {
         XCTAssertEqual(s.registered, [BackgroundSorter.identifier])
         sorter.schedule()
         let req = try! XCTUnwrap(s.submitted.first)
-        XCTAssertEqual(req.identifier, "dev.loupe.app.sort")
+        XCTAssertEqual(req.identifier, "com.loupe-ai.ios.sort")
         XCTAssertTrue(req.requiresExternalPower)
         XCTAssertFalse(req.requiresNetworkConnectivity)
     }
@@ -167,7 +167,7 @@ final class SortServiceTests: XCTestCase {
 
     private func service(conditions: FakeConditions = FakeConditions(), backend: FakeJudgmentBackend = FakeJudgmentBackend(p: 0.55),
                          lane: ModelLane = ModelLane(), count: Int = 12) -> SortService {
-        let items = (0..<count).map { item("i\($0)", $0 % 3 == 0 ? "receipt \($0)" : "note \($0)") }
+        let items = (0..<count).map { item("i\($0)", $0 % 3 == 0 ? "receipt \($0)" : "note about the payment \($0)") }
         let j = judgment()
         return SortService(ledger: LedgerService(home: home), judgments: { [j] }, items: { items },
                            model: FakeModel(installed: true, backend: backend), conditions: conditions,

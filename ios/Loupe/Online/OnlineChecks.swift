@@ -231,7 +231,7 @@ final class OnlineChecksService: ObservableObject {
 
     init(defaults: UserDefaults = .standard,
          session: URLSession? = nil,
-         key: KeyStore = KeychainStore(service: "dev.loupe.app.safebrowsing", account: "google-safe-browsing-key"),
+         key: KeyStore = KeychainStore(service: "com.loupe-ai.ios.safebrowsing", account: "google-safe-browsing-key"),
          dir: URL? = nil,
          base: URL = HelperEndpoint.base,
          now: @escaping () -> Date = Date.init,

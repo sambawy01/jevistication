@@ -15,7 +15,7 @@ final class KeychainStore: KeyStore {
     let service: String
     let account: String
 
-    init(service: String = "dev.loupe.app.duffel", account: String = "duffel-access-token") {
+    init(service: String = "com.loupe-ai.ios.duffel", account: String = "duffel-access-token") {
         self.service = service
         self.account = account
     }

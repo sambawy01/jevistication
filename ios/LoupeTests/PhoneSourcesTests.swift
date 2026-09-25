@@ -151,7 +151,8 @@ final class PhoneSourcesTests: XCTestCase {
     override func tearDown() { try? FileManager.default.removeItem(at: home) }
 
     @MainActor
-    private func service(oauth: OAuthConfig = OAuthConfig(googleClientId: "", microsoftClientId: "")) -> SourcesService {
+    private func service(oauth: OAuthConfig = OAuthConfig(googleClientId: "", microsoftClientId: ""),
+                         http: URLSession = .shared) -> SourcesService {
         let deps = PhoneDependencies(
             photos: photos, recognizer: FakeRecognizer(text: [Data("receipt-bytes".utf8): "RECEIPT\nTotal £12.40"]),
             events: events, contacts: contacts, bookmarks: BookmarkStore(home: home, resolver: bookmarks),
@@ -163,7 +164,7 @@ final class PhoneSourcesTests: XCTestCase {
                 let s = MemoryKeyStore(); self.keys[k] = s; return s
             },
             makeTransport: { [unowned self] _ in self.transports.removeFirst() },
-            oauth: oauth, state: PhoneStateStore(home: home))
+            oauth: oauth, state: PhoneStateStore(home: home), http: http)
         return SourcesService(home: home, sampleRoot: nil, deps: deps)
     }
 
@@ -349,8 +350,14 @@ final class PhoneSourcesTests: XCTestCase {
     }
 
     func testOAuthIsGatedOnEmptyClientIds() {
-        let empty = OAuthConfig.fromBundle(.main)
-        XCTAssertEqual(empty, OAuthConfig(googleClientId: "", microsoftClientId: ""), "the shipped config must be empty (owner-blocked)")
+        let shipped = OAuthConfig.fromBundle(.main)
+        XCTAssertEqual(shipped.googleClientId, "149960832358-7i7bc56cuof9q91mhut306f35k0jgvi2.apps.googleusercontent.com",
+                       "GOOGLE_IOS_CLIENT_ID reaches Info.plist")
+        XCTAssertEqual(shipped.microsoftClientId, "", "no Microsoft client yet")
+        let types = Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]] ?? []
+        let schemes = types.flatMap { $0["CFBundleURLSchemes"] as? [String] ?? [] }
+        XCTAssertTrue(schemes.contains(OAuthProvider.google.callbackScheme(clientId: shipped.googleClientId)), "reversed client ID registered: \(schemes)")
+        let empty = OAuthConfig(googleClientId: "", microsoftClientId: "")
         for p in OAuthProvider.allCases {
             guard case .needsClientId(let why) = empty.availability(p) else { return XCTFail("\(p) should be gated") }
             XCTAssertTrue(why.contains("Needs a \(p.name) OAuth client ID"), why)
@@ -380,7 +387,11 @@ final class PhoneSourcesTests: XCTestCase {
         XCTAssertEqual(q["code_challenge"], pkce.challenge)
         XCTAssertEqual(q["code_challenge_method"], "S256")
         XCTAssertEqual(q["redirect_uri"], "com.googleusercontent.apps.123-abc:/oauth2redirect")
-        XCTAssertEqual(q["scope"], "https://mail.google.com/ email")
+        XCTAssertEqual(q["scope"], "https://www.googleapis.com/auth/gmail.readonly", "read-only, least privilege")
+        XCTAssertFalse(url.absoluteString.contains("mail.google.com"))
+        XCTAssertEqual(q["response_type"], "code")
+        XCTAssertEqual(q["access_type"], "offline")
+        XCTAssertEqual(q["client_id"], "123-abc.apps.googleusercontent.com")
         XCTAssertEqual(q["state"], "s1")
         XCTAssertNil(q["client_secret"])
 
@@ -572,11 +583,11 @@ final class PhoneSourcesTests: XCTestCase {
         let account = MailAccount(host: "imap.example.com", port: 993, username: "Tester-\(UUID().uuidString)@example.com", auth: .appPassword)
         let store = account.keychain()
         defer { try? store.delete() }
-        XCTAssertEqual(store.service, "dev.loupe.app.mail")
+        XCTAssertEqual(store.service, "com.loupe-ai.ios.mail")
         try store.save("app-password")
         XCTAssertEqual(store.read(), "app-password")
         XCTAssertEqual(store.accessibility(), kSecAttrAccessibleWhenUnlockedThisDeviceOnly as String)
-        XCTAssertNotEqual(MailAccount(host: "imap.example.com", port: 993, username: account.username, auth: .googleOAuth).keychain().account,
+        XCTAssertNotEqual(MailAccount(host: "imap.example.com", port: 993, username: account.username, auth: .gmailAPI).keychain().account,
                           store.account, "OAuth tokens and app passwords never share an item")
     }
 }

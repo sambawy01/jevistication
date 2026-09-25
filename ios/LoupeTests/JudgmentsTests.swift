@@ -45,7 +45,7 @@ final class JudgmentsTests: XCTestCase {
 
     private func service(installed: Bool = true, items: [SourceItem]? = nil, backend: FakeJudgmentBackend = FakeJudgmentBackend()) -> (JudgmentsService, FakeModel) {
         let model = FakeModel(installed: installed, backend: backend)
-        let list = items ?? [item("r1", "Receipt for a donation"), item("n1", "Lunch plans"), item("img", "", hasText: false)]
+        let list = items ?? [item("r1", "Receipt for a donation"), item("n1", "Lunch plans, about the payment"), item("img", "", hasText: false)]
         let s = JudgmentsService(ledger: LedgerService(home: home), items: { list }, model: model)
         s.load()
         return (s, model)

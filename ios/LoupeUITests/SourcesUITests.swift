@@ -27,7 +27,7 @@ final class SourcesUITests: XCTestCase {
 
     /// The Mail screen offers app-password IMAP and says plainly that Google / Microsoft sign-in needs
     /// an OAuth client ID (none is configured: owner-blocked).
-    func testMailSetupSaysOAuthNeedsAClientId() {
+    func testMailSetupOffersGmailSignInAndGatesOutlook() {
         let app = XCUIApplication()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "sources", "-LoupeSkipOnboarding"]
         app.launch()
@@ -38,10 +38,10 @@ final class SourcesUITests: XCTestCase {
         XCTAssertTrue(app.textFields["mail.host"].waitForExistence(timeout: 5))
         XCTAssertEqual(app.textFields["mail.host"].value as? String, "imap.mail.me.com")
         XCTAssertTrue(app.secureTextFields["mail.password"].exists)
-        let google = app.descendants(matching: .any)["mail.oauth.google"]
+        let google = app.buttons["mail.oauth.google.signin"]
         for _ in 0..<3 where !google.exists { app.swipeUp() }
-        XCTAssertTrue(google.exists)
-        XCTAssertTrue(google.label.contains("Needs a Google OAuth client ID"), google.label)
+        XCTAssertTrue(google.exists, "the Google client ID is configured, so Gmail sign-in is offered")
+        XCTAssertTrue(app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'read-only'")).firstMatch.exists)
         XCTAssertTrue(app.descendants(matching: .any)["mail.oauth.microsoft"].label.contains("Needs a Microsoft OAuth client ID"))
     }
 }

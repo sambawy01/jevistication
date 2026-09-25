@@ -22,6 +22,7 @@ import dev.loupe.kit.measure.JudgmentMeasure
 import dev.loupe.templates.BaselineMode
 import dev.loupe.templates.JudgmentDraft
 import dev.loupe.templates.MechanicalCheck
+import dev.loupe.templates.TransactionEvidence
 import dev.loupe.templates.Template
 import dev.loupe.templates.UserJudgment
 import kotlinx.coroutines.CoroutineScope
@@ -477,11 +478,12 @@ class LoupeController(
             // "Always baseline": the rule answers and the model is not asked.
             return Mechanical.Resolved(baselineRule.answer(item.text), AutoBaseline.ALWAYS_CHECK)
         }
-        return if (judgment.mechanical == MechanicalCheck.EXACT_DUPLICATE && item.duplicateOf != null && positive != null) {
-            Mechanical.Resolved(positive, "exact-duplicate")
-        } else {
-            Mechanical.Deferred
+        if (judgment.mechanical == MechanicalCheck.EXACT_DUPLICATE && item.duplicateOf != null && positive != null) {
+            return Mechanical.Resolved(positive, "exact-duplicate")
         }
+        // The money judgments' evidence gate (as the phone's JudgmentSweep.mechanical).
+        TransactionEvidence.ruleAnswer(judgment, item.text)?.let { return Mechanical.Resolved(it, TransactionEvidence.CHECK) }
+        return Mechanical.Deferred
     }
 
     // ------------------------------------------------------------------ corrections (D1)

@@ -270,7 +270,7 @@ final class IMAPClient {
 /// certificate). No STARTTLS: a plaintext first hop is not offered.
 final class NWIMAPTransport: IMAPTransport {
     private let connection: NWConnection
-    private let queue = DispatchQueue(label: "dev.loupe.imap")
+    private let queue = DispatchQueue(label: "com.loupe-ai.ios.imap")
     private let timeout: TimeInterval
 
     init(host: String, port: UInt16 = 993, timeout: TimeInterval = 30) {

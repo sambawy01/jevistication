@@ -25,6 +25,15 @@ final class MascotModel {
         scene.lightingEnvironment.contents = t.environment
         scene.lightingEnvironment.intensity = 0.7
         let world = t.world.clone()
+        // clone() shares each SCNGeometry (and its mesh) with the template. Two mascots on screen
+        // at once (Now's card under the game) then have two render threads building renderable
+        // data for one mesh, which double-frees inside SceneKit. Give every instance its own mesh.
+        world.enumerateHierarchy { node, _ in
+            guard let g = node.geometry else { return }
+            let own = SCNGeometry(sources: g.sources, elements: g.elements)
+            own.materials = g.materials
+            node.geometry = own
+        }
         scene.rootNode.addChildNode(world)
         func n(_ name: String) -> SCNNode { world.childNode(withName: name, recursively: true)! }
         root = n("root"); hips = n("hips"); torso = n("torso"); neck = n("neck"); head = n("head")

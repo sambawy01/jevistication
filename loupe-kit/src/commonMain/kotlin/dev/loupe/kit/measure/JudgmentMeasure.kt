@@ -18,6 +18,7 @@ import dev.loupe.engine.ThresholdSlider
 import dev.loupe.engine.UncertainQueue
 import dev.loupe.engine.VisibleCalibration
 import dev.loupe.templates.BaselineMode
+import dev.loupe.templates.TransactionEvidence
 import dev.loupe.persistence.CorrectionKey
 import dev.loupe.persistence.CorrectionRecord
 import dev.loupe.persistence.DataExport
@@ -41,8 +42,24 @@ data class UnsureEntry(
     val options: List<Pair<String, Double>>
         get() = judgment.shape.candidates.map { it to (if (it in row.distribution.labels) row.distribution.getValue(it).value else 0.0) }
 
-    /** The desktop's words for why this item is in front of you. */
-    val why: String get() = if (isAudit) "picked at random from confident answers" else "picked because the model is torn"
+    /**
+     * Why this item is in front of you, in the owner's words (no "model", no "torn"): for an
+     * uncertain item, how sure Laya was — the share it gave the positive option of a yes/no, or its
+     * top pick otherwise — e.g. "Laya wasn't sure (52% yes) — your answer teaches it"; for the
+     * audit arm, "a random check on an answer Laya was sure of".
+     */
+    val why: String
+        get() {
+            if (isAudit) return "a random check on an answer Laya was sure of"
+            val positive = judgment.positiveLabel
+            val lean = if (positive != null && judgment.shape.candidates.size == 2) {
+                val mass = if (positive in row.distribution.labels) row.distribution.getValue(positive).value else 0.0
+                "${formatPercent(mass)} yes"
+            } else {
+                "${formatPercent(row.distribution.getValue(modelPick).value)} “$modelPick”"
+            }
+            return "Laya wasn't sure ($lean) — your answer teaches it"
+        }
 
     /** The key the answer is filed under: this item, under this judgment's exact wording. */
     val key: CorrectionKey get() = CorrectionKey(judgment.id, judgment.criteriaHash, item.id)
@@ -158,7 +175,14 @@ object JudgmentMeasure {
         val byId = items.associateBy { it.id }
         val byJudgment = judgments.associateBy { it.id }
         // Only items still scanned: the phone cannot show (or answer) what it no longer has.
-        val candidates = judgments.flatMap { effectiveRows(all, it, corrections) }.filter { it.itemId in byId }
+        // A model answer logged before the evidence gate existed, on an item the gate now answers
+        // by rule (a shop's product page under "Is this a receipt?"), is not a question worth asking.
+        val candidates = judgments.flatMap { j ->
+            effectiveRows(all, j, corrections).filter { r ->
+                val item = r.itemId?.let(byId::get)
+                item != null && (r.isMechanical || TransactionEvidence.ruleAnswer(j, item.text) == null)
+            }
+        }
         return UncertainQueue.select(candidates, size, AUDIT_SHARE, SEED).map { e ->
             UnsureEntry(byJudgment.getValue(e.row.judgmentId), e.row, byId.getValue(e.row.itemId!!), e.reason, e.informativeness)
         }
