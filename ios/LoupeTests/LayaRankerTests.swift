@@ -106,7 +106,7 @@ final class LayaRankerTests: XCTestCase {
         for _ in 0..<100 where m.ranking != .laya { try await Task.sleep(nanoseconds: 20_000_000) }
         XCTAssertEqual(m.ranking, .laya)
         XCTAssertEqual(m.shown.first?.offer.id, "off_fixture_05")
-        XCTAssertEqual(m.rankerName, "Laya (on this phone)")
+        XCTAssertEqual(m.rankerName, "The decision model (on this phone)")
         XCTAssertEqual(m.topDisagreement?.rules.offer.id, "off_fixture_02")
         m.showRules = true
         XCTAssertEqual(m.shown.first?.offer.id, "off_fixture_02")

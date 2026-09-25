@@ -89,13 +89,13 @@ struct ResultsView: View {
             VStack(alignment: .leading, spacing: 4) {
                 ProgressView(value: Double(done), total: Double(max(total, 1))).tint(Palette.blue)
                 HStack {
-                    Text(done == 0 ? "Laya is checking the model on this phone…" : "Laya is reading offer \(min(done + 1, total)) of \(total), on this phone")
+                    Text(done == 0 ? "Checking the decision model on this phone…" : "The decision model is reading offer \(min(done + 1, total)) of \(total), on this phone")
                         .font(.caption).foregroundStyle(Palette.inkSoft)
                     Spacer()
                     Button("Cancel") { web.cancelRanking() }.font(.caption.weight(.semibold))
                         .accessibilityIdentifier("results.cancelRanking")
                 }
-                Text("Showing the rule ranking until Laya is done.").font(.caption2).foregroundStyle(Palette.inkSoft)
+                Text("Showing the rule ranking until the decision model is done.").font(.caption2).foregroundStyle(Palette.inkSoft)
             }
             .accessibilityIdentifier("results.rankingProgress")
         case .laya:
@@ -104,16 +104,16 @@ struct ResultsView: View {
             }
             .accessibilityIdentifier("results.showRules")
             if let d = web.topDisagreement {
-                Label("Laya and the rules disagree on #1: Laya picks \(d.laya.offer.owner) \(d.laya.offer.currency) \(d.laya.offer.totalAmount), the rules pick \(d.rules.offer.owner) \(d.rules.offer.currency) \(d.rules.offer.totalAmount).",
+                Label("The decision model and the rules disagree on #1: the decision model picks \(d.laya.offer.owner) \(d.laya.offer.currency) \(d.laya.offer.totalAmount), the rules pick \(d.rules.offer.owner) \(d.rules.offer.currency) \(d.rules.offer.totalAmount).",
                       systemImage: "arrow.left.arrow.right")
                     .font(.footnote).foregroundStyle(Palette.amber)
                     .accessibilityIdentifier("results.disagreement")
             } else {
-                Text("Laya and the rules agree on #1.").font(.footnote).foregroundStyle(Palette.inkSoft)
+                Text("The decision model and the rules agree on #1.").font(.footnote).foregroundStyle(Palette.inkSoft)
             }
             let unsure = (web.layaRanked ?? []).filter(\.unsure).count
-            Text(unsure == 0 ? "Laya is sure of every answer here. Its percentages are not yet calibrated to your corrections."
-                             : "Laya is unsure about \(unsure) offer\(unsure == 1 ? "" : "s"), marked below. Its percentages are not yet calibrated to your corrections.")
+            Text(unsure == 0 ? "The decision model is sure of every answer here. Its percentages are not yet calibrated to your corrections."
+                             : "The decision model is unsure about \(unsure) offer\(unsure == 1 ? "" : "s"), marked below. Its percentages are not yet calibrated to your corrections.")
                 .font(.caption).foregroundStyle(Palette.inkSoft)
         case let .rulesOnly(why):
             VStack(alignment: .leading, spacing: 4) {
@@ -127,9 +127,9 @@ struct ResultsView: View {
             }
         case .cancelled:
             HStack {
-                Text("Laya ranking cancelled; showing the rules.").font(.footnote).foregroundStyle(Palette.inkSoft)
+                Text("The decision model's ranking was cancelled; showing the rules.").font(.footnote).foregroundStyle(Palette.inkSoft)
                 Spacer()
-                Button("Rank with Laya") { web.rerank() }.font(.footnote.weight(.semibold))
+                Button("Rank with the decision model") { web.rerank() }.font(.footnote.weight(.semibold))
             }
         }
     }
@@ -141,9 +141,9 @@ struct ResultsView: View {
         case .modelFailed(let m):
             return "Ranked by the rules only: the on-device model could not be used (\(m))."
         case .prioritiesRefused(let reasons):
-            return "Ranked by the rules only: Laya cannot use these priorities (\(reasons.joined(separator: "; ")))."
+            return "Ranked by the rules only: the decision model cannot use these priorities (\(reasons.joined(separator: "; ")))."
         case .layaOff:
-            return "Ranked by the rules only: Laya is off for flights in Model settings."
+            return "Ranked by the rules only: the decision model is off for flights in Model settings."
         }
     }
 
@@ -223,7 +223,7 @@ struct OfferCard: View {
 
     private var scoreText: String {
         let pct = Int((item.score * 100).rounded())
-        return item.scoreKind == .model ? "Laya: \(pct)% fits" : "fits \(pct)% of rules"
+        return item.scoreKind == .model ? "Decision model: \(pct)% fits" : "fits \(pct)% of rules"
     }
 
     private func icon(_ o: RuleCheck.Outcome) -> String {

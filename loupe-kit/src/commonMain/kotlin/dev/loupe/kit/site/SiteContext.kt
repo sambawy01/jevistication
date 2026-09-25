@@ -85,8 +85,8 @@ object SiteContext {
         "payment_expected_age" to "Normal for a shop on a {years}-year-old domain.",
         "payment_expected_processor" to "Normal on a checkout that uses {provider}.",
         "sign_in_expected_age" to "Normal for a sign-in page on a {years}-year-old domain.",
-        "uncorroborated" to "Only Laya's reading of the text; nothing else about this site backs it up.",
-        "uncorroborated_established" to "Only Laya's reading of the text; the domain is {years} years old and nothing else backs it up.",
+        "uncorroborated" to "Only the decision model's reading of the text; nothing else about this site backs it up.",
+        "uncorroborated_established" to "Only the decision model's reading of the text; the domain is {years} years old and nothing else backs it up.",
     )
 
     /** The payment processor that controls [host], or null. */

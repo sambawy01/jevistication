@@ -44,13 +44,13 @@ data class UnsureEntry(
 
     /**
      * Why this item is in front of you, in the owner's words (no "model", no "torn"): for an
-     * uncertain item, how sure Laya was — the share it gave the positive option of a yes/no, or its
-     * top pick otherwise — e.g. "Laya wasn't sure (52% yes) — your answer teaches it"; for the
-     * audit arm, "a random check on an answer Laya was sure of".
+     * uncertain item, how sure Loupe was — the share it gave the positive option of a yes/no, or its
+     * top pick otherwise — e.g. "Loupe wasn't sure (52% yes) — your answer teaches it"; for the
+     * audit arm, "a random check on an answer Loupe was sure of" (2026-09-25: "Loupe", not "Laya").
      */
     val why: String
         get() {
-            if (isAudit) return "a random check on an answer Laya was sure of"
+            if (isAudit) return "a random check on an answer Loupe was sure of"
             val positive = judgment.positiveLabel
             val lean = if (positive != null && judgment.shape.candidates.size == 2) {
                 val mass = if (positive in row.distribution.labels) row.distribution.getValue(positive).value else 0.0
@@ -58,7 +58,7 @@ data class UnsureEntry(
             } else {
                 "${formatPercent(row.distribution.getValue(modelPick).value)} “$modelPick”"
             }
-            return "Laya wasn't sure ($lean) — your answer teaches it"
+            return "Loupe wasn't sure ($lean) — your answer teaches it"
         }
 
     /** The key the answer is filed under: this item, under this judgment's exact wording. */

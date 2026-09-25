@@ -290,8 +290,9 @@ struct PlayCard: View {
             }
             HStack(spacing: 10) {
                 Button { onPlay(.watch) } label: {
-                    Label("Watch Loupe fly", systemImage: "eye").lineLimit(1).minimumScaleFactor(0.75).frame(maxWidth: .infinity)
+                    Label("Watch", systemImage: "eye").lineLimit(1).minimumScaleFactor(0.75).frame(maxWidth: .infinity)
                 }
+                .accessibilityLabel("Watch Loupe fly")
                 .buttonStyle(.neonPrimary)
                 .accessibilityIdentifier("now.play.watch")
                 Button { onPlay(.human) } label: {

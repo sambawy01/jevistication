@@ -157,7 +157,7 @@ class JudgmentSweep(private val backend: Backend?) {
         const val LAYA_OFF_CHECK: String = "laya-off"
 
         /** Stands in for the model when Laya is off; never called (every item goes to a rule or is skipped). */
-        private val NO_MODEL: Backend = Backend { _, _ -> throw IllegalStateException("Laya is off for judgments") }
+        private val NO_MODEL: Backend = Backend { _, _ -> throw IllegalStateException("The decision model is off for judgments") }
 
         /**
          * With Laya off, the rules alone: "Always baseline", an exact duplicate, then the judgment's

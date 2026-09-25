@@ -102,7 +102,7 @@ fun main() {
 
 /** Loads Laya exactly as the game does, from the gitignored `models/` the run task points at. */
 fun loadLaya(): ModelState = when (val status = ModelLoader.load(fallback = "Judgments cannot run; mechanical features (sources, census, watchers' checks) still work.")) {
-    is ModelStatus.Ready -> ModelState.Ready(status.model.backend, "Laya multilingual, INT8, on this CPU", status.model)
+    is ModelStatus.Ready -> ModelState.Ready(status.model.backend, "Loupe Decision Model (multilingual, INT8), on this CPU", status.model)
     is ModelStatus.Unavailable -> ModelState.Unavailable(status.message)
     ModelStatus.Loading -> ModelState.Unavailable("Model loading did not finish.")
 }

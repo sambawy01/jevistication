@@ -269,7 +269,7 @@ struct WebAnswerSection: View {
             Caption(text: WS.t("answer.by", ["who": library.answeredByLaya(sector) ? WS.t("answer.laya") : WS.t("answer.rules")]))
                 .accessibilityIdentifier("web.answer.by")
             if let laya = run.laya {
-                Text(WebLibraryModel.headline(laya, run: run, who: "Laya")).font(.headline).foregroundStyle(Palette.ink)
+                Text(WebLibraryModel.headline(laya, run: run, who: WS.t("answer.model"))).font(.headline).foregroundStyle(Palette.ink)
                     .accessibilityIdentifier("web.answer.laya")
             }
             Text(WebLibraryModel.headline(run.rules, run: run, who: WS.t("answer.rules"))).font(run.laya == nil ? .headline : .subheadline)

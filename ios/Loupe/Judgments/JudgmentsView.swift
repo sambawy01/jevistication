@@ -183,7 +183,7 @@ struct NeedsYouCard: View {
             MascotView(state: count > 0 ? .thinking : .idle, size: 48)
             VStack(alignment: .leading, spacing: 2) {
                 Text("Needs you: \(count)").font(.headline).foregroundStyle(Palette.ink)
-                Text(count > 0 ? "Items Laya is unsure about, plus a few random checks. One tap each."
+                Text(count > 0 ? "Items the decision model is unsure about, plus a few random checks. One tap each."
                                : "Nothing waiting for your answer.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             }

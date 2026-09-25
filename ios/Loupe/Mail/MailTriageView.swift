@@ -122,7 +122,7 @@ struct MailTriageView: View {
             if let item = ItemIndex.item(r.itemId) { ItemRefHeader(item: item); ItemActions(item: item) }
             let labels = r.labels.filter { $0 != MailClassify.shared.PHISHING_LABEL }
             if !labels.isEmpty {
-                Text(labels.map { $0.replacingOccurrences(of: "Laya/", with: "") + (r.weakLabels.contains($0) ? " (weak rule)" : "") }.joined(separator: " · "))
+                Text(labels.map { $0.replacingOccurrences(of: MailClassify.shared.LABEL_PREFIX, with: "") + (r.weakLabels.contains($0) ? " (weak rule)" : "") }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             }
             let signals = r.signals

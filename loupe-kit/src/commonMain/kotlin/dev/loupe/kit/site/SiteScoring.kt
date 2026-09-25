@@ -61,12 +61,12 @@ object SiteScoring {
 
     /** Laya answer -> (code, points, reason). Choice answers are keyed "qid=label". */
     val LAYA_POINTS: Map<String, Triple<String, Int, String>> = linkedMapOf(
-        "asks_visitor_to=sign_in" to Triple("laya_asks_sign_in", 10, "Laya's reading: the page asks you to sign in."),
-        "asks_visitor_to=pay" to Triple("laya_asks_payment", 10, "Laya's reading: the page asks for card details or a payment."),
-        "asks_visitor_to=install" to Triple("laya_asks_install", 10, "Laya's reading: the page asks you to download or install something."),
-        "asks_visitor_to=claim" to Triple("laya_asks_claim", 10, "Laya's reading: the page asks you to claim a prize, gift or refund."),
-        "urgency_or_threat" to Triple("laya_urgency", 15, "Laya's reading: the page pressures you to act fast or threatens you."),
-        "offers_prize_or_refund" to Triple("laya_prize", 15, "Laya's reading: the page says you won something or will get money back."),
+        "asks_visitor_to=sign_in" to Triple("laya_asks_sign_in", 10, "The decision model's reading: the page asks you to sign in."),
+        "asks_visitor_to=pay" to Triple("laya_asks_payment", 10, "The decision model's reading: the page asks for card details or a payment."),
+        "asks_visitor_to=install" to Triple("laya_asks_install", 10, "The decision model's reading: the page asks you to download or install something."),
+        "asks_visitor_to=claim" to Triple("laya_asks_claim", 10, "The decision model's reading: the page asks you to claim a prize, gift or refund."),
+        "urgency_or_threat" to Triple("laya_urgency", 15, "The decision model's reading: the page pressures you to act fast or threatens you."),
+        "offers_prize_or_refund" to Triple("laya_prize", 15, "The decision model's reading: the page says you won something or will get money back."),
     )
     val SCAM_CUES = setOf("laya_urgency", "laya_prize", "laya_asks_payment", "laya_asks_install", "laya_asks_claim", "pressure_login")
     val CREDENTIAL_ASKS = setOf("laya_asks_sign_in", "laya_asks_payment")

@@ -151,7 +151,7 @@ object PackFormat {
         val errors = mutableListOf<PackProblem>()
         if (data !is JsonValue.Obj) return PackParse.Invalid(listOf(PackProblem(emptyList(), "a pack must be a JSON object")))
         if ((data["format"] as? JsonValue.Str)?.value != FORMAT) {
-            errors += PackProblem(listOf("format"), "must be '$FORMAT' (is this a Laya Studio preset pack?)")
+            errors += PackProblem(listOf("format"), "must be '$FORMAT' (is this a Loupe Station preset pack?)")
         }
         if (!isOne(data["version"])) errors += PackProblem(listOf("version"), "must be $VERSION")
         val name = text(data["name"], listOf("name"), errors, MAX_NAME_CHARS)

@@ -202,15 +202,15 @@ private fun WhoAnswersCard(c: LoupeController, j: dev.loupe.templates.UserJudgme
         H3("Who answers")
         Body(verdict.line)
         Muted(
-            "Auto lets the baseline rule answer once it is right more often than Laya on at least " +
+            "Auto lets the baseline rule answer once it is right more often than the decision model on at least " +
                 "${dev.loupe.kit.measure.AutoBaseline.MIN_CORRECTIONS} of your corrections. Its answers are logged as a rule, " +
-                "with Laya's answer kept beside them, so they never count as Laya's.",
+                "with the decision model's answer kept beside them, so they never count as the decision model's.",
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for ((mode, title) in listOf(
                 dev.loupe.templates.BaselineMode.AUTO to "Auto",
                 dev.loupe.templates.BaselineMode.ALWAYS_BASELINE to "Always baseline",
-                dev.loupe.templates.BaselineMode.ALWAYS_LAYA to "Always Laya",
+                dev.loupe.templates.BaselineMode.ALWAYS_LAYA to "Always model",
             )) {
                 if (mode == j.baselineMode) PrimaryButton(title) {} else SecondaryButton(title) { c.setBaselineMode(j.id, mode) }
             }

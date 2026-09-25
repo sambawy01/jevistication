@@ -43,7 +43,7 @@ final class ModelSettingsUITests: XCTestCase {
         rerun.tap()
         let banner = app.descendants(matching: .any)["banner.layaOff.scan"]
         XCTAssertTrue(banner.waitForExistence(timeout: 30), "the run had Laya off: the banner says so")
-        XCTAssertTrue(app.staticTexts["Laya was off for this run — answers come from rules only."].exists)
+        XCTAssertTrue(app.staticTexts["The decision model was off for this run — answers come from rules only."].exists)
 
         // Turn it on → Model settings at the feature → Reset to default.
         app.buttons["banner.layaOff.scan.turnOn"].tap()

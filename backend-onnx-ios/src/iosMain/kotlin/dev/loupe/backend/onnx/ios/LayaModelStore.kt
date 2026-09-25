@@ -53,7 +53,7 @@ class LayaModelStore(
     val variant: String = DEFAULT_VARIANT,
 ) {
     init {
-        require(variant in VARIANTS) { "unknown Laya variant '$variant' (known: ${VARIANTS.keys})" }
+        require(variant in VARIANTS) { "unknown decision model variant '$variant' (known: ${VARIANTS.keys})" }
     }
 
     /** The tokenizer and this [variant]'s graph, with their pinned SHA-256s. */
@@ -84,7 +84,7 @@ class LayaModelStore(
             val actual = sha256(file)
             if (actual != expected) problems += "$name: SHA-256 $actual, expected $expected"
         }
-        check(problems.isEmpty()) { "Laya model files in $directory are not usable: ${problems.joinToString("; ")}" }
+        check(problems.isEmpty()) { "The decision model's files in $directory are not usable: ${problems.joinToString("; ")}" }
         return LayaFiles(tokenizer = path(TOKENIZER), graph = path(graph))
     }
 
@@ -126,7 +126,7 @@ class LayaModelStore(
 
         /** The tokenizer and [variant]'s graph, with their pins, in a fixed order. */
         fun filesFor(variant: String): Map<String, String> {
-            val (graph, sha) = VARIANTS[variant] ?: throw IllegalArgumentException("unknown Laya variant '$variant'")
+            val (graph, sha) = VARIANTS[variant] ?: throw IllegalArgumentException("unknown decision model variant '$variant'")
             return linkedMapOf(TOKENIZER to FILES.getValue(TOKENIZER), graph to sha)
         }
 

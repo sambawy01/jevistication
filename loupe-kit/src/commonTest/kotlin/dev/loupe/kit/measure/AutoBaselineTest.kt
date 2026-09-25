@@ -136,7 +136,7 @@ class AutoBaselineTest {
         val c = corrections(j, 40)
         val laya = JudgmentMeasure.withBaselineMode(j, BaselineMode.ALWAYS_LAYA)
         assertFalse(AutoBaseline.verdict(ledger, laya, c, items).baselineAnswers)
-        assertTrue(AutoBaseline.verdict(ledger, laya, c, items).line.startsWith("Always Laya"))
+        assertTrue(AutoBaseline.verdict(ledger, laya, c, items).line.startsWith("Always model"))
         val always = JudgmentMeasure.withBaselineMode(j, BaselineMode.ALWAYS_BASELINE)
         assertTrue(always.useBaseline)
         calls = 0

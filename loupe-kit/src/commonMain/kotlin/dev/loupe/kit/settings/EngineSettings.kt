@@ -314,7 +314,7 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
             val phone = if (id == Features.PLAYGROUND) OnPhone.DESKTOP_ONLY else OnPhone.APPLIES
             val textNote = when {
                 id == Features.PLAYGROUND -> "The Playground is on Loupe Station only."
-                !Features.usesLayaOnPhone(id) -> "Laya reads no text for this feature on iPhone yet (it runs on rules), so the limit changes nothing here."
+                !Features.usesLayaOnPhone(id) -> "The decision model reads no text for this feature on iPhone yet (it runs on rules), so the limit changes nothing here."
                 else -> ""
             }
             val textPhone = if (textNote.isEmpty()) phone else OnPhone.DESKTOP_ONLY
@@ -336,7 +336,7 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
             add(global("idle_unload_min", SettingKind.NUMBER, n(10), 0.0, 1_440.0, reload = true))
             add(global("accept_confidence", SettingKind.NULLABLE_NUMBER, NULL, 0.05, 0.99))
             add(global("use_calibration", SettingKind.BOOL, b(true),
-                note = "No calibration is fitted on iPhone yet, so on and off both use Laya's raw confidence today."))
+                note = "No calibration is fitted on iPhone yet, so on and off both use the decision model's raw confidence today."))
             add(global("rules_first", SettingKind.BOOL, b(true)))
             add(global("baseline_switch", SettingKind.BOOL, b(true)))
             add(global("bias_correction", SettingKind.ENUM, s(BIAS_OFF), choices = BIAS_CORRECTIONS,
@@ -360,9 +360,9 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
             addAll(common(Features.EMAIL))
             addAll(common(Features.BROWSER))
             add(feature(Features.BROWSER, "time_limit_s", SettingKind.NUMBER, n(5), 1.0, 60.0, onPhone = OnPhone.DESKTOP_ONLY,
-                note = "Site checks on iPhone are rules only; Laya does not read pages here."))
+                note = "Site checks on iPhone are rules only; the decision model does not read pages here."))
             add(feature(Features.BROWSER, "queue_size", SettingKind.INT, n(2), 0.0, 10.0, onPhone = OnPhone.DESKTOP_ONLY,
-                note = "Site checks on iPhone are rules only; Laya does not read pages here."))
+                note = "Site checks on iPhone are rules only; the decision model does not read pages here."))
             addAll(common(Features.WATCHERS))
             addAll(common(Features.PLAYGROUND))
             addAll(common(Features.JUDGMENTS))

@@ -54,7 +54,7 @@ object ModelLoader {
     }
 
     fun graphPath(dir: Path = modelsDir(), variant: String = variant()): Path {
-        require(variant in VARIANTS) { "unknown Laya graph variant \"$variant\"; expected one of $VARIANTS" }
+        require(variant in VARIANTS) { "unknown decision model graph variant \"$variant\"; expected one of $VARIANTS" }
         return dir.resolve("laya-multilingual-onnx/laya-multilingual-choice.$variant.onnx")
     }
 
@@ -68,7 +68,7 @@ object ModelLoader {
         val missing = listOf(tokenizer, graph).filterNot { Files.isRegularFile(it) }
         if (missing.isNotEmpty()) {
             return ModelStatus.Unavailable(
-                "Laya model not found (${missing.joinToString { dir.relativize(it).toString() }} missing under " +
+                "The decision model was not found (${missing.joinToString { dir.relativize(it).toString() }} missing under " +
                     "$dir). $fallback Run tools/export-laya-onnx.py to produce the model.",
             )
         }
@@ -82,7 +82,7 @@ object ModelLoader {
                 throw e
             }
         } catch (e: Exception) {
-            ModelStatus.Unavailable("Laya model failed to load (${e.message ?: e::class.simpleName}). $fallback")
+            ModelStatus.Unavailable("The decision model failed to load (${e.message ?: e::class.simpleName}). $fallback")
         }
     }
 }

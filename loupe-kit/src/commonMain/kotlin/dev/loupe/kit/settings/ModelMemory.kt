@@ -76,8 +76,8 @@ class ModelMemory(
             m to forgotten
         }
         held.first?.let { return it }
-        check(!held.second) { "Laya was removed from this phone" }
-        val opened = opener() ?: throw IllegalStateException("Laya could not be loaded again")
+        check(!held.second) { "The decision model was removed from this phone" }
+        val opened = opener() ?: throw IllegalStateException("The decision model could not be loaded again")
         val (use, spare) = lock.withLock {
             val existing = loaded
             inFlight++

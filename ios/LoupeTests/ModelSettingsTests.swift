@@ -186,7 +186,7 @@ final class ModelSettingsTests: XCTestCase {
         let settings = FakeSettings().off("game")
         let game = GameController(mode: .watch, seed: 1, modelInstalled: { true }, settings: settings)
         guard case .baseline(let reason) = game.pilot else { return XCTFail("\(game.pilot)") }
-        XCTAssertTrue(reason.contains("Laya is off"))
+        XCTAssertTrue(reason.contains("decision model is off"))
         XCTAssertEqual(settings.runs["game"], true)
         game.close()
     }

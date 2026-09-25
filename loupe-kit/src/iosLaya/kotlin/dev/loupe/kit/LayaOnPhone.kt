@@ -32,7 +32,7 @@ object LayaOnPhone {
     /** Verifies every file against its pin and opens Laya; the caller closes a [Opened.Ready]. */
     fun open(directory: String): Opened =
         runCatching { LayaModelStore(directory).open() }
-            .fold({ Opened.Ready(it) }, { Opened.Failed(it.message ?: it::class.simpleName ?: "could not open Laya") })
+            .fold({ Opened.Ready(it) }, { Opened.Failed(it.message ?: it::class.simpleName ?: "could not open the decision model") })
 
     /** Graph variants the store knows (`int8` default, `int8-partial` opt-in). */
     val variants: List<String> get() = LayaModelStore.VARIANTS.keys.toList()
@@ -52,7 +52,7 @@ object LayaOnPhone {
     /** Verifies [variant]'s files against their pins and opens Laya; the caller closes a [Opened.Ready]. */
     fun open(directory: String, variant: String): Opened =
         runCatching { LayaModelStore(directory, variant).open() }
-            .fold({ Opened.Ready(it) }, { Opened.Failed(it.message ?: it::class.simpleName ?: "could not open Laya") })
+            .fold({ Opened.Ready(it) }, { Opened.Failed(it.message ?: it::class.simpleName ?: "could not open the decision model") })
 
     /**
      * One Choice scored exactly as the parity tests score it (the whole state, no budget cut),

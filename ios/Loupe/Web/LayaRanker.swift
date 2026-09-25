@@ -6,7 +6,7 @@ import LoupeKit
 /// policy path decides (LoupeKit `FlightJudge`). An offer the policy would not act on is marked
 /// unsure — the uncertain queue's rule. Synchronous and CPU-bound: call it off the main thread.
 struct LayaRanker: OfferRanker {
-    let name = "Laya"
+    let name = "Decision model"
     let backend: Backend
     /// Model settings for flights (threshold, text budget); the defaults are the old behaviour.
     var policy: RunPolicy = RunPolicy.companion.defaults(feature: Features.shared.FLIGHTS)

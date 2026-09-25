@@ -42,7 +42,7 @@ final class LiveRunTests: XCTestCase {
         XCTAssertEqual(q3.answer, "yes · 100%")
         XCTAssertEqual(m.gates.map(\.count), [1, 0, 1, 1])
         XCTAssertEqual(m.shares.first { $0.id == "rule" }?.count, 2)
-        XCTAssertEqual(m.poweredBy, "powered by Laya · multilingual")
+        XCTAssertEqual(m.poweredBy, "powered by the decision model · multilingual")
         XCTAssertEqual(m.mascot, .scanning)
         // 2 decisions × (700 × $2 + 60 × $10) / 1M = $0.004
         XCTAssertEqual(m.costCloud, "$0.0040")

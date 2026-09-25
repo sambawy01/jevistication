@@ -42,7 +42,7 @@ final class GetLayaUITests: XCTestCase {
         let locked = any(app, "needsLaya.sort")
         scrollTo(locked, in: app)
         XCTAssertTrue(locked.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["Needs Laya, the on-device model"].exists || locked.label.contains("Needs Laya"))
+        XCTAssertTrue(app.staticTexts["Needs the decision model"].exists || locked.label.contains("Needs the decision model"))
         XCTAssertFalse(app.buttons["me.sort.run"].exists, "Run now is not offered while Laya is missing")
 
         // Its button opens Get Laya; Not now returns.

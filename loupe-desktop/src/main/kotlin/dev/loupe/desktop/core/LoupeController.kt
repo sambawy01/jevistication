@@ -364,9 +364,9 @@ class LoupeController(
         val current = judgment(id) ?: return
         replace(JudgmentMeasure.withBaselineMode(current, mode))
         notice = when (mode) {
-            BaselineMode.AUTO -> "\"${current.title}\": Auto — the baseline answers only while it beats Laya on your corrections."
-            BaselineMode.ALWAYS_BASELINE -> "\"${current.title}\" now always answers by its baseline rule; Laya is not asked. Re-run to apply."
-            BaselineMode.ALWAYS_LAYA -> "\"${current.title}\" now always answers with Laya."
+            BaselineMode.AUTO -> "\"${current.title}\": Auto — the baseline answers only while it beats the decision model on your corrections."
+            BaselineMode.ALWAYS_BASELINE -> "\"${current.title}\" now always answers by its baseline rule; the decision model is not asked. Re-run to apply."
+            BaselineMode.ALWAYS_LAYA -> "\"${current.title}\" now always answers with the decision model."
         }
     }
 

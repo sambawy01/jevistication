@@ -17,7 +17,9 @@ struct LayaModelView: View {
                 LiveRunSection(view: "setup", whileRunning: true)
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Laya, on this phone").font(Typeface.display(28)).foregroundStyle(Palette.ink)
+                        Text("The Loupe Decision Model").font(Typeface.display(28)).foregroundStyle(Palette.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityAddTraits(.isHeader)
                         Text("The model behind your judgments, the watchers and flight ranking. It runs here, never on a server.")
                             .foregroundStyle(Palette.inkSoft)
                     }
@@ -55,7 +57,7 @@ struct LayaModelView: View {
         .confirmationDialog("Remove the model from this iPhone?", isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Remove (\(sizeText))", role: .destructive) { model.remove() }
         } message: {
-            Text("Judgments, the watchers' model half and Laya ranking stop until you download it again. Your data stays.")
+            Text("Judgments, the watchers' model half and the decision model's flight ranking stop until you download it again. Your data stays.")
         }
     }
 
@@ -75,7 +77,7 @@ struct LayaModelView: View {
                 Label("Installed and ready", systemImage: "checkmark.circle.fill").foregroundStyle(Palette.mint)
                     .accessibilityIdentifier("model.ready")
                 if web.response != nil, web.layaRanked == nil {
-                    Button("Rank the current results with Laya") { web.rerank() }
+                    Button("Rank the current results with the decision model") { web.rerank() }
                 }
                 Button("Remove the model", role: .destructive) { confirmRemove = true }
                     .accessibilityIdentifier("model.remove")
@@ -194,8 +196,8 @@ struct ModelConsentView: View {
 
     static func lines(size: String) -> [String] {
         [
-            "Loupe will download Laya's model files once: \(size).",
-            "This is a one-time download. After it, Laya runs entirely on this iPhone.",
+            "Loupe will download the decision model's files once: \(size).",
+            "This is a one-time download. After it, the decision model runs entirely on this iPhone.",
             "Only the model files are fetched. Nothing about you, your files, mail, photos or judgments is sent — nothing else goes online.",
             "Each file is checked against its SHA-256 fingerprint before it is used; a file that does not match is deleted.",
             "The files stay on this iPhone, are not backed up to iCloud, and can be removed from this screen at any time.",

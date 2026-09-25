@@ -7,7 +7,12 @@ import dev.loupe.templates.Baseline
 
 /*
  * Mail triage labels for one email: the category, reply and urgency answers, the evidence-based
- * phishing verdict, the provider's spam / bulk verdicts, and the `Laya/...` labels they map to.
+ * phishing verdict, the provider's spam / bulk verdicts, and the `Loupe/...` labels they map to.
+ *
+ * 2026-09-25: the label prefix is `Loupe/` (owner decision: no user-facing "Laya"); Station's own
+ * wording is `Laya/`. These labels are shown in the app only: the iPhone never writes a label or a
+ * folder to any mailbox (Gmail is `gmail.readonly`, and `IMAPClient.allowed` refuses every write
+ * command), so there is no mailbox to migrate from this codebase.
  *
  * PROVENANCE: ported from the owner's Loupe Station repository (`~/laya-studio`, commit
  * ea7697a4f78e9a648ba49fc8bf9d13226c26cb0e): `laya_studio/mail/classify.py` (triage_flags,
@@ -31,11 +36,11 @@ data class TriageAnswer(val label: String, val p: Double, val weak: Boolean, val
 
 object MailClassify {
     const val PRESET_ID = "wf-email-triage"
-    const val LABEL_PREFIX = "Laya/"
-    const val PHISHING_LABEL = "Laya/Phishing"
-    const val SPAM_LABEL = "Laya/Spam"
-    const val URGENT_LABEL = "Laya/Urgent"
-    const val NEEDS_REPLY_LABEL = "Laya/Needs Reply"
+    const val LABEL_PREFIX = "Loupe/"
+    const val PHISHING_LABEL = "Loupe/Phishing"
+    const val SPAM_LABEL = "Loupe/Spam"
+    const val URGENT_LABEL = "Loupe/Urgent"
+    const val NEEDS_REPLY_LABEL = "Loupe/Needs Reply"
     const val PHISHING_MIN = 0.5
     const val SPAM_MIN = 0.5
     const val NEEDS_REPLY_MIN = 0.5
@@ -152,7 +157,8 @@ object MailClassify {
 
     // ------------------------------------------------------------------ naming
     private val ACRONYMS = mapOf("hr" to "HR", "vip" to "VIP", "it" to "IT", "vat" to "VAT", "ai" to "AI", "faq" to "FAQ", "pr" to "PR")
-    private val LABEL_RE = Regex("^Laya/[^\\x00-\\x1f\\x7f\"\\\\{}\\[\\]*%]{1,59}$")
+    /** A label is at most 64 characters, prefix included (Station's limit), so 58 after `Loupe/`. */
+    private val LABEL_RE = Regex("^Loupe/[^\\x00-\\x1f\\x7f\"\\\\{}\\[\\]*%]{1,58}$")
     private val REPLY_RE = Regex("reply|respon", RegexOption.IGNORE_CASE)
 
     fun words(key: String): String =

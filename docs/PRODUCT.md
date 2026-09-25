@@ -120,7 +120,7 @@ never books: the never list holds, and the last button is yours.
 
 *Updated 2026-09-25:* the Web tab is a **template library**. Currency, Weather and UK trains each offer
 several ready-made questions (English and Arabic) plus your own question with a decision type — yes/no, pick
-the best, score, or rank the list. Laya answers per fetched item on the phone, with the rule baseline shown
+the best, score, or rank the list. The Loupe Decision Model answers per fetched item on the phone, with the rule baseline shown
 beside it (rules only, with a banner, when the model is not installed). Each source is off by default and
 labelled Online with its source, fetch time and required attribution; every row links to the provider's
 record. Flights stays **development-only** until Duffel grants permission (its agreement bars metasearch and
@@ -503,7 +503,7 @@ Order of work. Nothing here is cut, and nothing waits for a second release.
 
 *Added 2026-09-23 — the iPhone app, epic #6.* Where the list says Android, read iOS first (§11).
 The phone work starts with: record the decision (done) → the engine on Kotlin Multiplatform →
-Laya on iOS, and in parallel the fetch-only flight helper (deployed) → the SwiftUI shell → the Web
+the on-device model on iOS, and in parallel the fetch-only flight helper (deployed) → the SwiftUI shell → the Web
 tab's flights. Later Web phases each get their own spec. Blocked on an Apple developer account, a
 physical iPhone and a Duffel test key. Status lives in [`BUILD.md`](BUILD.md), *Where the build
 stands*.
@@ -522,11 +522,15 @@ Closed since locking (two reopened on 2026-09-23 — the model, and the platform
   PhotoKit, and impersonation runs on email and contacts. What iOS allows is set out in
   [`BUILD.md`](BUILD.md) §0.
 - **Online sources** — opt-in, fetch-only, never judge; rules in §4a (2026-09-23).
-- **Model** — `convaiinnovations/laya-multilingual` (Apache-2.0 weights), since 2026-09-23;
-  it replaced `gliclass-modern-base-v2.0` on performance. A logit-scored `Qwen3-0.6B`
+- **Model** — the **Loupe Decision Model**, built on `convaiinnovations/laya-multilingual`
+  (Apache-2.0 weights, upstream name "Laya"), since 2026-09-23; it replaced `gliclass-modern-base-v2.0` on performance. A logit-scored `Qwen3-0.6B`
   (Apache-2.0) stays the second backend. No hosted backend. Three candidates were rejected on
-  licence grounds. Laya is cleared for shipping by owner decision 2026-09-23 (risk 12 closed in
-  [`BUILD.md`](BUILD.md)); training-data notes in [`LICENSING.md`](LICENSING.md).
+  licence grounds. The Laya base weights are cleared for shipping by owner decision 2026-09-23 (risk 12 closed in
+  [`BUILD.md`](BUILD.md)); training-data notes in [`LICENSING.md`](LICENSING.md). *Named
+  2026-09-25:* the product never says "Laya" to the user — it is "the Loupe Decision Model" (short
+  form "the decision model"; Arabic «نموذج Loupe للقرار», short «نموذج القرار»), and where the
+  product acts, "Loupe answers / flies / sorts". Code, file names, model paths and stored keys
+  keep `laya`; the Licences screen credits the upstream Laya model by Convai.
 - **Name** — **Loupe**. A loupe is the lens you hold up to something before you trust it:
   it magnifies, it does not decide for you, and it names no vendor whose model we might one
   day replace. The mark is crowded — see risk 9 in [`BUILD.md`](BUILD.md).

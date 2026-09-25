@@ -50,8 +50,8 @@ fun SidePanel(controller: GameController, frame: Long, modifier: Modifier = Modi
         Label("working name — a Loupe demo: the on-device model flies, and shows its work")
 
         when (val status = controller.modelStatus) {
-            ModelStatus.Loading -> Note("Loading the Laya model… the baseline flies meanwhile.", Palette.handOff)
-            is ModelStatus.Ready -> Label("Model: Laya multilingual, INT8 ONNX, on this CPU, offline.")
+            ModelStatus.Loading -> Note("Loading the decision model… the baseline flies meanwhile.", Palette.handOff)
+            is ModelStatus.Ready -> Label("Model: the Loupe Decision Model (multilingual, INT8 ONNX), on this CPU, offline.")
             is ModelStatus.Unavailable -> Note(status.message, Palette.overrideFlash)
         }
 

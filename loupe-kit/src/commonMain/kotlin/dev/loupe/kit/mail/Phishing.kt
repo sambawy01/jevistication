@@ -113,7 +113,7 @@ object Phishing {
         "contact_lookalike_domain" to (45 to "The sender's name is your contact {name}, but {domain} is a near miss of {target}, the domain they write from."),
         "contact_name_other_address" to (30 to "The sender's name is your contact {name}, but {address} is not an address they write from."),
         // Laya (weight shown is the maximum; 0.5-0.8 counts half)
-        "laya_phishing" to (LAYA_STRONG to "Laya's reading of the text: it looks like a phishing or scam attempt."),
+        "laya_phishing" to (LAYA_STRONG to "The decision model's reading of the text: it looks like a phishing or scam attempt."),
     ).also { m -> m.putAll(OnlineSignals.MAIL_WEIGHTS) }
     val INFO_TEXT: Map<String, String> = linkedMapOf(
         "known_sender" to "The sender's domain {domain} belongs to {brand}.",

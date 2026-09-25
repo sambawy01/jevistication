@@ -24,7 +24,7 @@ struct MeView: View {
                     row("Built-in judgments", "\(engine.builtInJudgments)")
                     row("Public Suffix List", engine.pslVersion)
                     NavigationLink { LayaModelView() } label: {
-                        row("Laya model", layaStatus)
+                        row("Decision model", layaStatus)
                     }
                     .accessibilityIdentifier("me.model")
                     NavigationLink { ModelSettingsView() } label: {

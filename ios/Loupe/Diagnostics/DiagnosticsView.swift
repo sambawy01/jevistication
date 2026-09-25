@@ -88,7 +88,7 @@ final class DiagnosticsRunner: ObservableObject {
         report = nil
         phase = .opening
         guard let backend = await model.backend() else {
-            phase = .failed("Laya is not installed or did not open (\(model.status)). Get the model first.")
+            phase = .failed("The decision model is not installed or did not open (\(model.status)). Get the model first.")
             return
         }
         UIApplication.shared.isIdleTimerDisabled = true
@@ -190,7 +190,7 @@ struct DiagnosticsView: View {
     var body: some View {
         List {
             NeonSection {
-                Text("Runs the \(runner.fixture?.cases.count ?? 0) pinned parity questions (34 golden + 8 criteria) through Laya on this phone and compares each answer with the desktop's INT8 answer. Measures latency by token length, peak memory, thermal state and battery. Nothing leaves the phone unless you share the report.")
+                Text("Runs the \(runner.fixture?.cases.count ?? 0) pinned parity questions (34 golden + 8 criteria) through the decision model on this phone and compares each answer with the desktop's INT8 answer. Measures latency by token length, peak memory, thermal state and battery. Nothing leaves the phone unless you share the report.")
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
                 Stepper("Timed passes: \(passes)", value: $passes, in: 1...20).disabled(runner.isRunning)
                     .accessibilityIdentifier("diag.passes")
@@ -208,7 +208,7 @@ struct DiagnosticsView: View {
                 }
             }
             switch runner.phase {
-            case .opening: NeonSection { ProgressView("Checking and opening Laya…") }
+            case .opening: NeonSection { ProgressView("Checking and opening the decision model…") }
             case let .running(done, total):
                 NeonSection { ProgressView(value: Double(done), total: Double(max(1, total))) { Text("\(done) / \(total)") } }
             case .failed(let m): NeonSection { Text(m).foregroundStyle(Palette.red).font(.footnote) }

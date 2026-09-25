@@ -196,7 +196,7 @@ data class JudgmentDraft(
             findings += compiled.findings.filter { it !in findings }
         }
         if (options.isNotEmpty() && options.size > 12) {
-            findings += LintFinding("too-many-options", "keep to 12 options; Laya's card advises under ~20, and fewer is sharper")
+            findings += LintFinding("too-many-options", "keep to 12 options; the decision model's card advises under ~20, and fewer is sharper")
         }
         if (options.any { it.isBlank() }) findings += LintFinding("blank-option", "an option is blank")
         return findings

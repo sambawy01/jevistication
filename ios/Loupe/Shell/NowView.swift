@@ -181,13 +181,13 @@ struct NowView: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Findings").font(Typeface.display(24)).foregroundStyle(Palette.ink)
                         Spacer()
-                        Text(summary.modelRan ? "Laya + arithmetic"
-                             : ModelSettingsService.shared.wasLayaOff(Features.shared.WATCHERS) ? "Mechanical only · Laya off" : "Mechanical only · model not installed")
+                        Text(summary.modelRan ? "Decision model + arithmetic"
+                             : ModelSettingsService.shared.wasLayaOff(Features.shared.WATCHERS) ? "Mechanical only · decision model off" : "Mechanical only · model not installed")
                             .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                     }
                     .padding(.horizontal, 4)
                     if !summary.modelRan, !readiness.isReady, !ModelSettingsService.shared.wasLayaOff(Features.shared.WATCHERS) {
-                        GetLayaButton(title: "Get Laya for the watchers' model half", id: "findings.getLaya")
+                        GetLayaButton(title: "Get the decision model for the watchers' model half", id: "findings.getLaya")
                             .padding(.horizontal, 4)
                     }
                     ForEach(Array(summary.findings.enumerated()), id: \.element.key) { i, f in

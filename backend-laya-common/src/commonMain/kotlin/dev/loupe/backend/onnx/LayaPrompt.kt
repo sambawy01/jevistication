@@ -124,7 +124,7 @@ class LayaPrompt(
         /** One per candidate, or empty for none; null or `""` shows that label bare (upstream's rule). */
         descriptions: List<String?> = emptyList(),
     ): LayaSequence {
-        require(candidates.isNotEmpty()) { "a Laya question needs at least one option" }
+        require(candidates.isNotEmpty()) { "a decision model question needs at least one option" }
         require(descriptions.isEmpty() || descriptions.size == candidates.size) {
             "${descriptions.size} descriptions for ${candidates.size} options"
         }
@@ -164,7 +164,7 @@ class LayaPrompt(
         val inRange = markers.filter { it < maxLen }
         if (inRange.size != candidates.size) {
             throw IllegalArgumentException(
-                "${candidates.size} options do not fit Laya's $maxLen-token context: only " +
+                "${candidates.size} options do not fit the decision model's $maxLen-token context: only " +
                     "${inRange.size} markers fall inside it (upstream raises here too)",
             )
         }

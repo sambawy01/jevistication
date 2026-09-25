@@ -28,9 +28,9 @@ struct GetLayaView: View {
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     Text("ON-DEVICE MODEL").font(Typeface.mono(11, weight: .medium)).tracking(0.8).foregroundStyle(Palette.cyan)
-                    Text("Get Laya").font(Typeface.display(34)).foregroundStyle(Palette.ink)
+                    Text("Get the Loupe Decision Model").font(Typeface.display(34)).foregroundStyle(Palette.ink)
                         .accessibilityAddTraits(.isHeader)
-                    Text("Loupe needs Laya, its on-device model, to judge, sort and answer your questions. It is a one-time download of about \(sizeText) that runs on this iPhone, and nothing you have leaves the phone.")
+                    Text("Loupe needs the Loupe Decision Model, which runs on this iPhone, to judge, sort and answer your questions. It is a one-time download of about \(sizeText), and nothing you have leaves the phone.")
                         .foregroundStyle(Palette.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityIdentifier("getLaya.explainer")
@@ -68,7 +68,7 @@ struct GetLayaView: View {
         VStack(alignment: .leading, spacing: 12) {
             switch readiness.state {
             case .ready:
-                Label("Laya is on this iPhone and ready", systemImage: "checkmark.circle.fill")
+                Label("The decision model is on this iPhone and ready", systemImage: "checkmark.circle.fill")
                     .font(.headline).foregroundStyle(Palette.mint)
                     .accessibilityIdentifier("getLaya.ready")
                 Button(action: onDone) {
@@ -77,10 +77,10 @@ struct GetLayaView: View {
                 .buttonStyle(.neonPrimary)
                 .accessibilityIdentifier("getLaya.continue")
             case .downloading(let p):
-                ProgressView(value: p) { Text("Downloading Laya… \(Int(p * 100))%").foregroundStyle(Palette.ink) }
+                ProgressView(value: p) { Text("Downloading the decision model… \(Int(p * 100))%").foregroundStyle(Palette.ink) }
                     .tint(Palette.blue)
                     .accessibilityIdentifier("getLaya.progress")
-                Text("It keeps downloading if you leave Loupe. Features that need Laya unlock when it finishes.")
+                Text("It keeps downloading if you leave Loupe. Features that need the decision model unlock when it finishes.")
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
                 Button("Pause") { model.pauseDownload() }
                     .frame(minHeight: 44)
@@ -92,7 +92,7 @@ struct GetLayaView: View {
                     .disabled(!readiness.hostConfigured)
                     .accessibilityIdentifier("getLaya.resume")
             case .verifying:
-                ProgressView("Checking Laya's files…").foregroundStyle(Palette.ink)
+                ProgressView("Checking the decision model's files…").foregroundStyle(Palette.ink)
             case .failed(let why):
                 Label(why, systemImage: "exclamationmark.triangle.fill").font(.footnote).foregroundStyle(Palette.dangerText)
                     .accessibilityIdentifier("getLaya.error")
@@ -108,7 +108,7 @@ struct GetLayaView: View {
     @ViewBuilder private var downloadControls: some View {
         if readiness.hostConfigured {
             Button { if model.hasConsent { model.startDownload() } else { showConsent = true } } label: {
-                Label("Download Laya (\(sizeText))", systemImage: "arrow.down.circle.fill").frame(maxWidth: .infinity, minHeight: 44)
+                Label("Download the decision model (\(sizeText))", systemImage: "arrow.down.circle.fill").frame(maxWidth: .infinity, minHeight: 44)
             }
             .buttonStyle(.neonPrimary)
             .accessibilityIdentifier("getLaya.download")
@@ -120,9 +120,9 @@ struct GetLayaView: View {
                 .font(.footnote).foregroundStyle(Palette.inkSoft)
         } else {
             VStack(alignment: .leading, spacing: 6) {
-                Label("This build cannot download Laya", systemImage: "link.badge.plus")
+                Label("This build cannot download the decision model", systemImage: "link.badge.plus")
                     .font(.headline).foregroundStyle(Palette.warnText)
-                Text("It has no model download host set, so there is nothing to download from and no request is made. Features that need Laya stay locked until its files are on this iPhone; they unlock by themselves when the files appear.")
+                Text("It has no model download host set, so there is nothing to download from and no request is made. Features that need the decision model stay locked until its files are on this iPhone; they unlock by themselves when the files appear.")
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -144,8 +144,8 @@ struct GetLayaView: View {
                 .foregroundStyle(Palette.ink)
                 .accessibilityIdentifier("getLaya.later")
                 Text(context == .onboarding
-                     ? "Features that need Laya stay locked until it is here. Loupe asks again next time you open it."
-                     : "Features that need Laya stay locked until it is here.")
+                     ? "Features that need the decision model stay locked until it is here. Loupe asks again next time you open it."
+                     : "Features that need the decision model stay locked until it is here.")
                     .font(.caption).foregroundStyle(Palette.inkSoft).multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
@@ -177,9 +177,9 @@ struct NeedsLayaCard: View {
                     .frame(width: 28)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Needs Laya, the on-device model").font(.headline).foregroundStyle(Palette.ink)
+                    Text("Needs the decision model").font(.headline).foregroundStyle(Palette.ink)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("\(what) runs on Laya. \(ModelGate.detail(readiness.state, hostConfigured: readiness.hostConfigured))")
+                    Text("\(what) runs on the decision model. \(ModelGate.detail(readiness.state, hostConfigured: readiness.hostConfigured))")
                         .font(.subheadline).foregroundStyle(Palette.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -205,14 +205,14 @@ struct NeedsLayaCard: View {
     private var buttonTitle: String {
         switch readiness.state {
         case .downloading, .paused, .verifying: return "See the download"
-        default: return "Get Laya"
+        default: return "Get the decision model"
         }
     }
 }
 
 /// The compact form, for a line inside a card (Web answers, the game's banner): one button.
 struct GetLayaButton: View {
-    var title = "Get Laya"
+    var title = "Get the decision model"
     let id: String
     @State private var showGetLaya = false
 

@@ -155,11 +155,11 @@ enum ModelGate {
         switch state {
         case .ready: return ""
         case .missing:
-            return hostConfigured ? "Get Laya once (about 400 MB) and this unlocks. It runs on this iPhone."
-                                  : "This build cannot download Laya yet: no model host is set."
-        case .downloading(let p): return "Laya is downloading: \(Int(p * 100))%. This unlocks when it finishes."
+            return hostConfigured ? "Get the decision model once (about 400 MB) and this unlocks. It runs on this iPhone."
+                                  : "This build cannot download the decision model yet: no model host is set."
+        case .downloading(let p): return "The decision model is downloading: \(Int(p * 100))%. This unlocks when it finishes."
         case .paused(let p): return "The download is paused at \(Int(p * 100))%."
-        case .verifying: return "Checking Laya's files…"
+        case .verifying: return "Checking the decision model's files…"
         case .failed(let m): return m
         }
     }

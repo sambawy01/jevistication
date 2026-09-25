@@ -47,14 +47,14 @@ data class AutoBaselineVerdict(
     /** One plain line for the Measure / Baseline screens (iOS and desktop). */
     val line: String
         get() = when {
-            !hasBaseline -> "This judgment has no baseline rule, so Laya always answers."
-            mode == BaselineMode.ALWAYS_BASELINE -> "Always baseline: the keyword rule answers and Laya is not asked."
-            mode == BaselineMode.ALWAYS_LAYA -> "Always Laya: Laya answers, whatever your corrections say about the baseline."
-            !enough -> "Auto: Laya answers. The baseline rule takes over only if it is right more often than Laya on at least " +
+            !hasBaseline -> "This judgment has no baseline rule, so the decision model always answers."
+            mode == BaselineMode.ALWAYS_BASELINE -> "Always baseline: the keyword rule answers and the decision model is not asked."
+            mode == BaselineMode.ALWAYS_LAYA -> "Always model: the decision model answers, whatever your corrections say about the baseline."
+            !enough -> "Auto: the decision model answers. The baseline rule takes over only if it is right more often than the decision model on at least " +
                 "${AutoBaseline.MIN_CORRECTIONS} of your corrections (${AutoBaseline.MIN_CORRECTIONS - compared} more needed; $compared so far)."
-            baselineAnswers -> "Auto: the baseline rule answers. On your $compared corrections it was right $baselineRight times, Laya $modelRight. " +
-                "Laya is still asked and its answer is kept beside the rule's."
-            else -> "Auto: Laya answers. On your $compared corrections Laya was right $modelRight times, the baseline $baselineRight."
+            baselineAnswers -> "Auto: the baseline rule answers. On your $compared corrections it was right $baselineRight times, the decision model $modelRight. " +
+                "The decision model is still asked and its answer is kept beside the rule's."
+            else -> "Auto: the decision model answers. On your $compared corrections the decision model was right $modelRight times, the baseline $baselineRight."
         }
 }
 

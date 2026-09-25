@@ -252,7 +252,7 @@ final class WebModel: ObservableObject {
 
     /// The list on screen: the rules when the user toggled to them or Laya did not run.
     var shown: [RankedOffer] { showRules || layaRanked == nil ? ruleRanked : (layaRanked ?? ruleRanked) }
-    var rankerName: String { showRules || layaRanked == nil ? "Rules" : "Laya (on this phone)" }
+    var rankerName: String { showRules || layaRanked == nil ? "Rules" : "The decision model (on this phone)" }
 
     /// Set when Laya and the rules put different offers first.
     var topDisagreement: (laya: RankedOffer, rules: RankedOffer)? {

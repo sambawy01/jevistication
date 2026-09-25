@@ -266,7 +266,7 @@ final class GameController: ObservableObject {
                 if let backend {
                     self.flyLaya(backend)
                 } else {
-                    self.flyBaseline(reason: "The decision model could not be opened (see Me → Laya model), so the rule-based pilot is flying.")
+                    self.flyBaseline(reason: "The decision model could not be opened (see Me → Decision model), so the rule-based pilot is flying.")
                 }
             }
         }

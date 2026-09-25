@@ -284,7 +284,7 @@ class PhishingFormulaV12Test {
         assertTrue(c.reassuringFacts.contains("The domain tells mail servers to reject forged email (DMARC)."))
         val cues = SiteScoring.verdict(PageFacts("https://resort.example/"), laya = mapOf("offers_prize_or_refund" to LayaPageAnswer(0.9, yes = true)))
         assertEquals(listOf("laya_prize"), cues.notCounted.map { it.code })
-        assertEquals("Laya's reading: the page says you won something or will get money back. Only Laya's reading of the text; nothing else about this site backs it up.",
+        assertEquals("The decision model's reading: the page says you won something or will get money back. Only the decision model's reading of the text; nothing else about this site backs it up.",
             SiteCheckResult("https://resort.example/", cues).notCountedLines.single())
     }
 }

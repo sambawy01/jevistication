@@ -49,7 +49,7 @@ final class LiveRunUITests: XCTestCase {
         XCTAssertTrue(view.waitForExistence(timeout: 30), "the live run is in place on the Privacy screen")
         XCTAssertEqual(view.value as? String, "animated")
         XCTAssertTrue(app.descendants(matching: .any)["liverun.poweredBy"].exists)
-        XCTAssertTrue(app.staticTexts["powered by Laya · multilingual"].exists)
+        XCTAssertTrue(app.staticTexts["powered by the decision model · multilingual"].exists)
         // Counters move while the items pass (150 ms an item under -LoupeSlowJobs).
         let read = app.descendants(matching: .any)["liverun.counter.read"]
         XCTAssertTrue(read.waitForExistence(timeout: 10))

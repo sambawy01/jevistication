@@ -185,8 +185,8 @@ object WatcherFindings {
             val when_ = if (days < 0) "expired ${-days} days ago" else "expires in $days days"
             val why = when {
                 alerts == null -> "The date is arithmetic, so it is certain; what the document is has not been judged (the model is not loaded)."
-                alert != null -> "Laya judged this a ${alert.documentType}; the date and the rule are arithmetic."
-                else -> "Laya did not judge this an expiring document of a listed type. Shown anyway: a missed expiry costs more than a false alarm."
+                alert != null -> "The decision model judged this a ${alert.documentType}; the date and the rule are arithmetic."
+                else -> "The decision model did not judge this an expiring document of a listed type. Shown anyway: a missed expiry costs more than a false alarm."
             }
             out += WatcherFinding(
                 key = "expiry:" + c.item.id,

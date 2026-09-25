@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
 
 /** Who flies the main view. */
 enum class PilotMode(val title: String) {
-    MODEL("Model (Laya)"),
+    MODEL("Decision model"),
     BASELINE("Baseline rules"),
     HUMAN("You"),
 }

@@ -23,7 +23,7 @@ struct UnsureQueueView: View {
                         Text("Needs you: \(all.count)")
                             .font(Typeface.display(26)).foregroundStyle(Palette.ink)
                             .accessibilityIdentifier("queue.count")
-                        Text("Check Laya's decisions one at a time. The ones it was unsure about come first; about one in five is a random pick from answers it was sure of, so the measurements are not built only from hard cases.")
+                        Text("Check the decision model's decisions one at a time. The ones it was unsure about come first; about one in five is a random pick from answers it was sure of, so the measurements are not built only from hard cases.")
                             .font(.footnote).foregroundStyle(Palette.inkSoft)
                     }
                 }

@@ -236,8 +236,8 @@ final class JudgmentsService: ObservableObject {
         } else if end.cancelled {
             notice = "Cancelled after \(end.done) of \(end.total); what ran is saved."
         } else if end.layaOff {
-            notice = "Finished with Laya off: \(end.done - end.noRule) item(s) answered by rules" +
-                (end.noRule > 0 ? ", \(end.noRule) left for a run with Laya (no rule covers them)." : ".")
+            notice = "Finished with the decision model off: \(end.done - end.noRule) item(s) answered by rules" +
+                (end.noRule > 0 ? ", \(end.noRule) left for a run with the decision model (no rule covers them)." : ".")
         } else {
             notice = "Finished: \(end.done) item(s) judged."
         }
@@ -369,9 +369,9 @@ extension JudgmentsService {
         guard let j = judgment(id), j.baselineMode != mode else { return }
         if replace(JudgmentMeasure.shared.withBaselineMode(judgment: j, mode: mode)) {
             switch mode {
-            case .alwaysBaseline: notice = "\"\(j.title)\" now always answers by its baseline rule; Laya is not asked. Re-run to apply."
-            case .alwaysLaya: notice = "\"\(j.title)\" now always answers with Laya."
-            default: notice = "\"\(j.title)\": Auto — the baseline answers only while it beats Laya on your corrections."
+            case .alwaysBaseline: notice = "\"\(j.title)\" now always answers by its baseline rule; the decision model is not asked. Re-run to apply."
+            case .alwaysLaya: notice = "\"\(j.title)\" now always answers with the decision model."
+            default: notice = "\"\(j.title)\": Auto — the baseline answers only while it beats the decision model on your corrections."
             }
         }
     }

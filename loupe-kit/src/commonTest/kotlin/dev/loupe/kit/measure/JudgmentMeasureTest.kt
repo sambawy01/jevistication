@@ -66,11 +66,11 @@ class JudgmentMeasureTest {
         assertTrue(queue.first().informativeness >= queue.filter { it.reason == SelectionReason.UNCERTAIN }.last().informativeness)
         assertEquals(j.shape.candidates, queue.first().options.map { it.first })
 
-        // The caption is in plain words: how sure Laya was, never "the model is torn".
+        // The caption is in plain words: how sure Loupe was, never "the model is torn".
         val unsure = queue.first { it.reason == SelectionReason.UNCERTAIN }
         val yes = unsure.options.first().second
-        assertEquals("Laya wasn't sure (${kotlin.math.round(yes * 100).toInt()}% yes) — your answer teaches it", unsure.why)
-        assertEquals("a random check on an answer Laya was sure of", queue.first { it.isAudit }.why)
+        assertEquals("Loupe wasn't sure (${kotlin.math.round(yes * 100).toInt()}% yes) — your answer teaches it", unsure.why)
+        assertEquals("a random check on an answer Loupe was sure of", queue.first { it.isAudit }.why)
         assertTrue(queue.none { "model" in it.why || "torn" in it.why })
 
         val before = JudgmentMeasure.summary(ledger, j, index())

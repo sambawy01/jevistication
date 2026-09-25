@@ -142,7 +142,7 @@ struct MeasureView: View {
             Picker("Who answers", selection: Binding(get: { j.baselineMode }, set: { service.setBaselineMode(j.id, $0) })) {
                 Text("Auto").tag(BaselineMode.auto_)
                 Text("Always baseline").tag(BaselineMode.alwaysBaseline)
-                Text("Always Laya").tag(BaselineMode.alwaysLaya)
+                Text("Always model").tag(BaselineMode.alwaysLaya)
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("measure.whoAnswers")
@@ -150,7 +150,7 @@ struct MeasureView: View {
                 .foregroundStyle(auto.baselineAnswers ? Palette.warnText : Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("measure.whoAnswers.line")
-            Text("Auto lets the baseline rule answer once it is right more often than Laya on at least \(AutoBaseline.shared.MIN_CORRECTIONS) of your corrections. Its answers are logged as a rule, with Laya's answer kept beside them, so they never count as Laya's.")
+            Text("Auto lets the baseline rule answer once it is right more often than the decision model on at least \(AutoBaseline.shared.MIN_CORRECTIONS) of your corrections. Its answers are logged as a rule, with the decision model's answer kept beside them, so they never count as the decision model's.")
                 .font(.caption).foregroundStyle(Palette.inkSoft)
         }
     }

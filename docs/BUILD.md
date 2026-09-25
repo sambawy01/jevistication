@@ -1492,6 +1492,41 @@ their acceptance criteria are met; entries here record increments toward them.
   (one 17 Pro run); 14.3/s, P50 26 ms, P95 36 ms, 86 of 91 (one SE run). These are simulator numbers,
   not the phone's. Gate: `./gradlew check` green (1,444 tests; game 95 JVM, 78 iOS-simulator Kotlin);
   LoupeKit rebuilt; iOS simulator 330 unit (2 skipped) + 38 UI (1 skipped: the screenshot test without its variable); in that full run `SourcesUITests.testPhotosScanShowsTheLiveDisplayThenTheSummary` failed once and passed twice run alone (not game code).
+- **2026-09-25 — The model is "the Loupe Decision Model" to the user; mail labels are `Loupe/…` (owner
+  decisions A–C).** No user-facing text says "Laya": the on-device model is "the Loupe Decision Model",
+  short form "the decision model" in tight UI (Arabic «نموذج Loupe للقرار» / «نموذج القرار», as the
+  website), and where the product acts, "Loupe …" (the Unsure-queue captions now read "Loupe wasn't sure
+  (52% yes) — your answer teaches it"). Changed: every iPhone string (onboarding step **Get the Loupe
+  Decision Model**, the **Needs the decision model** lock, Me → **Decision model**, the model page, Model
+  settings EN + AR, Web answers and flight ranking, the live run view's "powered by" and source column,
+  Measure's **Always model** override, Diagnostics, the game's fallback reasons); the Mac desktop app and
+  the desktop game; LoupeKit's display text (phishing and site-check reasons, watcher findings, Auto-baseline
+  lines, Model-settings notes, the model-open errors that reach the UI). Unchanged by rule: identifiers,
+  file and model names (`laya-multilingual`, `models.json`, the Supabase `laya/v1` path, SHA pins),
+  ledger and settings keys (`use_laya`, source `laya`, `mechanical:laya-off`), log subsystems, and every
+  string the model reads (no model prompt contained the name; the cloud second-opinion prompt ported from
+  Station, `SecondOpinionWorkflow`, still says "Laya's answer" and is left for an owner decision). Me →
+  Licences gains a notice crediting the base model, Laya by Convai (Apache-2.0), and its mmBERT-base
+  backbone (MIT) with both licence texts — the iPhone had no credit for the weights it downloads — and
+  the generated iOS notices name the Loupe Decision Model (`THIRD_PARTY_NOTICES-ios.txt` regenerated).
+  **Labels:** `MailClassify.LABEL_PREFIX` is `Loupe/` (Phishing, Spam, Urgent, Needs Reply and every
+  choice/question label; the 64-character cap keeps 58 after the prefix). **No mailbox migration from this
+  codebase, because nothing here writes a label:** the iPhone's Gmail path is `gmail.readonly` and lists
+  only, its IMAP client refuses every command outside a read-only allowlist (now tested against CREATE,
+  RENAME, UID MOVE, `+X-GM-LABELS` and keyword stores too), and the Mac desktop app has no mail source.
+  The only label writer is Loupe Station (`~/laya-studio`, `laya_studio/mail/{google,imap,composio_*}.py`),
+  which still writes `Laya/…`; the migration (move `Laya/*` to `Loupe/*`, delete the empty old label) belongs
+  there, and the website's privacy lines about Station's `Laya/...` labels stay until it ships. Tests:
+  `MailTriageTest.labelsUseTheLoupePrefixNotLaya`, `PhoneSourcesTests.testOnlyReadOnlyCommandsAreAllowed`,
+  the updated string assertions, and `RenameShotsUITests` (screenshots to `TEST_RUNNER_LOUPE_SHOTS`: Get
+  the Loupe Decision Model with and without a host, Me, the lock, the model page, Model settings EN + AR,
+  the Watch card). Gate: `./gradlew check` green (1,446 tests); LoupeKit rebuilt; iOS simulator (iPhone 17 Pro Max) 330 unit (2 skipped) + 39 UI (2 skipped: the two
+  screenshot tests without their variable). The screenshots on an iPhone 17 Pro and an iPhone SE (3rd
+  generation) caught two truncations, both fixed: the model page's heading (now wraps) and the Watch card's
+  button, "Watch Loupe…" (now "Watch", VoiceOver still "Watch Loupe fly"); after those two edits,
+  `RenameShotsUITests` and `GameUITests` were re-run on both sizes (on the SE,
+  `GameUITests.testFireButtonFiresWithoutPausingAndIsAbsentInWatch` fails its home-indicator bound, a
+  check written for Face ID phones; untouched here).
 
 
 ## Where the build stands

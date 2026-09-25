@@ -214,7 +214,10 @@ final class PhoneSourcesTests: XCTestCase {
             XCTAssertTrue(IMAPClient.allowed(ok), ok)
         }
         for refused in ["SELECT INBOX", "UID STORE 1 +FLAGS (\\Seen)", "UID FETCH 1 (BODY[])", "UID FETCH 1 (RFC822)",
-                        "UID FETCH 1 (UID BODY[TEXT])", "EXPUNGE", "APPEND INBOX {3}", "DELETE INBOX", "UID COPY 1 Trash"] {
+                        "UID FETCH 1 (UID BODY[TEXT])", "EXPUNGE", "APPEND INBOX {3}", "DELETE INBOX", "UID COPY 1 Trash",
+                        // No label or folder writes (the 2026-09-25 Laya/ → Loupe/ rename has no mailbox to migrate):
+                        "CREATE \"Loupe/Spam\"", "RENAME \"Laya/Spam\" \"Loupe/Spam\"", "UID MOVE 1 \"Loupe/Spam\"",
+                        "UID STORE 1 +X-GM-LABELS (\"Loupe/Spam\")", "UID STORE 1 +FLAGS.SILENT ($Loupe_Spam)", "SUBSCRIBE \"Loupe/Spam\""] {
             XCTAssertFalse(IMAPClient.allowed(refused), refused)
         }
     }

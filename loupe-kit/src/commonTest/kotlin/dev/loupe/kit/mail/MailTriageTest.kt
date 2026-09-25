@@ -85,16 +85,32 @@ class MailTriageTest {
         assertEquals(MailSection.NEEDS_REPLY, r.section)
         val inv = row("supplier-invoice")
         assertEquals("bank_payment", inv.categoryKey)    // "bank" is the earlier rule, as in Station's map order
-        assertTrue("Laya/Bank Payment" in inv.labels && "Laya/Bank Payment" in inv.weakLabels)
+        assertTrue("Loupe/Bank Payment" in inv.labels && "Loupe/Bank Payment" in inv.weakLabels)
     }
 
     @Test
     fun labelNamingIsStations() {
-        assertEquals("Laya/Supplier Invoice", MailClassify.choiceLabel("supplier_invoice"))
-        assertEquals("Laya/Needs Reply", MailClassify.questionLabel("needs_reply"))
-        assertEquals("Laya/Phishing", MailClassify.questionLabel("is_phishing"))
-        assertEquals("Laya/VAT Return", MailClassify.choiceLabel("vat_return"))
-        assertFalse(MailClassify.validLabel("Laya/a*b"))
+        assertEquals("Loupe/Supplier Invoice", MailClassify.choiceLabel("supplier_invoice"))
+        assertEquals("Loupe/Needs Reply", MailClassify.questionLabel("needs_reply"))
+        assertEquals("Loupe/Phishing", MailClassify.questionLabel("is_phishing"))
+        assertEquals("Loupe/VAT Return", MailClassify.choiceLabel("vat_return"))
+        assertFalse(MailClassify.validLabel("Loupe/a*b"))
+    }
+
+    @Test
+    fun labelsUseTheLoupePrefixNotLaya() {
+        // 2026-09-25 rename: every label the app shows is Loupe/..., never Station's Laya/...
+        assertEquals("Loupe/", MailClassify.LABEL_PREFIX)
+        for (l in listOf(MailClassify.PHISHING_LABEL, MailClassify.SPAM_LABEL, MailClassify.URGENT_LABEL, MailClassify.NEEDS_REPLY_LABEL)) {
+            assertTrue(l.startsWith("Loupe/") && MailClassify.validLabel(l), l)
+        }
+        assertFalse(MailClassify.validLabel("Laya/Phishing"))
+        // The 64-character cap includes the (one character longer) prefix.
+        val long = MailClassify.choiceLabel("x".repeat(80))!!
+        assertTrue(long.startsWith("Loupe/") && long.length == 64, long)
+        // Every label on every fixture email carries the new prefix.
+        val all = EMAIL_CASES.flatMap { MailTriage.triage(message(it)).labels }
+        assertTrue(all.isNotEmpty() && all.all { it.startsWith("Loupe/") && !it.contains("Laya") }, all.toString())
     }
 
     @Test

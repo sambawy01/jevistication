@@ -190,7 +190,7 @@ struct ReplyDraftSheet: View {
                 .disabled(approved)
             ForEach(d.needsInfo, id: \.self) { Text("• Check before sending: \($0)").font(.caption).foregroundStyle(Palette.warnText) }
             if !d.notes.isEmpty { Text("Note: \(d.notes)").font(.caption).foregroundStyle(Palette.inkSoft) }
-            Text("Not checked by Laya: the phone does not run Station's injection guard or brand gate on drafts. Read it before you send it.")
+            Text("Not checked by the decision model: the phone does not run Station's injection guard or brand gate on drafts. Read it before you send it.")
                 .font(.caption2).foregroundStyle(Palette.inkSoft)
             if approved {
                 HStack {
@@ -282,10 +282,10 @@ struct SecondOpinionSection: View {
                     Text("Second opinion: \(o.agrees ? "agrees" : "disagrees") — \(judgment.shown(o.answer))\(o.reason.isEmpty ? "" : " — \(o.reason)")")
                         .font(.subheadline).foregroundStyle(o.agrees ? Palette.ink : Palette.warnText)
                         .accessibilityIdentifier("assist.opinion")
-                    Text("Shown beside Laya's answer only. It changes nothing: not the answer, the ledger, calibration or the queue.")
+                    Text("Shown beside the decision model's answer only. It changes nothing: not the answer, the ledger, calibration or the queue.")
                         .font(.caption2).foregroundStyle(Palette.inkSoft)
                 } else if let r = request {
-                    AssistPreview(request: r, what: "Only this item's text (\(r.sentCharacters) characters), the question, its answers and Laya's answer.") { ask(r, i) }
+                    AssistPreview(request: r, what: "Only this item's text (\(r.sentCharacters) characters), the question, its answers and the decision model's answer.") { ask(r, i) }
                         .disabled(working)
                     if working { ProgressView() }
                 } else {
