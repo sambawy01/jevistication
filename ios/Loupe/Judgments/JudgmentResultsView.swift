@@ -10,6 +10,7 @@ struct JudgmentResultsView: View {
     var autoRun = false
     @State private var confirmCriteria = false
     @State private var didAutoRun = false
+    @ObservedObject private var readiness = ModelReadiness.shared
 
     var body: some View {
         ScrollView {
@@ -36,7 +37,7 @@ struct JudgmentResultsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await service.checkModel()
-            if autoRun && !didAutoRun && service.gate == .ready {
+            if autoRun && !didAutoRun && readiness.isReady && service.gate == .ready {
                 didAutoRun = true
                 await service.startSweep(judgmentId)
             }
@@ -66,16 +67,17 @@ struct JudgmentResultsView: View {
     // MARK: Model and run
 
     @ViewBuilder private func modelCard(_ j: UserJudgment) -> some View {
+        if case .locked = ModelGate.decide(needsModel: true, readiness.state), !service.running {
+            NeedsLayaCard(feature: "judgments", what: "Running a judgment")
+        } else {
+            runCard(j)
+        }
+    }
+
+    @ViewBuilder private func runCard(_ j: UserJudgment) -> some View {
         switch service.gate {
         case .notInstalled:
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Model not installed", systemImage: "cpu").font(.headline).foregroundStyle(Palette.ink)
-                Text("Judgments run on Laya, on this phone. Until it is installed nothing is judged, so no scores are shown.")
-                    .font(.subheadline).foregroundStyle(Palette.inkSoft)
-                NavigationLink { LayaModelView() } label: { Label("Get the on-device model", systemImage: "arrow.down.circle") }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading).card()
-            .accessibilityIdentifier("results.modelMissing")
+            NeedsLayaCard(feature: "judgments", what: "Running a judgment")
         case .failed(let why):
             VStack(alignment: .leading, spacing: 6) {
                 Label("The model could not be opened", systemImage: "exclamationmark.triangle.fill").foregroundStyle(Palette.red)

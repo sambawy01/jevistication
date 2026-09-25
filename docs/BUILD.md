@@ -1222,6 +1222,41 @@ their acceptance criteria are met; entries here record increments toward them.
   restarts every user's calibration, the wording was **not** changed. Laya remains weak on real
   receipts (the English till receipt: 0.11 yes under either wording) — the gate removes noise, it
   does not make the model read receipts better.
+- **2026-09-25 — iPhone: the mascot renders right again, and Laya is required up front (owner's report
+  from an iPhone 17 Pro).** *Mascot:* the robot's arms showed as big upright tubes and rings in front of
+  a collapsed torso. Root cause: e984ed2 replaced every node's geometry with
+  `SCNGeometry(sources:elements:)` to stop two mascots sharing a mesh, but for SceneKit's parametric
+  primitives (`SCNCapsule`, `SCNTorus`, `SCNSphere`, `SCNCone`, `SCNCylinder`, `SCNPlane`) `sources` is the
+  unit mesh at the default parameters (a capsule of radius 0.5 and height 2, a torus of ring 0.5 and pipe
+  0.25; measured in the simulator), the real size being applied at render time — so every limb became a
+  default-sized primitive. No skinner or morpher is involved (the robot is a node rig). Fix: each
+  `MascotModel` now builds its own node tree, geometry and materials (`MascotTemplate()` is no longer a
+  shared singleton to clone; only the immutable studio and shadow images are shared), so no two mascots
+  share a mesh and nothing is rebuilt from sources. `LoupeTests/MascotRenderTests.swift` checks the world
+  bounds (±0.723 × 1.75 with feet at 0) and a real `SCNRenderer` silhouette (62% × 79% of the frame, 32%
+  covered) against the designed build, that two instances share no geometry or material, and — a negative
+  control — that the sources rebuild fails both (bounds ±1.24, 86% covered). *Laya required:* the owner's
+  rule — the model is not optional, so features that need it are locked visibly, and the download is raised
+  at onboarding. `Loupe/Laya/ModelReadiness.swift`: one `@MainActor` source of truth derived from
+  `LayaModel.status` and the pinned files on disk (`.checking` counts as ready so opening Laya never flickers
+  a lock), re-checked on every return to the foreground and polled every 4 s while missing and in front
+  (existence checks only), so a finished download or files copied into `Application Support/Loupe/
+  laya-multilingual/` lift the locks without a restart; `ModelGate.decide` is the pure decision.
+  `Loupe/Laya/GetLayaView.swift`: **Get Laya**, shown before the tabs at every launch while the model is not
+  ready (two sentences: needed, about 418 MB once, runs on the phone, nothing leaves it; Download through the
+  existing consent sheet and background download, Allow mobile data, progress, Pause/Resume; "Later" opens
+  the app locked; with no model host it says the build cannot download Laya and shows no Download);
+  `NeedsLayaCard` ("Needs Laya, the on-device model" + Get Laya), `GetLayaButton` and `.requiresLaya(...)`.
+  Gated: Me → Sorting (Run now, Sort while charging), judgment runs (Results), answering the Unsure queue,
+  Measure, Diagnostics' parity run, the game's Laya pilot (the rule pilot flies under a Needs Laya banner and
+  hands over when Laya arrives), and the Laya half of Web answers and flight ranking (rules stay, with Get
+  Laya); the watchers' model half offers Get Laya and re-runs when Laya arrives. Not gated (rules-only):
+  the privacy check, mail triage, site checks, sources, the Library, writing judgments, packs, settings.
+  Me → Laya model stays the place to manage it. DEBUG `-LoupeModelState ready|missing` stands in for the
+  files in UI tests (`-LoupeNoModel` implies missing). Tests: `LoupeTests/ModelReadinessTests.swift`
+  (derivation, gate, live unlock, recheck, override, launch rule, the game pilot hand-over),
+  `LoupeUITests/GetLayaUITests.swift` (first launch without the model → Get Laya, no Download without a host,
+  Later → Sorting locked, Get Laya from the lock; with the model → no step, Run now offered).
 
 ## Where the build stands
 

@@ -182,6 +182,7 @@ final class DiagnosticsRunner: ObservableObject {
 struct DiagnosticsView: View {
     @StateObject private var runner = DiagnosticsRunner()
     @ObservedObject private var model = LayaModel.shared
+    @ObservedObject private var readiness = ModelReadiness.shared
     @State private var passes = 3
     @State private var shared: SharedFile?
     @State private var exportError: String?
@@ -198,6 +199,8 @@ struct DiagnosticsView: View {
                 row("Thermal", runner.thermalNow)
                 if runner.isRunning {
                     Button("Stop", role: .destructive) { runner.cancel() }
+                } else if case .locked = ModelGate.decide(needsModel: true, readiness.state) {
+                    NeedsLayaCard(feature: "diagnostics", what: "The parity check")
                 } else {
                     Button("Run diagnostics") { Task { await runner.run(passes: passes) } }
                         .disabled(!model.isInstalled)

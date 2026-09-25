@@ -3,9 +3,17 @@ import UIKit
 import simd
 
 /// The rigged robot, built in code from primitives (ported from the web prototype's three.js
-/// Lumi: same proportions, materials, rig and camera). One template scene is built once and
-/// cloned per `MascotView`: clones share geometry and the body materials; each instance gets its
-/// own face texture and glow materials.
+/// Lumi: same proportions, materials, rig and camera). Every instance builds its own node tree,
+/// geometry and materials (`MascotTemplate()`); nothing is shared with another mascot.
+///
+/// Why not clone one template: `clone()` shares each SCNGeometry and its mesh, and two mascots on
+/// screen at once (Now's card under the game) then have two render threads building renderable
+/// data for one mesh, which double-frees inside SceneKit. And not `SCNGeometry(sources:elements:)`
+/// either: for SceneKit's parametric primitives (SCNCapsule, SCNTorus, SCNSphere, SCNCone, …)
+/// `sources` is the unit mesh at the default parameters (a capsule of radius 0.5 and height 2, a
+/// torus of ring 0.5 and pipe 0.25); the real size is applied at render time. Rebuilding from
+/// the sources turned the arms into huge capsules and tori (the broken mascot on the owner's
+/// iPhone, 2026-09-25). `MascotRenderTests` guards both.
 final class MascotModel {
     let scene: SCNScene
     let root: SCNNode, hips: SCNNode, torso: SCNNode, neck: SCNNode, head: SCNNode
@@ -19,21 +27,12 @@ final class MascotModel {
     private let face = MascotFaceRenderer()
 
     init() {
-        let t = MascotTemplate.shared
+        let t = MascotTemplate()
         scene = SCNScene()
         scene.background.contents = UIColor.clear
-        scene.lightingEnvironment.contents = t.environment
+        scene.lightingEnvironment.contents = MascotTemplate.environment
         scene.lightingEnvironment.intensity = 0.7
-        let world = t.world.clone()
-        // clone() shares each SCNGeometry (and its mesh) with the template. Two mascots on screen
-        // at once (Now's card under the game) then have two render threads building renderable
-        // data for one mesh, which double-frees inside SceneKit. Give every instance its own mesh.
-        world.enumerateHierarchy { node, _ in
-            guard let g = node.geometry else { return }
-            let own = SCNGeometry(sources: g.sources, elements: g.elements)
-            own.materials = g.materials
-            node.geometry = own
-        }
+        let world = t.world
         scene.rootNode.addChildNode(world)
         func n(_ name: String) -> SCNNode { world.childNode(withName: name, recursively: true)! }
         root = n("root"); hips = n("hips"); torso = n("torso"); neck = n("neck"); head = n("head")
@@ -43,14 +42,12 @@ final class MascotModel {
         chestDots = (0..<3).map { n("dot.\($0)") }
         camera = n("camera")
 
-        // Per-instance materials: face texture and glows change per frame.
-        faceMaterial = t.faceMaterial.copy() as! SCNMaterial
-        n("face").geometry = (n("face").geometry!.copy() as! SCNGeometry)
-        n("face").geometry!.materials = [faceMaterial]
+        // The face texture and glows change per frame (the tree is this instance's own).
+        faceMaterial = t.faceMaterial
         slotMaterial = t.glowMaterial(); tipMaterial = t.glowMaterial(); dotMaterial = t.glowMaterial()
-        chest.geometry = (chest.geometry!.copy() as! SCNGeometry); chest.geometry!.materials = [slotMaterial]
-        for tip in ["tip.A", "tip.B"] { let tn = n(tip); tn.geometry = (tn.geometry!.copy() as! SCNGeometry); tn.geometry!.materials = [tipMaterial] }
-        for d in chestDots { d.geometry = (d.geometry!.copy() as! SCNGeometry); d.geometry!.materials = [dotMaterial] }
+        chest.geometry!.materials = [slotMaterial]
+        for tip in ["tip.A", "tip.B"] { n(tip).geometry!.materials = [tipMaterial] }
+        for d in chestDots { d.geometry!.materials = [dotMaterial] }
     }
 
     /// Applies one frame of the rig to the nodes (mirrors the prototype's frameGL).
@@ -99,11 +96,11 @@ enum MascotPalette {
     }
 }
 
-/// The shared template: geometry and body materials built once per process.
+/// One robot's node tree, geometry and materials, built fresh per `MascotModel` (cheap: a few
+/// thousand vertices). Only the studio environment image is shared (immutable).
 final class MascotTemplate {
-    static let shared = MascotTemplate()
+    static let environment = MascotTemplate.studio()
     let world = SCNNode()
-    let environment: UIImage
     let faceMaterial: SCNMaterial
 
     private let WHITE: SCNMaterial, BAND: SCNMaterial, SOLE: SCNMaterial, VISOR: SCNMaterial
@@ -114,7 +111,7 @@ final class MascotTemplate {
         return m
     }
 
-    private init() {
+    init() {
         func pbr(_ color: UIColor, rough: CGFloat, coat: CGFloat = 0, coatRough: CGFloat = 0, metal: CGFloat = 0) -> SCNMaterial {
             let m = SCNMaterial(); m.lightingModel = .physicallyBased
             m.diffuse.contents = color; m.roughness.contents = rough; m.metalness.contents = metal
@@ -132,7 +129,6 @@ final class MascotTemplate {
         faceMaterial.blendMode = .alpha
         faceMaterial.writesToDepthBuffer = false
         faceMaterial.isDoubleSided = false
-        environment = MascotTemplate.studio()
         build()
     }
 
@@ -222,7 +218,7 @@ final class MascotTemplate {
         }
         // soft contact shadow: a blurred ellipse under the boots (no shadow maps, cheap)
         let shadow = M(SCNPlane(width: 0.9, height: 0.36), MascotTemplate.shadowMaterial(), 0, -0.012, 0.03)
-        shadow.simdOrientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0]); shadow.renderingOrder = -1
+        shadow.name = "shadow"; shadow.simdOrientation = simd_quatf(angle: -.pi / 2, axis: [1, 0, 0]); shadow.renderingOrder = -1
         world.addChildNode(shadow)
 
         // lights (prototype: hemisphere + warm key + two cool rims)
@@ -244,15 +240,16 @@ final class MascotTemplate {
         world.addChildNode(camNode)
     }
 
+    private static let shadowImage: UIImage = UIGraphicsImageRenderer(size: CGSize(width: 128, height: 64)).image { ctx in
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let grad = CGGradient(colorsSpace: cs, colors: [UIColor(white: 0, alpha: 0.32).cgColor, UIColor(white: 0, alpha: 0).cgColor] as CFArray, locations: [0, 1])!
+        ctx.cgContext.scaleBy(x: 1, y: 0.5)
+        ctx.cgContext.drawRadialGradient(grad, startCenter: CGPoint(x: 64, y: 64), startRadius: 0, endCenter: CGPoint(x: 64, y: 64), endRadius: 64, options: [])
+    }
+
     private static func shadowMaterial() -> SCNMaterial {
-        let img = UIGraphicsImageRenderer(size: CGSize(width: 128, height: 64)).image { ctx in
-            let cs = CGColorSpaceCreateDeviceRGB()
-            let grad = CGGradient(colorsSpace: cs, colors: [UIColor(white: 0, alpha: 0.32).cgColor, UIColor(white: 0, alpha: 0).cgColor] as CFArray, locations: [0, 1])!
-            ctx.cgContext.scaleBy(x: 1, y: 0.5)
-            ctx.cgContext.drawRadialGradient(grad, startCenter: CGPoint(x: 64, y: 64), startRadius: 0, endCenter: CGPoint(x: 64, y: 64), endRadius: 64, options: [])
-        }
         let m = SCNMaterial(); m.lightingModel = .constant
-        m.diffuse.contents = img; m.writesToDepthBuffer = false; m.blendMode = .alpha
+        m.diffuse.contents = shadowImage; m.writesToDepthBuffer = false; m.blendMode = .alpha
         return m
     }
 }

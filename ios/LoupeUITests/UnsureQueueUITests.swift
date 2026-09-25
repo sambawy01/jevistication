@@ -6,7 +6,8 @@ final class UnsureQueueUITests: XCTestCase {
     /// Now → Needs you → answer the first item → the count drops by one.
     func testAnsweringAnItemDropsTheCount() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeFixtures", "-LoupeQueueDemo", "-LoupeTab", "now", "-LoupeSkipOnboarding"]
+        // The demo's stand-in scorer plays the model: Laya reads as ready (it is required, 2026-09-25).
+        app.launchArguments = ["-LoupeFixtures", "-LoupeQueueDemo", "-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
         app.launch()
         let card = app.buttons["now.needsYou"]
         XCTAssertTrue(card.waitForExistence(timeout: 20))

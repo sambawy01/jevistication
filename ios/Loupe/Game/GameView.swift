@@ -44,6 +44,7 @@ struct GameView: View {
             if phase != .active { game.setPaused(true) }
         }
         .onDisappear { game.close() }
+        .onReceive(ModelReadiness.shared.$state) { s in if s.isReady { game.modelBecameReady() } }
     }
 
     private func syncSettings() {
@@ -242,10 +243,7 @@ struct GameView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 4)
             if !ModelSettingsService.shared.wasLayaOff(Features.shared.GAME) {
-                NavigationLink { LayaModelView() } label: {
-                    Text("Me → Laya model").font(Typeface.mono(12, weight: .semibold)).foregroundStyle(Palette.amber)
-                }
-                .accessibilityIdentifier("game.getModel")
+                GetLayaButton(id: "game.getModel").foregroundStyle(Palette.amber)
             }
         }
         .padding(.horizontal, 16).padding(.vertical, 8)

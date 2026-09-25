@@ -122,9 +122,7 @@ struct ResultsView: View {
                 if case .layaOff = why {
                     LayaOffBanner(feature: Features.shared.FLIGHTS)
                 } else if case .prioritiesRefused = why {} else {
-                    NavigationLink("Get the on-device model") { LayaModelView() }
-                        .font(.footnote.weight(.semibold))
-                        .accessibilityIdentifier("results.getModel")
+                    GetLayaButton(id: "results.getModel")
                 }
             }
         case .cancelled:

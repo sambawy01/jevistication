@@ -16,6 +16,7 @@ struct NowView: View {
     @State private var openItem: SourceItem?
     @State private var showQueue = false
     @State private var opened = false
+    @ObservedObject private var readiness = ModelReadiness.shared
 
     var body: some View {
         NavigationStack {
@@ -37,6 +38,10 @@ struct NowView: View {
         }
         // Whatever a check proposes goes to Review as soon as it has run (never run until approved).
         // (@Published fires before the value is stored: hop once so collect reads the new one.)
+        // Laya arrived (download finished, files copied in): the watchers' model half can run now.
+        .onChange(of: readiness.isReady) { _, ready in
+            if ready, !sources.scanning { Task { await watchers.run() } }
+        }
         .onReceive(privacy.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .onReceive(mail.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .onReceive(watchers.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
@@ -181,6 +186,10 @@ struct NowView: View {
                             .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                     }
                     .padding(.horizontal, 4)
+                    if !summary.modelRan, !readiness.isReady, !ModelSettingsService.shared.wasLayaOff(Features.shared.WATCHERS) {
+                        GetLayaButton(title: "Get Laya for the watchers' model half", id: "findings.getLaya")
+                            .padding(.horizontal, 4)
+                    }
                     ForEach(Array(summary.findings.enumerated()), id: \.element.key) { i, f in
                         FindingCard(finding: f, index: i, item: ItemIndex.item(f.itemId),
                                     onVerdict: { watchers.answer(f, $0) },

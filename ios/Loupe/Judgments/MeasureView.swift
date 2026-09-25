@@ -17,16 +17,7 @@ struct MeasureView: View {
                     Text(j.title).font(Typeface.display(26)).foregroundStyle(Palette.ink)
                     Text("This is one judgment's record, on your corrections only.")
                         .font(.footnote).foregroundStyle(Palette.inkSoft)
-                    if s.decisions == 0 {
-                        box(title: "Nothing measured yet", tone: .plain) {
-                            Text("Run \"\(j.title)\" and answer some items in the Unsure queue.").font(.subheadline)
-                        }
-                    } else {
-                        stats(s)
-                        calibration(s)
-                        baseline(j)
-                        slider(j)
-                    }
+                    measured(j, s).requiresLaya("measure", what: "Measuring a judgment")
                     if s.earlierWording > 0 {
                         Text("\(s.earlierWording) decision(s) made under earlier wording are not counted here.")
                             .font(.caption).foregroundStyle(Palette.inkSoft)
@@ -40,6 +31,22 @@ struct MeasureView: View {
         .navigationTitle("Measure")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { service.load(); service.refreshLedger() }
+    }
+
+    /// The figures, the baseline and the threshold (locked while Laya is not ready).
+    private func measured(_ j: UserJudgment, _ s: MeasureSummary) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            if s.decisions == 0 {
+                box(title: "Nothing measured yet", tone: .plain) {
+                    Text("Run \"\(j.title)\" and answer some items in the Unsure queue.").font(.subheadline)
+                }
+            } else {
+                stats(s)
+                calibration(s)
+                baseline(j)
+                slider(j)
+            }
+        }
     }
 
     private func stats(_ s: MeasureSummary) -> some View {

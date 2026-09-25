@@ -12,8 +12,61 @@ struct RootView: View {
     @AppStorage("onboarding.seen") private var onboardingSeen = false
     @State private var showOnboarding = false
     @State private var watchAfterOnboarding = false
+    /// Get Laya, before the tabs: shown at launch while the model is not ready (every launch until
+    /// it is installed); "Later" or "Start using Loupe" leaves it for this launch.
+    @State private var showGetLaya = RootView.getLayaAtLaunch(ready: ModelReadiness.shared.isReady, launch: .current)
+    @State private var started = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The Get Laya step shows at launch when the model is not ready, unless a test skips
+    /// onboarding or the launch opens the game directly.
+    static func getLayaAtLaunch(ready: Bool, launch: LaunchOptions) -> Bool {
+        !ready && !launch.skipOnboarding && launch.game == nil
+    }
 
     var body: some View {
+        Group {
+            if showGetLaya {
+                GetLayaView(context: .onboarding) {
+                    showGetLaya = false
+                    // Then the one-time intro (the game as the demo), once the tabs are up.
+                    if !onboardingSeen && !LaunchOptions.current.skipOnboarding { showOnboarding = true }
+                }
+                .transition(.opacity)
+            } else {
+                tabs
+            }
+        }
+        .animation(Motion.reduced(reduceMotion) ? nil : .easeOut(duration: 0.25), value: showGetLaya)
+        .onAppear(perform: start)
+        // "Open in Loupe" from the share sheet or Files: a preset pack goes to the Judgments preview
+        // (packs need no model, so this leaves Get Laya for the tabs).
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            showGetLaya = false
+            selection = .judgments
+            PacksService.shared.open(url)
+        }
+    }
+
+    private func start() {
+        guard !started else { return }
+        started = true
+        selection = initialTab
+        sources.start()
+        #if DEBUG
+        DeviceDiag.run(sources)
+        #endif
+        let launch = LaunchOptions.current
+        launcher.seed = launch.gameSeed
+        if let game = launch.game {
+            launcher.open(game)
+        } else if !showGetLaya && !onboardingSeen && !launch.skipOnboarding {
+            showOnboarding = true
+        }
+    }
+
+    private var tabs: some View {
         TabView(selection: $selection) {
             NowView()
                 .tabItem { Label("Now", systemImage: "dot.radiowaves.left.and.right") }
@@ -39,12 +92,6 @@ struct RootView: View {
         // Jobs running off-screen, and the model-load banner (the live run views are in place on each screen).
         .overlay(alignment: .bottom) { ActivityDock() }
         .environmentObject(launcher)
-        // "Open in Loupe" from the share sheet or Files: a preset pack goes to the Judgments preview.
-        .onOpenURL { url in
-            guard url.isFileURL else { return }
-            selection = .judgments
-            PacksService.shared.open(url)
-        }
         .fullScreenCover(item: $launcher.mode) { mode in
             GameView(mode: mode, seed: launcher.seed)
         }
@@ -60,20 +107,6 @@ struct RootView: View {
                 onboardingSeen = true
                 showOnboarding = false
             })
-        }
-        .onAppear {
-            selection = initialTab
-            sources.start()
-            #if DEBUG
-            DeviceDiag.run(sources)
-            #endif
-            let launch = LaunchOptions.current
-            launcher.seed = launch.gameSeed
-            if let game = launch.game {
-                launcher.open(game)
-            } else if !onboardingSeen && !launch.skipOnboarding {
-                showOnboarding = true
-            }
         }
     }
 }

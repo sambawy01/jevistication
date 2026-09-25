@@ -130,7 +130,7 @@ final class PilotSchedulingTests: XCTestCase {
     func testWatchModeWithoutTheModelFliesTheBaselineAndSaysSo() {
         let game = GameController(mode: .watch, seed: 1, modelInstalled: { false })
         guard case .baseline(let reason) = game.pilot else { return XCTFail("\(game.pilot)") }
-        XCTAssertTrue(reason.contains("Laya not installed"))
+        XCTAssertTrue(reason.contains("Needs Laya"))
         XCTAssertNil(game.shadow)
         game.close()
     }

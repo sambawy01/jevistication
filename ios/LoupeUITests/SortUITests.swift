@@ -6,7 +6,8 @@ final class SortUITests: XCTestCase {
     /// Me → Run now shows progress over the sample and finishes with real counts.
     func testRunNowShowsProgressAndCompletes() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeFixtures", "-LoupeSortDemo", "-LoupeTab", "me", "-LoupeSkipOnboarding"]
+        // The demo's stand-in scorer plays the model: Laya reads as ready (it is required, 2026-09-25).
+        app.launchArguments = ["-LoupeFixtures", "-LoupeSortDemo", "-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
         app.launch()
         let toggle = app.switches["me.sort.toggle"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 10))

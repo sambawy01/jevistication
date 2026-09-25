@@ -153,7 +153,7 @@ final class GameController: ObservableObject {
     private let hitHaptic = UIImpactFeedbackGenerator(style: .light)
     private let crashHaptic = UINotificationFeedbackGenerator()
 
-    static let notInstalled = "Laya not installed — the baseline pilot is flying."
+    static let notInstalled = "Needs Laya, the on-device model. The rule-based pilot flies meanwhile."
     static let tick: TimeInterval = 1.0 / 60.0
     static let maxCatchUp: TimeInterval = 0.1
     static let autoRestartAfter: TimeInterval = 2.5
@@ -164,7 +164,7 @@ final class GameController: ObservableObject {
          seed: Int64 = 1,
          rush: Bool = false,
          backendProvider: @escaping @MainActor () async -> Backend? = { LaunchOptions.current.noModel ? nil : await LayaModel.shared.backend() },
-         modelInstalled: @escaping @MainActor () -> Bool = { !LaunchOptions.current.noModel && LayaModel.shared.isInstalled },
+         modelInstalled: @escaping @MainActor () -> Bool = { ModelReadiness.shared.isReady },
          executor: PilotExecutor = QueuePilotExecutor.shared,
          returnToSimulation: @escaping (@escaping () -> Void) -> Void = { w in DispatchQueue.main.async(execute: w) },
          settings: ModelSettingsSource = ModelSettingsService.shared) {
@@ -188,6 +188,12 @@ final class GameController: ObservableObject {
     }
 
     func newRiver() { start(mode: mode, seed: seed + 1) }
+
+    /// Laya arrived while the baseline was flying for want of it: restart the river with Laya.
+    func modelBecameReady() {
+        guard mode == .watch, case .baseline(let reason) = pilot, reason == Self.notInstalled, modelInstalled() else { return }
+        start(mode: mode, seed: seed)
+    }
 
     func setRush(_ on: Bool) {
         guard on != rush else { return }

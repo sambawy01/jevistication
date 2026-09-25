@@ -29,6 +29,7 @@ struct UnsureQueueView: View {
                 }
                 if let e = waiting.first {
                     card(e, position: (all.firstIndex { id($0) == id(e) } ?? 0) + 1, of: all.count)
+                        .requiresLaya("queue", what: "Answering the Unsure queue")
                 } else if !all.isEmpty {
                     empty("You skipped everything waiting", "Skipped items come back next time you open the queue.") {
                         Button("Show skipped again") { skipped.removeAll() }.buttonStyle(.bordered)

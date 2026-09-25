@@ -318,9 +318,7 @@ struct WebAnswerSection: View {
                 case .layaOff: LayaOffBanner(feature: Features.shared.FLIGHTS)
                 case .refused: EmptyView()
                 case .modelNotInstalled, .modelFailed:
-                    NavigationLink(WS.t("getModel")) { LayaModelView() }
-                        .font(.footnote.weight(.semibold))
-                        .accessibilityIdentifier("web.answer.getModel")
+                    GetLayaButton(title: WS.t("getModel"), id: "web.answer.getModel")
                 }
             }
         case .cancelled:
