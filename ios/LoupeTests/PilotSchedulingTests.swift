@@ -138,8 +138,37 @@ final class PilotSchedulingTests: XCTestCase {
     func testWatchModeWithoutTheModelFliesTheBaselineAndSaysSo() {
         let game = GameController(mode: .watch, seed: 1, modelInstalled: { false })
         guard case .baseline(let reason) = game.pilot else { return XCTFail("\(game.pilot)") }
-        XCTAssertTrue(reason.contains("Needs Laya"))
+        XCTAssertTrue(reason.contains("Needs the Loupe Decision Model"))
         XCTAssertNil(game.shadow)
+        game.close()
+    }
+
+    /// The results card's headline comes from the run's own counters, not from anything invented.
+    func testResultsCardStatsComeFromTheRunsCounters() async {
+        let backend = FakeGameBackend(preferring: "straight")
+        let exec = ManualExecutor()
+        let game = GameController(mode: .watch, seed: 9,
+                                  backendProvider: { backend }, modelInstalled: { true },
+                                  executor: exec, returnToSimulation: { $0() })
+        for _ in 0..<50 where game.pilot != .laya { await Task.yield() }
+        XCTAssertEqual(game.pilot, .laya)
+        for i in 0..<600 {
+            game.step(now: Double(i) / 60)
+            exec.runAll()
+        }
+        let r = game.makeResults()
+        let s = game.session.stats
+        XCTAssertGreaterThan(r.totalDecisions, 20)
+        XCTAssertEqual(r.totalDecisions, Int(s.total))
+        XCTAssertEqual(r.modelDecisions, Int(s.count(source: .model)))
+        XCTAssertEqual(r.collisionChoices, Int(s.collisionChoices))
+        XCTAssertEqual(r.collisionsAvoided, Int(s.collisionsAvoided))
+        XCTAssertEqual(r.takeovers, Int(s.takeovers))
+        XCTAssertEqual(r.onTimePercent, s.onTimePercent()?.doubleValue)
+        XCTAssertEqual(r.p50, s.latencyMillis(q: 0.5)?.doubleValue)
+        XCTAssertEqual(r.averagePerSecond, Double(s.total) / (Double(game.session.world.tick) / 60), accuracy: 1e-9)
+        XCTAssertEqual(r.layaRows, Int(game.session.world.cameraY))
+        XCTAssertEqual(LastRun.read()?.decisions, r.totalDecisions, "the Watch card's last-run line is this run")
         game.close()
     }
 

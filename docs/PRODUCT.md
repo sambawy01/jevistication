@@ -153,9 +153,12 @@ stays on the device.
 
 **Verifiable privacy.** Airplane mode, everything still works.
 
-**The game.** A playable demo where the model decides many times a second with its probability
-bars visible, offline. Nobody understands "typed decisions with calibrated probabilities";
-everybody understands watching it think. It is the onboarding, and it is the store video.
+**The game.** A playable demo where the decision model decides many times a second, live, on the
+phone, with nothing leaving it — and shows every answer. Nobody understands "typed decisions with
+calibrated probabilities"; everybody understands watching it think. It is the onboarding, and it is
+the store video. *What it shows off (owner decision, 2026-09-25):* speed and privacy — decisions per
+second, latency on this phone, on-time answers, predicted collisions avoided, 0 bytes out — not that
+the model out-flies a few lines of rules (it does not; see below). The mode is **"Watch Loupe fly"**.
 
 *What it is (decided 2026-09-23):* an original vertical-scrolling river shooter in the spirit of
 the early-1980s genre — fly up a procedurally generated river, steer, shoot boats, drones and
@@ -171,19 +174,21 @@ question, and when one move is left the model is not asked. Two more rules only 
 fuel with a depot in reach, only the ways toward it are offered; and the gun is set by rule (fire when
 a target is in line and no fuel depot is, otherwise not), so each way is offered once. The model then
 answers one small question, **"Which way is safest?"**, over at most three ways — left, straight,
-right — each described in words ("boat close", "land very close", "fuel that way"). A **safety
+right — each described by a motion-aware collision prediction: the way is flown 1.5 s ahead in a copy
+of the game, with the boats and helicopters really moving ("crash: heli crossing in, 0.5 s", "safe,
+boat moving away", "safe, fuel that way"). A **safety
 override** replaces a held move that has become fatal, and the screen flashes when it does. Below a
 **threshold slider**, the decision is handed to the player ("your turn"). A **dumb baseline**
-autopilot flies the same seeds, and the game reports which wins. The bars show the model's share with
+autopilot flies the same seeds, and the results show both distances. The bars show the model's share with
 its measured left/right word bias divided out — not calibrated, and labelled so.
 
-*Honest status (measured 2026-09-25, `BUILD.md`):* untuned, the model **still loses to the
-baseline** — 495 against 543 rows on average over 20 seeds, ahead on 5 of them — though it flies 46%
-further than the earlier six-way question, which shot its own fuel and ran dry. The gates and the
-safety net do much of the flying: the same gates holding course, with no model at all, reach 418.
-Fine-tuning on baseline-flown states is still the planned fix. On a desktop CPU it now decides in
-~21 ms (P50); on a phone that is **unmeasured** (risk 13). It runs on macOS as a Compose Desktop app
-and on the iPhone.
+*Honest status (measured 2026-09-25, `BUILD.md`):* the model reads the prediction — where a safe
+way is on offer it flies into a predicted crash 5.6% of the time (the rule-based pilot 40%) — but
+untuned it **still does not beat the rule-based pilot on distance**: 502 against 543 rows on average
+over 20 seeds, ahead on 7 of them. The gates and the safety net do much of the flying (the same gates
+holding course, with no model at all, reach 418). Fine-tuning is still the planned fix. On a desktop
+CPU it decides in ~25 ms (P50); on a phone that is **unmeasured** (risk 13) until the watch run's own
+numbers are read on a device. It runs on macOS as a Compose Desktop app and on the iPhone.
 
 ---
 

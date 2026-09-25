@@ -96,6 +96,9 @@ class GameSession(
 
     /** The legal set behind the decision in flight, to hold the pilot to it. */
     private var pendingLegal: LegalActions? = null
+
+    /** The observation behind the decision in flight, for the collision-avoidance count. */
+    private var pendingObservation: Observation? = null
     private var nextRequestTick: Long = 0
 
     fun tick() {
@@ -107,7 +110,9 @@ class GameSession(
             if (!decider.busy && world.tick >= nextRequestTick) {
                 val legal = Mechanics.legalActions(world)
                 pendingLegal = legal
-                decider.submit(Observation.of(world, legal))
+                val observation = Observation.of(world, legal)
+                pendingObservation = observation
+                decider.submit(observation)
                 val interval = currentInterval
                 // Honest accounting: a request that goes out after it was due is late, and every
                 // whole interval that passed with the pilot still busy was a decision not made.
@@ -126,7 +131,7 @@ class GameSession(
             Mechanics.safetyOverride(world, wanted)?.let { replacement ->
                 flown = replacement
                 lastOverride = OverrideEvent(world.tick, wanted, replacement)
-                stats.recordOverride()
+                stats.recordOverride(world.tick)
             }
         }
         lastFlown = flown
@@ -145,6 +150,8 @@ class GameSession(
         currentLegal = legal
         current = decision
         stats.record(decision, clock())
+        pendingObservation?.let { o -> if (decision.source != DecisionSource.FAILURE) stats.recordCollisionChoice(o, decision.action) }
+        pendingObservation = null
         val top = decision.topProbability
         handedOff = decision.source == DecisionSource.MODEL && top != null && top < threshold
         if (handedOff) stats.recordHandOff()

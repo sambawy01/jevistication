@@ -83,16 +83,39 @@ final class GameInputTests: XCTestCase {
         XCTAssertEqual(r.began(6, onFireButton: false), .steer, "a new finger steers again")
     }
 
-    func testFireButtonLayoutIsBottomRightAndThumbSized() {
-        let bounds = CGRect(x: 0, y: 0, width: 430, height: 460)
+    func testFireButtonLayoutIsThumbSizedAndRoundWithSlop() {
+        let side = FireButtonLayout.touchSize
+        let bounds = CGRect(x: 0, y: 0, width: side, height: side)
         let f = FireButtonLayout.frame(in: bounds)
         XCTAssertGreaterThanOrEqual(f.width, 64)
-        XCTAssertEqual(f.maxX, 430 - FireButtonLayout.inset)
-        XCTAssertEqual(f.maxY, 460 - FireButtonLayout.inset)
+        XCTAssertEqual(f.midX, bounds.midX)
+        XCTAssertEqual(f.midY, bounds.midY)
         XCTAssertTrue(FireButtonLayout.contains(CGPoint(x: f.midX, y: f.midY), in: bounds))
         XCTAssertTrue(FireButtonLayout.contains(CGPoint(x: f.minX - 4, y: f.midY), in: bounds), "a little slop")
-        XCTAssertFalse(FireButtonLayout.contains(CGPoint(x: 215, y: 400), in: bounds), "the river steers")
-        XCTAssertFalse(FireButtonLayout.contains(CGPoint(x: f.minX, y: f.minY), in: bounds), "round, not square")
+        XCTAssertFalse(FireButtonLayout.contains(CGPoint(x: 0, y: 0), in: bounds), "round, not square")
+    }
+
+    /// FIRE lives in its own touch view (the bar under the river): holding it and dragging on the
+    /// river are two touches on two views, and both reach the game at once.
+    @MainActor
+    func testHeldFireAndARiverDragWorkTogether() {
+        let game = GameController(mode: .human, seed: 3, modelInstalled: { false })
+        let fire = FireTouchView(frame: CGRect(x: 0, y: 0, width: FireButtonLayout.touchSize, height: FireButtonLayout.touchSize))
+        fire.game = game
+        XCTAssertTrue(fire.point(inside: CGPoint(x: fire.bounds.midX, y: fire.bounds.midY), with: nil))
+        XCTAssertFalse(fire.isExclusiveTouch)
+        game.fireBegan()                                    // what FireTouchView does on touchesBegan
+        game.touchBegan(column: 2, x: 20, time: 0)          // a drag on the river at the same time
+        let start = game.session.world.playerX
+        let shots = game.session.world.tally.shotsFired
+        for i in 0..<30 { game.step(now: Double(i) / 60) }
+        XCTAssertLessThan(game.session.world.playerX, start, "the drag steers while FIRE is held")
+        XCTAssertGreaterThan(game.session.world.tally.shotsFired, shots, "FIRE fires while the other finger steers")
+        game.touchEnded(time: 0.5)
+        game.fireEnded()                                    // what FireTouchView does on touchesEnded
+        XCTAssertFalse(game.fireButton.pressed)
+        XCTAssertFalse(game.paused)
+        game.close()
     }
 
     @MainActor

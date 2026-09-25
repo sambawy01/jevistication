@@ -16,66 +16,78 @@ class PathTextTest {
     private fun observe(w: World) = Observation.of(w, Mechanics.legalActions(w))
 
     @Test
-    fun `open water reads as open water every way`() {
+    fun `open water reads safe every way`() {
         val o = observe(open())
-        assertEquals(listOf("open water", "open water", "open water"), listOf(-1, 0, 1).map { PathText.describe(o, it) })
+        assertEquals(listOf("safe", "safe", "safe"), listOf(-1, 0, 1).map { PathText.describe(o, it) })
         assertEquals("fuel 100%", PathText.scene(o))
     }
 
     @Test
-    fun `a boat dead ahead is on the straight path only`() {
+    fun `a heli crossing into the straight path reads as a crash there only`() {
         val w = open()
-        w.addEnemy(Enemy(EnemyKind.BOAT, w.playerX, w.playerY + 5, 0.0))
+        w.addEnemy(Enemy(EnemyKind.HELI, w.playerX - 4.0, w.playerY + 6, 4.5))
         val o = observe(w)
-        assertEquals("boat close", PathText.describe(o, 0))
-        assertEquals("open water", PathText.describe(o, -1))
-        assertEquals("open water", PathText.describe(o, 1))
+        assertEquals("crash: heli crossing in, 0.5 s", PathText.describe(o, 0))
+        assertEquals("safe", PathText.describe(o, 1))
     }
 
     @Test
-    fun `a moving heli is placed where it will be`() {
+    fun `a heli in line but moving away reads safe - and says why`() {
         val w = open()
-        // Two columns left, flying right at 4.5 columns a second: in line by the time the plane is there.
-        w.addEnemy(Enemy(EnemyKind.HELI, w.playerX - 2.0, w.playerY + 3.0, 4.5))
+        // 1.4 columns right: overlapping the plane's path now (0.75 + 0.8 > 1.4), but outside the
+        // gun's line (1.2), so no shot is planned — it is only moving away.
+        w.addEnemy(Enemy(EnemyKind.HELI, w.playerX + 1.4, w.playerY + 6, 4.5))
         val o = observe(w)
-        assertEquals("heli very close", PathText.describe(o, 0))
+        assertEquals("safe, heli moving away", PathText.describe(o, 0))
+    }
+
+    @Test
+    fun `a boat dead ahead that the gun will hit reads safe straight on`() {
+        val w = open()
+        w.addEnemy(Enemy(EnemyKind.BOAT, w.playerX, w.playerY + 5, 0.0))
+        val o = observe(w)
+        assertEquals("boat", o.path(0)!!.predicted!!.shoots)
+        assertEquals("safe", PathText.describe(o, 0))
     }
 
     @Test
     fun `fuel is mentioned only when the tank is not full`() {
         val w = open()
         w.addDepot(Depot(w.playerX + 5, w.playerY + 12))
-        assertEquals("open water", PathText.describe(observe(w), 1))
+        assertEquals("safe", PathText.describe(observe(w), 1))
         w.setFuel(40.0)
         val low = observe(w)
-        assertEquals("fuel that way", PathText.describe(low, 1))
-        assertEquals("open water", PathText.describe(low, -1))
+        assertEquals("safe, fuel that way", PathText.describe(low, 1))
+        assertEquals("safe", PathText.describe(low, -1))
         assertEquals("fuel 40%, low", PathText.scene(low))
     }
 
     @Test
-    fun `land ahead on a path is named with how close`() {
+    fun `land ahead on a path is named with when`() {
         // Seed 1's banks sit 3 columns in at the start: a hard-left path meets them.
         val w = open()
         w.placePlayer(4.6)
         val o = observe(w)
-        val left = o.path(-1)!!
-        assertTrue(left.landRows != null && left.landRows!! <= 3, "$left")
-        assertEquals("land very close", PathText.describe(o, -1))
-        assertNull(o.path(1)!!.landRows)
+        assertEquals("crash: land in 0.5 s", PathText.describe(o, -1))
+        assertEquals("safe", PathText.describe(o, 1))
+    }
+
+    @Test
+    fun `seconds are rounded to the half second - at least half a second`() {
+        assertEquals(listOf("0.5 s", "0.5 s", "1 s", "1.5 s"), listOf(1, 30, 60, 90).map(PathText::seconds))
     }
 
     @Test
     fun `the question is one word per way with its description`() {
         val w = open()
-        w.addEnemy(Enemy(EnemyKind.BOAT, w.playerX, w.playerY + 5, 0.0))
+        w.addEnemy(Enemy(EnemyKind.HELI, w.playerX - 4.0, w.playerY + 6, 4.5))
         val o = observe(w)
         val offered = ModelPilot.gates(o, o.legal.actions)
-        assertEquals(listOf(Action.LEFT_FIRE, Action.HOLD_FIRE, Action.RIGHT_FIRE), offered)
+        assertEquals(listOf(Action.LEFT, Action.HOLD, Action.RIGHT), offered)
         val j = ModelPilot.judgment(o, offered)
         assertEquals("Which way is safest?", j.question)
         assertEquals(listOf("left", "straight", "right"), j.candidates)
-        assertEquals(listOf("open water", "boat close", "open water"), j.descriptionList)
+        assertEquals(listOf(PathText.describe(o, -1), "crash: heli crossing in, 0.5 s", "safe"), j.descriptionList)
     }
 
     /** 64-bit FNV-1a over the UTF-8 bytes of [s]. */
@@ -111,6 +123,6 @@ class PathTextTest {
     }
 
     private companion object {
-        const val GOLDEN = "f40eb949500c77d0"
+        const val GOLDEN = "8743dc419eadd7bc"
     }
 }

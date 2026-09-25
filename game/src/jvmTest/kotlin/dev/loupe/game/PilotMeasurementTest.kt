@@ -76,12 +76,7 @@ class PilotMeasurementTest {
             val jobs = names.flatMap { name ->
                 seeds.map { seed ->
                     pool.submit<Measure.Run> {
-                        val pilot: Pilot = when (name) {
-                            "before" -> LegacyModelPilot(local.get().backend)
-                            "after" -> ModelPilot(local.get().backend)
-                            "gates-only" -> GatesOnlyPilot()
-                            else -> BaselinePilot()
-                        }
+                        val pilot: Pilot = pilotNamed(name, local.get().backend)
                         Measure.run(seed, pilot, Difficulty.PROGRESSIVE, seconds * Rules.TICK_HZ, 4)
                     }
                 }
@@ -100,16 +95,40 @@ class PilotMeasurementTest {
         System.getProperty("loupe.game.out")?.let { java.io.File(it).appendText(text + "\n") }
     }
 
-    private val seeds: List<Long> = (System.getProperty("loupe.game.seeds")?.toInt() ?: 4).let { n -> (1L..n.toLong()).toList() }
+    /**
+     * The pilot behind a variant name: `before` (beb3112), `v2` (792c86e: the same question, words
+     * without motion), `after` (now: the motion-aware prediction in the words), `gates-only`,
+     * `baseline`, `baseline+sensor`.
+     */
+    private fun pilotNamed(name: String, backend: OnnxBackend): Pilot = when {
+        name == "before" -> LegacyModelPilot(backend)
+        name == "v2" -> ModelPilot(backend).also {
+            it.words = Words792::describe
+            it.neutralWords = listOf("open water", "land close")
+        }.named("v2")
+        name == "after" -> ModelPilot(backend)
+        name == "gates-only" -> GatesOnlyPilot()
+        name == "baseline+sensor" -> SensorBaselinePilot()
+        else -> BaselinePilot()
+    }
+
+    private fun Pilot.named(n: String): Pilot = object : Pilot by this {
+        override val name: String = n
+    }
+
+    private val seeds: List<Long> = (System.getProperty("loupe.game.seeds")?.toInt() ?: 4).let { n ->
+        val first = System.getProperty("loupe.game.first")?.toLong() ?: 1L
+        (first until first + n).toList()
+    }
     private val seconds: Int = System.getProperty("loupe.game.seconds")?.toInt() ?: 45
 
     @Test
     fun `Laya against the baseline on the phone's river`() {
         assumeTrue(Files.isRegularFile(tokenizerPath), "Laya tokenizer not present at $tokenizerPath; skipping")
         assumeTrue(Files.isRegularFile(graphPath), "Laya INT8 graph not present at $graphPath; skipping")
-        val variants = (System.getProperty("loupe.game.variants") ?: "before,after").split(',').filter { it == "before" || it == "after" || it == "gates-only" }
+        val variants = (System.getProperty("loupe.game.variants") ?: "v2,after").split(',').filter { it.isNotBlank() && !it.startsWith("probe") }
         val threads = System.getProperty("loupe.game.threads")?.toInt() ?: 3
-        val runs = runAll(variants + "baseline", threads)
+        val runs = runAll(if ("baseline" in variants) variants else variants + "baseline", threads)
         report(Measure.table(runs))
         report(Measure.summary(runs))
         assertEquals(0, runs.sumOf { r -> r.decisions.count { it.source == DecisionSource.FAILURE } }, "the model path failed")
@@ -118,7 +137,7 @@ class PilotMeasurementTest {
     @Test
     fun `mirror probe - does the pilot read the scene`() = withModel { backend ->
         val states = Measure.sampleStates(seeds.take(8), every = 60)
-        for (pilot in listOf(LegacyModelPilot(backend), ModelPilot(backend), GatesOnlyPilot(), BaselinePilot())) {
+        for (pilot in listOf(LegacyModelPilot(backend), pilotNamed("v2", backend), ModelPilot(backend), GatesOnlyPilot(), BaselinePilot())) {
             report(Measure.mirrorProbe(pilot, states))
         }
     }
@@ -139,6 +158,12 @@ object Measure {
         val latencyMs: Double,
         var overrideSoon: Boolean = false,
         var diedSoon: Boolean = false,
+        /** The ways on offer included one predicted clear and one predicted to hit. */
+        val clearAndHit: Boolean = false,
+        /** The way flown was predicted to hit. */
+        val pickedHit: Boolean = false,
+        /** What the way flown was predicted to hit, if anything. */
+        val pickedHitWith: String? = null,
     )
 
     data class Run(
@@ -172,11 +197,17 @@ object Measure {
                 val d = pilot.decide(observation)
                 val b = shadow.decide(observation).action
                 val sorted = d.raw?.values?.sortedDescending()
+                val ways = ModelPilot.gates(observation, observation.legal.actions).map { it.steer }
+                val hits = ways.map { observation.path(it)?.predicted?.clear == false }
+                val picked = observation.path(d.action.steer)?.predicted
                 log += Decision(
                     tick = observation.tick, source = d.source, action = d.action, baseline = b,
                     offered = d.raw?.size ?: 1, top = sorted?.firstOrNull(),
                     margin = sorted?.let { if (it.size >= 2) it[0] - it[1] else null },
                     latencyMs = d.latencyNanos / 1e6,
+                    clearAndHit = hits.any { it } && hits.any { !it },
+                    pickedHit = picked?.clear == false,
+                    pickedHitWith = picked?.hitWith,
                 )
                 return d
             }
@@ -275,6 +306,17 @@ object Measure {
                 )
                 appendLine(f("  latency P50 %.1f ms, P95 %.1f ms", lat[lat.size / 2], lat[((lat.size - 1) * 0.95).toInt()]))
             }
+            run {
+                val chances = all.filter { it.clearAndHit }
+                val bad = chances.filter { it.pickedHit }
+                appendLine(
+                    f(
+                        "  predicted-collision avoidance: %d decisions offered a clear way and a predicted hit; flew a predicted hit %d (%.1f%%: %s); enemy deaths %d",
+                        chances.size, bad.size, pct(bad.size, chances.size), bad.groupingBy { it.pickedHitWith }.eachCount(),
+                        group.count { it.death == DeathCause.ENEMY },
+                    ),
+                )
+            }
         }
     }
 
@@ -335,6 +377,51 @@ object Measure {
     private fun pct(n: Int, d: Int): Double = if (d == 0) 0.0 else 100.0 * n / d
 
     private fun f(format: String, vararg args: Any?): String = String.format(Locale.ROOT, format, *args)
+}
+
+/**
+ * The baseline with the collision sensor: its own move, unless that way is predicted to hit and a
+ * legal way is predicted clear — then the clear way nearest its preference, gun as it wanted.
+ */
+class SensorBaselinePilot : Pilot {
+    override val name: String = "baseline+sensor"
+    private val inner = BaselinePilot()
+
+    override fun decide(observation: Observation): PilotDecision {
+        val d = inner.decide(observation)
+        val mine = observation.path(d.action.steer)?.predicted ?: return d
+        if (mine.clear) return d
+        val legal = observation.legal.actions
+        val clear = legal.map { it.steer }.distinct().filter { observation.path(it)?.predicted?.clear == true }
+        val steer = clear.minByOrNull { abs(it - d.action.steer) } ?: return d
+        return d.copy(action = closestLegal(Action.of(steer, d.action.fire), legal.filter { it.steer == steer }))
+    }
+}
+
+/** The 792c86e words, verbatim: what lies along each way, without motion. */
+object Words792 {
+    fun describe(o: Observation, steer: Int): String {
+        val p = o.path(steer) ?: return "open water"
+        val parts = mutableListOf<String>()
+        p.landRows?.let { parts += "land ${PathText.near(it)}" }
+        p.enemyRows?.let { parts += "${p.enemy ?: "enemy"} ${PathText.near(it)}" }
+        if (o.fuelPercent < PathText.FUEL_WANTED) {
+            val onPath = p.depotRows
+            if (onPath != null) {
+                parts += "fuel ${PathText.near(onPath)}"
+            } else {
+                o.depot?.let { d ->
+                    val side = when {
+                        d.across < -1.0 -> -1
+                        d.across > 1.0 -> 1
+                        else -> 0
+                    }
+                    if (side == steer) parts += "fuel that way"
+                }
+            }
+        }
+        return if (parts.isEmpty()) "open water" else parts.joinToString(", ")
+    }
 }
 
 /**

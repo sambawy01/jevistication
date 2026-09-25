@@ -59,6 +59,14 @@ struct HUDSnapshot: Equatable {
     var dropped = 0
     var lateAnswers = 0
     var maxSustained = 0.0
+    /// Percent of decisions that landed within one decision interval; nil before any.
+    var onTimePercent: Double?
+    /// Decisions where a way was predicted to crash and another predicted safe, and of those, the
+    /// ones where the pilot flew a safe way (`DecisionStats.collisionChoices` / `collisionsAvoided`).
+    var collisionChoices = 0
+    var collisionsAvoided = 0
+    /// Separate times the safety net took over.
+    var takeovers = 0
 }
 
 /// A published HUD snapshot, observed by the views that draw it and nothing else.
@@ -70,6 +78,12 @@ final class HUDStore: ObservableObject {
 /// The end-of-run card for a Laya run: what the phone sustained, and Laya against the baseline.
 struct RunResults: Equatable {
     var maxSustained: Double
+    /// Decisions landed per second over the whole run (simulation time).
+    var averagePerSecond: Double = 0
+    var onTimePercent: Double?
+    var collisionChoices: Int = 0
+    var collisionsAvoided: Int = 0
+    var takeovers: Int = 0
     var totalDecisions: Int
     var modelDecisions: Int
     var dropped: Int
@@ -160,7 +174,7 @@ final class GameController: ObservableObject {
     private let hitHaptic = UIImpactFeedbackGenerator(style: .light)
     private let crashHaptic = UINotificationFeedbackGenerator()
 
-    static let notInstalled = "Needs Laya, the on-device model. The rule-based pilot flies meanwhile."
+    static let notInstalled = "Needs the Loupe Decision Model on this iPhone. The rule-based pilot flies meanwhile."
     static let tick: TimeInterval = 1.0 / 60.0
     static let maxCatchUp: TimeInterval = 0.1
     static let autoRestartAfter: TimeInterval = 2.5
@@ -252,7 +266,7 @@ final class GameController: ObservableObject {
                 if let backend {
                     self.flyLaya(backend)
                 } else {
-                    self.flyBaseline(reason: "Laya could not be opened (see Me → Laya model), so the baseline autopilot is flying.")
+                    self.flyBaseline(reason: "The decision model could not be opened (see Me → Laya model), so the rule-based pilot is flying.")
                 }
             }
         }
@@ -431,11 +445,19 @@ final class GameController: ObservableObject {
         }
     }
 
-    private func makeResults() -> RunResults {
+    /// The results card, from this run's own counters (the session's `DecisionStats` and world).
+    /// Also remembered as the "last run on this iPhone" line on the Watch card.
+    func makeResults() -> RunResults {
         let w = session.world, s = session.stats
         let b = shadow?.world
-        return RunResults(
+        let seconds = Double(w.tick) / Double(Rules.shared.TICK_HZ)
+        let r = RunResults(
             maxSustained: maxSustained,
+            averagePerSecond: seconds > 0 ? Double(s.total) / seconds : 0,
+            onTimePercent: s.onTimePercent()?.doubleValue,
+            collisionChoices: Int(s.collisionChoices),
+            collisionsAvoided: Int(s.collisionsAvoided),
+            takeovers: Int(s.takeovers),
             totalDecisions: Int(s.total),
             modelDecisions: Int(s.count(source: .model)),
             dropped: Int(s.dropped),
@@ -447,6 +469,8 @@ final class GameController: ObservableObject {
             baselineScore: Int(b?.score ?? 0), baselineRows: Int(b?.cameraY ?? 0), baselineLevel: Int(b?.level ?? 1),
             baselineAlive: !(b?.over ?? true),
             rush: rush)
+        LastRun.remember(r)
+        return r
     }
 
     func drainEffects() -> [(x: Double, y: Double, big: Bool)] {
@@ -564,6 +588,10 @@ final class GameController: ObservableObject {
         h.requested = Int(stats.requested)
         h.dropped = Int(stats.dropped)
         h.lateAnswers = Int(stats.lateAnswers)
+        h.onTimePercent = stats.onTimePercent()?.doubleValue
+        h.collisionChoices = Int(stats.collisionChoices)
+        h.collisionsAvoided = Int(stats.collisionsAvoided)
+        h.takeovers = Int(stats.takeovers)
         // Sustained: the 2-second rate, counted only once the run has had two seconds to fill it.
         if !w.over, let start = runStart, (lastTime ?? start) - start > 2.5, stats.total > 0 {
             maxSustained = max(maxSustained, h.decisionsPerSecond)
@@ -599,8 +627,8 @@ final class GameController: ObservableObject {
     static func sourceText(_ d: PilotDecision?) -> String {
         guard let d else { return "Waiting for the first decision" }
         switch d.source {
-        case .model: return "Laya chose"
-        case .mechanical: return "Only one safe move: mechanics decided, Laya was not asked"
+        case .model: return "The decision model chose"
+        case .mechanical: return "Only one safe move: mechanics decided, the model was not asked"
         case .baseline: return "Rules, no model: no probabilities to show"
         default: return "Model answer unusable (\(d.failure ?? "?")); holding course"
         }
@@ -622,4 +650,27 @@ final class GameController: ObservableObject {
 @MainActor
 final class FireButtonState: ObservableObject {
     @Published var pressed = false
+}
+
+/// The last finished watch run's measured numbers, for the Watch card ("last run on this iPhone").
+/// Nothing is shown until a run has finished here.
+enum LastRun {
+    static let key = "game.lastRun"
+
+    struct Numbers: Equatable {
+        var perSecond: Double
+        var p50: Double?
+        var decisions: Int
+    }
+
+    static func remember(_ r: RunResults, defaults: UserDefaults = .standard) {
+        var d: [String: Double] = ["perSecond": r.averagePerSecond, "decisions": Double(r.totalDecisions)]
+        if let p = r.p50 { d["p50"] = p }
+        defaults.set(d, forKey: key)
+    }
+
+    static func read(defaults: UserDefaults = .standard) -> Numbers? {
+        guard let d = defaults.dictionary(forKey: key) as? [String: Double], let ps = d["perSecond"], let n = d["decisions"], n > 0 else { return nil }
+        return Numbers(perSecond: ps, p50: d["p50"], decisions: Int(n))
+    }
 }

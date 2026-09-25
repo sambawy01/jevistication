@@ -10,8 +10,10 @@ data class Sighting(val what: String, val ahead: Double, val across: Double, val
 /**
  * What lies along one way the plane can fly: [steer] (-1 left, 0 straight, 1 right) held for about
  * one decision — a lane change of up to [Observation.LANE] columns — then straight on, looked at
- * [Observation.PATH_ROWS] rows ahead. Rows until the first land, the first enemy (where it will be
- * when the plane gets there) and the nearest fuel depot on that path; null when there is none.
+ * [Observation.PATH_ROWS] rows ahead. Rows until the first land, the first enemy (where its current
+ * sideways speed puts it, in a straight line) and the nearest fuel depot on that path; null when
+ * there is none. [predicted] is the motion-aware answer: the same way flown in a copy of the real
+ * simulation ([Prediction]), as the pilot would fly it (the gun set as [ModelPilot.gates] sets it).
  *
  * It is a sensor, not a verdict: it says what is in the way, not which way to go.
  */
@@ -21,6 +23,7 @@ data class PathAhead(
     val enemyRows: Int?,
     val enemy: String? = null,
     val depotRows: Int? = null,
+    val predicted: Prediction? = null,
 )
 
 /**
@@ -90,7 +93,7 @@ data class Observation(
                 ?.let { Sighting("depot", it.y - py, it.x - x) }
             val bridge = world.bridges.filter { it.alive && it.y >= py }.minByOrNull { it.y }
 
-            return Observation(
+            val seen = Observation(
                 tick = world.tick,
                 playerX = x,
                 fuelPercent = (world.fuel / Rules.FUEL_MAX * 100).roundToInt(),
@@ -104,7 +107,14 @@ data class Observation(
                 depot = depot,
                 bridgeAheadRows = bridge?.let { (it.y - py).roundToInt() },
                 legal = legal,
-                paths = listOf(-1, 0, 1).map { path(world, it) },
+            )
+            // Each way is predicted as it would be flown: with the gun setting the gates leave it.
+            val offered = ModelPilot.gates(seen, legal.actions)
+            return seen.copy(
+                paths = listOf(-1, 0, 1).map { steer ->
+                    val move = offered.firstOrNull { it.steer == steer } ?: Action.of(steer, false)
+                    path(world, steer).copy(predicted = Prediction.of(world, move))
+                },
             )
         }
 
@@ -200,11 +210,12 @@ object StateText {
 }
 
 /**
- * The words the model pilot reads: for each way, what lies along it (from [PathAhead]), and a
- * one-clause scene. Discrete and relative — "land close", "boat very close", "fuel that way" —
- * never raw columns: measured 2026-09-25, Laya read the numeric [StateText] near chance.
+ * The words the model pilot reads: for each way, what happens if the plane flies it (from the
+ * [Prediction] in its [PathAhead]), and a one-clause scene. Discrete and relative — "crash: boat
+ * in 1 s", "safe, heli moving away", "fuel that way" — never raw columns: measured 2026-09-25,
+ * Laya read the numeric [StateText] near chance.
  *
- * Built by code from exact facts, never summarised, nothing from outside the game. Distances:
+ * Built by code from exact facts, never summarised, nothing from outside the game. Fuel distances:
  * up to 3 rows "very close", up to 6 "close", beyond that "ahead" (a path looks
  * [Observation.PATH_ROWS] rows).
  */
@@ -215,12 +226,31 @@ object PathText {
         else -> "ahead"
     }
 
-    /** What lies along [steer]; "open water" when nothing does. */
+    /**
+     * What happens along [steer], from its [Prediction]: "crash: boat crossing in, 1 s", "crash:
+     * land in 0.5 s", "safe, heli moving away", "safe"; then fuel, as before. Times are rounded to
+     * the half second, never below 0.5 s. Picked on the dev seeds (docs/BUILD.md, 2026-09-25): with
+     * "safe" and "crash" — words that match the question — Laya flew a way predicted to crash, when a
+     * safe one was on offer, 4% of the time; with "clear" / "hit in", 37%.
+     */
     fun describe(o: Observation, steer: Int): String {
-        val p = o.path(steer) ?: return OPEN
+        val p = o.path(steer) ?: return SAFE
         val parts = mutableListOf<String>()
-        p.landRows?.let { parts += "land ${near(it)}" }
-        p.enemyRows?.let { parts += "${p.enemy ?: "enemy"} ${near(it)}" }
+        val pr = p.predicted
+        if (pr != null) {
+            val t = pr.hitTicks
+            if (t != null) {
+                val at = seconds(t)
+                parts += when {
+                    pr.hitWith == "land" || pr.hitWith == "bridge" -> "crash: ${pr.hitWith} in $at"
+                    pr.crossing -> "crash: ${pr.hitWith} crossing in, $at"
+                    else -> "crash: ${pr.hitWith} in $at"
+                }
+            } else {
+                parts += SAFE
+                pr.leaving?.let { parts += "$it moving away" }
+            }
+        }
         if (o.fuelPercent < FUEL_WANTED) {
             val onPath = p.depotRows
             if (onPath != null) {
@@ -236,13 +266,20 @@ object PathText {
                 }
             }
         }
-        return if (parts.isEmpty()) OPEN else parts.joinToString(", ")
+        return if (parts.isEmpty()) SAFE else parts.joinToString(", ")
     }
+
+    /** Ticks as seconds, to the half second, at least 0.5: "0.5 s", "1 s", "1.5 s". */
+    fun seconds(ticks: Int): String {
+        val halves = maxOf(1, kotlin.math.round(ticks / (Rules.TICK_HZ / 2.0)).toInt())
+        return if (halves % 2 == 0) "${halves / 2} s" else "${halves / 2}.5 s"
+    }
+
+    const val SAFE: String = "safe"
 
     /** The scene beside the ways: the tank, and "low" under half. */
     fun scene(o: Observation): String = if (o.fuelPercent < FUEL_LOW) "fuel ${o.fuelPercent}%, low" else "fuel ${o.fuelPercent}%"
 
-    const val OPEN: String = "open water"
 
     /** Below this fuel percentage, depots are mentioned at all. */
     const val FUEL_WANTED: Int = 90

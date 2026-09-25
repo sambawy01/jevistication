@@ -148,9 +148,11 @@ fun closestLegal(preferred: Action, legal: List<Action>): Action {
  * six-way "which move keeps it off the banks, shoots targets and reaches fuel" question over a
  * numeric scene was answered near chance: half the model's answers were within 0.1 of the next,
  * a mirrored scene was steered the mirrored way only 74% of the time, and it fired on half its
- * decisions, shooting its own fuel. Now each way carries a short description of what lies along
- * it ([PathText], from the observation's [PathAhead] sensor: land, an enemy, fuel, how close), and
- * the question is only "Which way is safest?" — a reading question a choice model is good at.
+ * decisions, shooting its own fuel. Now each way carries a short description of what happens if
+ * the plane flies it ([PathText], from the motion-aware [Prediction] in the observation's
+ * [PathAhead]: "crash: heli crossing in, 0.5 s", "safe, boat moving away", "fuel that way"), and the
+ * question is only "Which way is safest?" — a reading question a choice model is good at. Rules
+ * still only remove; the prediction is a description, never a filter.
  *
  * **Word bias, divided out.** Laya prefers some option words whatever the scene: with every way
  * described identically it gave "right" 0.74 against "left" 0.26. So each answer is divided by
@@ -174,6 +176,12 @@ class ModelPilot(
 ) : Pilot {
     override val name: String = "model"
 
+    /** The words for each way. Swappable only by tests, to keep earlier pilots measurable. */
+    internal var words: (Observation, Int) -> String = PathText::describe
+
+    /** The content-free descriptions the word bias is measured over; see [NEUTRAL]. */
+    internal var neutralWords: List<String> = NEUTRAL
+
     private val priors = HashMap<List<String>, List<Double>>()
 
     override fun decide(observation: Observation): PilotDecision {
@@ -181,7 +189,7 @@ class ModelPilot(
         if (offered.size == 1) {
             return PilotDecision(offered.single(), DecisionSource.MECHANICAL, observedTick = observation.tick)
         }
-        val judgment = judgment(observation, offered, question)
+        val judgment = judgment(observation, offered, question, words)
         val state = TextState.build(listOf("river" to PathText.scene(observation)), stateBudget)
         val started = GameClock.nanoTime()
         val answered = runCatching {
@@ -222,16 +230,16 @@ class ModelPilot(
      */
     private fun prior(labels: List<String>): List<Double> = priors.getOrPut(labels) {
         val sum = DoubleArray(labels.size)
-        for (words in NEUTRAL) {
+        for (same in neutralWords) {
             val neutral = Judgment.Choice(
                 id = JUDGMENT_ID,
                 question = question,
                 candidates = labels,
                 onFailure = FailurePosture.NULL_ACTION,
-                descriptions = labels.associateWith { words },
+                descriptions = labels.associateWith { same },
             )
             val d = neutral.validate(backend.score(neutral, TextState.build(listOf("river" to NEUTRAL_SCENE), stateBudget)).masses)
-            labels.forEachIndexed { i, label -> sum[i] += d.getValue(label).value / NEUTRAL.size }
+            labels.forEachIndexed { i, label -> sum[i] += d.getValue(label).value / neutralWords.size }
         }
         sum.toList()
     }
@@ -245,14 +253,19 @@ class ModelPilot(
         }
 
         /** The exact question the model is asked for [offered] (one move per way, as [gates] leaves them). */
-        fun judgment(o: Observation, offered: List<Action>, question: String = QUESTION): Judgment.Choice {
+        fun judgment(
+            o: Observation,
+            offered: List<Action>,
+            question: String = QUESTION,
+            words: (Observation, Int) -> String = PathText::describe,
+        ): Judgment.Choice {
             val labels = offered.map { way(it.steer) }
             return Judgment.Choice(
                 id = JUDGMENT_ID,
                 question = question,
                 candidates = labels,
                 onFailure = FailurePosture.NULL_ACTION,
-                descriptions = offered.associate { way(it.steer) to PathText.describe(o, it.steer) },
+                descriptions = offered.associate { way(it.steer) to words(o, it.steer) },
             )
         }
 
@@ -307,7 +320,7 @@ class ModelPilot(
         const val BRIDGE_RANGE: Int = 12
 
         /** The content-free descriptions and scene the word bias is measured over. */
-        val NEUTRAL: List<String> = listOf("open water", "land close")
+        val NEUTRAL: List<String> = listOf("safe", "crash: boat in 1 s")
         const val NEUTRAL_SCENE: String = "fuel 70%"
 
         /** Characters of state; [PathText.scene] stays well inside it, so it is never cut. */

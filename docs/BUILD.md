@@ -295,8 +295,11 @@ placeholder): `:game` (pure Kotlin, depends only on `:engine`) and `:game-deskto
 threshold, a baseline autopilot and a headless model-vs-baseline run. *Accept* (proposed): the
 model decides at ≥10 Hz with bars visible **on a phone**, offline, and the game reports honestly
 whether it beats the baseline. The desktop half is met (10 decisions/s; since 2026-09-25 one
-three-way "which way is safest?" question, ~21 ms P50 on an M4 CPU); the phone half is not measured, and
-untuned it does not beat the baseline (495 vs 543 rows over 20 seeds) — see the progress log.
+three-way "which way is safest?" question over motion-aware collision predictions, ~25 ms P50 on an M4
+CPU); the phone half is not measured, and untuned it does not beat the baseline (502 vs 543 rows over 20
+seeds), though it now flies a way predicted to crash, when a safe one is on offer, 5.6% of the time (was
+52%). Since 2026-09-25 the demo shows off the speed and privacy of live on-device decisions, not a race
+against the rules — see the progress log.
 
 ---
 
@@ -1373,6 +1376,123 @@ their acceptance criteria are met; entries here record increments toward them.
   skipped) + 35 UI green. Not done: a fine-tune (still the real fix), the device latency, and
   the depot-beyond-the-view case `Mechanics.shotHitsDepot` covers for the human gun (the pilot's gun gate
   covers a depot in line and one being flown over, from the observation).
+
+- **2026-09-25 — iPhone Sources: a live scan display instead of a spinner, and a visual pass over the page
+  (owner's feedback on the Photos card while it scanned: "looks like lagging 1998 Windows software").**
+  `ios/Loupe/Sources/Live/`. Every spinner and "Reading…" on Sources is gone: the scanning source's card shows
+  the real items passing through a scanning lens (Photos: thumbnails from the bytes already read, Vision's
+  text boxes lighting up as the beam passes; Files and the sample: file names; Mail: subjects from the
+  fetched headers; Calendar: event titles; Contacts: initials only), a pipeline strip of only the stages
+  that really run (Photos Read → Text → Saved; Files → Read → Saved; Mail Fetch → Read → Saved; Calendar and
+  Contacts Read → Saved — no model stage, the decision model does not run in a scan) with live counts that
+  pulse, a ledger of snippets masked with the privacy check's own masks, items/s, progress, ETA and "0 bytes
+  out" (Mail says what it fetches, read-only, and from which host). The end settles for 4 s on a summary
+  ("16 photos · 11 with text · 0 bytes out") and the card rests on its new count ring. The page got a header
+  (items read, which of the 7 sources are on, last scan, what leaves the phone), glyph tiles per source,
+  On device / Online badges, count rings and first-scan invitations. Performance: producers feed a locked
+  aggregator; the display publishes at most 12 Hz; `SourcesService` no longer republishes per scanned file;
+  only two TimelineView + Canvas views draw per frame (canvas draw p95 0.05–0.1 ms). Measured on the iPhone
+  17 Pro Max simulator (60 Hz) with `-LoupeFrameProbe`: first ~7 dropped frames per 2 s during a scan;
+  `sample` showed over half the main thread in `CGContextDrawConicGradient` — `WorkingBorder`'s turning
+  angular gradient, drawn on the CPU each frame (the app-wide "working card" border, also on the header).
+  With `drawingGroup()` on it the scan holds 60 fps (0–1 frames over 25 ms per 2 s). Reduce Motion: same
+  information, nothing moves, crossfades. Fixture: `-LoupeFixtures -LoupePhotosDemo` (16 rendered pictures,
+  Vision reads them for real), `-LoupeScanDemo <source>`. Tests: `ScanStreamTests` (counts, stages, rate/ETA,
+  throttle, masking, summary, the feed end to end, the Photos producer's events, mail subjects) and two
+  Sources UI tests (live display then summary; Reduce Motion). Gate (iPhone 17 Pro Max simulator): 37 UI
+  green; unit 328 green (2 skipped) on HEAD plus this work only — in the shared tree
+  `GameInputTests.testHeldFireAndARiverDragWorkTogether` failed against the game's in-progress
+  `GameInput.swift` edits, not this change. Not done: device frame time at 120 Hz on the
+  iPhone 17 Pro (the simulator runs at 60), Files/Mail/Calendar/Contacts scans checked only by unit tests and
+  a fixture Files/sample run, not with real mailboxes or calendars.
+- **2026-09-25 — Riverflight: motion-aware collision prediction, read by the decision model (owner:
+  "Laya while playing should predict collision according to obstacle movement and avoid it").** *Sensor*
+  (`:game` `Prediction.kt`, shared Kotlin, deterministic): for each way (left / straight / right) the plan
+  "hold that move for one held decision (`Mechanics.HOLD_TICKS`, a lane change of ~3 columns), then fly
+  straight with the same gun setting" is flown for **1.5 s (90 ticks)** in a copy of the real world — so
+  boats and helis move with their real speed, turn round at the banks, wake at 14 rows, the river scrolls
+  at the level's speed, and bullets in the air (and the plan's own shots, with the gun set as the gates set
+  it) fly and hit. Nothing re-derived; the tests step the real world with the same plan and get the same
+  tick. The same plan is flown again with every enemy standing still: a hit in both is *in the way*, a hit
+  only when things move is *crossing in*, a hit only when they stand still is *moving away*. Horizon: a
+  lane change takes ~0.2 s and a decision lands 0.1–0.2 s after it is asked, so 1.5 s is seven or more
+  decisions of warning; beyond it the plane can cross the whole channel before arriving, so a later hit is
+  still avoidable; and it is inside the 2 s (14 rows at level 1) at which enemies start moving. Each
+  `Observation` carries it per way (`PathAhead.predicted`); cost per decision request: 0.11 ms on the JVM,
+  1.4 ms in the iOS-simulator Kotlin/Native test binary (the legal set there costs 0.5 ms). *Words*
+  (`PathText.describe`): "crash: heli crossing in, 0.5 s", "crash: land in 1 s", "safe, boat moving away",
+  "safe, fuel that way"; question unchanged ("Which way is safest?"), word-bias measured over "safe" /
+  "crash: boat in 1 s". Rules still only remove (the prediction is words for the model, never a filter).
+  *Wording picked on dev seeds 101–112 only* (12 × 90 s; rows, and how often a way predicted to crash was
+  flown when a safe one was on offer): 792c86e words 563 / 50%; "clear" · "boat crossing in, hit in 1 s"
+  551 / 37%; plus "boat shot" 528 / 40%; "clear for 1.5 s" 565 / 33%; same with new bias words 586 / 35%;
+  **"safe" · "crash: …" 576 / 4.4%** (kept); same asking "Which way avoids a crash?" 587 / 8.5%; baseline
+  521, with the sensor 487. A controlled probe explains why the word choice matters: over two ways, one
+  "clear" and one "hit in 1 s", Laya put only 0.57–0.62 on the clear one whatever the question, and yes/no
+  questions per way ("Will the plane crash?") were near random; "safe" / "crash", the question's own word,
+  is what it reads. *Test seeds 1–20* (progressive, 90 s, 4-tick charged latency, same safety net):
+
+  | seeds 1–20 | before (beb3112) | 792c86e | **now** | gates, no model | baseline | baseline + sensor |
+  |---|---|---|---|---|---|---|
+  | rows, mean (median) | 339.7 (350.1) | 495.2 (523.3) | **502.3** (576.4) | 418.0 (440.9) | 542.7 (584.7) | 533.1 (558.7) |
+  | alive at 90 s | 0/20 | 6/20 | 2/20 | 8/20 | 6/20 | 4/20 |
+  | deaths | fuel 19, bank 1 | fuel 6, enemy 5, bank 3 | fuel 12, bank 4, enemy 2 | enemy 4, bank 4, fuel 4 | fuel 10, bank 3, enemy 1 | fuel 14, enemy 2 |
+  | **enemy deaths** | 0 | 5 | **2** | 4 | 1 | 2 |
+  | score · level, mean | 911 · 2.20 | 1,133 · 2.90 | 1,137 · 3.00 | 909 · 2.55 | 1,423 · 3.20 | 1,316 · 3.15 |
+  | **flew a predicted crash when a safe way was offered** | 54.7% (1,382 of 2,526) | 52.3% (1,886 of 3,604) | **5.6% (222 of 3,989)** | 36.1% | 40.1% | 0% (by rule) |
+  | safety-net ticks per 100 rows | 90.3 | 29.0 | 19.7 | 17.1 | 29.4 | 21.2 |
+  | mirror probe | 74% | 43% | 72% | — | 100% | — |
+  | latency P50 / P95, M4, sequential | 63.1 / 76.2 ms | 21.0 / 26.1 ms | **24.6 / 39.2 ms** | — | — | — |
+  | tokens, mean / max | 106 / 137 | 29 / 44 | 34 / 59 | — | — | — |
+
+  *Honest reading.* The model now reads the prediction: it flies into a predicted crash 5.6% of the time
+  where a safe way exists (the rule-based pilot 40%, holding course 36%), enemy deaths fell from 5 to 2,
+  and the safety net flies a third less. It still **does not beat the rule-based pilot on distance** (502 vs
+  543 rows; ahead on 7 seeds, behind on 12, 1 tie) — its runs now mostly end out of fuel (12 of 20): it
+  prefers a "safe" way over one that reads "crash: …, fuel close", and the fuel gate only steps in below
+  60%. Giving the baseline the sensor (swap to the nearest safe way) did not help it (533 vs 543), so the
+  app keeps the plain baseline. P95 39 ms sits inside the cadence to level 5 (50 ms) but not the 33 ms of
+  level 6 and up (the first decision over a new set of ways pays two word-bias passes). Tests:
+  `PredictionTest` (in the way; crossing in; moving away; parallel; turn-round at the bank, which the old
+  straight-line reading missed; several enemies; the plan's own shot; land; world untouched; every
+  prediction in three real flights equals stepping the world with that plan; golden digest, identical on
+  the JVM and the iOS simulator), `CollisionCountersTest`, `PathTextTest` (new words, new golden),
+  `PilotMeasurementTest` (`before`, `v2`, `after`, `gates-only`, `baseline`, `baseline+sensor`;
+  `-Ploupe.game.first=101` for the dev seeds).
+- **2026-09-25 — iPhone Riverflight: FIRE moves out of the river into a control bar (owner's report from
+  the iPhone, build 792c86e: the 76 pt FIRE circle drawn over the river's bottom-right covered the plane
+  and the right bank).** You fly: under the river, a compact bar — "Drag the river to steer · tap to pause"
+  on the left, FIRE (68 pt, same look and pressed state) on the right in the thumb zone; the long help
+  paragraph is gone. FIRE is its own UIKit view (`FireTouchView`, not exclusive-touch, outside the panel's
+  scroll view), so a thumb held on it and a finger dragging on the river are two touches on two views and
+  both register; the river's view now only steers (`RiverTouchView`). The bar keeps its size while paused
+  (FIRE hidden), so the river never moves. Tests: `GameInputTests` (layout round with slop; FIRE held while
+  the river drag steers: both reach the game), `GameUITests` (FIRE does not intersect the river, sits under
+  it, right, clears the home indicator).
+- **2026-09-25 — iPhone Riverflight: "Watch Loupe fly" shows off live on-device decisions (owner decision:
+  the point is an on-device model deciding fast on this phone with nothing leaving it, not out-flying the
+  rules; naming: the Loupe Decision Model).** Watch card on Now: "The Loupe Decision Model decides every
+  move live, on this iPhone: many times a second, with nothing leaving the phone.", plus, once a watch run
+  has finished here, "Last run on this iPhone: N decisions/s · P50 M ms · 0 bytes out" from that run's own
+  counters (`LastRun`); onboarding and Me say the same. The speed panel leads with decisions/s, then P50,
+  P95, on-time % (`DecisionStats.onTimePercent`: answers that landed within one decision interval) and
+  collisions avoided (`collisionsAvoided` of `collisionChoices`: decisions with a way predicted to crash
+  and a safe one on offer, where the safe one was flown), "On this iPhone · 0 bytes out", and the safety
+  net as takeovers (`takeovers`: consecutive override ticks count once). Results card headline: decisions,
+  per second (run average, plus the peak), P50/P95, on time, collisions avoided, safety-net takeovers, 0
+  bytes out; the distance against the rule-based pilot on the same river stays, as a secondary line with
+  both numbers, and a note that over 20 test rivers the rule-based pilot went further on average (543 to
+  502). The Model settings line (EN + AR) says the same. Tests: `PilotSchedulingTests` (the results card
+  equals the run's own counters, and the Watch card's last-run line is that run), `GameUITests` (the card
+  says "on this iPhone"), `GameShotsUITests` (screenshots to `shots/` when `TEST_RUNNER_LOUPE_SHOTS` is
+  set; Laya side-loaded with `ios-native/sideload-models.sh`). Screenshots checked on an iPhone 17 Pro and
+  an iPhone SE (3rd generation) simulator: FIRE sits in the bar under the river on both, clear of the
+  river and, on the 17 Pro, of the home indicator. Simulator runs with the real model, as measured by the
+  run itself: 12.6 decisions/s, P50 27 ms, P95 38 ms, 97% on time, 73 of 79 predicted collisions avoided
+  (one 17 Pro run); 14.3/s, P50 26 ms, P95 36 ms, 86 of 91 (one SE run). These are simulator numbers,
+  not the phone's. Gate: `./gradlew check` green (1,444 tests; game 95 JVM, 78 iOS-simulator Kotlin);
+  LoupeKit rebuilt; iOS simulator 330 unit (2 skipped) + 38 UI (1 skipped: the screenshot test without its variable); in that full run `SourcesUITests.testPhotosScanShowsTheLiveDisplayThenTheSummary` failed once and passed twice run alone (not game code).
+
 
 ## Where the build stands
 

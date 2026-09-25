@@ -63,7 +63,7 @@ struct MeView: View {
                 SortSection()
                 NeonSection("Game") {
                     Button { launcher.open(.watch) } label: {
-                        row("Riverflight", "watch Laya fly")
+                        row("Riverflight", "watch Loupe fly")
                     }
                     .foregroundStyle(Palette.ink)
                     .accessibilityIdentifier("me.game")

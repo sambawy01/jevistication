@@ -10,7 +10,7 @@ import Foundation
 /// - **Drag (or hold) anywhere on the river to steer:** the plane chases the finger's column. Inside
 ///   a small deadband it holds course, so it does not jitter left-right around the finger. A steering
 ///   touch never fires, however long it lasts or however far it travels.
-/// - **FIRE button to fire:** a second finger on the button (bottom-right) fires while it stays down,
+/// - **FIRE button to fire:** a second finger on the button (in the bar under the river, right) fires while it stays down,
 ///   at the gun's cooldown. It is a deliberate choice, so it fires even at a fuel depot.
 /// - **Auto-fire (a toggle)** fires whenever the gun is ready, except while a live fuel depot is in
 ///   the line of fire (`FireControl`).
@@ -131,27 +131,26 @@ struct TouchRouter<ID: Hashable>: Equatable {
     }
 }
 
-/// Where the FIRE button sits over the river: bottom-right, in the thumb zone. The drawn button and
-/// the touch surface's hit area both come from here, so they cannot drift apart.
+/// The FIRE button in the control bar under the river (never over the river: it covered the plane).
+/// The drawn button and its touch view's hit area both come from here, so they cannot drift apart.
 enum FireButtonLayout {
     /// The button's diameter, points (at least 64 for a thumb).
-    static let size: CGFloat = 76
-    /// Gap from the river's right and bottom edges.
-    static let inset: CGFloat = 16
+    static let size: CGFloat = 68
     /// Extra touch area around the drawn button, so a thumb that lands just off it still fires.
-    static let slop: CGFloat = 10
+    static let slop: CGFloat = 8
+    /// The touch view's side: the button plus its slop all round.
+    static var touchSize: CGFloat { size + 2 * slop }
 
-    /// The drawn button in a river `bounds` (UIKit coordinates, origin top-left).
+    /// The drawn button, centred in a touch view's `bounds` (UIKit coordinates).
     static func frame(in bounds: CGRect) -> CGRect {
-        CGRect(x: bounds.maxX - inset - size, y: bounds.maxY - inset - size, width: size, height: size)
+        CGRect(x: bounds.midX - size / 2, y: bounds.midY - size / 2, width: size, height: size)
     }
 
-    /// Whether a touch at `point` lands on the button.
+    /// Whether a touch at `point` lands on the button (round, with the slop).
     static func contains(_ point: CGPoint, in bounds: CGRect) -> Bool {
         let f = frame(in: bounds)
-        let center = CGPoint(x: f.midX, y: f.midY)
         let r = size / 2 + slop
-        let dx = point.x - center.x, dy = point.y - center.y
+        let dx = point.x - f.midX, dy = point.y - f.midY
         return dx * dx + dy * dy <= r * r
     }
 }

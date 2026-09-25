@@ -140,9 +140,46 @@ class DecisionStats(private val window: Int = 256) {
         handOffs++
     }
 
-    fun recordOverride() {
+    /**
+     * The safety override flew instead of the pilot on [tick]. [overrides] counts ticks; a run of
+     * consecutive ticks is one [takeovers].
+     */
+    fun recordOverride(tick: Long = -1) {
         overrides++
+        if (tick < 0 || tick != lastOverrideTick + 1) takeovers++
+        lastOverrideTick = tick
     }
+
+    /** Separate times the safety override took over (consecutive override ticks count once). */
+    var takeovers: Int = 0; private set
+    private var lastOverrideTick: Long = Long.MIN_VALUE
+
+    /**
+     * Decisions (by the pilot, not mechanics) whose offered ways included one predicted to crash
+     * ([Prediction]) and one predicted safe: the only decisions where avoiding a predicted
+     * collision was a choice.
+     */
+    var collisionChoices: Int = 0; private set
+
+    /** Of [collisionChoices], those where the way flown was predicted safe. */
+    var collisionsAvoided: Int = 0; private set
+
+    /** Counts one landed decision toward [collisionChoices] / [collisionsAvoided]. */
+    fun recordCollisionChoice(observation: Observation, flown: Action) {
+        val ways = ModelPilot.gates(observation, observation.legal.actions).map { it.steer }.distinct()
+        if (ways.size < 2) return
+        val safe = ways.map { observation.path(it)?.predicted?.clear }
+        if (safe.any { it == true } && safe.any { it == false }) {
+            collisionChoices++
+            if (observation.path(flown.steer)?.predicted?.clear == true) collisionsAvoided++
+        }
+    }
+
+    /**
+     * Percent of landed decisions that arrived within one decision interval of the state they
+     * answered, or null before any landed.
+     */
+    fun onTimePercent(): Double? = if (total == 0) null else 100.0 * (total - lateAnswers) / total
 
     /** Decisions landed per second over the last two seconds of [nowNanos]'s clock. */
     fun decisionsPerSecond(nowNanos: Long): Double {

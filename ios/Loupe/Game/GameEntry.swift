@@ -30,12 +30,12 @@ struct OnboardingView: View {
                 .foregroundStyle(Palette.overlayInk.opacity(0.85))
             VStack(alignment: .leading, spacing: 6) {
                 Text("SEE IT WORK").font(Typeface.mono(11, weight: .medium)).tracking(0.8).foregroundStyle(Palette.cyan)
-                Text("Watch Laya fly a river: every move is a question it answers live, with its probabilities on screen, against a simple rule-based pilot on the same river.")
+                Text("Watch Loupe fly a river: the decision model decides every move live, on this iPhone, many times a second, with its answers on screen. Nothing leaves the phone.")
                     .font(.subheadline).foregroundStyle(Palette.overlayInk.opacity(0.85))
             }
             Spacer()
             Button(action: onWatch) {
-                Label("Watch Laya fly", systemImage: "eye").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
+                Label("Watch Loupe fly", systemImage: "eye").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)
             }
             .buttonStyle(.neonPrimary)
             .accessibilityIdentifier("onboarding.watch")
