@@ -204,7 +204,7 @@ enum MS {
                                 "مُفعّل: يسأل مراقب انتهاء الصلاحية Laya عن نوع كل مستند. متوقف: يعمل المراقِبون بقواعدهم فقط ويذكرون أن فحص Laya لم يجرِ."),
         "f.flights.use_laya": ("On: Laya ranks offers against your priorities. Off: the rules rank them (price, then convenience); faster, no model needed.",
                                "مُفعّل: يرتّب Laya العروض حسب أولوياتك. متوقف: ترتّبها القواعد (السعر ثم الراحة)؛ أسرع ولا حاجة إلى النموذج."),
-        "f.game.use_laya": ("On: Laya flies in Watch mode. Off: the baseline autopilot flies.", "مُفعّل: يقود Laya في وضع المشاهدة. متوقف: يقود الطيار الآلي الأساسي."),
+        "f.game.use_laya": ("On: in Watch mode Laya picks which way to fly; rules remove crashing moves and work the gun. Off: the baseline autopilot flies.", "مُفعّل: في وضع المشاهدة يختار Laya الاتجاه، وتستبعد القواعد الحركات التي تؤدي إلى الاصطدام وتتولى الإطلاق. متوقف: يقود الطيار الآلي الأساسي."),
         "f.game.max_decisions_per_s": ("Caps how often Laya is asked while it flies. Lower saves battery and heat; the plane reacts less often (the safety override still steers). Off = as often as the game asks.",
                                        "يحدّ عدد مرات سؤال Laya أثناء القيادة. الأقل يوفّر البطارية والحرارة؛ وتستجيب الطائرة أقل (ويبقى تجاوز السلامة يوجّهها). متوقف = بقدر ما تطلب اللعبة."),
         "f.routing": ("Which model reads for this feature.", "أي نموذج يقرأ لهذه الميزة."),

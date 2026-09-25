@@ -8,6 +8,22 @@ import kotlin.math.roundToInt
 data class Sighting(val what: String, val ahead: Double, val across: Double, val moving: Int = 0)
 
 /**
+ * What lies along one way the plane can fly: [steer] (-1 left, 0 straight, 1 right) held for about
+ * one decision — a lane change of up to [Observation.LANE] columns — then straight on, looked at
+ * [Observation.PATH_ROWS] rows ahead. Rows until the first land, the first enemy (where it will be
+ * when the plane gets there) and the nearest fuel depot on that path; null when there is none.
+ *
+ * It is a sensor, not a verdict: it says what is in the way, not which way to go.
+ */
+data class PathAhead(
+    val steer: Int,
+    val landRows: Int?,
+    val enemyRows: Int?,
+    val enemy: String? = null,
+    val depotRows: Int? = null,
+)
+
+/**
  * An immutable snapshot of what a pilot may know, taken on the simulation thread.
  *
  * Pilots run on another thread and see only this, never the live [World]: a decision computed
@@ -33,12 +49,26 @@ data class Observation(
     val depot: Sighting?,
     val bridgeAheadRows: Int?,
     val legal: LegalActions,
+    /** What lies along each way the plane can fly, left, straight and right (see [PathAhead]). */
+    val paths: List<PathAhead> = emptyList(),
 ) {
+    /** The [PathAhead] for [steer], if one was looked at. */
+    fun path(steer: Int): PathAhead? = paths.firstOrNull { it.steer == steer }
+
     companion object {
         const val NEAR_ROWS: Int = 6
         const val FAR_ROW: Int = 9
         const val MAX_THREATS: Int = 3
         const val THREAT_RANGE: Double = 16.0
+
+        /** How far each [PathAhead] looks, in rows. */
+        const val PATH_ROWS: Int = 10
+
+        /** The sideways shift of a steered path, in columns: about one held decision of steering. */
+        const val LANE: Double = 3.0
+
+        /** Clearance added around the plane when asking whether something is on a path, in columns. */
+        const val PATH_MARGIN: Double = 0.3
 
         fun of(world: World, legal: LegalActions): Observation {
             val x = world.playerX
@@ -74,6 +104,47 @@ data class Observation(
                 depot = depot,
                 bridgeAheadRows = bridge?.let { (it.y - py).roundToInt() },
                 legal = legal,
+                paths = listOf(-1, 0, 1).map { path(world, it) },
+            )
+        }
+
+        /**
+         * Looks along [steer]: the plane's centre after `k` rows is `x + steer * min(k * lateral /
+         * scroll, LANE)` (it cannot leave the screen). Enemies are placed where their current
+         * sideways speed will have taken them by the time the plane reaches their row.
+         */
+        private fun path(world: World, steer: Int): PathAhead {
+            val x = world.playerX
+            val py = world.playerY
+            val level = world.level
+            val scroll = world.difficulty.scroll(level)
+            val perRow = world.difficulty.lateral(level) / scroll
+            val half = Rules.PLAYER_W / 2
+            fun xAt(rows: Double): Double = (x + steer * minOf(rows * perRow, LANE)).coerceIn(half, Rules.COLUMNS - half)
+
+            val base = floor(py).toInt()
+            val land = (1..PATH_ROWS).firstOrNull { k ->
+                val px = xAt(k.toDouble())
+                world.river.row(base + k).landIn(px - half, px + half)
+            }
+            val enemy = world.enemies
+                .filter { it.alive && it.y + it.height > py && it.y - py <= PATH_ROWS }
+                .filter { e ->
+                    val ahead = (e.y - py).coerceAtLeast(0.0)
+                    val ex = e.x + e.vx * (ahead / scroll)
+                    abs(ex - xAt(ahead)) < (e.width + Rules.PLAYER_W) / 2 + PATH_MARGIN
+                }
+                .minByOrNull { it.y }
+            val depot = world.depots
+                .filter { it.alive && it.y + it.height > py && it.y - py <= PATH_ROWS }
+                .filter { d -> abs(d.x - xAt((d.y - py).coerceAtLeast(0.0))) < (Depot.WIDTH + Rules.PLAYER_W) / 2 }
+                .minByOrNull { it.y }
+            return PathAhead(
+                steer = steer,
+                landRows = land,
+                enemyRows = enemy?.let { (it.y - py).coerceAtLeast(0.0).roundToInt() },
+                enemy = enemy?.kind?.word,
+                depotRows = depot?.let { (it.y - py).coerceAtLeast(0.0).roundToInt() },
             )
         }
 
@@ -126,4 +197,56 @@ object StateText {
             else -> "$n right"
         }
     }
+}
+
+/**
+ * The words the model pilot reads: for each way, what lies along it (from [PathAhead]), and a
+ * one-clause scene. Discrete and relative — "land close", "boat very close", "fuel that way" —
+ * never raw columns: measured 2026-09-25, Laya read the numeric [StateText] near chance.
+ *
+ * Built by code from exact facts, never summarised, nothing from outside the game. Distances:
+ * up to 3 rows "very close", up to 6 "close", beyond that "ahead" (a path looks
+ * [Observation.PATH_ROWS] rows).
+ */
+object PathText {
+    fun near(rows: Int): String = when {
+        rows <= 3 -> "very close"
+        rows <= 6 -> "close"
+        else -> "ahead"
+    }
+
+    /** What lies along [steer]; "open water" when nothing does. */
+    fun describe(o: Observation, steer: Int): String {
+        val p = o.path(steer) ?: return OPEN
+        val parts = mutableListOf<String>()
+        p.landRows?.let { parts += "land ${near(it)}" }
+        p.enemyRows?.let { parts += "${p.enemy ?: "enemy"} ${near(it)}" }
+        if (o.fuelPercent < FUEL_WANTED) {
+            val onPath = p.depotRows
+            if (onPath != null) {
+                parts += "fuel ${near(onPath)}"
+            } else {
+                o.depot?.let { d ->
+                    val side = when {
+                        d.across < -1.0 -> -1
+                        d.across > 1.0 -> 1
+                        else -> 0
+                    }
+                    if (side == steer) parts += "fuel that way"
+                }
+            }
+        }
+        return if (parts.isEmpty()) OPEN else parts.joinToString(", ")
+    }
+
+    /** The scene beside the ways: the tank, and "low" under half. */
+    fun scene(o: Observation): String = if (o.fuelPercent < FUEL_LOW) "fuel ${o.fuelPercent}%, low" else "fuel ${o.fuelPercent}%"
+
+    const val OPEN: String = "open water"
+
+    /** Below this fuel percentage, depots are mentioned at all. */
+    const val FUEL_WANTED: Int = 90
+
+    /** Below this fuel percentage, the scene says "low". */
+    const val FUEL_LOW: Int = 50
 }

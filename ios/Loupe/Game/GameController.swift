@@ -22,7 +22,8 @@ enum PilotStatus: Equatable {
 struct ActionBar: Equatable, Identifiable {
     var id: String { label }
     let label: String
-    /// The model's raw probability, or nil when no model was asked.
+    /// The model's share for this move (raw, with its measured word bias divided out: what it chose
+    /// by), or nil when no model was asked. Not a calibrated probability.
     let raw: Double?
     let chosen: Bool
     /// "✕ crash" / "✕ fuel" when the action was not offered.
@@ -129,6 +130,12 @@ final class GameController: ObservableObject {
     nonisolated(unsafe) private var modelClaim: ModelClaim?
     deinit { modelClaim?.release() }
     private var steering = TouchSteering()
+    /// The FIRE button is held (human mode). Separate from the steering touch: steering never fires.
+    private(set) var fireHeld = false
+    /// VoiceOver pressed FIRE: fire the next shot the gun is ready for, then stop.
+    private var firePulse = false
+    /// The FIRE button's pressed look, in its own store so a press never re-renders the river's parent.
+    let fireButton = FireButtonState()
 
     /// Explosions for the scene to draw: world x, y and whether it is a big one.
     private(set) var pendingEffects: [(x: Double, y: Double, big: Bool)] = []
@@ -218,6 +225,7 @@ final class GameController: ObservableObject {
         self.mode = mode
         self.seed = seed
         steering.cancel()
+        releaseFire()
         switch mode {
         case .human:
             pilot = .you
@@ -336,6 +344,7 @@ final class GameController: ObservableObject {
         paused = value
         lastTime = nil
         steering.cancel()
+        releaseFire()
     }
 
     /// Called by the scene every frame with its clock.
@@ -362,8 +371,13 @@ final class GameController: ObservableObject {
     func step(now: TimeInterval) {
         let world = session.world
         if mode == .human {
-            let k = steering.keys(playerX: world.playerX, autoFire: autoFire, now: now)
-            session.human = HumanInput(left: k.left, right: k.right, fire: k.fire)
+            let k = steering.keys(playerX: world.playerX)
+            let fire = FireControl.fire(button: fireHeld || firePulse, autoFire: autoFire) {
+                Self.depotInLineOfFire(world)
+            }
+            // A VoiceOver press lasts until the gun is ready, so it always fires one shot.
+            if firePulse, world.cooldown == 0 { firePulse = false }
+            session.human = HumanInput(left: k.left, right: k.right, fire: fire)
         }
         // Model settings' cap (`features.game.max_decisions_per_s`, nil = uncapped) floors the cadence.
         if let cap = settings.current.gameMaxDecisionsPerS?.doubleValue, cap > 0 {
@@ -460,6 +474,16 @@ final class GameController: ObservableObject {
         }
     }
 
+    /// Auto-fire's hold, from the shared rules in LoupeKit: a live depot in the line of fire
+    /// (`Mechanics.depotInLineOfFire`, the pilots' check), or a shot now that would destroy one
+    /// (`Mechanics.shotHitsDepot`, exact on world copies: it also catches the depot the plane is
+    /// flying over to refuel). Asked for every steer, since the safety net may fly a different one
+    /// than the player's and the bullet leaves after this tick's sideways move.
+    static func depotInLineOfFire(_ world: World) -> Bool {
+        if Mechanics.shared.depotInLineOfFire(world: world) { return true }
+        return [Int32(0), -1, 1].contains { Mechanics.shared.shotHitsDepot(world: world, steer: $0) }
+    }
+
     // MARK: Touch (human mode)
 
     func touchBegan(column: Double, x: Double, time: TimeInterval) {
@@ -471,13 +495,43 @@ final class GameController: ObservableObject {
         steering.moved(column: column, x: x)
     }
 
-    /// A tap pauses (or, once the run is over, starts the next river).
+    /// A tap pauses (or, once the run is over, starts the next river). Not while FIRE is held: a
+    /// quick touch on the river then is the other thumb starting to steer, not a request to stop.
     func touchEnded(time: TimeInterval) {
         let wasTap = steering.ended(time: time)
-        if mode == .watch || wasTap {
+        if mode == .watch || (wasTap && !fireHeld) {
             if session.world.over && mode == .human { newRiver(); return }
             setPaused(!paused)
         }
+    }
+
+    /// The system took the steering touch (a call, a gesture from the screen edge): stop steering,
+    /// and do not count it as a tap.
+    func touchCancelled() {
+        steering.cancel()
+    }
+
+    /// The FIRE button went down (human mode, flying). It fires at the gun's cooldown until it lifts.
+    func fireBegan() {
+        guard mode == .human, !paused, !session.world.over else { return }
+        fireHeld = true
+        fireButton.pressed = true
+    }
+
+    func fireEnded() {
+        releaseFire()
+    }
+
+    /// VoiceOver's activation of FIRE: one shot.
+    func fireOnce() {
+        guard mode == .human, !paused, !session.world.over else { return }
+        firePulse = true
+    }
+
+    private func releaseFire() {
+        fireHeld = false
+        firePulse = false
+        if fireButton.pressed { fireButton.pressed = false }
     }
 
     // MARK: HUD
@@ -496,7 +550,7 @@ final class GameController: ObservableObject {
         let decision = session.current
         let legal = session.currentLegal
         h.bars = GameSessions.shared.actions.map { action in
-            let raw = GameSessions.shared.raw(decision: decision, action: action)
+            let raw = GameSessions.shared.shown(decision: decision, action: action)
             let excluded: String? = legal?.excluded[action].map { $0 == Exclusion.fatal ? "✕ crash" : "✕ fuel" }
             return ActionBar(label: action.label, raw: raw >= 0 ? raw : nil, chosen: decision?.action == action, excluded: excluded)
         }
@@ -562,4 +616,10 @@ final class GameController: ObservableObject {
         session.close()
         shadow?.close()
     }
+}
+
+/// The FIRE button's pressed state, observed only by the button.
+@MainActor
+final class FireButtonState: ObservableObject {
+    @Published var pressed = false
 }

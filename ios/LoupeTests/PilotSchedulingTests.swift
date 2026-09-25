@@ -2,7 +2,9 @@ import XCTest
 import LoupeKit
 @testable import Loupe
 
-/// A Backend that always prefers one label, counting calls; no model involved.
+/// A Backend that prefers one way ("left", "straight", "right") in a real scene, counting calls; no
+/// model involved. The pilot's content-free word-bias question (once per option set) is answered
+/// evenly, so what it adjusts by is the plain answer.
 final class FakeGameBackend: NSObject, Backend {
     let preferred: String
     private(set) var calls = 0
@@ -11,6 +13,10 @@ final class FakeGameBackend: NSObject, Backend {
         calls += 1
         let n = Double(judgment.candidates.count)
         var masses: [String: KotlinDouble] = [:]
+        if state.text.contains(ModelPilot.companion.NEUTRAL_SCENE) {
+            for c in judgment.candidates { masses[c] = KotlinDouble(value: 1 / n) }
+            return Scored(masses: masses, modelContext: nil, optionCriteria: nil)
+        }
         for c in judgment.candidates {
             masses[c] = KotlinDouble(value: c == preferred ? 0.7 : 0.3 / max(n - 1, 1))
         }
@@ -44,7 +50,7 @@ final class PilotSchedulingTests: XCTestCase {
     }
 
     func testTheSimulationNeverWaitsForThePilot() {
-        let backend = FakeGameBackend(preferring: "hold course")
+        let backend = FakeGameBackend(preferring: "straight")
         let exec = ManualExecutor()
         let (session, scheduler) = hosted(backend, executor: exec)
         for _ in 0..<30 {
@@ -60,18 +66,20 @@ final class PilotSchedulingTests: XCTestCase {
     }
 
     func testDecisionsLandOnTheNextTickWithRawProbabilities() {
-        let backend = FakeGameBackend(preferring: "hold course")
+        let backend = FakeGameBackend(preferring: "straight")
         let exec = ManualExecutor()
         let (session, scheduler) = hosted(backend, executor: exec)
         session.tick(); scheduler.afterTick()
         exec.runAll()
-        XCTAssertEqual(backend.calls, 1)
+        // One answer, plus the pilot's word-bias passes the first time it sees these ways.
+        XCTAssertEqual(backend.calls, 1 + ModelPilot.companion.NEUTRAL.count)
         XCTAssertEqual(scheduler.landed, 1)
         session.tick(); scheduler.afterTick()
         let d = session.current
         XCTAssertEqual(d?.source, DecisionSource.model)
         XCTAssertEqual(d?.action, Action.hold)
         XCTAssertEqual(GameSessions.shared.raw(decision: d, action: .hold), 0.7, accuracy: 1e-9)
+        XCTAssertEqual(GameSessions.shared.shown(decision: d, action: .hold), 0.7, accuracy: 1e-9)
         XCTAssertEqual(scheduler.dispatched, 1, "not due again until six ticks after the last request")
         for _ in 0..<5 { session.tick(); scheduler.afterTick() }
         XCTAssertEqual(scheduler.dispatched, 2, "the next request goes out once one landed and one is due")
@@ -80,7 +88,7 @@ final class PilotSchedulingTests: XCTestCase {
 
     func testRequestsFollowTheDecisionInterval() {
         let exec = ManualExecutor()
-        let (session, scheduler) = hosted(FakeGameBackend(preferring: "hold course"), executor: exec)
+        let (session, scheduler) = hosted(FakeGameBackend(preferring: "straight"), executor: exec)
         for _ in 0..<60 {
             session.tick()
             scheduler.afterTick()
@@ -94,7 +102,7 @@ final class PilotSchedulingTests: XCTestCase {
 
     func testADecisionReturningAfterCloseIsDropped() {
         let exec = ManualExecutor()
-        let (session, scheduler) = hosted(FakeGameBackend(preferring: "hold course"), executor: exec)
+        let (session, scheduler) = hosted(FakeGameBackend(preferring: "straight"), executor: exec)
         session.tick(); scheduler.afterTick()
         scheduler.close()
         exec.runAll()
@@ -105,7 +113,7 @@ final class PilotSchedulingTests: XCTestCase {
     }
 
     func testWatchModeFliesLayaWithABaselineScoreboard() async {
-        let backend = FakeGameBackend(preferring: "hold course and shoot")
+        let backend = FakeGameBackend(preferring: "straight")
         let exec = ManualExecutor()
         let game = GameController(mode: .watch, seed: 9,
                                   backendProvider: { backend }, modelInstalled: { true },
@@ -137,7 +145,7 @@ final class PilotSchedulingTests: XCTestCase {
 
     /// A model slower than the cadence: the game counts what it asked for and never got.
     func testASlowModelAtRushCadenceIsCountedAsDropped() {
-        let backend = FakeGameBackend(preferring: "hold course")
+        let backend = FakeGameBackend(preferring: "straight")
         let exec = ManualExecutor()
         let decider = GameSessions.shared.modelDecider(backend: backend)
         let scheduler = PilotScheduler(decider: decider, executor: exec, returnToSimulation: { $0() })

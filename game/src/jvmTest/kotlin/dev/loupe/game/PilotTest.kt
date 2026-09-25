@@ -22,26 +22,49 @@ class PilotTest {
     }
 
     @Test
-    fun `the model is asked over exactly the legal actions, and its raw answer is kept`() {
+    fun `the model is asked which way, over exactly the gated ways, and its raw answer is kept`() {
         var offered: List<String>? = null
+        var described: List<String?>? = null
         var question: String? = null
+        // Favours "left" when reading a real scene, and has no preference over the content-free one
+        // the word bias is measured on, so the adjusted share is the raw answer.
         val pilot = ModelPilot(Backend.ofMasses { judgment, state ->
-            offered = judgment.candidates
-            question = judgment.question
             assertTrue(state.isComplete, "the state must never be cut")
-            favouring("steer left and shoot").score(judgment, state).masses
+            if (state.text.contains(ModelPilot.NEUTRAL_SCENE)) return@ofMasses judgment.candidates.associateWith { 1.0 / judgment.candidates.size }
+            offered = judgment.candidates
+            described = judgment.descriptionList
+            question = judgment.question
+            favouring("left").score(judgment, state).masses
         })
         val o = observation()
         val decision = pilot.decide(o)
 
-        assertEquals(o.legal.actions.map { it.label }, offered)
-        assertTrue("hold course" in offered!!, "the explicit no-op must be offered in open water")
+        val ways = ModelPilot.gates(o, o.legal.actions)
+        assertEquals(ways.map { ModelPilot.way(it.steer) }, offered)
+        assertEquals(listOf("left", "straight", "right"), offered, "open water offers every way once")
+        assertEquals(ways.map { PathText.describe(o, it.steer) }, described)
         assertEquals(ModelPilot.QUESTION, question)
         assertEquals(DecisionSource.MODEL, decision.source)
-        assertEquals(Action.LEFT_FIRE, decision.action)
+        assertEquals(Action.LEFT, decision.action)
         val raw = assertNotNull(decision.raw)
         assertEquals(1.0, raw.values.sum(), 1e-9)
         assertEquals(0.7, decision.topProbability!!, 1e-9)
+        assertEquals(0.7, decision.adjusted!!.getValue(Action.LEFT), 1e-9)
+    }
+
+    @Test
+    fun `a pure word bias is divided out, and the raw answer still shows it`() {
+        var calls = 0
+        // Always 0.7 on "right", whatever the ways say: a preference for the word, not the scene.
+        val biased = Backend.ofMasses { j, s -> calls++; favouring("right").score(j, s).masses }
+        val pilot = ModelPilot(biased)
+        val o = observation()
+        val first = pilot.decide(o)
+        assertEquals(1 + ModelPilot.NEUTRAL.size, calls, "one answer plus the bias passes, the first time")
+        assertEquals(0.7, first.raw!!.getValue(Action.RIGHT), 1e-9)
+        first.adjusted!!.values.forEach { assertEquals(1.0 / 3, it, 1e-9) }
+        pilot.decide(o)
+        assertEquals(2 + ModelPilot.NEUTRAL.size, calls, "the bias is measured once per option set")
     }
 
     @Test
@@ -83,7 +106,9 @@ class PilotTest {
         var calls = 0
         val flaky = Backend.ofMasses { j, s ->
             calls++
-            if (calls % 3 == 0) error("intermittent") else favouring("hold course and shoot").score(j, s).masses
+            // Every fourth call (not third: the first decision also makes the pilot's two word-bias
+            // passes, and a third-call failure would land on one of those every time).
+            if (calls % 4 == 0) error("intermittent") else favouring("straight").score(j, s).masses
         }
         val session = GameSession(4, Control.Piloted(LockstepDecider(ModelPilot(flaky), 3)))
         repeat(2_000) { session.tick() }

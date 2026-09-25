@@ -1,13 +1,20 @@
+import CoreGraphics
 import Foundation
 
 /// Touch → the three keys the game reads (left, right, fire). Pure value logic, no UIKit, so the
 /// mapping is unit-tested (`GameInputTests`).
 ///
-/// - **Drag horizontally to steer:** the plane chases the finger's column. Inside a small deadband
-///   it holds course, so it does not jitter left-right around the finger.
-/// - **Hold to fire:** a touch that has lasted past the tap window, or moved past the tap travel,
-///   fires while it stays down. Auto-fire (a toggle) fires whenever the gun is ready.
-/// - **Tap to pause:** a touch that ends quickly and nearly where it began is a tap.
+/// Steering and firing are separate controls, tracked on separate touches (owner's report
+/// 2026-09-25: firing on every drag destroyed fuel depots while the player was only steering):
+///
+/// - **Drag (or hold) anywhere on the river to steer:** the plane chases the finger's column. Inside
+///   a small deadband it holds course, so it does not jitter left-right around the finger. A steering
+///   touch never fires, however long it lasts or however far it travels.
+/// - **FIRE button to fire:** a second finger on the button (bottom-right) fires while it stays down,
+///   at the gun's cooldown. It is a deliberate choice, so it fires even at a fuel depot.
+/// - **Auto-fire (a toggle)** fires whenever the gun is ready, except while a live fuel depot is in
+///   the line of fire (`FireControl`).
+/// - **Tap to pause:** a steering touch that ends quickly and nearly where it began is a tap.
 struct TouchSteering: Equatable {
     /// Columns either side of the finger inside which the plane holds course.
     var deadband: Double = 0.35
@@ -25,7 +32,6 @@ struct TouchSteering: Equatable {
     struct Keys: Equatable {
         var left = false
         var right = false
-        var fire = false
     }
 
     /// A touch began at `column` (world columns) / `x` (points) at `time`.
@@ -50,7 +56,7 @@ struct TouchSteering: Equatable {
             touching = false
             targetColumn = nil
         }
-        return touching && isTapSoFar(now: time)
+        return touching && time - startTime <= tapMaxDuration && travel <= tapMaxTravel
     }
 
     mutating func cancel() {
@@ -58,19 +64,95 @@ struct TouchSteering: Equatable {
         targetColumn = nil
     }
 
-    private func isTapSoFar(now: TimeInterval) -> Bool {
-        now - startTime <= tapMaxDuration && travel <= tapMaxTravel
-    }
-
-    /// The keys to hold this tick, for a plane at `playerX`.
-    func keys(playerX: Double, autoFire: Bool, now: TimeInterval) -> Keys {
+    /// The steering keys to hold this tick, for a plane at `playerX`. Never fire.
+    func keys(playerX: Double) -> Keys {
         var k = Keys()
         if touching, let target = targetColumn {
             let dx = target - playerX
             if dx < -deadband { k.left = true } else if dx > deadband { k.right = true }
         }
-        k.fire = autoFire || (touching && !isTapSoFar(now: now))
         return k
+    }
+}
+
+/// Whether the gun fires this tick.
+enum FireControl {
+    /// `button`: the FIRE button is held (or VoiceOver pressed it this tick) — the player chose to
+    /// fire, so it fires even at a depot. Otherwise auto-fire fires unless a live depot is in the line
+    /// of fire; `depotInLine` is asked only then (it scans the world), and in the app it is the shared
+    /// `Mechanics.depotInLineOfFire`, the same check the pilots' candidate set uses.
+    static func fire(button: Bool, autoFire: Bool, depotInLine: () -> Bool) -> Bool {
+        if button { return true }
+        return autoFire && !depotInLine()
+    }
+}
+
+/// Which control a touch drives, fixed when it begins: a touch that starts on the FIRE button fires
+/// until it lifts (sliding off the button does not steer), one that starts on the river steers until
+/// it lifts (sliding onto the button does not fire). One steering touch and one fire touch at a time;
+/// any further finger is ignored until it lifts. Generic over the touch's identity so it is unit-tested
+/// without UIKit.
+struct TouchRouter<ID: Hashable>: Equatable {
+    enum Role: Equatable { case steer, fire, ignored }
+
+    private(set) var steer: ID?
+    private(set) var fire: ID?
+
+    /// A touch began; `onFireButton` when it landed on the FIRE button.
+    mutating func began(_ id: ID, onFireButton: Bool) -> Role {
+        if onFireButton {
+            guard fire == nil else { return .ignored }
+            fire = id
+            return .fire
+        }
+        guard steer == nil else { return .ignored }
+        steer = id
+        return .steer
+    }
+
+    func role(of id: ID) -> Role {
+        if id == steer { return .steer }
+        if id == fire { return .fire }
+        return .ignored
+    }
+
+    /// A touch lifted (or was cancelled); returns the role it had.
+    @discardableResult
+    mutating func ended(_ id: ID) -> Role {
+        let r = role(of: id)
+        if r == .steer { steer = nil }
+        if r == .fire { fire = nil }
+        return r
+    }
+
+    mutating func reset() {
+        steer = nil
+        fire = nil
+    }
+}
+
+/// Where the FIRE button sits over the river: bottom-right, in the thumb zone. The drawn button and
+/// the touch surface's hit area both come from here, so they cannot drift apart.
+enum FireButtonLayout {
+    /// The button's diameter, points (at least 64 for a thumb).
+    static let size: CGFloat = 76
+    /// Gap from the river's right and bottom edges.
+    static let inset: CGFloat = 16
+    /// Extra touch area around the drawn button, so a thumb that lands just off it still fires.
+    static let slop: CGFloat = 10
+
+    /// The drawn button in a river `bounds` (UIKit coordinates, origin top-left).
+    static func frame(in bounds: CGRect) -> CGRect {
+        CGRect(x: bounds.maxX - inset - size, y: bounds.maxY - inset - size, width: size, height: size)
+    }
+
+    /// Whether a touch at `point` lands on the button.
+    static func contains(_ point: CGPoint, in bounds: CGRect) -> Bool {
+        let f = frame(in: bounds)
+        let center = CGPoint(x: f.midX, y: f.midY)
+        let r = size / 2 + slop
+        let dx = point.x - center.x, dy = point.y - center.y
+        return dx * dx + dy * dy <= r * r
     }
 }
 

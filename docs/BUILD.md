@@ -294,8 +294,9 @@ placeholder): `:game` (pure Kotlin, depends only on `:engine`) and `:game-deskto
 `./gradlew :game-desktop:run`). Mechanical-first legal moves, a safety override, a hand-off
 threshold, a baseline autopilot and a headless model-vs-baseline run. *Accept* (proposed): the
 model decides at ≥10 Hz with bars visible **on a phone**, offline, and the game reports honestly
-whether it beats the baseline. The desktop half is met (10 decisions/s, ~65 ms P50); the phone half
-is not measured, and untuned it does not beat the baseline — see the progress log.
+whether it beats the baseline. The desktop half is met (10 decisions/s; since 2026-09-25 one
+three-way "which way is safest?" question, ~21 ms P50 on an M4 CPU); the phone half is not measured, and
+untuned it does not beat the baseline (495 vs 543 rows over 20 seeds) — see the progress log.
 
 ---
 
@@ -1265,6 +1266,113 @@ their acceptance criteria are met; entries here record increments toward them.
   needs; nothing in the downloader reads those headers itself, so no code change. DEBUG `-LoupeNoModelHost` keeps
   the no-host copy under test (`ModelDeliveryUITests`, `GetLayaUITests`); `-LoupeResetModelConsent` makes a
   Download tap in a UI test open the consent sheet, which the tests decline, so the suite makes no model request.
+- **2026-09-25 — iPhone Riverflight: steering never fires; a FIRE button; auto-fire spares fuel depots
+  (owner's report from the iPhone: "the game autofires while steering so you end up destroying the gas
+  station unintentionally").** Root cause: `GameInput.swift` fired on any touch held past the tap window
+  or moved past the tap travel, and steering is a drag, so every steer fired. Now (`GameInput.swift`,
+  new `GameControls.swift`): a drag or hold anywhere on the river only steers; a quick still tap on the
+  river pauses, except while FIRE is held (then it is the other thumb starting to steer). A FIRE button
+  bottom-right (76 pt, `FireButtonLayout`, touch slop 10 pt; pressed = bright fill and white ring, a small
+  shrink unless motion is reduced) fires at the gun's cooldown while held. All river touches land on one
+  UIKit view with multi-touch on (`RiverTouchView`); `TouchRouter` fixes each `UITouch`'s role when it
+  lands (on the button: fire, else: steer; one of each, extra fingers ignored), so pressing FIRE never
+  moves the plane and steering never fires. VoiceOver: the river says "steering never fires", FIRE is a
+  labelled button whose activation fires one shot. Pause, a mode change or a new river lets go of the gun.
+  Watch mode shows no FIRE button. *Auto-fire* (a toggle, off by default) holds fire when a depot is in the
+  line of fire. Reusing `Mechanics.depotInLineOfFire` alone was not enough: an iOS test flying four seeds
+  under every depot still destroyed six, because it skips a depot the plane is flying over to refuel
+  (`depot.y > playerY`, while the depot's top is above the muzzle) and a depot that spawns just beyond
+  the view and scrolls into a bullet already flying. New shared `Mechanics.shotHitsDepot(world, steer)`
+  (`:game`, exported through LoupeKit): exact, like the candidate set — two world copies, one firing now,
+  fly on until the bullet is gone; a cheap filter first (no depot up the bullet's column, on the map or in
+  the river rows still to spawn → no simulation), and that same column check as the cautious answer when
+  a copy crashes first. iOS holds auto-fire on `depotInLineOfFire || shotHitsDepot` for each steer (the
+  safety net may fly another one); cost in the simulator 0.007 ms a tick on average, worst 0.55 ms. FIRE
+  itself always shoots (the player chose to). The pilots' candidate set is unchanged (it still uses
+  `depotInLineOfFire`; the same gap applies to its low-fuel exclusion, left for the pilot work). Tests:
+  `ShotHitsDepotTest` (7: ahead, overhead, beyond the view, not yet spawned, off the line, reloading, no
+  side effects; each "hits" case checked against the real world), `LoupeTests/GameInputTests.swift`
+  (steering never fires, fire + steer at once, lifting either, tap does not pause while firing, pause
+  releases the gun, watch ignores fire, auto-fire over four seeds fires iff clear and never shoots a
+  depot, cost), `LoupeUITests/GameUITests.swift` (FIRE labelled, bottom-right, ≥ 64 pt; tapping or holding
+  it does not pause; a river tap does; no FIRE in Watch). Not verifiable in the simulator: two real fingers
+  at once — the routing is unit-tested, the device check is the owner's.
+- **2026-09-25 — Riverflight: Laya's flying measured, then re-asked as one small question (owner's report
+  from the iPhone: "the model can't really perform well with the game decisions").** *Measured first*, with
+  the real Laya INT8 on the JVM: new gated `PilotMeasurementTest` (`:game` jvmTest; skipped without
+  `models/`), seeds 1–20 on the phone's river (progressive), 90 s cap, the same charged latency (4 ticks,
+  67 ms) and safety net for every pilot; `LegacyModelPilot` there is the beb3112 pilot verbatim. Root
+  causes, in order: (1) *the gun* — asked the six-way steer × fire question, Laya fired on 49% of its
+  decisions (the baseline 1%), shot 59 fuel depots and refuelled 449 ticks in 20 runs (baseline 24 and
+  2,398): 19 of 20 runs ended out of fuel; (2) *it was not reading the scene* — half its answers were
+  within 0.1 of the next option (mean top 0.50 over 2–6 options), a mirrored scene was steered the
+  mirrored way only 74% of the time, it almost never chose "hold course" (4 of 376 probe states), and the
+  safety net had to fly for it 90 ticks per 100 rows (baseline 29); (3) *word bias* — with every way
+  described identically Laya gives "right" 0.74 against "left" 0.26 (and, with no descriptions, "steer right"
+  0.95 against "hold course" 0.05), so an uncorrected steering arm picked left 11 times against 398 right; (4) the numeric
+  scene ("water 3 left, 5 right … boat 8 ahead 2 left") reads near chance for a small encoder. Cadence
+  was not a cause: no model decision was dropped in lockstep; late answers (1,327 of 15,247 requests)
+  come from the level 4+ cadence (3 ticks) being under any 4-tick latency, the baseline's the same (1,307).
+  *Changed* (`Pilots.kt`, `Observation.kt`, `GameSessions.kt`): the model now answers one question,
+  **"Which way is safest?"**, over at most three options — `left` / `straight` / `right` — each described
+  in words from a new `PathAhead` sensor in `Observation` (what lies along that way over 10 rows: land, an
+  enemy where it will be, fuel; "very close" ≤ 3 rows, "close" ≤ 6, "ahead") by `PathText`, e.g.
+  `straight: boat close`, `left: land very close`, `right: fuel that way`; the scene is only "fuel 42%, low".
+  Rules still only remove: the fuel gate is unchanged; the gun gate (`fireGate`, replacing `fireFocus`)
+  keeps one gun setting per way — fire when an enemy is in line or a bridge is close and no depot is in
+  line, else hold fire; a way whose wanted setting is not legal keeps the other, so the gate never removes
+  a way. The model's word bias is divided out: its answer is divided by its own answer to the same
+  options when every way reads the same (content-free calibration, 2 extra passes per option set, once,
+  cached), and the pilot flies the largest `PilotDecision.adjusted` share; `raw` stays exactly the
+  model's output. iOS bars show the adjusted share ("Laya's share", not "raw probability"); the results
+  card no longer gives Laya the lead on a tie. Question and word choices were picked on separate dev seeds
+  (101–112), not on the test seeds. *Before → after, seeds 1–20* (Laya / gates-only control / baseline):
+
+  | seeds 1–20, progressive, 90 s | before (beb3112) | after | gates, no model | baseline |
+  |---|---|---|---|---|
+  | rows, mean (median) | 339.7 (350.1) | **495.2** (523.3) | 418.0 (440.9) | 542.7 (584.7) |
+  | alive at 90 s | 0/20 | 6/20 | 8/20 | 6/20 |
+  | deaths | fuel 19, bank 1 | fuel 6, enemy 5, bank 3 | enemy 4, bank 4, fuel 4 | fuel 10, bank 3, enemy 1 |
+  | score, mean · level, mean | 911 · 2.20 | 1,133 · 2.90 | 909 · 2.55 | 1,423 · 3.20 |
+  | depots shot · refuel ticks | 59 · 449 | 10 · 2,540 | 8 · 2,101 | 24 · 2,398 |
+  | safety-net ticks per 100 rows | 90.3 | 29.0 | 17.1 | 29.4 |
+  | model decisions (of all) | 9,520 of 10,040 | 8,669 of 15,247 | — | — |
+  | options offered | 2–6 | 2–3 | — | — |
+  | top-2 raw margin, mean (share < 0.1) | 0.13 (50%) | 0.30 (17%) | — | — |
+  | mirror probe: mirrored the mirror way | 74% | 43% | — | 100% |
+  | latency P50 / P95, M4 CPU, sequential | 63.1 / 76.2 ms | **21.0 / 26.1 ms** | — | — |
+  | Laya sequence tokens, mean / max | 106 / 137 | 29 / 44 | — | — |
+
+  *Honest reading.* Laya flies 46% further than before and never starves itself of fuel by shooting, but
+  **it still loses to the baseline** on these seeds (495 vs 543 rows; ahead on 5 seeds, behind on 12, 3
+  ties), and a control that keeps the same gates and safety net but simply holds course flies 418: Laya's
+  own choices are worth about 77 rows over that; the rest is the gates and the safety net. On the dev seeds the order was
+  different (Laya 563, hold-course 545, baseline 521): the gaps are within seed-to-seed noise. The mirror
+  probe got worse (43%): the correction removes the average word bias, not its interaction with the
+  descriptions; averaging each scene with its mirror image fixed that exactly but flew worse (517 on dev)
+  at twice the cost, so it was not kept. What it is good at is fast: a 3-option reading question is
+  ~3× cheaper than the six-way one (tokens 106 → 29); the phone runs the same graph, so it should be
+  about as much faster there — **not yet measured on a device** (the simulator measured ~63 ms P50 for
+  the old prompt).
+  Copy changed to match: the Watch Laya fly card ("Laya … picks which way to fly … Rules take out moves
+  that would crash and work the gun … a few lines of rules … often go further"), the results card, the
+  Model settings line (EN + AR) and docs/PRODUCT.md. Tests: `PathTextTest` (common, JVM + iOS simulator:
+  exact words and a golden digest of every question on three rivers), `FuelFocusTest` (gun gate: quiet
+  with nothing in line — `enemyOffLineLeavesTheModelFree` became `…EveryWayWithTheGunQuiet`, since firing
+  at nothing is now removed — depot never shot, a way never removed, reloading never fires),
+  `LayaPilotTest` (tokens now of the new question, and no option description cut),
+  `PilotMeasurementTest` (defaults 4 seeds × 45 s under `check`; the full run is
+  `-Ploupe.game.seeds=20 -Ploupe.game.seconds=90 -Ploupe.game.variants=before,after,gates-only
+  -Ploupe.game.threads=5`, ~15 min), `PilotTest` (the model is asked over exactly the gated ways with
+  their words; a pure word bias is divided out, measured once per option set; the flaky-backend game now
+  fails every fourth call, since a third-call failure always landed on a bias pass), iOS
+  `PilotSchedulingTests` / `ModelSettingsTests` (the fake backend prefers "straight" and answers the
+  content-free pass evenly). Depots: the pilot shot 10 in 20 runs (baseline 24), so its low-fuel exclusion
+  stays on `depotInLineOfFire` rather than the human gun's new `shotHitsDepot`. Gate: `./gradlew check`
+  green (game: 78 JVM, 61 iOS-simulator Kotlin tests); LoupeKit rebuilt; iOS simulator 314 unit (2
+  skipped) + 35 UI green. Not done: a fine-tune (still the real fix), the device latency, and
+  the depot-beyond-the-view case `Mechanics.shotHitsDepot` covers for the human gun (the pilot's gun gate
+  covers a depot in line and one being flown over, from the observation).
 
 ## Where the build stands
 

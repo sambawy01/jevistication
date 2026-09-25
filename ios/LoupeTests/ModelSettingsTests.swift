@@ -192,7 +192,7 @@ final class ModelSettingsTests: XCTestCase {
     }
 
     func testDecisionsPerSecondCapThrottlesDispatch() {
-        let backend = FakeGameBackend(preferring: "hold course")
+        let backend = FakeGameBackend(preferring: "straight")
         let exec = ManualExecutor()
         let decider = GameSessions.shared.modelDecider(backend: backend)
         let scheduler = PilotScheduler(decider: decider, executor: exec, returnToSimulation: { $0() })

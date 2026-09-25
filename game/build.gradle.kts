@@ -54,6 +54,11 @@ tasks.named<Test>("jvmTest") {
     // The gated tests look for the gitignored Laya weights here and skip without them.
     val models = rootProject.file("models")
     systemProperty("loupe.models.dir", models.absolutePath)
+    // PilotMeasurementTest's size and arms: -Ploupe.game.seeds=20 -Ploupe.game.seconds=90 for the
+    // full measurement recorded in docs/BUILD.md; the defaults keep `check` short.
+    for (key in listOf("loupe.game.seeds", "loupe.game.seconds", "loupe.game.variants", "loupe.game.threads", "loupe.game.out")) {
+        providers.gradleProperty(key).orNull?.let { systemProperty(key, it) }
+    }
     // Declared as inputs so a result is never replayed from the build cache across the weights
     // appearing or disappearing (the trap recorded in docs/BUILD.md's hand-off).
     inputs.files(

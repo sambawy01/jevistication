@@ -28,6 +28,10 @@ enum class DecisionSource {
  * returned it**. It is not calibrated — Laya ships with temperature `[1, 1, 1]` and its card calls it
  * over-confident, and no calibration has been fitted for this judgment — so nothing downstream may
  * call these numbers calibrated. It is null when no model was consulted.
+ *
+ * [adjusted] is what [ModelPilot] actually chooses by: [raw] divided by the model's own answer to
+ * the same options when every one of them reads the same, renormalised (see [ModelPilot]). Still
+ * not a calibrated probability. Null when no model was asked or no adjustment was made.
  */
 data class PilotDecision(
     val action: Action,
@@ -38,6 +42,7 @@ data class PilotDecision(
     val latencyNanos: Long = 0,
     /** The tick whose observation this decision answered. */
     val observedTick: Long = 0,
+    val adjusted: Map<Action, Double>? = null,
 ) {
     /** The largest raw mass, or null when no model was asked. */
     val topProbability: Double? get() = raw?.values?.maxOrNull()
@@ -125,23 +130,41 @@ fun closestLegal(preferred: Action, legal: List<Action>): Action {
 }
 
 /**
- * The model pilot: one Laya `Choice` per decision, over the legal actions only.
+ * The model pilot: one Laya `Choice` per decision — **which way to fly** — over at most three ways.
  *
- * **One question, not two.** Steering and firing are asked together as up to six labels rather than
- * as a steering question and a firing question, because Laya scores every option at its own marker
- * in one forward pass: six options cost one call (~45 ms on a desktop CPU), two questions would cost
- * two. The candidate set is state-dependent — [Mechanics.legalActions] has already removed what
- * would crash — and it always includes the explicit no-op, "hold course", unless holding course is
- * itself fatal.
+ * **Rules only remove.** Before the model is asked, [gates] narrows the legal set
+ * ([Mechanics.legalActions], which has already removed every move that crashes):
  *
- * **Mechanical first.** When only one action is legal the model is not asked at all.
+ * - the fuel gate ([fuelFocus]): low on fuel with a depot in reach, only the ways toward it;
+ * - the gun gate ([fireGate]): of each way's two gun settings, the pointless or harmful one goes —
+ *   firing with nothing in line (it wastes the reload), holding fire at a target in line, firing
+ *   at a depot in line. A way is never removed by it: when its preferred setting is not legal, the
+ *   other is kept.
+ *
+ * What is left is at most one move per way — left, straight, right — and **the model picks the
+ * way**. When one move is left the model is not asked at all ([DecisionSource.MECHANICAL]).
+ *
+ * **The question is small, and the scene is words.** Measured 2026-09-25 (docs/BUILD.md), the
+ * six-way "which move keeps it off the banks, shoots targets and reaches fuel" question over a
+ * numeric scene was answered near chance: half the model's answers were within 0.1 of the next,
+ * a mirrored scene was steered the mirrored way only 74% of the time, and it fired on half its
+ * decisions, shooting its own fuel. Now each way carries a short description of what lies along
+ * it ([PathText], from the observation's [PathAhead] sensor: land, an enemy, fuel, how close), and
+ * the question is only "Which way is safest?" — a reading question a choice model is good at.
+ *
+ * **Word bias, divided out.** Laya prefers some option words whatever the scene: with every way
+ * described identically it gave "right" 0.74 against "left" 0.26. So each answer is divided by
+ * the model's own answer to the same options when every way reads the same (content-free
+ * calibration, computed once per option set with the model itself and cached), and the pilot flies
+ * the largest [PilotDecision.adjusted] share. [PilotDecision.raw] stays exactly what the model
+ * returned. The first decision over a new option set also pays for its two calibration passes;
+ * that time is counted in its latency. Not thread-safe: one decision at a time (every host runs
+ * the pilot on one model thread).
  *
  * **Failure posture: null action.** A backend that throws, or returns anything that fails the
  * engine's strict validation (unknown or missing labels, NaN, masses that do not normalise), yields
  * [Action.HOLD] with the failure recorded — never an exception into the game loop. The safety
  * override still stands behind that hold.
- *
- * The probabilities it reports are the model's raw output; see [PilotDecision.raw].
  */
 class ModelPilot(
     private val backend: Backend,
@@ -151,26 +174,35 @@ class ModelPilot(
 ) : Pilot {
     override val name: String = "model"
 
+    private val priors = HashMap<List<String>, List<Double>>()
+
     override fun decide(observation: Observation): PilotDecision {
-        val legal = gates(observation, observation.legal.actions)
-        if (legal.size == 1) {
-            return PilotDecision(legal.single(), DecisionSource.MECHANICAL, observedTick = observation.tick)
+        val offered = gates(observation, observation.legal.actions)
+        if (offered.size == 1) {
+            return PilotDecision(offered.single(), DecisionSource.MECHANICAL, observedTick = observation.tick)
         }
-        val judgment = Judgment.Choice(
-            id = JUDGMENT_ID,
-            question = question,
-            candidates = legal.map { it.label },
-            onFailure = FailurePosture.NULL_ACTION,
-        )
-        val state = TextState.build(listOf("river" to StateText.describe(observation)), stateBudget)
+        val judgment = judgment(observation, offered, question)
+        val state = TextState.build(listOf("river" to PathText.scene(observation)), stateBudget)
         val started = GameClock.nanoTime()
-        val validated = runCatching { judgment.validate(backend.score(judgment, state).masses) }
+        val answered = runCatching {
+            val distribution = judgment.validate(backend.score(judgment, state).masses)
+            val raw = judgment.candidates.map { distribution.getValue(it).value }
+            raw to prior(judgment.candidates)
+        }
         val latency = GameClock.nanoTime() - started
-        return validated.fold(
-            onSuccess = { distribution ->
-                val raw = legal.associateWith { distribution.getValue(it.label).value }
-                val chosen = Action.ofLabel(distribution.argmax) ?: Action.HOLD
-                PilotDecision(chosen, DecisionSource.MODEL, raw, latencyNanos = latency, observedTick = observation.tick)
+        return answered.fold(
+            onSuccess = { (raw, prior) ->
+                val share = raw.indices.map { raw[it] / prior[it] }
+                val total = share.sum()
+                val best = share.indices.maxBy { share[it] }
+                PilotDecision(
+                    action = offered[best],
+                    source = DecisionSource.MODEL,
+                    raw = offered.indices.associate { offered[it] to raw[it] },
+                    latencyNanos = latency,
+                    observedTick = observation.tick,
+                    adjusted = offered.indices.associate { offered[it] to share[it] / total },
+                )
             },
             onFailure = { failure ->
                 PilotDecision(
@@ -184,7 +216,46 @@ class ModelPilot(
         )
     }
 
+    /**
+     * The model's answer over [labels] when the ways cannot be told apart: each described
+     * identically, in each of [NEUTRAL], over [NEUTRAL_SCENE], averaged. Cached per option set.
+     */
+    private fun prior(labels: List<String>): List<Double> = priors.getOrPut(labels) {
+        val sum = DoubleArray(labels.size)
+        for (words in NEUTRAL) {
+            val neutral = Judgment.Choice(
+                id = JUDGMENT_ID,
+                question = question,
+                candidates = labels,
+                onFailure = FailurePosture.NULL_ACTION,
+                descriptions = labels.associateWith { words },
+            )
+            val d = neutral.validate(backend.score(neutral, TextState.build(listOf("river" to NEUTRAL_SCENE), stateBudget)).masses)
+            labels.forEachIndexed { i, label -> sum[i] += d.getValue(label).value / NEUTRAL.size }
+        }
+        sum.toList()
+    }
+
     companion object {
+        /** The word for each way: `-1`, `0`, `1`. */
+        fun way(steer: Int): String = when {
+            steer < 0 -> "left"
+            steer > 0 -> "right"
+            else -> "straight"
+        }
+
+        /** The exact question the model is asked for [offered] (one move per way, as [gates] leaves them). */
+        fun judgment(o: Observation, offered: List<Action>, question: String = QUESTION): Judgment.Choice {
+            val labels = offered.map { way(it.steer) }
+            return Judgment.Choice(
+                id = JUDGMENT_ID,
+                question = question,
+                candidates = labels,
+                onFailure = FailurePosture.NULL_ACTION,
+                descriptions = offered.associate { way(it.steer) to PathText.describe(o, it.steer) },
+            )
+        }
+
         /**
          * The fuel gate: when fuel is low and a depot is reachable, only moves that steer toward it
          * (and never a shot at it once it is in line) are offered. The model zero-shot kept flying
@@ -206,30 +277,40 @@ class ModelPilot(
         }
 
         /**
-         * The gun gate: with the gun ready and an enemy or bridge in line and in range, only the
-         * shooting moves are offered. Zero-shot, the model picked safe non-firing moves and dodged
-         * targets instead of shooting them.
+         * The gun gate: one move per way. Firing is wanted when the gun is ready and an enemy is in
+         * line within range or a bridge is close, and no fuel depot is in line; otherwise holding
+         * fire is. Each way keeps its wanted gun setting when that is legal, else the other: the
+         * gate removes pointless or harmful shots (and the passive twin of a needed one), never a
+         * way. Measured 2026-09-25: left to the model, the gun fired on half of all decisions and
+         * shot 59 depots in 20 runs; 19 of the 20 ended out of fuel.
          */
-        fun fireFocus(o: Observation, legal: List<Action>): List<Action> {
-            if (!o.weaponReady) return legal
-            val enemyInLine = o.threats.any { abs(it.across) < 1.2 && it.ahead < 14 }
-            val bridgeClose = (o.bridgeAheadRows ?: Int.MAX_VALUE) < 12
-            if (!enemyInLine && !bridgeClose) return legal
-            return legal.filter { it.fire }.ifEmpty { legal }
+        fun fireGate(o: Observation, legal: List<Action>): List<Action> {
+            val enemyInLine = o.threats.any { abs(it.across) < IN_LINE && it.ahead < FIRE_RANGE }
+            val bridgeClose = (o.bridgeAheadRows ?: Int.MAX_VALUE) < BRIDGE_RANGE
+            val depotInLine = o.depot?.let { abs(it.across) < IN_LINE } ?: false
+            val fire = o.weaponReady && (enemyInLine || bridgeClose) && !depotInLine
+            return legal.map { it.steer }.distinct().sorted().map { steer ->
+                val wanted = Action.of(steer, fire)
+                if (wanted in legal) wanted else Action.of(steer, !fire)
+            }
         }
 
         /** Both gates, fuel first: a low tank outranks a target. */
-        fun gates(o: Observation, legal: List<Action>): List<Action> {
-            val fuel = fuelFocus(o, legal)
-            return if (fuel.size < legal.size) fuel else fireFocus(o, legal)
-        }
+        fun gates(o: Observation, legal: List<Action>): List<Action> = fireGate(o, fuelFocus(o, legal))
 
-        const val JUDGMENT_ID: String = "game.river.move"
-        const val QUESTION: String =
-            "A plane flies up a river. Which move keeps it off the banks and away from enemies, " +
-                "shoots targets in line, and reaches fuel when fuel is low?"
+        const val JUDGMENT_ID: String = "game.river.way"
+        const val QUESTION: String = "Which way is safest?"
 
-        /** Characters of state; [StateText] stays well inside it, so it is never cut. */
+        /** Columns either side of the plane that count as "in line" for the gun. */
+        const val IN_LINE: Double = 1.2
+        const val FIRE_RANGE: Double = 14.0
+        const val BRIDGE_RANGE: Int = 12
+
+        /** The content-free descriptions and scene the word bias is measured over. */
+        val NEUTRAL: List<String> = listOf("open water", "land close")
+        const val NEUTRAL_SCENE: String = "fuel 70%"
+
+        /** Characters of state; [PathText.scene] stays well inside it, so it is never cut. */
         const val STATE_BUDGET: Int = 600
     }
 }

@@ -71,4 +71,40 @@ final class GameUITests: XCTestCase {
         XCTAssertTrue(app.buttons["game.getModel"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["game.bars"].exists)
     }
+
+    /// You fly: a labelled FIRE button sits bottom-right. Tapping it fires rather than pausing (a
+    /// quick tap on the river pauses), holding it does not pause either, and the help says steering
+    /// never fires. Watch mode shows no FIRE button.
+    func testFireButtonFiresWithoutPausingAndIsAbsentInWatch() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeGame", "human"]
+        app.launch()
+        let fire = app.descendants(matching: .any)["game.fire"]
+        XCTAssertTrue(fire.waitForExistence(timeout: 5))
+        XCTAssertEqual(fire.label, "Fire")
+        let river = app.descendants(matching: .any)["game.river"]
+        XCTAssertTrue(river.exists)
+        XCTAssertGreaterThanOrEqual(fire.frame.width, 64)
+        XCTAssertGreaterThan(fire.frame.midX, river.frame.midX, "FIRE sits on the right")
+        XCTAssertGreaterThan(fire.frame.midY, river.frame.midY, "FIRE sits low, in the thumb zone")
+        let help = app.descendants(matching: .any)["game.help"]
+        XCTAssertTrue(help.label.contains("steering never fires"), help.label)
+
+        let resume = app.buttons["game.resume"]
+        fire.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        XCTAssertFalse(resume.waitForExistence(timeout: 1), "a tap on FIRE paused the game")
+        fire.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).press(forDuration: 0.8)
+        XCTAssertFalse(resume.waitForExistence(timeout: 1), "holding FIRE paused the game")
+
+        // A quick tap on the open river still pauses.
+        river.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3)).tap()
+        XCTAssertTrue(resume.waitForExistence(timeout: 3), "a tap on the river pauses")
+        XCTAssertFalse(fire.exists, "no FIRE button while paused")
+        resume.tap()
+        XCTAssertTrue(fire.waitForExistence(timeout: 3))
+
+        app.buttons["Watch Laya"].tap()
+        XCTAssertTrue(app.descendants(matching: .any)["game.rows"].waitForExistence(timeout: 5))
+        XCTAssertFalse(fire.waitForExistence(timeout: 2), "Watch mode has no FIRE button")
+    }
 }

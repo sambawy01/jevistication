@@ -56,8 +56,11 @@ class LayaPilotTest {
 
     @Test
     fun `the whole Laya sequence for a decision stays short`() = withModel { _, prompt ->
-        val sequences = sampleObservations().map { o ->
-            prompt.build(ModelPilot.QUESTION, StateText.describe(o), o.legal.actions.map { it.label })
+        val sequences = sampleObservations().mapNotNull { o ->
+            val offered = ModelPilot.gates(o, o.legal.actions)
+            if (offered.size < 2) return@mapNotNull null
+            val j = ModelPilot.judgment(o, offered)
+            prompt.build(j.question, PathText.scene(o), j.candidates, j.descriptionList)
         }
         val stateTokens = sequences.map { it.stateTokens }
         val total = sequences.map { it.inputIds.size }
@@ -67,6 +70,7 @@ class LayaPilotTest {
                 "(mean ${"%.1f".format(total.average())})",
         )
         assertTrue(sequences.none { it.stateTruncated }, "a state was cut to fit")
+        assertTrue(sequences.none { it.optionsTruncated }, "an option's description was cut to fit")
         assertTrue(stateTokens.max() <= 120, "state reached ${stateTokens.max()} tokens")
         assertTrue(total.max() <= 200, "sequence reached ${total.max()} tokens")
     }

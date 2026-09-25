@@ -3,13 +3,13 @@ import SpriteKit
 import SwiftUI
 
 /// Riverflight on the phone: the SpriteKit river between a navy score bar and a clean-room panel.
-/// Human mode: drag to steer, hold to fire, tap to pause. Watch mode: Laya flies through the shared
+/// Human mode: drag anywhere on the river to steer, the FIRE button (a second thumb) to shoot, tap to
+/// pause. Watch mode: Laya flies through the shared
 /// Backend, with its raw probabilities, decisions per second and a scoreboard against the baseline
 /// on the same seed.
 struct GameView: View {
     @StateObject private var game: GameController
     @State private var scene = RiverScene(size: CGSize(width: 390, height: 446))
-    @State private var touching = false
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -109,7 +109,6 @@ struct GameView: View {
 
     private var river: some View {
         GeometryReader { geo in
-            let width = geo.size.width
             ZStack {
                 SpriteView(scene: scene, preferredFramesPerSecond: 60, options: [.ignoresSiblingOrder])
                     .onAppear {
@@ -119,14 +118,15 @@ struct GameView: View {
                     }
                     .onChange(of: geo.size) { _, s in scene.size = s }
                     .accessibilityHidden(true)
-                // Touches land on this layer, not on the SKView, so SwiftUI owns the gesture.
-                Color.clear
-                    .contentShape(Rectangle())
-                    .gesture(steerGesture(width: width))
-                    .accessibilityElement()
-                    .accessibilityLabel(riverLabel)
-                    .accessibilityIdentifier("game.river")
-                    .accessibilityAddTraits(.allowsDirectInteraction)
+                // Every touch lands on this multi-touch layer, not on the SKView. It tracks the
+                // steering finger and the FIRE finger as separate touches (GameInput's TouchRouter).
+                RiverTouchSurface(game: game, fireButton: game.mode == .human, label: riverLabel)
+                if game.mode == .human, !game.paused, game.results == nil {
+                    FireButton(state: game.fireButton, reducedMotion: reducedMotion, onActivate: { game.fireOnce() })
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                        .padding(.trailing, FireButtonLayout.inset)
+                        .padding(.bottom, FireButtonLayout.inset)
+                }
                 if let level = game.levelFlash, !game.paused { LevelFlash(level: level, reducedMotion: reducedMotion) }
                 if game.paused { pausedOverlay }
                 else if let r = game.results { ResultsCard(results: r, seed: game.seed, onNext: { game.newRiver() }) }
@@ -141,24 +141,8 @@ struct GameView: View {
 
     private var riverLabel: String {
         game.mode == .human
-            ? "River. Drag left or right to steer, hold to fire, tap to pause."
+            ? "River. Drag left or right to steer; steering never fires. Fire with the Fire button. Tap to pause."
             : "River. \(pilotName) is flying. Tap to pause."
-    }
-
-    private func steerGesture(width: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 0, coordinateSpace: .local)
-            .onChanged { v in
-                let col = ColumnMapping.column(x: v.location.x, width: width, columns: GameController.columns)
-                if !touching {
-                    touching = true
-                    game.touchBegan(column: col, x: v.location.x, time: CACurrentMediaTime())
-                }
-                game.touchMoved(column: col, x: v.location.x)
-            }
-            .onEnded { _ in
-                touching = false
-                game.touchEnded(time: CACurrentMediaTime())
-            }
     }
 
     private var pausedOverlay: some View {
@@ -192,9 +176,17 @@ struct GameView: View {
     private var humanPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
             Caption(text: "You are flying")
-            Text("Drag left or right to steer. Hold to fire. Tap to pause.")
+            Text("Drag anywhere on the river to steer; steering never fires. Press FIRE, bottom right, to shoot, with your other thumb while you steer. Tap the river to pause.")
                 .font(.subheadline).foregroundStyle(Palette.ink)
-            Toggle("Auto-fire", isOn: $autoFire).accessibilityIdentifier("game.autofire")
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("game.help")
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle("Auto-fire", isOn: $autoFire).accessibilityIdentifier("game.autofire")
+                    .accessibilityHint("Fires whenever the gun is ready, but holds fire while a fuel depot is ahead")
+                Text("Holds fire while a fuel depot is ahead. FIRE always shoots.")
+                    .font(.caption).foregroundStyle(Palette.inkSoft)
+                    .accessibilityHidden(true)
+            }
             settingsToggles
             Text("The safety net still stands behind you: it flies a move that avoids a crash only when yours cannot.")
                 .font(.footnote).foregroundStyle(Palette.inkSoft)
@@ -271,7 +263,7 @@ struct PlayCard: View {
                     .foregroundStyle(Palette.blue).rotationEffect(.degrees(-90))
                     .accessibilityHidden(true)
             }
-            Text("The on-device model flies a river and shows its work: every choice, live, against a few lines of rules on the same river.")
+            Text("Laya, the on-device model, picks which way to fly many times a second, and shows every choice. Rules take out moves that would crash and work the gun. A few lines of rules fly the same river for comparison, and often go further.")
                 .font(.subheadline).foregroundStyle(Palette.inkSoft)
             HStack(spacing: 10) {
                 Button { onPlay(.watch) } label: {
@@ -447,7 +439,8 @@ struct SpeedPanel: View {
         .accessibilityIdentifier(id ?? "")
     }
 
-    /// The chosen move, and Laya's raw (uncalibrated) probabilities when Laya chose it.
+    /// The chosen move, and Laya's shares when Laya chose it: its raw answer with its measured word
+    /// bias divided out (what it chose by; `PilotDecision.adjusted`). Not calibrated probabilities.
     private func bars(_ h: HUDSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(h.source).font(.caption).foregroundStyle(Palette.inkSoft).lineLimit(1)
@@ -481,7 +474,7 @@ struct SpeedPanel: View {
 
     static func barValue(_ bar: ActionBar) -> String {
         var parts: [String] = []
-        if let raw = bar.raw { parts.append("raw probability \(Int((raw * 100).rounded())) percent") }
+        if let raw = bar.raw { parts.append("Laya's share \(Int((raw * 100).rounded())) percent") }
         if let ex = bar.excluded { parts.append(ex.contains("crash") ? "not offered, would crash" : "not offered, would shoot the last fuel") }
         if bar.chosen { parts.append("chosen") }
         return parts.isEmpty ? "not chosen" : parts.joined(separator: ", ")
@@ -563,11 +556,12 @@ struct ResultsCard: View {
                     }
                 }
                 HStack(spacing: 0) {
-                    side("LAYA", r.layaScore, r.layaRows, r.layaLevel, note: "down", lead: r.layaRows >= r.baselineRows)
+                    side("LAYA", r.layaScore, r.layaRows, r.layaLevel, note: "down", lead: r.layaRows > r.baselineRows)
                     side("BASELINE", r.baselineScore, r.baselineRows, r.baselineLevel,
                          note: r.baselineAlive ? "still flying" : "down", lead: r.baselineRows > r.layaRows)
                 }
-                Text("Same seed, same river, same safety net: only the pilot differs.").font(.caption).foregroundStyle(Palette.inkSoft)
+                Text("Same seed, same river, same safety net. On Laya's side, rules remove crashing moves and work the gun; Laya picks the way. Over 20 test rivers it did not beat the baseline on average.").font(.caption).foregroundStyle(Palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
                 Button("Next river", action: onNext).buttonStyle(.neonPrimary).frame(maxWidth: .infinity)
                     .accessibilityIdentifier("game.results.next")
             }

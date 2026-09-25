@@ -30,8 +30,27 @@ class FuelFocusTest {
     @Test fun enemyInLineMeansShoot() =
         assertEquals(listOf(Action.LEFT_FIRE, Action.HOLD_FIRE, Action.RIGHT_FIRE), ModelPilot.gates(armed(Sighting("boat", 8.0, 0.5)), all))
 
-    @Test fun enemyOffLineLeavesTheModelFree() =
-        assertEquals(all, ModelPilot.gates(armed(Sighting("boat", 8.0, 4.0)), all))
+    // Changed 2026-09-25: the gun gate now also drops a shot with nothing in line (it only wastes
+    // the reload; left to the model it fired on half of all decisions), so each way is offered once.
+    @Test fun enemyOffLineLeavesEveryWayWithTheGunQuiet() =
+        assertEquals(listOf(Action.LEFT, Action.HOLD, Action.RIGHT), ModelPilot.gates(armed(Sighting("boat", 8.0, 4.0)), all))
+
+    @Test fun aDepotInLineIsNeverShotEvenWithATargetBehindIt() =
+        assertEquals(
+            listOf(Action.LEFT, Action.HOLD, Action.RIGHT),
+            ModelPilot.fireGate(obs(95, Sighting("depot", 5.0, 0.3)).copy(threats = listOf(Sighting("boat", 9.0, 0.5))), all),
+        )
+
+    @Test fun theGunGateNeverRemovesAWay() {
+        // Firing wanted, but only the quiet move is legal going left: left stays, quiet.
+        val legal = listOf(Action.LEFT, Action.HOLD_FIRE, Action.RIGHT_FIRE)
+        assertEquals(listOf(Action.LEFT, Action.HOLD_FIRE, Action.RIGHT_FIRE), ModelPilot.fireGate(armed(Sighting("boat", 8.0, 0.5)), legal))
+        // Nothing to shoot, but only the firing move is legal straight on: straight stays, firing.
+        assertEquals(listOf(Action.LEFT, Action.HOLD_FIRE), ModelPilot.fireGate(obs(95, null), listOf(Action.LEFT, Action.LEFT_FIRE, Action.HOLD_FIRE)))
+    }
+
+    @Test fun aReloadingGunNeverFires() =
+        assertEquals(listOf(Action.LEFT, Action.HOLD, Action.RIGHT), ModelPilot.gates(armed(Sighting("boat", 8.0, 0.5)).copy(weaponReady = false), all))
 
     @Test fun lowFuelOutranksATarget() =
         assertEquals(listOf(Action.HOLD), ModelPilot.gates(obs(30, Sighting("depot", 6.0, 0.2)).copy(threats = listOf(Sighting("boat", 8.0, 0.5))), all))

@@ -165,18 +165,25 @@ a trade dress are not. **Not Tetris,** for two reasons: *Tetris Holding v. Xio* 
 a clone that copied Tetris's look to infringe copyright and trade dress, and a Tetris placement is a
 choice among up to ~40 options where the model's own card advises staying under ~20.
 
-It is the product in miniature. Each decision (10 a second) runs **mechanical first**: exact
-look-ahead removes every move that would crash before the model sees the question, and when one
-move is left the model is not asked. The model then picks among at most six plain-language moves,
-"hold course" always among them when it is safe. A **safety override** replaces a held move that
-has become fatal, and the screen flashes when it does. Below a **threshold slider**, the decision is
-handed to the player ("your turn"). A **dumb baseline** autopilot flies the same seeds, and the game
-reports which wins. The bars show the model's **raw** output — not calibrated, and labelled so.
+It is the product in miniature. Each decision (10 a second, more as the river speeds up) runs
+**mechanical first**: exact look-ahead removes every move that would crash before the model sees the
+question, and when one move is left the model is not asked. Two more rules only *remove*: low on
+fuel with a depot in reach, only the ways toward it are offered; and the gun is set by rule (fire when
+a target is in line and no fuel depot is, otherwise not), so each way is offered once. The model then
+answers one small question, **"Which way is safest?"**, over at most three ways — left, straight,
+right — each described in words ("boat close", "land very close", "fuel that way"). A **safety
+override** replaces a held move that has become fatal, and the screen flashes when it does. Below a
+**threshold slider**, the decision is handed to the player ("your turn"). A **dumb baseline**
+autopilot flies the same seeds, and the game reports which wins. The bars show the model's share with
+its measured left/right word bias divided out — not calibrated, and labelled so.
 
-*Honest status:* untuned, the model **loses to the baseline** (it does not seek fuel, so it runs dry
-— see `BUILD.md` F5 for the numbers); fine-tuning on baseline-flown states is the planned fix. On a
-desktop CPU it decides in ~65 ms; on a phone that is **unmeasured** (risk 13). It runs on macOS
-today as a Compose Desktop app written to move to Android.
+*Honest status (measured 2026-09-25, `BUILD.md`):* untuned, the model **still loses to the
+baseline** — 495 against 543 rows on average over 20 seeds, ahead on 5 of them — though it flies 46%
+further than the earlier six-way question, which shot its own fuel and ran dry. The gates and the
+safety net do much of the flying: the same gates holding course, with no model at all, reach 418.
+Fine-tuning on baseline-flown states is still the planned fix. On a desktop CPU it now decides in
+~21 ms (P50); on a phone that is **unmeasured** (risk 13). It runs on macOS as a Compose Desktop app
+and on the iPhone.
 
 ---
 

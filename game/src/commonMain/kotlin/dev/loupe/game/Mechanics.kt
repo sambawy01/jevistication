@@ -1,6 +1,8 @@
 package dev.loupe.game
 
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 
 /** Why an action was left out of the candidate set. */
 enum class Exclusion {
@@ -138,5 +140,57 @@ object Mechanics {
             depot.y > world.playerY &&
             depot.y - world.playerY < Rules.VIEW_ROWS &&
             abs(depot.x - world.playerX) < (Depot.WIDTH + Rules.BULLET_W) / 2
+    }
+
+    /** Ticks a bullet can live: it is culled at the top of the view. Plus a margin. */
+    private val BULLET_TICKS: Int = (Rules.VIEW_ROWS / (Rules.BULLET_SPEED * Rules.DT)).toInt() + 4
+
+    /**
+     * True when a shot fired this tick, with [steer] held, would end up destroying a live fuel depot.
+     * Exact, like the candidate set: two copies of the world fly on, one firing now and one not (gun
+     * off afterwards in both), until the bullet is gone; the shot is to blame if the first loses more
+     * depots. It catches what the geometric [depotInLineOfFire] misses: the depot the plane is flying
+     * over to refuel (its top still above the muzzle), and a depot just beyond the view that scrolls
+     * into the bullet's path. False when the gun is not ready this tick (no shot would leave).
+     * Human auto-fire holds on it (iOS, owner's report 2026-09-25).
+     */
+    fun shotHitsDepot(world: World, steer: Int): Boolean {
+        // Not "no depot yet, so no": one can spawn at the top of the view while the bullet flies.
+        if (world.over || world.cooldown > 1) return false
+        // Cheap first: a bullet flies straight up, so with no depot up its column (on the map or in
+        // the rows still to spawn) there is nothing to simulate. This keeps the per-tick cost low.
+        val sideways = steer.coerceIn(-1, 1) * world.difficulty.lateral(world.level) * Rules.DT
+        val column = (world.playerX + sideways).coerceIn(Rules.PLAYER_W / 2, Rules.COLUMNS - Rules.PLAYER_W / 2)
+        if (!depotUpTheColumn(world, column)) return false
+        val shot = world.copy()
+        val quiet = world.copy()
+        shot.step(Action.of(steer, true))
+        quiet.step(Action.of(steer, false))
+        // The bullet leaves from where the plane is after this tick's sideways move.
+        val muzzleX = shot.playerX
+        repeat(BULLET_TICKS) {
+            if (shot.tally.depotsShot > quiet.tally.depotsShot) return true
+            if (shot.over || quiet.over) return depotUpTheColumn(world, muzzleX)
+            shot.step(Action.HOLD)
+            quiet.step(Action.HOLD)
+        }
+        return shot.tally.depotsShot > quiet.tally.depotsShot
+    }
+
+    /**
+     * Any live depot up the bullet's column, on the map above the muzzle or in the river rows the
+     * camera reaches while a bullet can still fly. The cheap filter before the simulation, and its
+     * cautious answer when a copy crashed before its bullet was gone (the copy holds course; the real
+     * plane will not).
+     */
+    private fun depotUpTheColumn(world: World, muzzleX: Double): Boolean {
+        val reach = (Depot.WIDTH + Rules.BULLET_W) / 2
+        val muzzle = world.playerY + Rules.PLAYER_H
+        if (world.depots.any { it.alive && it.y + Depot.HEIGHT > muzzle && abs(it.x - muzzleX) < reach }) return true
+        val spawned = floor(world.cameraY).toInt() + Rules.VIEW_ROWS + 1
+        val ahead = ceil(world.difficulty.scroll(world.level) * Rules.DT * BULLET_TICKS).toInt() + 1
+        return (spawned + 1..spawned + ahead).any { i ->
+            world.river.row(i).spawns.any { it is Spawn.Depot && abs(it.x - muzzleX) < reach }
+        }
     }
 }

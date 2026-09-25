@@ -52,6 +52,13 @@ object GameSessions {
     /** The raw model probability of [action] in [decision], or -1 when none was reported. */
     fun raw(decision: PilotDecision?, action: Action): Double = decision?.raw?.get(action) ?: -1.0
 
+    /**
+     * What a bar shows for [action]: the model's [PilotDecision.adjusted] share (the numbers it chose
+     * by) when there is one, else its raw probability, else -1 when none was reported.
+     */
+    fun shown(decision: PilotDecision?, action: Action): Double =
+        decision?.adjusted?.get(action) ?: decision?.raw?.get(action) ?: -1.0
+
     /** The row at [index] of [world]'s river, for a renderer. */
     fun row(world: World, index: Int): Row = world.river.row(index.coerceAtLeast(0))
 }
