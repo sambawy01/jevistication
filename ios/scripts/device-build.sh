@@ -80,5 +80,5 @@ print "device-build: built $app"
 
 if (( install )); then
   xcrun devicectl device install app --device "$device" "$app"
-  print "device-build: installed on $device. Open Loupe → Me → Laya model, then Me → Diagnostics."
+  print "device-build: installed on $device. Open Loupe → Me → Decision model, then Me → Diagnostics."
 fi
