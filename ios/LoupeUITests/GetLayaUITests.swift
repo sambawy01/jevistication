@@ -21,7 +21,7 @@ final class GetLayaUITests: XCTestCase {
 
     func testFirstLaunchWithoutTheModelShowsGetLayaThenLaterLocksModelFeatures() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeModelState", "missing", "-LoupeTab", "me", "-LoupeEphemeralKeychain", "-LoupeFixtures"]
+        app.launchArguments = ["-LoupeModelState", "missing", "-LoupeNoModelHost", "-LoupeTab", "me", "-LoupeEphemeralKeychain", "-LoupeFixtures"]
         app.launch()
 
         // Get Laya comes first, before the tabs.
@@ -57,6 +57,28 @@ final class GetLayaUITests: XCTestCase {
         for _ in 0..<6 where !privacy.isHittable { app.swipeUp() }
         XCTAssertTrue(privacy.waitForExistence(timeout: 5))
         XCTAssertFalse(any(app, "needsLaya.privacy").exists)
+    }
+
+    /// The shipped build has a host: Download and the consent (with the mobile-data toggle). The
+    /// consent is reset and declined, so nothing is ever downloaded by this test.
+    func testWithAHostGetLayaOffersDownloadThroughTheConsent() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-LoupeModelState", "missing", "-LoupeResetModelConsent", "-LoupeTab", "now", "-LoupeEphemeralKeychain", "-LoupeFixtures"]
+        app.launch()
+        XCTAssertTrue(any(app, "getLaya.screen").waitForExistence(timeout: 10))
+        XCTAssertFalse(any(app, "getLaya.notConfigured").exists)
+        let download = app.buttons["getLaya.download"]
+        XCTAssertTrue(download.waitForExistence(timeout: 5))
+        XCTAssertTrue(download.label.contains("MB"), download.label)
+        XCTAssertTrue(app.switches["getLaya.cellular"].exists)
+        download.tap()                                      // no consent yet: opens the consent sheet
+        XCTAssertTrue(any(app, "consent.screen").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.switches["consent.cellular"].exists)
+        XCTAssertTrue(app.buttons["consent.agree"].exists, "the host is set: agreeing would start the download")
+        XCTAssertFalse(any(app, "consent.notConfigured").exists)
+        app.buttons["consent.decline"].tap()                // never agree: no request in tests
+        XCTAssertTrue(download.waitForExistence(timeout: 5))
+        XCTAssertFalse(any(app, "getLaya.progress").exists)
     }
 
     func testWithTheModelThereIsNoGetLayaStep() {

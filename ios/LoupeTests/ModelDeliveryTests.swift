@@ -72,15 +72,23 @@ final class ModelDeliveryTests: XCTestCase {
 
     // MARK: manifest
 
-    func testTheBundledManifestParsesWithAnEmptyHostAndTheKotlinPins() throws {
+    func testTheBundledManifestParsesWithTheSupabaseHostAndTheKotlinPins() throws {
         let m = try ModelManifest.bundled(Bundle(for: LayaModel.self)).get()
         XCTAssertEqual(m.defaultVariant, "int8")
         XCTAssertEqual(m.variants.map(\.id), ["int8", "int8-partial"])
         XCTAssertFalse(m.variant("int8")!.optIn)
         XCTAssertTrue(m.variant("int8-partial")!.optIn)
-        XCTAssertEqual(m.source.host, "", "the host ships empty until the owner sets it")
-        XCTAssertNil(m.configuredHost)
-        XCTAssertNil(m.url(for: m.variants[0].files[0], variant: m.variants[0]))
+        XCTAssertEqual(m.configuredHost?.absoluteString, "https://zqyeihzjpfnvkrprcwam.supabase.co")
+        // Every file resolves to exactly the object the owner uploaded (laya/v1, never overwritten).
+        let base = "https://zqyeihzjpfnvkrprcwam.supabase.co/storage/v1/object/public/models/laya/v1/"
+        var urls: Set<String> = []
+        for v in m.variants { for f in v.files { urls.insert(try XCTUnwrap(m.url(for: f, variant: v)).absoluteString) } }
+        XCTAssertEqual(urls, [base + "tokenizer.json",
+                              base + "laya-multilingual-choice.int8.onnx",
+                              base + "laya-multilingual-choice.int8-partial.onnx"])
+        // A build with no host (DEBUG -LoupeNoModelHost) resolves nothing.
+        XCTAssertNil(m.withoutHost.configuredHost)
+        XCTAssertNil(m.withoutHost.url(for: m.variants[0].files[0], variant: m.variants[0]))
         XCTAssertEqual(m.variant("int8")!.totalBytes, 34_363_188 + 383_883_281)
         XCTAssertEqual(m.variant("int8-partial")!.totalBytes, 34_363_188 + 357_361_791)
         // The manifest and LoupeKit's LayaModelStore must pin the same files to the same hashes.
@@ -305,9 +313,9 @@ final class ModelDeliveryTests: XCTestCase {
         XCTAssertEqual(d.phase, .idle)
     }
 
-    func testLayaModelWithTheShippedManifestIsNotConfiguredAndRequestsNothing() throws {
+    func testLayaModelWithNoHostIsNotConfiguredAndRequestsNothing() throws {
         let t = FakeTransport()
-        let model = LayaModel(directory: dir.path, manifest: ModelManifest.bundled(Bundle(for: LayaModel.self)),
+        let model = LayaModel(directory: dir.path, manifest: ModelManifest.bundled(Bundle(for: LayaModel.self)).map(\.withoutHost),
                               transport: t, defaults: defaults)
         XCTAssertFalse(model.hostConfigured)
         XCTAssertEqual(model.status, .notInstalled)

@@ -11,7 +11,7 @@ import Foundation
 // Application Support excluded from backup instead of a Hugging Face hub cache.
 
 /// `Resources/Laya/models.json`: every graph variant with its files, sizes and SHA-256 pins, and
-/// where they are downloaded from. The host ships EMPTY (owner to set).
+/// where they are downloaded from (the owner's Supabase Storage bucket; an empty host = not configured).
 struct ModelManifest: Decodable, Equatable {
     struct Source: Decodable, Equatable {
         /// `https://…` with no trailing slash, or "" (not configured).
@@ -85,9 +85,22 @@ struct ModelManifest: Decodable, Equatable {
     static func bundled(_ bundle: Bundle = .main) -> Result<ModelManifest, Problem> {
         guard let url = bundle.url(forResource: "models", withExtension: "json"),
               let data = try? Data(contentsOf: url) else { return .failure(.unreadable("models.json is not in the app")) }
-        do { return .success(try parse(data)) } catch let p as Problem { return .failure(p) } catch {
+        do {
+            let m = try parse(data)
+            #if DEBUG
+            // -LoupeNoModelHost: behave as a build with no host (UI tests keep the not-configured copy covered).
+            if ProcessInfo.processInfo.arguments.contains("-LoupeNoModelHost") { return .success(m.withoutHost) }
+            #endif
+            return .success(m)
+        } catch let p as Problem { return .failure(p) } catch {
             return .failure(.unreadable(error.localizedDescription))
         }
+    }
+
+    /// The same manifest with an empty host: "not configured", no request is ever made.
+    var withoutHost: ModelManifest {
+        ModelManifest(schema: schema, source: Source(host: "", urlTemplate: source.urlTemplate),
+                      defaultVariant: defaultVariant, variants: variants)
     }
 
     func variant(_ id: String) -> Variant? { variants.first { $0.id == id } }

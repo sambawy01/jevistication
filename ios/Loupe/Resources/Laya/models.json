@@ -1,9 +1,9 @@
 {
-  "_comment": "Laya's on-device files (docs/BUILD.md A1, risk 2). The download host is EMPTY until the owner sets it: the app then says 'Model host not configured' and downloads nothing. urlTemplate placeholders: {host} (https only), {variant}, {file}. Sizes and SHA-256s are the exports parity was measured on; a re-export changes them together with the Kotlin pins in LayaModelStore (a test checks the two agree).",
+  "_comment": "Laya's on-device files (docs/BUILD.md A1, risk 2). Host: the owner's Supabase Storage public bucket 'models' (project zqyeihzjpfnvkrprcwam), files under laya/v1/, served with Range, ETag and Last-Modified so a paused or interrupted download resumes. v1 is never overwritten: a re-export uploads under a new path (laya/v2/, …) and changes urlTemplate, sizes and SHA-256s together with the Kotlin pins in LayaModelStore (a test checks the two agree). An empty host means 'Model host not configured': the app then downloads nothing (DEBUG -LoupeNoModelHost simulates it). urlTemplate placeholders: {host} (https only), {variant}, {file}. Sizes and SHA-256s are the exports parity was measured on.",
   "schema": 1,
   "source": {
-    "host": "",
-    "urlTemplate": "{host}/{file}"
+    "host": "https://zqyeihzjpfnvkrprcwam.supabase.co",
+    "urlTemplate": "{host}/storage/v1/object/public/models/laya/v1/{file}"
   },
   "defaultVariant": "int8",
   "variants": [

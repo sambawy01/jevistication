@@ -12,6 +12,11 @@ struct LoupeApp: App {
         if ProcessInfo.processInfo.arguments.contains("-LoupeResetMascot") {
             UserDefaults.standard.removeObject(forKey: MascotKind.storageKey)
         }
+        // -LoupeResetModelConsent: forget the download consent, so a Download tap in a UI test
+        // opens the consent sheet and can never start a real download.
+        if ProcessInfo.processInfo.arguments.contains("-LoupeResetModelConsent") {
+            UserDefaults.standard.removeObject(forKey: ModelConsent.key)
+        }
         #endif
         // Dark neon everywhere (owner decision 2026-09-24): bars, tabs, controls.
         NeonChrome.install()

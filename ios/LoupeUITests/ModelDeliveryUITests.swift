@@ -1,13 +1,14 @@
 import XCTest
 
-/// Me → Laya model with the shipped manifest (host EMPTY): the honest "not configured" state, and
-/// the consent screen's copy, reachable without any download being possible.
+/// Me → Laya model. With no host (DEBUG -LoupeNoModelHost): the honest "not configured" state and
+/// the consent copy. With the shipped Supabase host: Download is offered (never tapped here, so no
+/// test makes a network request).
 final class ModelDeliveryUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     func testModelScreenSaysNotConfiguredAndShowsTheConsentCopy() throws {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeEphemeralKeychain"]
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeEphemeralKeychain", "-LoupeNoModelHost"]
         app.launch()
         let entry = app.descendants(matching: .any)["me.model"]
         XCTAssertTrue(entry.waitForExistence(timeout: 5))
@@ -32,5 +33,22 @@ final class ModelDeliveryUITests: XCTestCase {
         XCTAssertFalse(app.buttons["consent.agree"].exists, "cannot agree to a download that has no host")
         app.buttons["consent.decline"].tap()
         XCTAssertTrue(notConfigured.waitForExistence(timeout: 5))
+    }
+
+    func testWithTheHostTheModelScreenOffersDownload() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeEphemeralKeychain", "-LoupeResetModelConsent"]
+        app.launch()
+        let entry = app.descendants(matching: .any)["me.model"]
+        XCTAssertTrue(entry.waitForExistence(timeout: 5))
+        entry.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["model.screen"].waitForExistence(timeout: 5))
+        if app.descendants(matching: .any)["model.ready"].waitForExistence(timeout: 1) {
+            throw XCTSkip("The model is on this simulator; Download is not offered.")
+        }
+        XCTAssertTrue(app.buttons["model.download"].waitForExistence(timeout: 5), "the host is set: Download is offered")
+        XCTAssertTrue(app.buttons["model.download"].label.contains("MB"))
+        XCTAssertTrue(app.switches["model.cellular"].exists)
+        XCTAssertFalse(app.descendants(matching: .any)["model.notConfigured"].exists)
     }
 }
