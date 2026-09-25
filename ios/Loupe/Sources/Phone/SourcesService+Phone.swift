@@ -169,12 +169,16 @@ extension SourcesService {
         phone[s, default: .init()].scanning = true
         phone[s, default: .init()].problem = nil
         defer { phone[s, default: .init()].scanning = false }
+        // The live run, centred in the Sources screen while this source is read (docs/LIVE-RUN-VIEW.md).
+        let run = SourceScanRun(source: s.rawValue, stage: s == .mail ? "act.stage.connecting" : "act.stage.walking")
+        let obs = run.observer
         do {
             switch s {
             case .photos:
                 let cacheId = PhoneSourceIds.shared.PHOTOS
                 var producer = PhotosProducer(library: deps.photos, recognizer: deps.recognizer)
                 producer.ocr = { OcrPolicy.current() }
+                producer.onItem = { done, total, read, ocr in run.item(done: done, of: total, read: read, ocr: ocr) }
                 let cached = library.cached(sourceId: cacheId)?.result
                 let prior = deps.state.state(s.rawValue)
                 let out = await Task.detached(priority: .utility) { await producer.scan(cached: cached, state: prior) }.value
@@ -182,8 +186,9 @@ extension SourcesService {
             case .files:
                 let deps = self.deps
                 let (files, shared) = try await runOffMain {
-                    (try FilesProducer(store: deps.bookmarks).scan(), try SharedInbox.scan(folder: deps.inbox()))
+                    (try FilesProducer(store: deps.bookmarks).scan(observer: obs), try SharedInbox.scan(folder: deps.inbox()))
                 }
+                run.ocrCount(Self.ocrItems(files.result))
                 try store(files, as: PhoneSourceIds.shared.FILES, for: s)
                 try store(shared, as: PhoneSourceIds.shared.SHARED, for: s)
             case .calendar:
@@ -197,19 +202,32 @@ extension SourcesService {
             case .mail:
                 guard let account = deps.mailAccounts.load() else {
                     phone[s, default: .init()].problem = "Add a mailbox first: tap Mail, then enter your server and an app password."
+                    run.fail()
                     return
                 }
                 let credential = try await mailCredential(account)
                 let producer = MailProducer(account: account, credential: credential, cacheRoot: deps.mailCache,
                                             makeTransport: deps.makeTransport)
-                let out = try await producer.scan(state: deps.state.state(s.rawValue))
+                let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: obs,
+                                                  fetched: { run.job.stage("act.stage.walking") })
                 try store(out, as: PhoneSourceIds.shared.MAIL, for: s)
             }
+            let st = state(s)
+            run.finish(items: st.itemCount, skipped: st.skippedCount)
         } catch let failure as IMAPClient.Failure {
-            phone[s, default: .init()].problem = failure.recovery
+            let host = deps.mailAccounts.load()?.host ?? ""
+            phone[s, default: .init()].problem = failure.recovery(host: host)
+            Log.mail.error("mail scan failed: kind=\(String(describing: failure.kind), privacy: .public) server=\(IMAPClient.Failure.brief(failure.detail), privacy: .public)")
+            run.fail()
         } catch {
             phone[s, default: .init()].problem = "The scan failed: \(error.localizedDescription)"
+            run.fail()
         }
+    }
+
+    /// Items whose text came from a picture (OCR): images and scanned PDFs with text.
+    nonisolated static func ocrItems(_ r: ScanResult) -> Int {
+        r.items.filter { $0.kind == .image && $0.hasText }.count
     }
 
     private func store(_ out: PhoneScanOutput, as cacheId: String, for s: PhoneSource) throws {
@@ -253,12 +271,13 @@ extension SourcesService {
         guard !host.isEmpty, host.range(of: #"^[a-z0-9.-]+$"#, options: .regularExpression) != nil else {
             throw PhoneSourceError("Enter the IMAP server name, e.g. imap.mail.me.com.")
         }
+        let secret = MailInput.secret(secret, host: host)
         guard !account.username.trimmingCharacters(in: .whitespaces).isEmpty, !secret.isEmpty else {
             throw PhoneSourceError("Enter the user name and the app password.")
         }
         var clean = account
         clean.host = host
-        clean.username = account.username.trimmingCharacters(in: .whitespaces)
+        clean.username = MailInput.username(account.username, host: host)
         if let old = deps.mailAccounts.load(), old != clean { removeMailData(old) }
         try deps.keychain(clean).save(secret)
         try deps.mailAccounts.save(clean)

@@ -37,7 +37,7 @@ class ActivityTest {
             listOf("scan", "email_run", "watchers", "model_load", "ocr", "ollama_pull", "feeds", "llm_job", "calibration", "mail_history"),
             ActivityNames.STATION_KINDS,
         )
-        assertEquals(listOf("judgments", "sort", "inbox", "flights", "game", "web_search"), ActivityNames.MOBILE_KINDS)
+        assertEquals(listOf("judgments", "sort", "inbox", "flights", "game", "web_search", "source_scan"), ActivityNames.MOBILE_KINDS)
         assertEquals(listOf("read", "decisions", "flagged", "to_you", "tokens"), ActivityNames.COUNTERS)
         assertEquals(listOf("accepted", "uncertain", "flagged", "skipped"), ActivityNames.GATES)
         assertEquals(listOf("laya", "rule", "baseline", "personal"), ActivityNames.SOURCES)
@@ -56,6 +56,7 @@ class ActivityTest {
         assertEquals(mapOf("accepted" to "outcome", "uncertain" to "review", "flagged" to "review", "skipped" to "rules"), LiveRun.FATE_END)
         assertEquals(LiveRun.SCAN, LiveRun.pipeFor("scan"))
         assertEquals(LiveRun.SCAN, LiveRun.pipeFor("inbox"))
+        assertEquals(LiveRun.SCAN, LiveRun.pipeFor("source_scan"))
         assertEquals(LiveRun.EMAIL, LiveRun.pipeFor("email_run"))
         assertEquals(LiveRun.WATCHERS, LiveRun.pipeFor("judgments"))
         assertNull(LiveRun.pipeFor("model_load"))

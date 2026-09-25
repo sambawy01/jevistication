@@ -48,18 +48,30 @@ protocol ItemResolving {
 struct LiveItemResolver: ItemResolving {
     var locator: PrivacyLocating
     var extraFiles: [String: URL] = [:]
+    /// The bundled sample's current location. The app bundle moves to a new container on every
+    /// install, so a sample path cached by an earlier install is rebased onto this one.
+    var sampleRoot: URL? = SourcesService.bundledSample()
+
+    /// Rebases a cached absolute path under an old bundle's `sample/` folder onto the current one.
+    static func rebaseSample(_ path: String, onto root: URL?) -> URL {
+        let old = URL(fileURLWithPath: path)
+        guard let root, !FileManager.default.fileExists(atPath: path),
+              let r = path.range(of: "/sample/", options: .backwards) else { return old }
+        return root.appendingPathComponent(String(path[r.upperBound...]))
+    }
 
     func target(for item: SourceItem) -> ItemTarget {
         if let url = extraFiles[item.id] { return .file(url, scope: nil) }
+        let isSample = item.sourceId == SourcesService.sampleId
         if item.kind == .email || item.id.hasPrefix("mail:") {
-            let url = URL(fileURLWithPath: item.path)
+            let url = isSample ? Self.rebaseSample(item.path, onto: sampleRoot) : URL(fileURLWithPath: item.path)
             var ref = MailHeaders.read(url, messageIndex: item.messageIndex.map { Int(truncating: $0) })
             if ref.headers.isEmpty { ref.headers = MailHeaders.fromFacts(item) }
             ref.file = item.messageIndex == nil && FileManager.default.fileExists(atPath: url.path) ? url : nil
             return .mail(ref)
         }
-        if item.sourceId == SourcesService.sampleId {
-            let url = URL(fileURLWithPath: item.path)
+        if isSample {
+            let url = Self.rebaseSample(item.path, onto: sampleRoot)
             return FileManager.default.fileExists(atPath: url.path) ? .file(url, scope: nil) : .unavailable("The sample file is missing.")
         }
         switch locator.access(for: item.id) {

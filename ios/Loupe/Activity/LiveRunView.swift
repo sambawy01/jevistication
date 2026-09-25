@@ -382,6 +382,11 @@ struct LiveCards: View {
                 }
             }
             card(ActStrings.t("act.card.shares"), icon: "person.3.sequence.fill") {
+                if let note = model.sharesNote {
+                    Text(note).font(.caption).foregroundStyle(Palette.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("liverun.shares.note")
+                }
                 ForEach(model.shares) { s in bar(s, color: Palette.source(s.id)) }
             }
             card(ActStrings.t("act.card.cost"), icon: "dollarsign.circle") {

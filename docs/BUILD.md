@@ -1129,6 +1129,34 @@ their acceptance criteria are met; entries here record increments toward them.
   Live run kind `web_search`, view `web` (docs/LIVE-RUN-VIEW.md). Model settings: the Web tab reads
   `features.flights`. Tests: `WebQuestionTest` (Kotlin), `WebLibraryTests`, `WebLibraryUITests`.
 
+- **2026-09-25 — iPhone device fixes: Open original for the sample, a live run for Sources scans, specific
+  Gmail errors, and an honest "Who answered" (owner report from the device).** Root causes and fixes:
+  (1) *"The sample file is missing."* The sample is scanned once and cached with absolute paths into the app
+  bundle (`/private/var/containers/Bundle/Application/<UUID>/Loupe.app/sample/…`); iOS gives the bundle a new
+  container UUID on every install, so after any reinstall the cached path no longer existed (the simulator
+  hid it because the test scanned fresh). `LiveItemResolver` now rebases a sample path (after its last
+  `/sample/`) onto the current `Bundle.main` sample, for documents and sample mail; Files (bookmarks) and
+  Photos (local ids) were never path-based. Test: `ItemReferenceTests.testSamplePathFromAnOldInstallIs…`.
+  (2) *Sources scans showed only "Reading…".* Photos, Files, the sample, Mail, Calendar and Contacts now run
+  a `source_scan` job (new mobile kind in `ActivityNames.MOBILE_KINDS`, drawn with Station's Folder Scan
+  loop; stage `act.stage.reading` → `read`) through `SourceScanRun`, shown in place at the top of Sources by
+  `LiveRunSection(view: "sources")`: real items read / pictures OCR'd / skipped (per photo from
+  `PhotosProducer.onItem`, per file from the common scanner's `ScanObserver`), done/total progress and the
+  registry's ETA; Reduce Motion as elsewhere. (3) *Gmail.* Probed imap.gmail.com:993 with a made-up address:
+  greeting `* OK Gimap ready`, `CAPABILITY … SASL-IR AUTH=XOAUTH2 AUTH=PLAIN …`, and quoted `LOGIN` is accepted
+  protocol-wise (`NO [AUTHENTICATIONFAILED] Invalid credentials (Failure)`), so no protocol bug; OAuth stays
+  gated on empty client IDs. Two input faults: Google shows app passwords as "abcd efgh ijkl mnop" and the
+  spaces (and a pasted newline) were sent as part of the password; a bare user name had no `@gmail.com`.
+  Both are now cleaned (`MailInput`), and every refusal is mapped from the server's own code/text to a
+  specific sentence (`IMAPClient.Failure.recovery(host:)`: app password needed, IMAP off in Gmail settings,
+  web sign-in confirmation, wrong user name or password). (4) *"Laya · multilingual 0, Rules 440".* That card
+  was a privacy check (440 files): the privacy check and mail triage are rules on iPhone by design
+  (`ActivityReport.recordScanned` / `recordEmail` record `rule` decisions), so Laya was not skipped. The card
+  now says "Rules-only feature: on iPhone this check uses rules, not Laya." with no Laya bar for `scan`,
+  `email_run`, `feeds`, `mail_history`, and "Reading only" for imports and source scans. DEBUG `-LoupeDiag`
+  prints `LOUPE-DIAG` lines (sample resolution, Laya open time, the Sources run's counters, the Gmail probe,
+  who answered in every finished job) for `devicectl … launch --console`.
+
 ## Where the build stands
 
 As of 2026-09-23. Everything below was built on JVM Kotlin: no iOS or Android build, no device.

@@ -58,6 +58,15 @@ struct LiveRunModel {
     let mascot: MascotState
     let statusLine: String
     let hasLoop: Bool
+    /// Set for features that never ask Laya on the phone (the privacy check, mail triage, imports, source
+    /// scans): the "Who answered" card shows this line instead of a Laya bar stuck at 0, which read as
+    /// "Laya was skipped" (owner report, 2026-09-25).
+    let sharesNote: String?
+
+    /// Kinds that are rules (or plain reading) on iPhone by design, whatever Model settings say.
+    static let rulesOnlyKinds: Set<String> = ["scan", "email_run", "inbox", "source_scan", "feeds", "mail_history"]
+    /// Kinds that only read items (no decisions at all).
+    static let readOnlyKinds: Set<String> = ["inbox", "source_scan"]
 
     /// [question] maps an opaque judgment question id (`j:…`) back to its name, on this device only.
     init(_ job: JobSnapshot, previous: JobSnapshot?, reference: CostReference, question: (String) -> String? = { _ in nil }) {
@@ -105,8 +114,16 @@ struct LiveRunModel {
         }
         self.nodes = nodes
 
-        counters = ["read", "decisions", "flagged", "to_you"].map {
-            Counter(id: $0, label: t("act.ctr.\($0)"), value: Int(job.counters[$0]?.int32Value ?? 0))
+        if Self.readOnlyKinds.contains(job.kind) {
+            // A source scan reads: items read, pictures OCR'd, items skipped.
+            let ocr = (job.meta["ocr_files"] as? NSNumber)?.intValue ?? 0
+            counters = [Counter(id: "read", label: t("act.ctr.read"), value: Int(job.counters["read"]?.int32Value ?? 0)),
+                        Counter(id: "ocr", label: t("act.ctr.ocr"), value: ocr),
+                        Counter(id: "skipped", label: t("act.ctr.skipped"), value: Int(job.gates["skipped"]?.int32Value ?? 0))]
+        } else {
+            counters = ["read", "decisions", "flagged", "to_you"].map {
+                Counter(id: $0, label: t("act.ctr.\($0)"), value: Int(job.counters[$0]?.int32Value ?? 0))
+            }
         }
         log = job.decisions.reversed().map { d in
             LogRow(id: Int(d.seq), question: d.q.map { Self.questionLabel($0, question) } ?? "—", answer: d.a ?? "—",
@@ -133,7 +150,17 @@ struct LiveRunModel {
             let n = Int(src[s]?.int32Value ?? 0)
             who.append(Share(id: s, label: t("act.share.\(s)"), count: n, fraction: answered == 0 ? 0 : Double(n) / Double(answered)))
         }
-        shares = who.filter { $0.id != "english" || $0.count > 0 }    // the phone has no English model
+        if Self.readOnlyKinds.contains(job.kind) {
+            shares = []
+            sharesNote = t("act.share.readOnly")
+        } else if Self.rulesOnlyKinds.contains(job.kind) {
+            // No Laya bar: Laya is not part of this feature on the phone, so "Laya 0" would mislead.
+            shares = who.filter { $0.id != "english" && $0.id != "multilingual" && ($0.id == "rule" || $0.count > 0) }
+            sharesNote = t("act.share.rulesOnly")
+        } else {
+            shares = who.filter { $0.id != "english" || $0.count > 0 }    // the phone has no English model
+            sharesNote = nil
+        }
         gates = shareRows(job.gates, keys: ["accepted", "uncertain", "flagged", "skipped"]) { t("act.gate.\($0)") }
 
         // Cost of asking: the contract's formula; nothing is ever called.

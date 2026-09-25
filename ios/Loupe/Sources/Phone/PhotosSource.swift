@@ -146,6 +146,8 @@ struct PhotosProducer {
     var extractors = AppleExtractors()
     /// `features.scan.ocr`: off reads a photo's metadata only. Default on (what the app did before).
     var ocr: () -> OcrPolicy = { OcrPolicy(enabled: true, maxPages: 1) }
+    /// Per photo: (done, total, read, text found by OCR). Drives the Sources live run.
+    var onItem: @Sendable (Int, Int, Bool, Bool) -> Void = { _, _, _, _ in }
 
     func scan(cached: ScanResult?, state: [String: String], cancelled: () -> Bool = { false }) async -> PhoneScanOutput {
         let assets = library.allAssets()
@@ -169,10 +171,12 @@ struct PhotosProducer {
             processed += 1
             guard let data = await library.imageData(localId: asset.localId) else {
                 skipped.append(Skipped(path: asset.fileName, reason: "not on this iPhone: the original is in iCloud only (Loupe does not download it)"))
+                onItem(processed, batch.count, false, false)
                 continue
             }
             let info = extractors.readImage(data: data)
             let text = ocrOn ? recognizer.recognize(data) : ""
+            onItem(processed, batch.count, true, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             let created = asset.created.map { ISOStamp.local($0) }
             let dims = info.facts["dimensions"] ?? (asset.pixelWidth > 0 ? "\(asset.pixelWidth)x\(asset.pixelHeight)" : nil)
             fresh.append(builder.photo(localId: asset.localId, name: asset.fileName, ocrText: text, createdIso: created,

@@ -252,6 +252,45 @@ final class PhoneSourcesTests: XCTestCase {
         }
     }
 
+    /// Gmail's real greeting and LOGIN refusal, captured from imap.gmail.com:993 on 2026-09-25 with a
+    /// made-up address; the three refusals Gmail sends map to specific, actionable sentences.
+    func testGmailRefusalsAreSpecific() async throws {
+        let greeting = "* OK Gimap ready for requests from 192.0.2.1 5b1f17b1804b1-49fe3f8a6afmb775981725e9\r\n"
+        let t = TranscriptTransport(steps: [
+            .server(Data(greeting.utf8)),
+            .client("L1 LOGIN \"someone@gmail.com\" \"abcdefghijklmnop\""),
+            .server(Data("L1 NO [AUTHENTICATIONFAILED] Invalid credentials (Failure)\r\n".utf8)),
+        ])
+        do {
+            _ = try await IMAPClient(transport: t).sync(username: "someone@gmail.com", credential: .password("abcdefghijklmnop"),
+                                                        knownUidValidity: nil, afterUid: 0, maxMessages: 10)
+            XCTFail("expected a failure")
+        } catch let f as IMAPClient.Failure {
+            XCTAssertNil(t.mismatch)
+            XCTAssertEqual(f.kind, .authentication)
+            let r = f.recovery(host: "imap.gmail.com")
+            XCTAssertTrue(r.contains("myaccount.google.com/apppasswords"), r)
+            XCTAssertTrue(r.contains("Invalid credentials"), r)
+        }
+        let asp = IMAPClient.Failure(kind: .authentication, detail: "NO [ALERT] Application-specific password required: https://support.google.com/accounts/answer/185833 (Failure)")
+        XCTAssertTrue(asp.recovery(host: "imap.gmail.com").hasPrefix("Gmail needs an app password"))
+        let off = IMAPClient.Failure(kind: .authentication, detail: "NO [ALERT] Your account is not enabled for IMAP use. Please visit your Gmail settings page and enable your account for IMAP access. (Failure)")
+        XCTAssertTrue(off.recovery(host: "imap.gmail.com").hasPrefix("IMAP is off in Gmail settings"))
+        let web = IMAPClient.Failure(kind: .authentication, detail: "NO [WEBALERT https://accounts.google.com/signin/continue?x] Web login required.")
+        XCTAssertTrue(web.recovery(host: "imap.gmail.com").contains("accounts.google.com"))
+        let other = IMAPClient.Failure(kind: .authentication, detail: "NO [AUTHENTICATIONFAILED] Authentication failed.")
+        XCTAssertTrue(other.recovery(host: "imap.fastmail.com").hasPrefix("Wrong user name or password"))
+    }
+
+    /// Google shows app passwords as "abcd efgh ijkl mnop"; pasted as shown, the spaces went to the server.
+    func testGmailAppPasswordAndUserNameAreCleaned() {
+        XCTAssertEqual(MailInput.secret(" abcd efgh ijkl mnop\n", host: "imap.gmail.com"), "abcdefghijklmnop")
+        XCTAssertEqual(MailInput.secret("pass word", host: "imap.fastmail.com"), "pass word")
+        XCTAssertEqual(MailInput.secret("my google pass", host: "imap.gmail.com"), "my google pass")
+        XCTAssertEqual(MailInput.username("someone", host: "imap.gmail.com"), "someone@gmail.com")
+        XCTAssertEqual(MailInput.username(" a@b.com ", host: "imap.mail.me.com"), "a@b.com")
+    }
+
     // MARK: Mail through the service: Keychain, incremental UIDs, Online labels, off switch
 
     @MainActor

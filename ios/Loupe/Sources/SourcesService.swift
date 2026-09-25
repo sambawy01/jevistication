@@ -101,7 +101,9 @@ final class SourcesService: ObservableObject {
         }
         progress = Progress(seen: 0, total: 0, current: "")
         problem = nil
+        let run = SourceScanRun(source: "sample")
         let observer = Observer { [weak self] p in
+            run.scanned(p)
             Task { @MainActor in
                 guard let self, self.progress != nil else { return }
                 self.progress = Progress(seen: Int(p.filesSeen), total: Int(p.filesTotal), current: p.current)
@@ -115,8 +117,13 @@ final class SourcesService: ObservableObject {
             Task { @MainActor in
                 self.progress = nil
                 switch outcome {
-                case .success(let scan): self.sampleScan = scan; self.revision += 1
-                case .failure(let error): self.problem = "Scan failed: \(error.localizedDescription)"
+                case .success(let scan):
+                    self.sampleScan = scan; self.revision += 1
+                    run.ocrCount(Self.ocrItems(scan.result))
+                    run.finish(items: scan.result.items.count, skipped: scan.result.skipped.count)
+                case .failure(let error):
+                    self.problem = "Scan failed: \(error.localizedDescription)"
+                    run.fail()
                 }
             }
         }

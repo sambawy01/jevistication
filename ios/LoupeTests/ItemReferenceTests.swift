@@ -78,6 +78,19 @@ final class ItemReferenceTests: XCTestCase {
         XCTAssertEqual(why, "gone")
     }
 
+    /// Device bug (2026-09-25): the sample's cached paths point into the previous install's bundle
+    /// container, so "Open original" said the sample file was missing after every reinstall.
+    func testSamplePathFromAnOldInstallIsRebasedOntoTheCurrentBundle() throws {
+        let root = dir.appendingPathComponent("NewBundle.app/sample")
+        let file = root.appendingPathComponent("documents/identity/passport-scan-SPECIMEN.txt")
+        try FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try "x".write(to: file, atomically: true, encoding: .utf8)
+        let stale = "/private/var/containers/Bundle/Application/OLD-UUID/Loupe.app/sample/documents/identity/passport-scan-SPECIMEN.txt"
+        var r = LiveItemResolver(locator: FakeLocator(folder: dir))
+        r.sampleRoot = root
+        XCTAssertEqual(r.target(for: item("sample:documents/identity/passport-scan-SPECIMEN.txt", path: stale, source: SourcesService.sampleId)).fileURL?.standardizedFileURL, file.standardizedFileURL)
+    }
+
     func testLiveResolverMapsPhotosFilesSampleAndMail() throws {
         let r = LiveItemResolver(locator: FakeLocator(folder: dir))
         XCTAssertEqual(r.target(for: item("photos:ABC", kind: .image)), .photo(localId: "ABC"))
@@ -168,4 +181,8 @@ final class ItemReferenceTests: XCTestCase {
         let f = item("files:loc/Receipts/a.pdf", path: "/tmp/Receipts/a.pdf")
         XCTAssertEqual(f.sourceAndFolder, "Files · Receipts")
     }
+}
+
+private extension ItemTarget {
+    var fileURL: URL? { if case .file(let u, _) = self { return u }; return nil }
 }

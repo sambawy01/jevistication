@@ -64,6 +64,9 @@ struct RootView: View {
         .onAppear {
             selection = initialTab
             sources.start()
+            #if DEBUG
+            DeviceDiag.run(sources)
+            #endif
             let launch = LaunchOptions.current
             launcher.seed = launch.gameSeed
             if let game = launch.game {

@@ -312,6 +312,11 @@ final class GameController: ObservableObject {
             job.gate("accepted", dr)
         }
         if df > 0 { job.count("read", df); job.gate("skipped", df) }
+        #if DEBUG
+        if DeviceDiag.enabled, dm + dr + df > 0, (h.modelDecisions + h.mechanical) / 20 != (reported.model + reported.mechanical) / 20 {
+            DeviceDiag.say("game model=\(h.modelDecisions) rules=\(h.mechanical) failures=\(h.failures)")
+        }
+        #endif
         reported = (h.modelDecisions, h.mechanical, h.failures)
         if h.over {
             job.finish("done", "act.res.game", ["score": h.score, "rows": h.rows])

@@ -6,10 +6,16 @@ import SwiftUI
 /// with its switch, permission state, count, last scan and any error with what to do about it.
 struct SourcesView: View {
     @ObservedObject var sources: SourcesService
+    @ObservedObject private var center = ActivityCenter.shared
 
     var body: some View {
         NavigationStack {
             List {
+                // The live run of the source being read, in place at the top of the screen (docs/LIVE-RUN-VIEW.md).
+                if center.latest("sources")?.running == true {
+                    NeonSection { LiveRunSection(view: "sources", whileRunning: true).listRowInsets(EdgeInsets()) }
+                        .accessibilityIdentifier("sources.liverun")
+                }
                 NeonSection {
                     sampleRow
                 } header: {

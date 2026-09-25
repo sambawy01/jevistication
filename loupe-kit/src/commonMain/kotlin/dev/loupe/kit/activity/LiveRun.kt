@@ -85,7 +85,7 @@ object LiveRun {
      */
     fun pipeFor(kind: String): LivePipe? = when (kind) {
         "email_run" -> EMAIL
-        "scan", "inbox" -> SCAN
+        "scan", "inbox", "source_scan" -> SCAN
         "mail_history" -> HISTORY
         "watchers", "judgments", "sort", "flights", "game", "web_search" -> WATCHERS
         else -> null
@@ -107,7 +107,7 @@ object LiveRun {
         "act.stage.refining" to listOf("review"), "act.stage.finishing" to listOf("outcome"),
         // the phone's own stage keys (docs/LIVE-RUN-VIEW.md)
         "act.stage.ranking" to listOf("read"), "act.stage.playing" to listOf("read"),
-        "act.stage.importing" to listOf("walk"),
+        "act.stage.importing" to listOf("walk"), "act.stage.reading" to listOf("read"),
     )
 
     /** The lit node for a running job, or null (a finished job lights none). */

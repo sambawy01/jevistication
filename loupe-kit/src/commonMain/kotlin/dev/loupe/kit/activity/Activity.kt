@@ -30,7 +30,7 @@ object ActivityNames {
     )
 
     /** The phone's own kinds (docs/LIVE-RUN-VIEW.md). */
-    val MOBILE_KINDS: List<String> = listOf("judgments", "sort", "inbox", "flights", "game", "web_search")
+    val MOBILE_KINDS: List<String> = listOf("judgments", "sort", "inbox", "flights", "game", "web_search", "source_scan")
     val KINDS: List<String> = STATION_KINDS + MOBILE_KINDS
 
     val STATES: List<String> = listOf("running", "done", "error", "cancelled")

@@ -93,7 +93,7 @@ struct FilesProducer {
     let store: BookmarkStore
     var extractors = AppleExtractors.live()
 
-    func scan() throws -> PhoneScanOutput {
+    func scan(observer: ScanObserver = NullScanObserver()) throws -> PhoneScanOutput {
         var roots: [SourceRoot] = []
         var scoped: [URL] = []
         var unavailable: [Skipped] = []
@@ -126,16 +126,16 @@ struct FilesProducer {
                 }
             }
         }
-        let result = try SourceScanner(extractors: extractors).scan(sources: roots, observer: NullScanObserver())
+        let result = try SourceScanner(extractors: extractors).scan(sources: roots, observer: observer)
         return PhoneScanOutput(result: .of(result.items, skipped: result.skipped, unavailable: result.unavailable + unavailable))
     }
 }
 
 extension SharedInbox {
     /// Everything in the inbox, read by the common scanner as the `shared` source.
-    static func scan(folder: URL, extractors: AppleExtractors = AppleExtractors.live()) throws -> PhoneScanOutput {
+    static func scan(folder: URL, extractors: AppleExtractors = AppleExtractors.live(), observer: ScanObserver = NullScanObserver()) throws -> PhoneScanOutput {
         let root = SourceRoot(id: PhoneSourceIds.shared.SHARED, type: .folder, path: folder.path, idPrefix: "shared:")
-        let result = try SourceScanner(extractors: extractors).scan(sources: [root], observer: NullScanObserver())
+        let result = try SourceScanner(extractors: extractors).scan(sources: [root], observer: observer)
         return PhoneScanOutput(result: result)
     }
 }
