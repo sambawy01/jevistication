@@ -97,6 +97,8 @@ struct NowView: View {
                         }
                     }
                 }
+                // The game sits high on Now so it is found at once (owner, 2026-09-25).
+                PlayCard { launcher.open($0) }
                 // Runs that belong to Now, live and in place: the passive sort and the watchers.
                 LiveRunSection(view: "now", whileRunning: true).padding(.horizontal, 16)
                 LiveRunSection(view: "watchers", whileRunning: true).padding(.horizontal, 16)
@@ -124,7 +126,6 @@ struct NowView: View {
                     .padding(.horizontal, 16)
                     .accessibilityIdentifier("now.mail")
                 findingsSection
-                PlayCard { launcher.open($0) }
             }
             .padding(.bottom, 24)
         }

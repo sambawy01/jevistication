@@ -14,6 +14,24 @@ object GameSessions {
     /** The scripted baseline, computed in step so it is deterministic (as the desktop game does). */
     fun baseline(seed: Long): GameSession = GameSession(seed, Control.Piloted(LockstepDecider(BaselinePilot(), 0)))
 
+    /** [human] on [difficulty]. */
+    fun humanOn(seed: Long, difficulty: Difficulty): GameSession = GameSession(seed, Control.Human, difficulty = difficulty)
+
+    /** [baseline] on [difficulty]. */
+    fun baselineOn(seed: Long, difficulty: Difficulty): GameSession =
+        GameSession(seed, Control.Piloted(LockstepDecider(BaselinePilot(), 0)), difficulty = difficulty)
+
+    /** [hosted] on [difficulty]. */
+    fun hostedOn(seed: Long, decider: HostedDecider, decisionInterval: Int, difficulty: Difficulty): GameSession =
+        GameSession(seed, Control.Piloted(decider), decisionInterval = decisionInterval, difficulty = difficulty)
+
+    /** The difficulty by name ("classic", "progressive", "rush"), with [levelRows] rows a level. */
+    fun difficulty(name: String, levelRows: Int): Difficulty = when (name) {
+        "rush" -> Difficulty.rush(levelRows)
+        "progressive" -> Difficulty.progressive(levelRows)
+        else -> Difficulty.CLASSIC
+    }
+
     /** A pilot the host runs off the simulation thread through [decider]. */
     fun hosted(seed: Long, decider: HostedDecider, decisionInterval: Int = GameSession.DEFAULT_DECISION_INTERVAL): GameSession =
         GameSession(seed, Control.Piloted(decider), decisionInterval = decisionInterval)

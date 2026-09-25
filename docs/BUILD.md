@@ -1090,6 +1090,29 @@ their acceptance criteria are met; entries here record increments toward them.
   simulator, incl. no text / names / paths in a real privacy check's job), `LoupeTests/LiveRunTests.swift`,
   `LoupeUITests/LiveRunUITests.swift` (counters move; Reduce Motion variant; design screenshots to
   `~/.gstack/projects/sambawy01-jevistication/designs/ios-v2-dark/`). DEBUG `-LoupeSlowJobs` paces items 150 ms.
+- **2026-09-25 — Riverflight gets faster and harder: a speed showcase (owner request).** `:game`
+  `Difficulty` is a pure function of the river row index (classic / progressive / rush), so every
+  seed stays deterministic (all randomness from the seed, in row order) and the classic parity
+  goldens do not move. Every 200 rows a level: scroll and sideways speed +12%, fuel drain +12%,
+  depots further apart, bridges closer (min 80 rows), denser enemies (from L4), narrower channels
+  (from L3); passability is checked per level in `DifficultyTest`, whose digests are pinned on the
+  JVM and the iOS simulator. The decision cadence rises with the square of the speed (10/s at L1 to
+  30/s from L6), floored by `features.game.max_decisions_per_s`; `DecisionStats` counts requested,
+  late requests, dropped slots and late answers. iOS: LEVEL in the HUD with a level-up flash (still
+  under Reduce Motion, announced to VoiceOver), a RUSH toggle (starts at L4), a compact speed panel
+  (live decisions/s vs asked, p50/p95, peak, latency sparkline, asked/answered/dropped/late, fps,
+  "On this phone, no internet") and a results card at the end of a Laya run (max sustained
+  decisions/s, totals, p50/p95, rows per level, Laya vs the baseline on the same seed). Device bugs
+  fixed at the root: (1) the full live run pipeline rendered under the river and animated in a loop
+  all game long; the game screen now shows only the stable speed panel (the run still reports to
+  the activity center, once a second); (2) no model is a banner above the river, "Laya not
+  installed — the baseline pilot is flying", linking Me → Laya model; (3) 21 fps: each 10 Hz HUD
+  refresh republished the controller that owns the `SpriteView`, re-rendering the whole game view
+  with its glow shadows, numeric transitions and the live run section. The HUD now lives in two
+  `HUDStore`s observed only by leaf views (top bar 10 Hz, panel 5 Hz), and nothing live-updating
+  animates or casts a shadow. Simulator (iPhone 17 Pro Max, Laya flying): 60 fps steady, 10–14 decisions/s, p50 ~63 ms, p95 ~82 ms. Also reverted an
+  unintended change dropping the Share Extension's App Group entitlement, and the live run UI test
+  now scrolls to the privacy card, since the Play card sits high on Now.
 
 ## Where the build stands
 

@@ -73,7 +73,7 @@ data class Row(
  * Generation is strictly sequential and depends on nothing but the seed, so any code that reads row
  * `n` — the live game, a look-ahead copy of it, a test — sees the same row.
  */
-class RiverGenerator(seed: Long) {
+class RiverGenerator(seed: Long, val difficulty: Difficulty = Difficulty.CLASSIC) {
     private val random = Random(seed)
     private val noiseOffset = random.nextDouble(0.0, 1000.0)
     private var bank = 3
@@ -83,10 +83,11 @@ class RiverGenerator(seed: Long) {
 
     fun next(): Row {
         val i = index++
-        val nearBridge = bridgeDistance(i) <= BRIDGE_APPROACH
+        val level = difficulty.level(i)
+        val nearBridge = distanceToBridge(i) <= BRIDGE_APPROACH
 
         val n = abs(Noise.perlin(noiseOffset * FREQUENCY, (i + noiseOffset) * FREQUENCY))
-        var bankTarget = (1 + floor(n * Rules.HALF).toInt()).coerceIn(MIN_BANK, MAX_BANK)
+        var bankTarget = (1 + floor(n * Rules.HALF).toInt()).coerceIn(MIN_BANK, difficulty.maxBank(level))
         var islandTarget = (Rules.HALF - bankTarget - ISLAND_GAP).coerceAtLeast(0)
         if (i < Rules.SAFE_START_ROWS) {
             bankTarget = 3
@@ -96,12 +97,12 @@ class RiverGenerator(seed: Long) {
         // No island while the banks close in on a bridge, nor while they open out after it: an
         // island rising dead centre just past a bridge, where every pilot has lined up to shoot it,
         // is a trap rather than a challenge.
-        if (bridgeDistance(i) <= BRIDGE_APPROACH + ISLAND_CLEARANCE) islandTarget = 0
+        if (distanceToBridge(i) <= BRIDGE_APPROACH + ISLAND_CLEARANCE) islandTarget = 0
 
         bank += (bankTarget - bank).coerceIn(-MAX_WALL_STEP, MAX_WALL_STEP)
         islandHalf += (islandTarget - islandHalf).coerceIn(-MAX_WALL_STEP, MAX_WALL_STEP)
         // Clamped after the bank moved, so a widening bank squeezes the island, never the channel.
-        islandHalf = islandHalf.coerceIn(0, (Rules.HALF - bank - MIN_CHANNEL).coerceAtLeast(0))
+        islandHalf = islandHalf.coerceIn(0, (Rules.HALF - bank - difficulty.minChannel(level)).coerceAtLeast(0))
 
         val row = Row(
             index = i,
@@ -109,22 +110,23 @@ class RiverGenerator(seed: Long) {
             right = bank,
             islandFrom = Rules.HALF - islandHalf,
             islandTo = Rules.HALF + islandHalf,
-            bridge = i > 0 && i % BRIDGE_EVERY == 0,
+            bridge = isBridge(i),
             spawns = emptyList(),
         )
         return row.copy(spawns = spawnsFor(row))
     }
 
     private fun spawnsFor(row: Row): List<Spawn> {
-        if (row.index < Rules.SAFE_START_ROWS || bridgeDistance(row.index) <= NO_SPAWN_NEAR_BRIDGE) {
+        val level = difficulty.level(row.index)
+        if (row.index < Rules.SAFE_START_ROWS || distanceToBridge(row.index) <= NO_SPAWN_NEAR_BRIDGE) {
             // Skipping the random draws here is still deterministic: generation is sequential.
             return emptyList()
         }
         val spawns = mutableListOf<Spawn>()
         if (row.index >= nextDepotRow) {
             spawns += Spawn.Depot(placeIn(row, DEPOT_MARGIN))
-            nextDepotRow = row.index + random.nextInt(DEPOT_GAP_MIN, DEPOT_GAP_MAX + 1)
-        } else if (row.index % ENEMY_EVERY == 0 && random.nextDouble() < ENEMY_CHANCE) {
+            nextDepotRow = row.index + random.nextInt(difficulty.depotGapMin(level), difficulty.depotGapMax(level) + 1)
+        } else if (row.index % difficulty.enemyEvery(level) == 0 && random.nextDouble() < difficulty.enemyChance(level)) {
             val heli = random.nextDouble() < HELI_SHARE
             val kind = if (heli) EnemyKind.HELI else EnemyKind.BOAT
             val moving = heli || random.nextDouble() < MOVING_BOAT_SHARE
@@ -132,6 +134,38 @@ class RiverGenerator(seed: Long) {
             spawns += Spawn.Enemy(kind, placeIn(row, kind.width / 2 + 0.5), if (moving) direction * kind.speed else 0.0)
         }
         return spawns
+    }
+
+    /**
+     * Bridge rows for a progressive river: each one [Difficulty.bridgeSpacing] rows after the last,
+     * at the level of the last. Pure arithmetic on row indices, grown on demand.
+     */
+    private val bridgeRows = arrayListOf(0)
+
+    private fun growBridgesPast(i: Int) {
+        while (bridgeRows.last() <= i + BRIDGE_EVERY) {
+            val last = bridgeRows.last()
+            bridgeRows += last + difficulty.bridgeSpacing(difficulty.level(last))
+        }
+    }
+
+    fun isBridge(i: Int): Boolean {
+        if (!difficulty.progressive) return i > 0 && i % BRIDGE_EVERY == 0
+        if (i <= 0) return false
+        growBridgesPast(i)
+        return bridgeRows.binarySearch(i) >= 0
+    }
+
+    /** Rows to the nearest bridge row, as [bridgeDistance] for this river's difficulty. */
+    fun distanceToBridge(i: Int): Int {
+        if (!difficulty.progressive) return bridgeDistance(i)
+        growBridgesPast(i)
+        val at = bridgeRows.binarySearch(i)
+        val belowIdx = if (at >= 0) at else -at - 2
+        val below = bridgeRows[belowIdx]
+        val above = bridgeRows[belowIdx + 1]
+        val dBelow = if (below == 0) Int.MAX_VALUE else i - below
+        return minOf(dBelow, above - i)
     }
 
     /** A random column inside one of the row's channels, at least [margin] from its walls. */
@@ -184,8 +218,8 @@ class RiverGenerator(seed: Long) {
  * generation is sequential, so whichever copy asks first produces exactly the row the others would.
  * Not thread-safe — it is only touched from the simulation thread; pilots receive an [Observation].
  */
-class River(val seed: Long) {
-    private val generator = RiverGenerator(seed)
+class River(val seed: Long, val difficulty: Difficulty = Difficulty.CLASSIC) {
+    private val generator = RiverGenerator(seed, difficulty)
     private val rows = ArrayList<Row>()
 
     fun row(index: Int): Row {

@@ -29,8 +29,8 @@ class World private constructor(
     private val bulletsList: MutableList<Bullet>,
     val tally: Tally,
 ) {
-    constructor(seed: Long) : this(
-        river = River(seed),
+    constructor(seed: Long, difficulty: Difficulty = Difficulty.CLASSIC) : this(
+        river = River(seed, difficulty),
         tick = 0,
         cameraY = 0.0,
         playerX = Rules.HALF.toDouble(),
@@ -71,6 +71,11 @@ class World private constructor(
     var death: DeathCause? = null; private set
 
     val over: Boolean get() = death != null
+
+    val difficulty: Difficulty get() = river.difficulty
+
+    /** The level of the river under the camera (1 for [Difficulty.CLASSIC]). */
+    val level: Int get() = river.difficulty.levelAt(cameraY)
     val playerY: Double get() = cameraY + Rules.PLAYER_ROW
     val weaponReady: Boolean get() = cooldown == 0
 
@@ -97,8 +102,10 @@ class World private constructor(
         eventsList.clear()
         if (over) return
         tick++
+        val level = this.level
+        val d = river.difficulty
 
-        playerX = (playerX + action.steer * Rules.LATERAL * Rules.DT)
+        playerX = (playerX + action.steer * d.lateral(level) * Rules.DT)
             .coerceIn(Rules.PLAYER_W / 2, Rules.COLUMNS - Rules.PLAYER_W / 2)
         if (cooldown > 0) cooldown--
         if (action.fire && cooldown == 0) {
@@ -107,13 +114,15 @@ class World private constructor(
             tally.shotsFired++
         }
 
-        cameraY += Rules.SCROLL * Rules.DT
+        cameraY += d.scroll(level) * Rules.DT
         spawnAhead()
         moveEnemies()
         moveBullets()
-        burnFuel()
+        burnFuel(d.fuelDrain(level))
         collide()
         cull()
+        val now = this.level
+        if (now > level && !over) eventsList += GameEvent.LevelUp(now, floor(cameraY).toInt())
     }
 
     fun copy(): World = World(
@@ -240,13 +249,13 @@ class World private constructor(
         eventsList += GameEvent.Destroyed(what, x, y, points)
     }
 
-    private fun burnFuel() {
+    private fun burnFuel(drainPerS: Double) {
         val plane = player
         if (depotsList.any { it.alive && it.overlaps(plane) }) {
             fuel = (fuel + Rules.FUEL_REFILL_PER_S * Rules.DT).coerceAtMost(Rules.FUEL_MAX)
             tally.refuelTicks++
         } else {
-            fuel = (fuel - Rules.FUEL_DRAIN_PER_S * Rules.DT).coerceAtLeast(0.0)
+            fuel = (fuel - drainPerS * Rules.DT).coerceAtLeast(0.0)
         }
     }
 

@@ -180,6 +180,7 @@ class GameController(
             when (event) {
                 is GameEvent.Destroyed -> lane.effects += Effect(event.x, event.y, event.what == "bridge")
                 is GameEvent.Died -> lane.effects += Effect(event.x, event.y, true)
+                is GameEvent.LevelUp -> Unit // the desktop game flies the classic river
             }
         }
         lane.effects.forEach { it.age++ }

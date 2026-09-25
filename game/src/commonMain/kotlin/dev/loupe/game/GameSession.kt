@@ -42,12 +42,14 @@ class GameSession(
     overrideEnabled: Boolean = true,
     /** The clock throughput is measured against: wall time live, simulation time headless. */
     private val clock: () -> Long = GameClock::nanoTime,
+    /** How the river hardens with rows flown; [Difficulty.CLASSIC] is the original game. */
+    val difficulty: Difficulty = Difficulty.CLASSIC,
 ) : AutoCloseable {
     init {
         require(decisionInterval >= 1) { "decision interval must be at least one tick, was $decisionInterval" }
     }
 
-    val world: World = World(seed)
+    val world: World = World(seed, difficulty)
     val stats: DecisionStats = DecisionStats()
 
     @Volatile var threshold: Double = threshold
@@ -59,6 +61,23 @@ class GameSession(
     @Volatile var human: HumanInput = HumanInput()
 
     @Volatile var overrideEnabled: Boolean = overrideEnabled
+
+    /**
+     * A floor on the interval, in ticks, from a host's cap (Model settings'
+     * `features.game.max_decisions_per_s`): the game never asks faster than this. 1 = no cap.
+     */
+    @Volatile var minInterval: Int = 1
+        set(value) {
+            require(value >= 1) { "min interval must be at least one tick, was $value" }
+            field = value
+        }
+
+    /** Ticks between decision requests right now: the level's cadence, held to [minInterval]. */
+    val currentInterval: Int
+        get() = maxOf(difficulty.decisionInterval(world.level, decisionInterval), minInterval)
+
+    /** Decisions per second the game is asking for right now. */
+    val askedPerSecond: Double get() = Rules.TICK_HZ.toDouble() / currentInterval
 
     /** The decision being flown, or null before the first one lands. */
     var current: PilotDecision? = null; private set
@@ -89,7 +108,11 @@ class GameSession(
                 val legal = Mechanics.legalActions(world)
                 pendingLegal = legal
                 decider.submit(Observation.of(world, legal))
-                nextRequestTick = world.tick + decisionInterval
+                val interval = currentInterval
+                // Honest accounting: a request that goes out after it was due is late, and every
+                // whole interval that passed with the pilot still busy was a decision not made.
+                stats.recordRequest(dueTick = nextRequestTick, sentTick = world.tick, interval = interval)
+                nextRequestTick = world.tick + interval
             }
         }
 
@@ -125,6 +148,7 @@ class GameSession(
         val top = decision.topProbability
         handedOff = decision.source == DecisionSource.MODEL && top != null && top < threshold
         if (handedOff) stats.recordHandOff()
+        stats.recordLanding(world.tick - decision.observedTick, currentInterval)
     }
 
     override fun close() {

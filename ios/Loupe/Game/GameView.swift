@@ -27,6 +27,7 @@ struct GameView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 topBar
+                if game.mode == .watch, case .baseline = game.pilot { pilotBanner }
                 river
                 panel
             }
@@ -73,6 +74,18 @@ struct GameView: View {
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("game.mode")
 
+                Button { game.setRush(!game.rush) } label: {
+                    Text("RUSH").font(Typeface.mono(11, weight: .bold)).tracking(0.8)
+                        .padding(.horizontal, 10).frame(height: 34)
+                        .background(game.rush ? Palette.amber.opacity(0.28) : Palette.overlayInk.opacity(0.12), in: Capsule())
+                        .overlay(Capsule().stroke(game.rush ? Palette.amber : .clear, lineWidth: 1))
+                }
+                .foregroundStyle(game.rush ? Palette.amber : Palette.overlayInk)
+                .accessibilityLabel("Rush mode")
+                .accessibilityValue(game.rush ? "on, starts at level \(Difficulty.companion.RUSH_START)" : "off")
+                .accessibilityHint("Restarts the river")
+                .accessibilityIdentifier("game.rush")
+
                 Button { game.setPaused(!game.paused) } label: {
                     Image(systemName: game.paused ? "play.fill" : "pause.fill").font(.system(size: 14, weight: .bold))
                         .frame(width: 34, height: 34)
@@ -82,52 +95,13 @@ struct GameView: View {
                 .accessibilityLabel(game.paused ? "Resume" : "Pause")
                 .accessibilityIdentifier("game.pause")
             }
-            HStack(alignment: .firstTextBaseline) {
-                stat("SCORE", "\(game.hud.score)", id: "game.score")
-                Spacer()
-                MascotView(state: game.hud.over ? .empty : (game.mode == .watch ? .scanning : .watching), size: 44)
-                    .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 6 }
-                Spacer()
-                fuelGauge
-                Spacer()
-                stat("ROWS", "\(game.hud.rows)", id: "game.rows", alignment: .trailing)
-            }
+            TopStats(store: game.top, watching: game.mode == .watch)
         }
         .padding(.horizontal, 16)
         .padding(.top, 8)
         .padding(.bottom, 10)
         .background(LinearGradient(colors: [Palette.navyTop, Palette.navyBottom], startPoint: .top, endPoint: .bottom)
             .ignoresSafeArea(edges: .top))
-    }
-
-    private func stat(_ label: String, _ value: String, id: String, alignment: HorizontalAlignment = .leading) -> some View {
-        VStack(alignment: alignment, spacing: 0) {
-            Text(label).font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.overlayInk.opacity(0.65))
-            Text(value).font(Typeface.display(30)).monospacedDigit().foregroundStyle(Palette.cyan)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(label.capitalized)
-        .accessibilityValue(value)
-        .accessibilityIdentifier(id)
-    }
-
-    private var fuelGauge: some View {
-        let fuel = game.hud.fuelPercent
-        let low = Double(fuel) < Rules.shared.FUEL_LOW
-        return VStack(spacing: 4) {
-            Text("FUEL").font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.overlayInk.opacity(0.65))
-            ZStack(alignment: .leading) {
-                Capsule().fill(Palette.overlayInk.opacity(0.15))
-                Capsule().fill(low ? Palette.amber : Palette.mint)
-                    .frame(width: 110 * CGFloat(fuel) / 100)
-            }
-            .frame(width: 110, height: 8)
-            Text("\(fuel)%").font(Typeface.mono(11)).foregroundStyle(Palette.overlayInk.opacity(0.85))
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Fuel")
-        .accessibilityValue(low ? "\(fuel) percent, low" : "\(fuel) percent")
-        .accessibilityIdentifier("game.fuel")
     }
 
     // MARK: River
@@ -152,8 +126,10 @@ struct GameView: View {
                     .accessibilityLabel(riverLabel)
                     .accessibilityIdentifier("game.river")
                     .accessibilityAddTraits(.allowsDirectInteraction)
+                if let level = game.levelFlash, !game.paused { LevelFlash(level: level, reducedMotion: reducedMotion) }
                 if game.paused { pausedOverlay }
-                else if game.hud.over { overOverlay }
+                else if let r = game.results { ResultsCard(results: r, seed: game.seed, onNext: { game.newRiver() }) }
+                else { OverOverlay(store: game.top, human: game.mode == .human, onAgain: { game.newRiver() }) }
             }
         }
         .aspectRatio(CGFloat(GameController.columns) / CGFloat(GameController.viewRows), contentMode: .fit)
@@ -197,30 +173,15 @@ struct GameView: View {
         .accessibilityIdentifier("game.paused")
     }
 
-    private var overOverlay: some View {
-        VStack(spacing: 8) {
-            Text(game.hud.death ?? "Run over").font(Typeface.display(28)).foregroundStyle(Palette.overlayInk)
-            Text("Score \(game.hud.score) · \(game.hud.rows) rows").font(Typeface.mono(13)).foregroundStyle(Palette.overlayInk.opacity(0.85))
-            if game.mode == .human {
-                Button("Fly again") { game.newRiver() }.buttonStyle(.neonPrimary)
-                    .accessibilityIdentifier("game.again")
-            } else {
-                Text("Next river in a moment…").font(.footnote).foregroundStyle(Palette.overlayInk.opacity(0.75))
-            }
-        }
-        .padding(20)
-        .background(Palette.navyTop.opacity(0.85), in: RoundedRectangle(cornerRadius: 16))
-    }
-
     // MARK: Panel
 
     @ViewBuilder
     private var panel: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
+                // A compact, stable panel: it redraws only its numbers (5 Hz), never moves or
+                // scrolls on its own. The full live run pipeline stays on Now, not here.
                 if game.mode == .human { humanPanel } else { watchPanel }
-                // The pilot's live run, in place under the river: its decisions, who made them, where they went.
-                LiveRunSection(view: "game")
             }
             .padding(16)
         }
@@ -263,129 +224,37 @@ struct GameView: View {
 
     @ViewBuilder
     private var watchPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Caption(text: game.pilot == .laya ? "Laya is flying" : "Baseline autopilot is flying")
-                Spacer()
-                if game.pilot == .laya { Pill(text: "On device", color: Palette.mint, symbol: "cpu") }
-            }
-            switch game.pilot {
-            case .opening:
-                Label("Checking and opening Laya… the baseline flies meanwhile.", systemImage: "hourglass")
-                    .font(.footnote).foregroundStyle(Palette.inkSoft)
-            case .baseline where ModelSettingsService.shared.wasLayaOff(Features.shared.GAME):
-                LayaOffBanner(feature: Features.shared.GAME)
-            case .baseline(let reason):
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(reason).font(.footnote).foregroundStyle(Palette.ink)
-                    NavigationLink { LayaModelView() } label: {
-                        Label("Me → Laya model", systemImage: "arrow.down.circle")
-                            .font(Typeface.mono(12, weight: .medium))
-                    }
-                    .accessibilityIdentifier("game.getModel")
+        if case .baseline = game.pilot, ModelSettingsService.shared.wasLayaOff(Features.shared.GAME) {
+            LayaOffBanner(feature: Features.shared.GAME)
+        } else if game.pilot == .opening {
+            Label("Checking and opening Laya… the baseline flies meanwhile.", systemImage: "hourglass")
+                .font(.footnote).foregroundStyle(Palette.inkSoft)
+        }
+        SpeedPanel(store: game.panel, laya: game.pilot == .laya, seed: game.seed)
+    }
+
+    /// Watch mode without Laya: said once, plainly, above the river, with the way to fix it.
+    private var pilotBanner: some View {
+        let reason: String = { if case .baseline(let r) = game.pilot { return r } else { return "" } }()
+        return HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Palette.amber).accessibilityHidden(true)
+            Text(reason).font(.footnote.weight(.semibold)).foregroundStyle(Palette.overlayInk)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            if !ModelSettingsService.shared.wasLayaOff(Features.shared.GAME) {
+                NavigationLink { LayaModelView() } label: {
+                    Text("Me → Laya model").font(Typeface.mono(12, weight: .semibold)).foregroundStyle(Palette.amber)
                 }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Palette.amber.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("game.noModel")
-            default:
-                EmptyView()
-            }
-            Text(game.hud.source).font(.footnote).foregroundStyle(Palette.inkSoft)
-                .accessibilityIdentifier("game.source")
-            bars
-            readouts
-        }
-        .card()
-        if game.pilot == .laya { scoreboard }
-    }
-
-    private var bars: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(game.pilot == .laya ? "RAW MODEL OUTPUT (UNCALIBRATED)" : "DECISION")
-                .font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.inkSoft)
-            ForEach(game.hud.bars) { bar in
-                HStack(spacing: 8) {
-                    Text(bar.label)
-                        .font(.system(size: 12, weight: bar.chosen ? .bold : .regular))
-                        .foregroundStyle(bar.excluded == nil ? Palette.ink : Palette.inkSoft.opacity(0.6))
-                        .frame(width: 138, alignment: .leading)
-                        .lineLimit(1)
-                    GeometryReader { g in
-                        ZStack(alignment: .leading) {
-                            RoundedRectangle(cornerRadius: 3).fill(Palette.hairline)
-                            if let raw = bar.raw {
-                                RoundedRectangle(cornerRadius: 3).fill(bar.chosen ? Palette.blue : Palette.cyan.opacity(0.7))
-                                    .frame(width: max(2, g.size.width * raw))
-                            } else if bar.chosen {
-                                RoundedRectangle(cornerRadius: 3).stroke(Palette.blue, lineWidth: 1.5)
-                            }
-                        }
-                    }
-                    .frame(height: 10)
-                    Text(bar.excluded ?? bar.raw.map { String(format: "%.2f", $0) } ?? (bar.chosen ? "chosen" : ""))
-                        .font(Typeface.mono(11))
-                        .foregroundStyle(Palette.inkSoft)
-                        .frame(width: 56, alignment: .trailing)
-                }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(bar.label)
-                .accessibilityValue(barValue(bar))
+                .accessibilityIdentifier("game.getModel")
             }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("game.bars")
-    }
-
-    private func barValue(_ bar: ActionBar) -> String {
-        var parts: [String] = []
-        if let raw = bar.raw { parts.append("raw probability \(Int((raw * 100).rounded())) percent") }
-        if let ex = bar.excluded { parts.append(ex.contains("crash") ? "not offered, would crash" : "not offered, would shoot the last fuel") }
-        if bar.chosen { parts.append("chosen") }
-        return parts.isEmpty ? "not chosen" : parts.joined(separator: ", ")
-    }
-
-    private var readouts: some View {
-        let h = game.hud
-        return VStack(alignment: .leading, spacing: 3) {
-            mono("decisions/s  \(String(format: "%.1f", h.decisionsPerSecond))", id: "game.dps")
-            mono("latency p50  \(h.latencyP50.map { String(format: "%.0f ms", $0) } ?? "—")")
-            mono("model \(h.modelDecisions) · mechanical \(h.mechanical) · failed \(h.failures) · overrides \(h.overrides)")
-            mono("\(h.fps) fps", id: "game.fps")
-        }
-    }
-
-    private func mono(_ s: String, id: String? = nil) -> some View {
-        Text(s).font(Typeface.mono(11)).foregroundStyle(Palette.ink)
-            .accessibilityIdentifier(id ?? "")
-    }
-
-    private var scoreboard: some View {
-        let h = game.hud
-        return VStack(alignment: .leading, spacing: 8) {
-            Caption(text: "Same river, seed \(game.seed)")
-            HStack(spacing: 0) {
-                scoreColumn("Laya", score: h.score, rows: h.rows, over: h.over, lead: h.score >= (h.baselineScore ?? 0))
-                scoreColumn("Baseline", score: h.baselineScore ?? 0, rows: h.baselineRows ?? 0, over: h.baselineOver,
-                            lead: (h.baselineScore ?? 0) > h.score)
-            }
-            Text("The baseline is a few lines of rules. Untuned Laya has no reason to beat it; this shows which one does.")
-                .font(.caption).foregroundStyle(Palette.inkSoft)
-        }
-        .card()
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("game.scoreboard")
-    }
-
-    private func scoreColumn(_ name: String, score: Int, rows: Int, over: Bool, lead: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(name.uppercased()).font(Typeface.mono(10, weight: .medium)).foregroundStyle(lead ? Palette.blue : Palette.inkSoft)
-            Text("\(score)").font(Typeface.display(28)).monospacedDigit().foregroundStyle(Palette.ink)
-            Text("\(rows) rows\(over ? " · down" : "")").font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
-        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Palette.amber.opacity(0.18))
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("game.noModel")
     }
+
 }
 
 /// The Play card on Now.
@@ -421,5 +290,326 @@ struct PlayCard: View {
         }
         .card()
         .padding(.horizontal, 16)
+    }
+}
+
+
+// MARK: Speed showcase
+
+/// The score bar's numbers. Observes only the 10 Hz top store, so the river's parent never redraws.
+struct TopStats: View {
+    @ObservedObject var store: HUDStore
+    let watching: Bool
+
+    var body: some View {
+        let h = store.hud
+        HStack(alignment: .firstTextBaseline) {
+            stat("SCORE", "\(h.score)", id: "game.score")
+            Spacer()
+            stat("LEVEL", "\(h.level)", id: "game.level")
+            Spacer()
+            MascotView(state: h.over ? .empty : (watching ? .scanning : .watching), size: 44)
+                .alignmentGuide(.firstTextBaseline) { $0[.bottom] - 6 }
+            Spacer()
+            fuelGauge(h.fuelPercent)
+            Spacer()
+            stat("ROWS", "\(h.rows)", id: "game.rows", alignment: .trailing)
+        }
+    }
+
+    private func stat(_ label: String, _ value: String, id: String, alignment: HorizontalAlignment = .leading) -> some View {
+        VStack(alignment: alignment, spacing: 0) {
+            Text(label).font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.overlayInk.opacity(0.65))
+            Text(value).font(Typeface.display(30)).monospacedDigit().foregroundStyle(Palette.cyan)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label.capitalized)
+        .accessibilityValue(value)
+        .accessibilityIdentifier(id)
+    }
+
+    private func fuelGauge(_ fuel: Int) -> some View {
+        let low = Double(fuel) < Rules.shared.FUEL_LOW
+        return VStack(spacing: 4) {
+            Text("FUEL").font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.overlayInk.opacity(0.65))
+            ZStack(alignment: .leading) {
+                Capsule().fill(Palette.overlayInk.opacity(0.15))
+                Capsule().fill(low ? Palette.amber : Palette.mint)
+                    .frame(width: 110 * CGFloat(fuel) / 100)
+            }
+            .frame(width: 110, height: 8)
+            Text("\(fuel)%").font(Typeface.mono(11)).foregroundStyle(Palette.overlayInk.opacity(0.85))
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Fuel")
+        .accessibilityValue(low ? "\(fuel) percent, low" : "\(fuel) percent")
+        .accessibilityIdentifier("game.fuel")
+    }
+}
+
+/// The run-over note over the river (human, or the baseline between rivers).
+struct OverOverlay: View {
+    @ObservedObject var store: HUDStore
+    let human: Bool
+    var onAgain: () -> Void
+
+    var body: some View {
+        let h = store.hud
+        if h.over {
+            VStack(spacing: 8) {
+                Text(h.death ?? "Run over").font(Typeface.display(28)).foregroundStyle(Palette.overlayInk)
+                Text("Score \(h.score) · \(h.rows) rows").font(Typeface.mono(13)).foregroundStyle(Palette.overlayInk.opacity(0.85))
+                if human {
+                    Button("Fly again", action: onAgain).buttonStyle(.neonPrimary)
+                        .accessibilityIdentifier("game.again")
+                } else {
+                    Text("Next river in a moment…").font(.footnote).foregroundStyle(Palette.overlayInk.opacity(0.75))
+                }
+            }
+            .padding(20)
+            .background(Palette.navyTop.opacity(0.85), in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
+}
+
+/// Watch mode's panel: a compact, fixed-layout speed readout. Numbers change in place (5 Hz);
+/// nothing slides, scrolls or animates on its own. The run's pipeline stays on Now.
+struct SpeedPanel: View {
+    @ObservedObject var store: HUDStore
+    let laya: Bool
+    let seed: Int64
+
+    var body: some View {
+        let h = store.hud
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Caption(text: laya ? "Laya is flying · level \(h.level)" : "Baseline pilot is flying · level \(h.level)")
+                Spacer()
+                if laya { Pill(text: "On this phone, no internet", color: Palette.mint, symbol: "wifi.slash") }
+            }
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text(String(format: "%.1f", h.decisionsPerSecond))
+                    .font(Typeface.display(56)).monospacedDigit()
+                    .foregroundStyle(laya ? Palette.cyan : Palette.inkSoft)
+                    .frame(minWidth: 120, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("DECISIONS/S").font(Typeface.mono(11, weight: .medium)).tracking(0.8).foregroundStyle(Palette.inkSoft)
+                    Text("game asks \(String(format: "%.0f", h.askedPerSecond))/s")
+                        .font(Typeface.mono(12)).monospacedDigit()
+                        .foregroundStyle(h.askedPerSecond > h.decisionsPerSecond + 0.5 ? Palette.warnText : Palette.inkSoft)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Decisions per second")
+            .accessibilityValue(String(format: "%.1f, the game asks for %.0f", h.decisionsPerSecond, h.askedPerSecond))
+            .accessibilityIdentifier("game.dps")
+            HStack(spacing: 18) {
+                metric("P50", h.latencyP50.map { String(format: "%.0f ms", $0) } ?? "—")
+                metric("P95", h.latencyP95.map { String(format: "%.0f ms", $0) } ?? "—")
+                metric("PEAK", String(format: "%.1f/s", h.maxSustained))
+                metric("FPS", "\(h.fps)", id: "game.fps")
+            }
+            if laya {
+                Sparkline(values: h.sparkline).frame(height: 40).accessibilityHidden(true)
+            }
+            Text("asked \(h.requested) · answered \(h.modelDecisions + h.mechanical + h.failures) · dropped \(h.dropped) · late \(h.lateAnswers)")
+                .font(Typeface.mono(11)).monospacedDigit()
+                .foregroundStyle(h.dropped > 0 ? Palette.warnText : Palette.inkSoft)
+                .lineLimit(1).minimumScaleFactor(0.7)
+                .accessibilityLabel("Asked \(h.requested), answered \(h.modelDecisions + h.mechanical + h.failures), dropped \(h.dropped), late \(h.lateAnswers)")
+                .accessibilityIdentifier("game.speed.dropped")
+            Text("model \(h.modelDecisions) · mechanical \(h.mechanical) · failed \(h.failures) · overrides \(h.overrides)")
+                .font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
+                .lineLimit(1).minimumScaleFactor(0.7)
+            if laya {
+                HStack {
+                    Text("Same river, seed \(seed)").font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+                    Spacer()
+                    Text("Laya \(h.score) · \(h.rows) rows   Baseline \(h.baselineScore ?? 0) · \(h.baselineRows ?? 0)\(h.baselineOver ? " down" : "")")
+                        .font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.ink).lineLimit(1).minimumScaleFactor(0.7)
+                }
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("game.scoreboard")
+            }
+            bars(h)
+        }
+        .card()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("game.speed")
+    }
+
+    private func metric(_ label: String, _ value: String, id: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(label).font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.inkSoft)
+            Text(value).font(Typeface.mono(16, weight: .semibold)).monospacedDigit().foregroundStyle(Palette.ink)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label == "FPS" ? "Frames per second" : "Latency \(label)")
+        .accessibilityValue(value)
+        .accessibilityIdentifier(id ?? "")
+    }
+
+    /// The chosen move, and Laya's raw (uncalibrated) probabilities when Laya chose it.
+    private func bars(_ h: HUDSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(h.source).font(.caption).foregroundStyle(Palette.inkSoft).lineLimit(1)
+                .accessibilityIdentifier("game.source")
+            ForEach(h.bars) { bar in
+                HStack(spacing: 8) {
+                    Text(bar.label)
+                        .font(.system(size: 12, weight: bar.chosen ? .bold : .regular))
+                        .foregroundStyle(bar.excluded == nil ? Palette.ink : Palette.inkSoft.opacity(0.6))
+                        .frame(width: 138, alignment: .leading)
+                        .lineLimit(1)
+                    Capsule().fill(Palette.hairline)
+                        .overlay(alignment: .leading) {
+                            Capsule().fill(bar.chosen ? Palette.blue : Palette.cyan.opacity(0.7))
+                                .scaleEffect(x: bar.raw ?? (bar.chosen ? 1 : 0), y: 1, anchor: .leading)
+                        }
+                        .frame(height: 8)
+                    Text(bar.excluded ?? bar.raw.map { String(format: "%.2f", $0) } ?? (bar.chosen ? "chosen" : ""))
+                        .font(Typeface.mono(11)).monospacedDigit()
+                        .foregroundStyle(Palette.inkSoft)
+                        .frame(width: 56, alignment: .trailing)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(bar.label)
+                .accessibilityValue(Self.barValue(bar))
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("game.bars")
+    }
+
+    static func barValue(_ bar: ActionBar) -> String {
+        var parts: [String] = []
+        if let raw = bar.raw { parts.append("raw probability \(Int((raw * 100).rounded())) percent") }
+        if let ex = bar.excluded { parts.append(ex.contains("crash") ? "not offered, would crash" : "not offered, would shoot the last fuel") }
+        if bar.chosen { parts.append("chosen") }
+        return parts.isEmpty ? "not chosen" : parts.joined(separator: ", ")
+    }
+}
+
+/// Recent latencies, oldest left, with a glow line.
+struct Sparkline: View {
+    let values: [Double]
+
+    var body: some View {
+        Canvas { ctx, size in
+            guard values.count > 1 else { return }
+            let top = max(values.max() ?? 1, 1) * 1.15
+            let dx = size.width / CGFloat(values.count - 1)
+            var path = Path()
+            for (i, v) in values.enumerated() {
+                let p = CGPoint(x: CGFloat(i) * dx, y: size.height * (1 - CGFloat(v / top)))
+                if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+            }
+            var fill = path
+            fill.addLine(to: CGPoint(x: size.width, y: size.height))
+            fill.addLine(to: CGPoint(x: 0, y: size.height))
+            fill.closeSubpath()
+            ctx.fill(fill, with: .linearGradient(Gradient(colors: [Palette.cyan.opacity(0.28), .clear]),
+                                                 startPoint: .zero, endPoint: CGPoint(x: 0, y: size.height)))
+            ctx.stroke(path, with: .color(Palette.cyan), lineWidth: 1.8)
+        }
+        .background(Palette.track.opacity(0.35), in: RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+/// "LEVEL N" over the river as it speeds up. Reduce Motion: a plain label, no zoom.
+struct LevelFlash: View {
+    let level: Int
+    let reducedMotion: Bool
+    @State private var shown = false
+
+    var body: some View {
+        VStack(spacing: 2) {
+            Text("LEVEL \(level)").font(Typeface.display(44)).foregroundStyle(Palette.cyan)
+                .shadow(color: Palette.cyan.opacity(0.8), radius: 14)
+            Text("FASTER").font(Typeface.mono(13, weight: .bold)).tracking(2).foregroundStyle(Palette.overlayInk)
+        }
+        .scaleEffect(reducedMotion || shown ? 1 : 1.6)
+        .opacity(shown ? 1 : 0)
+        .onAppear { withAnimation(reducedMotion ? .linear(duration: 0.15) : .spring(duration: 0.35)) { shown = true } }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .id(level)
+    }
+}
+
+/// The end of a Laya run: what this phone sustained, and Laya against the baseline on the same seed.
+struct ResultsCard: View {
+    let results: RunResults
+    let seed: Int64
+    var onNext: () -> Void
+
+    var body: some View {
+        let r = results
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                Caption(text: "Run results · seed \(seed)\(r.rush ? " · rush" : "")")
+                Text(r.death ?? "Run over").font(Typeface.display(26)).foregroundStyle(Palette.overlayInk)
+                HStack(spacing: 16) {
+                    big(String(format: "%.1f", r.maxSustained), "MAX DECISIONS/S", id: "game.results.max")
+                    big("\(r.totalDecisions)", "DECISIONS", id: "game.results.total")
+                }
+                HStack(spacing: 16) {
+                    small("P50", r.p50.map { String(format: "%.0f ms", $0) } ?? "—")
+                    small("P95", r.p95.map { String(format: "%.0f ms", $0) } ?? "—")
+                    small("DROPPED", "\(r.dropped)")
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("ROWS PER LEVEL").font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.inkSoft)
+                    ForEach(r.rowsPerLevel, id: \.level) { e in
+                        Text("L\(e.level)  \(e.rows) rows").font(Typeface.mono(12)).foregroundStyle(Palette.overlayInk)
+                    }
+                }
+                HStack(spacing: 0) {
+                    side("LAYA", r.layaScore, r.layaRows, r.layaLevel, note: "down", lead: r.layaRows >= r.baselineRows)
+                    side("BASELINE", r.baselineScore, r.baselineRows, r.baselineLevel,
+                         note: r.baselineAlive ? "still flying" : "down", lead: r.baselineRows > r.layaRows)
+                }
+                Text("Same seed, same river, same safety net: only the pilot differs.").font(.caption).foregroundStyle(Palette.inkSoft)
+                Button("Next river", action: onNext).buttonStyle(.neonPrimary).frame(maxWidth: .infinity)
+                    .accessibilityIdentifier("game.results.next")
+            }
+            .padding(18)
+        }
+        .background(Palette.card.opacity(0.96), in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).stroke(Palette.borderActive, lineWidth: 1))
+        .shadow(color: Palette.cyan.opacity(0.25), radius: 18)
+        .padding(12)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("game.results")
+    }
+
+    private func big(_ v: String, _ label: String, id: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(v).font(Typeface.display(40)).monospacedDigit().foregroundStyle(Palette.cyan)
+                .shadow(color: Palette.cyan.opacity(0.5), radius: 10)
+            Text(label).font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.inkSoft)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label.capitalized)
+        .accessibilityValue(v)
+        .accessibilityIdentifier(id)
+    }
+
+    private func small(_ label: String, _ v: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(label).font(Typeface.mono(10, weight: .medium)).tracking(0.8).foregroundStyle(Palette.inkSoft)
+            Text(v).font(Typeface.mono(15, weight: .semibold)).foregroundStyle(Palette.overlayInk)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private func side(_ name: String, _ score: Int, _ rows: Int, _ level: Int, note: String, lead: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(name).font(Typeface.mono(10, weight: .medium)).foregroundStyle(lead ? Palette.cyan : Palette.inkSoft)
+            Text("\(rows) rows").font(Typeface.display(22)).foregroundStyle(Palette.overlayInk)
+            Text("L\(level) · \(score) pts · \(note)").font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }

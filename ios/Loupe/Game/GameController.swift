@@ -48,6 +48,49 @@ struct HUDSnapshot: Equatable {
     var baselineRows: Int?
     var baselineOver = false
     var fps = 0
+    // Speed showcase
+    var level = 1
+    var askedPerSecond = 0.0
+    var latencyP95: Double?
+    /// Recent model latencies in ms, oldest first, for the sparkline.
+    var sparkline: [Double] = []
+    var requested = 0
+    var dropped = 0
+    var lateAnswers = 0
+    var maxSustained = 0.0
+}
+
+/// A published HUD snapshot, observed by the views that draw it and nothing else.
+@MainActor
+final class HUDStore: ObservableObject {
+    @Published var hud = HUDSnapshot()
+}
+
+/// The end-of-run card for a Laya run: what the phone sustained, and Laya against the baseline.
+struct RunResults: Equatable {
+    var maxSustained: Double
+    var totalDecisions: Int
+    var modelDecisions: Int
+    var dropped: Int
+    var p50: Double?
+    var p95: Double?
+    /// Rows flown in each level reached, in level order.
+    var rowsPerLevel: [(level: Int, rows: Int)]
+    var layaScore: Int
+    var layaRows: Int
+    var layaLevel: Int
+    var death: String?
+    var baselineScore: Int
+    var baselineRows: Int
+    var baselineLevel: Int
+    /// True when the baseline was still flying as Laya went down.
+    var baselineAlive: Bool
+    var rush: Bool
+
+    static func == (a: RunResults, b: RunResults) -> Bool {
+        a.totalDecisions == b.totalDecisions && a.layaRows == b.layaRows && a.baselineRows == b.baselineRows
+            && a.maxSustained == b.maxSustained && a.rowsPerLevel.map(\.rows) == b.rowsPerLevel.map(\.rows)
+    }
 }
 
 /// The game's state and loop. The SpriteKit scene calls `advance(to:)` every frame; the simulation
@@ -59,8 +102,22 @@ final class GameController: ObservableObject {
     @Published private(set) var mode: GameMode
     @Published private(set) var pilot: PilotStatus = .you
     @Published private(set) var paused = false
-    @Published private(set) var hud = HUDSnapshot()
+    /// The HUD lives in its own stores, observed only by the leaf views that draw it, so a HUD
+    /// refresh never re-renders the river's parent view (21 fps on device before this; see
+    /// docs/BUILD.md 2026-09-25). `top` refreshes at 10 Hz, `panel` at 5 Hz.
+    let top = HUDStore()
+    let panel = HUDStore()
+    var hud: HUDSnapshot { panel.hud }
     @Published var autoFire = false
+    /// Rush: the river starts at level 4.
+    @Published private(set) var rush: Bool
+    /// The level just reached, while its flash shows.
+    @Published private(set) var levelFlash: Int?
+    /// Set when a Laya run ends; the card stays until the next river.
+    @Published private(set) var results: RunResults?
+    private var flashClear: DispatchWorkItem?
+    private var runStart: TimeInterval?
+    private var maxSustained = 0.0
 
     private(set) var seed: Int64
     private(set) var session: GameSession
@@ -96,6 +153,7 @@ final class GameController: ObservableObject {
     private let hitHaptic = UIImpactFeedbackGenerator(style: .light)
     private let crashHaptic = UINotificationFeedbackGenerator()
 
+    static let notInstalled = "Laya not installed — the baseline pilot is flying."
     static let tick: TimeInterval = 1.0 / 60.0
     static let maxCatchUp: TimeInterval = 0.1
     static let autoRestartAfter: TimeInterval = 2.5
@@ -104,6 +162,7 @@ final class GameController: ObservableObject {
 
     init(mode: GameMode,
          seed: Int64 = 1,
+         rush: Bool = false,
          backendProvider: @escaping @MainActor () async -> Backend? = { await LayaModel.shared.backend() },
          modelInstalled: @escaping @MainActor () -> Bool = { LayaModel.shared.isInstalled },
          executor: PilotExecutor = QueuePilotExecutor.shared,
@@ -112,6 +171,7 @@ final class GameController: ObservableObject {
         self.settings = settings
         self.mode = mode
         self.seed = seed
+        self.rush = rush
         self.backendProvider = backendProvider
         self.modelInstalled = modelInstalled
         self.executor = executor
@@ -129,6 +189,23 @@ final class GameController: ObservableObject {
 
     func newRiver() { start(mode: mode, seed: seed + 1) }
 
+    func setRush(_ on: Bool) {
+        guard on != rush else { return }
+        rush = on
+        start(mode: mode, seed: seed)
+    }
+
+    /// Rows per level: 200, or `-LoupeGameLevelRows N` (UI tests, demos).
+    static var levelRows: Int32 {
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-LoupeGameLevelRows"), i + 1 < args.count, let n = Int32(args[i + 1]), n > 0 { return n }
+        return Difficulty.companion.LEVEL_ROWS
+    }
+
+    var difficulty: Difficulty {
+        GameSessions.shared.difficulty(name: rush ? "rush" : "progressive", levelRows: Self.levelRows)
+    }
+
     private func start(mode: GameMode, seed: Int64) {
         openTask?.cancel()
         openTask = nil
@@ -138,7 +215,7 @@ final class GameController: ObservableObject {
         switch mode {
         case .human:
             pilot = .you
-            begin(session: GameSessions.shared.human(seed: seed), scheduler: nil, shadow: nil)
+            begin(session: GameSessions.shared.humanOn(seed: seed, difficulty: difficulty), scheduler: nil, shadow: nil)
         case .watch:
             // Model settings (`features.game`), read at each start: off, the baseline flies.
             let layaOn = settings.useLaya(Features.shared.GAME)
@@ -148,12 +225,12 @@ final class GameController: ObservableObject {
                 return
             }
             if !modelInstalled() {
-                flyBaseline(reason: "The Laya model isn't on this phone, so the baseline autopilot is flying.")
+                flyBaseline(reason: Self.notInstalled)
                 return
             }
             pilot = .opening
             // The baseline flies while Laya's files are verified and opened (a few seconds, once).
-            begin(session: GameSessions.shared.baseline(seed: seed), scheduler: nil, shadow: nil)
+            begin(session: GameSessions.shared.baselineOn(seed: seed, difficulty: difficulty), scheduler: nil, shadow: nil)
             openTask = Task { [weak self] in
                 guard let self else { return }
                 let backend = await self.backendProvider()
@@ -169,7 +246,7 @@ final class GameController: ObservableObject {
 
     private func flyBaseline(reason: String) {
         pilot = .baseline(reason: reason)
-        begin(session: GameSessions.shared.baseline(seed: seed), scheduler: nil, shadow: nil)
+        begin(session: GameSessions.shared.baselineOn(seed: seed, difficulty: difficulty), scheduler: nil, shadow: nil)
     }
 
     /// Laya flies the same `ModelPilot` as the desktop game; the baseline flies the same seed alongside.
@@ -186,10 +263,11 @@ final class GameController: ObservableObject {
         scheduler.maxPerSecond = { [weak source] in
             MainActor.assumeIsolated { source?.current.gameMaxDecisionsPerS?.doubleValue }
         }
-        begin(session: GameSessions.shared.hosted(seed: seed, decider: decider,
-                                                  decisionInterval: GameSession.companion.DEFAULT_DECISION_INTERVAL),
+        begin(session: GameSessions.shared.hostedOn(seed: seed, decider: decider,
+                                                    decisionInterval: GameSession.companion.DEFAULT_DECISION_INTERVAL,
+                                                    difficulty: difficulty),
               scheduler: scheduler,
-              shadow: GameSessions.shared.baseline(seed: seed))
+              shadow: GameSessions.shared.baselineOn(seed: seed, difficulty: difficulty))
     }
 
     private func begin(session: GameSession, scheduler: PilotScheduler?, shadow: GameSession?) {
@@ -202,6 +280,10 @@ final class GameController: ObservableObject {
         self.shadow = shadow
         accumulated = 0
         overSince = nil
+        results = nil
+        levelFlash = nil
+        runStart = nil
+        maxSustained = 0
         pendingEffects.removeAll()
         // The pilot's live run (a mobile-only kind, `game`): each decision it makes, who made it, where it went.
         liveJob?.finish("cancelled", "act.res.stopped")
@@ -257,7 +339,9 @@ final class GameController: ObservableObject {
         }
         if session.world.over {
             if overSince == nil { overSince = now }
-            if mode == .watch, let since = overSince, now - since > Self.autoRestartAfter {
+            if results == nil, mode == .watch, pilot == .laya { results = makeResults() }
+            // A Laya run keeps its results card until the viewer moves on; the baseline loops.
+            if mode == .watch, results == nil, let since = overSince, now - since > Self.autoRestartAfter {
                 newRiver()
             }
         }
@@ -270,8 +354,16 @@ final class GameController: ObservableObject {
             let k = steering.keys(playerX: world.playerX, autoFire: autoFire, now: now)
             session.human = HumanInput(left: k.left, right: k.right, fire: k.fire)
         }
+        // Model settings' cap (`features.game.max_decisions_per_s`, nil = uncapped) floors the cadence.
+        if let cap = settings.current.gameMaxDecisionsPerS?.doubleValue, cap > 0 {
+            session.minInterval = Int32(max(1, (60 / cap).rounded(.up)))
+        } else {
+            session.minInterval = 1
+        }
+        if runStart == nil { runStart = now }
         session.tick()
         for event in world.events {
+            if let up = event as? GameEventLevelUp { levelUp(Int(up.level)) }
             if let d = event as? GameEventDestroyed {
                 pendingEffects.append((d.x, d.y, d.what == "bridge"))
                 if mode == .human { haptic(crash: false) }
@@ -283,10 +375,50 @@ final class GameController: ObservableObject {
         scheduler?.afterTick()
         if let shadow, !shadow.world.over { shadow.tick() }
         ticksSinceHUD += 1
-        if ticksSinceHUD >= 6 {
-            ticksSinceHUD = 0
-            refreshHUD()
+        if ticksSinceHUD % 6 == 0 { refreshHUD(panel: ticksSinceHUD % 12 == 0) }
+        if ticksSinceHUD >= 60 { ticksSinceHUD = 0 }
+    }
+
+    private func levelUp(_ level: Int) {
+        levelFlash = level
+        UIAccessibility.post(notification: .announcement, argument: "Level \(level). Faster.")
+        flashClear?.cancel()
+        let clear = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated { if self?.levelFlash == level { self?.levelFlash = nil } }
         }
+        flashClear = clear
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.6, execute: clear)
+    }
+
+    /// Rows flown in each level of [world], in level order.
+    static func rowsPerLevel(_ world: World) -> [(level: Int, rows: Int)] {
+        let d = world.difficulty
+        let top = Int(world.level)
+        let start = Int(d.level(row: 0))
+        let flown = Int(world.cameraY)
+        return (start...max(start, top)).map { l in
+            let first = Int(d.firstRow(level: Int32(l))?.intValue ?? 0)
+            let next = l < top ? Int(d.firstRow(level: Int32(l + 1))?.intValue ?? flown) : flown
+            return (l, max(0, min(next, flown) - first))
+        }
+    }
+
+    private func makeResults() -> RunResults {
+        let w = session.world, s = session.stats
+        let b = shadow?.world
+        return RunResults(
+            maxSustained: maxSustained,
+            totalDecisions: Int(s.total),
+            modelDecisions: Int(s.count(source: .model)),
+            dropped: Int(s.dropped),
+            p50: s.latencyMillis(q: 0.5)?.doubleValue,
+            p95: s.latencyMillis(q: 0.95)?.doubleValue,
+            rowsPerLevel: Self.rowsPerLevel(w),
+            layaScore: Int(w.score), layaRows: Int(w.cameraY), layaLevel: Int(w.level),
+            death: w.death.map { Self.deathText($0) },
+            baselineScore: Int(b?.score ?? 0), baselineRows: Int(b?.cameraY ?? 0), baselineLevel: Int(b?.level ?? 1),
+            baselineAlive: !(b?.over ?? true),
+            rush: rush)
     }
 
     func drainEffects() -> [(x: Double, y: Double, big: Bool)] {
@@ -336,7 +468,9 @@ final class GameController: ObservableObject {
 
     // MARK: HUD
 
-    func refreshHUD() {
+    /// Rebuilds the snapshot. The top bar always gets it; the panel only when [panel] (5 Hz) or when
+    /// something it shows discretely changed (the run ended). The live run hears once a second.
+    func refreshHUD(panel refreshPanel: Bool = true) {
         let w = session.world
         let stats = session.stats
         var h = HUDSnapshot()
@@ -355,6 +489,18 @@ final class GameController: ObservableObject {
         h.source = Self.sourceText(decision)
         h.decisionsPerSecond = stats.decisionsPerSecond(nowNanos: GameClock.shared.nanoTime())
         h.latencyP50 = stats.latencyMillis(q: 0.5)?.doubleValue
+        h.latencyP95 = stats.latencyMillis(q: 0.95)?.doubleValue
+        h.level = Int(w.level)
+        h.askedPerSecond = session.control is ControlHuman ? 0 : session.askedPerSecond
+        h.sparkline = stats.recentLatenciesMillis(n: 48).map { $0.doubleValue }
+        h.requested = Int(stats.requested)
+        h.dropped = Int(stats.dropped)
+        h.lateAnswers = Int(stats.lateAnswers)
+        // Sustained: the 2-second rate, counted only once the run has had two seconds to fill it.
+        if !w.over, let start = runStart, (lastTime ?? start) - start > 2.5, stats.total > 0 {
+            maxSustained = max(maxSustained, h.decisionsPerSecond)
+        }
+        h.maxSustained = maxSustained
         h.modelDecisions = Int(stats.count(source: .model))
         h.mechanical = Int(stats.count(source: .mechanical))
         h.failures = Int(stats.count(source: .failure))
@@ -365,8 +511,12 @@ final class GameController: ObservableObject {
             h.baselineOver = shadow.world.over
         }
         h.fps = fps
-        reportDecisions(h)
-        if h != hud { hud = h }
+        if ticksSinceHUD == 0 || h.over { reportDecisions(h) }
+        var t = h
+        // The top bar reads only these; the rest is the panel's.
+        t.bars = []; t.sparkline = []
+        if t != top.hud { top.hud = t }
+        if (refreshPanel || h.over != panel.hud.over) && h != panel.hud { panel.hud = h }
     }
 
     static func deathText(_ cause: DeathCause) -> String {

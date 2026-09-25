@@ -130,8 +130,27 @@ final class PilotSchedulingTests: XCTestCase {
     func testWatchModeWithoutTheModelFliesTheBaselineAndSaysSo() {
         let game = GameController(mode: .watch, seed: 1, modelInstalled: { false })
         guard case .baseline(let reason) = game.pilot else { return XCTFail("\(game.pilot)") }
-        XCTAssertTrue(reason.contains("isn't on this phone"))
+        XCTAssertTrue(reason.contains("Laya not installed"))
         XCTAssertNil(game.shadow)
         game.close()
+    }
+
+    /// A model slower than the cadence: the game counts what it asked for and never got.
+    func testASlowModelAtRushCadenceIsCountedAsDropped() {
+        let backend = FakeGameBackend(preferring: "hold course")
+        let exec = ManualExecutor()
+        let decider = GameSessions.shared.modelDecider(backend: backend)
+        let scheduler = PilotScheduler(decider: decider, executor: exec, returnToSimulation: { $0() })
+        let session = GameSessions.shared.hostedOn(seed: 4, decider: decider, decisionInterval: 6,
+                                                   difficulty: GameSessions.shared.difficulty(name: "rush", levelRows: 10_000))
+        XCTAssertEqual(session.currentInterval, 3, "rush starts at level 4: 20 decisions a second")
+        for t in 0..<120 {
+            session.tick(); scheduler.afterTick()
+            if t % 10 == 9 { exec.runAll() } // the model answers every 10 ticks (6/s)
+        }
+        XCTAssertGreaterThan(session.stats.dropped, 10)
+        XCTAssertGreaterThan(session.stats.lateRequests, 5)
+        XCTAssertEqual(session.askedPerSecond, 20, accuracy: 1e-9)
+        session.close()
     }
 }

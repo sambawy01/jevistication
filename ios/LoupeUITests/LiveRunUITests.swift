@@ -24,9 +24,12 @@ final class LiveRunUITests: XCTestCase {
         app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeSlowJobs"] + extra
         app.launch()
         let card = app.buttons["now.privacy"]
+        // The Play card sits high on Now (2026-09-25): the privacy card may start below the fold.
+        for _ in 0..<4 where !card.waitForExistence(timeout: 15) { app.swipeUp() }
         XCTAssertTrue(card.waitForExistence(timeout: 60))
         expectation(for: NSPredicate(format: "label CONTAINS %@", "findings"), evaluatedWith: card)
         waitForExpectations(timeout: 120)
+        for _ in 0..<4 where !card.isHittable { app.swipeUp() }
         card.tap()
         let rerun = app.buttons["privacy.rerun"]
         XCTAssertTrue(rerun.waitForExistence(timeout: 30))

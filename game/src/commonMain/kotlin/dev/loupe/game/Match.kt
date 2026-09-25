@@ -24,6 +24,7 @@ object Match {
         val overrideEnabled: Boolean = true,
         /** Hand-off threshold. Headless there is no human, so a hand-off flies the no-op. */
         val threshold: Double = 0.0,
+        val difficulty: Difficulty = Difficulty.CLASSIC,
     )
 
     data class Episode(
@@ -45,6 +46,10 @@ object Match {
         val latencyP95Ms: Double?,
         /** Mean of the top raw probability over model decisions; raw, uncalibrated. */
         val meanTopRaw: Double?,
+        /** The level reached (1 on [Difficulty.CLASSIC]). */
+        val level: Int = 1,
+        /** Decision slots the pilot was too busy to take (see [DecisionStats.dropped]). */
+        val dropped: Int = 0,
     )
 
     fun episode(seed: Long, pilot: Pilot, settings: Settings = Settings()): Episode {
@@ -58,6 +63,7 @@ object Match {
             threshold = settings.threshold,
             overrideEnabled = settings.overrideEnabled,
             clock = { simNanos },
+            difficulty = settings.difficulty,
         ).use { session ->
             var seen: PilotDecision? = null
             while (!session.world.over && session.world.tick < settings.maxTicks) {
@@ -88,6 +94,8 @@ object Match {
                 latencyP50Ms = s.latencyMillis(0.5),
                 latencyP95Ms = s.latencyMillis(0.95),
                 meanTopRaw = if (tops.isEmpty()) null else tops.average(),
+                level = w.level,
+                dropped = s.dropped,
             )
         }
     }

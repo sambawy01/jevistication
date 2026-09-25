@@ -87,4 +87,7 @@ data class Bullet(override val x: Double, override var y: Double) : Box {
 sealed interface GameEvent {
     data class Destroyed(val what: String, val x: Double, val y: Double, val points: Int) : GameEvent
     data class Died(val cause: DeathCause, val x: Double, val y: Double) : GameEvent
+
+    /** The camera crossed into [level] at river row [row]. */
+    data class LevelUp(val level: Int, val row: Int) : GameEvent
 }

@@ -100,6 +100,42 @@ class DecisionStats(private val window: Int = 256) {
         while (landedAt.size > 1 && nowNanos - landedAt.first() > RATE_WINDOW_NANOS) landedAt.removeFirst()
     }
 
+    /** Decision requests sent to the pilot. */
+    var requested: Int = 0; private set
+
+    /** Requests that went out after they were due, because the pilot was still on the last one. */
+    var lateRequests: Int = 0; private set
+
+    /** Whole decision slots that passed with the pilot busy: decisions the game asked for and never got. */
+    var dropped: Int = 0; private set
+
+    /** Decisions that landed more than one interval after the state they answered. */
+    var lateAnswers: Int = 0; private set
+
+    /**
+     * A request due at [dueTick] was sent at [sentTick] with [interval] ticks to the next. The first
+     * request of a run (due at tick 0) is never late.
+     */
+    fun recordRequest(dueTick: Long, sentTick: Long, interval: Int) {
+        requested++
+        if (sentTick > dueTick) {
+            lateRequests++
+            dropped += ((sentTick - dueTick) / interval).toInt()
+        }
+    }
+
+    /** A decision landed [ageTicks] after the tick it observed, while the cadence was [interval]. */
+    fun recordLanding(ageTicks: Long, interval: Int) {
+        if (ageTicks > interval) lateAnswers++
+    }
+
+    /** The most recent latencies in milliseconds, oldest first, at most [n]. */
+    fun recentLatenciesMillis(n: Int): List<Double> {
+        val have = minOf(latencyCount, window)
+        val take = minOf(n, have)
+        return List(take) { i -> latencies[(latencyCount - take + i) % window] / 1e6 }
+    }
+
     fun recordHandOff() {
         handOffs++
     }

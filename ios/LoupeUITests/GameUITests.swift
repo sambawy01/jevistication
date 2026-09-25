@@ -33,6 +33,32 @@ final class GameUITests: XCTestCase {
         XCTAssertTrue(play.waitForExistence(timeout: 3))
     }
 
+    /// Watch from Now's Play card: the river runs, the level climbs (30 rows a level here), and
+    /// pause stops it.
+    func testWatchFromNowLevelClimbsAndPauses() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "now", "-LoupeGameLevelRows", "30"]
+        app.launch()
+        let watch = app.buttons["now.play.watch"]
+        XCTAssertTrue(watch.waitForExistence(timeout: 5))
+        watch.tap()
+        let level = app.descendants(matching: .any)["game.level"]
+        let rows = app.descendants(matching: .any)["game.rows"]
+        XCTAssertTrue(level.waitForExistence(timeout: 5))
+        XCTAssertEqual(level.value as? String, "1")
+        let climbed = expectation(for: NSPredicate { _, _ in (Int(level.value as? String ?? "") ?? 0) >= 2 }, evaluatedWith: nil)
+        wait(for: [climbed], timeout: 20)
+
+        app.buttons["game.pause"].tap()
+        XCTAssertTrue(app.buttons["game.resume"].waitForExistence(timeout: 3))
+        let paused = rows.value as? String
+        sleep(1)
+        XCTAssertEqual(rows.value as? String, paused, "the river moved while paused")
+        app.buttons["game.resume"].tap()
+        app.buttons["game.close"].tap()
+        XCTAssertTrue(watch.waitForExistence(timeout: 3))
+    }
+
     /// Watch mode without the model: the baseline flies, with a note and a link to Me → Laya model.
     func testWatchWithoutModelFliesBaselineWithNote() throws {
         let app = XCUIApplication()
