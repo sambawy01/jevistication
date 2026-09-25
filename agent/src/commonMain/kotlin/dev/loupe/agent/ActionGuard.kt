@@ -116,12 +116,12 @@ object ActionGuard {
      */
     private val PAYMENT_INTENT = Regex(
         "(?i)\\b(" +
-            "i (?:hereby )?authoris[ez]e (?:the |a |this )?(?:payment|charge|transfer|debit)|" +
+            "i (?:hereby )?authori[sz]e (?:the |a |this )?(?:payment|charge|transfer|debit)|" +
             "(?:please |go ahead and |feel free to )(?:charge|debit|bill) (?:my|the) (?:card|account)|" +
             "you (?:may|can) charge (?:my|the) (?:card|account)|" +
             "charge it to (?:my|the) (?:card|account)|" +
             "here (?:is|are) my (?:card|credit card|bank|account) (?:details|number|numbers)|" +
-            "i (?:have |'ve )?(?:approved|authoris[ez]ed) the (?:payment|invoice|transfer)|" +
+            "i (?:have |'ve )?(?:approved|authori[sz]ed) the (?:payment|invoice|transfer)|" +
             "proceed with the (?:payment|charge|purchase|order)|" +
             "i confirm the (?:payment|purchase|order|transfer)" +
             ")\\b",
@@ -374,13 +374,19 @@ object ActionGuard {
         DIGITS.findAll(text).map { it.range to it.value }.toList()
 
     /**
-     * True when a digit run is glued to a date or version separator on either side, which is what
-     * `2026-10-02` and `1.2.3` look like from inside.
+     * True when a digit run sits inside a date, a time or a version — `2026-10-02`, `09:40`,
+     * `1.2.3` — seen from inside one of its parts.
+     *
+     * The separator only counts when there is a digit on its far side. A full stop that ends a
+     * sentence ("the code is 481920.") is not a version number, and reading it as one hid every
+     * code that happened to end one.
      */
     private fun touchesDateSeparator(text: String, range: IntRange): Boolean {
-        val before = if (range.first > 0) text[range.first - 1] else ' '
-        val after = if (range.last + 1 < text.length) text[range.last + 1] else ' '
-        return before in DATE_SEPARATORS || after in DATE_SEPARATORS
+        val before = range.first - 1
+        if (before >= 1 && text[before] in DATE_SEPARATORS && text[before - 1] in '0'..'9') return true
+        val after = range.last + 1
+        if (after + 1 < text.length && text[after] in DATE_SEPARATORS && text[after + 1] in '0'..'9') return true
+        return false
     }
 
     private const val DATE_SEPARATORS = "-/.:"

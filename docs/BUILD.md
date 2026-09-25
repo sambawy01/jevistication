@@ -1265,6 +1265,28 @@ their acceptance criteria are met; entries here record increments toward them.
   needs; nothing in the downloader reads those headers itself, so no code change. DEBUG `-LoupeNoModelHost` keeps
   the no-host copy under test (`ModelDeliveryUITests`, `GetLayaUITests`); `-LoupeResetModelConsent` makes a
   Download tap in a UI test open the consent sheet, which the tests decline, so the suite makes no model request.
+- **2026-09-25 — The agent tier, on branch `agent-tier` (not merged).** A new `:agent` module
+  answering the owner's question: can Loupe act as a phone agent once connected to an LLM by API,
+  with the local companion free and the agent behind a paid tier. The design is the inversion — the
+  on-device engine is not replaced by the provider, it becomes the provider's gate and cost
+  governor, so the bill and the egress scale with *flagged* items rather than with mail volume.
+  `AgentGate` lets only a `Decision.Act` above its own bar (0.80, floored at 0.60) through, and
+  records every skip with a reason. `ActionGuard` is the never list (PRODUCT.md §4) as code, with
+  the two promises that matter most — never spends, never acts without approval — enforced by the
+  shape of the types rather than by a check: no `PreparedAction` can move money, and the module's
+  only output is a `ReviewProposal` a person must approve. `AgentWire` is the OpenAI-compatible wire
+  as pure functions at byte parity with `ios/Loupe/Assist/ChatClient.swift`; the module performs no
+  I/O at all, which is what makes the send-preview honest. `AgentSession` never throws (500-iteration
+  fuzz, the A4 contract). `EgressRecord` makes the changed privacy claim checkable per item instead
+  of reworded. 106 tests, green, plus `:loupe-kit` at 207 and `:engine` at 294 after the registry
+  change. `:loupe-kit` gained the `agent` review feature, four kinds and four actions, additively —
+  the shipped `email_reply` path is untouched. No `Backend` implementation: `Backend.kt` says a
+  hosted one would break the offline guarantee and it is right, so the provider never answers a
+  judgment and the calibration story survives intact. Design record and the honest list of what is
+  *not* built (no transport, no action handlers, no key-store binding, no tier entitlement, no UI)
+  in [`AGENT.md`](AGENT.md). Note for whoever runs CI on this branch: `.github/workflows/ci.yml`
+  triggers on push to `main` and on pull requests to `main`, so `agent-tier` gets no independent
+  green until a PR is opened.
 
 ## Where the build stands
 
