@@ -108,26 +108,26 @@ object ReviewRegistry {
             ReviewField("shape", true, 10, listOf("yes_no", "pick", "score")), ReviewField("options", true, 20_000),
             ReviewField("invariant", false, 2_000), ReviewField("pack", false, 80),
         )),
-        // The agent tier's four kinds. Every one carries `provider` (so the result can be labelled
-        // Online and name its source) and `evidence` (the on-device decision behind it), because an
-        // agent proposal with neither cannot be shown honestly and so must not be queued.
+        // The agent tier's four kinds. Every one carries `origin` (who prepared it -- "Loupe, on
+        // this device" or "<provider> (Online)") and `evidence` (the on-device decision behind it),
+        // because an agent proposal with neither cannot be shown honestly and so must not be queued.
         ReviewKind("agent_reminder", listOf(
             ReviewField("item_id", true, 1_000), ReviewField("when", true, 30), ReviewField("text", true, 200),
-            ReviewField("because", false, 400), ReviewField("provider", true, 200), ReviewField("evidence", true, 300),
+            ReviewField("because", false, 400), ReviewField("origin", true, 200), ReviewField("evidence", true, 300),
         )),
         ReviewKind("agent_event", listOf(
             ReviewField("item_id", true, 1_000), ReviewField("start", true, 30), ReviewField("end", false, 30),
             ReviewField("subject", true, 300), ReviewField("location", false, 300), ReviewField("because", false, 400),
-            ReviewField("provider", true, 200), ReviewField("evidence", true, 300),
+            ReviewField("origin", true, 200), ReviewField("evidence", true, 300),
         )),
         ReviewKind("agent_note", listOf(
             ReviewField("item_id", true, 1_000), ReviewField("headline", true, 300), ReviewField("detail", false, 2_000),
-            ReviewField("provider", true, 200), ReviewField("evidence", true, 300),
+            ReviewField("origin", true, 200), ReviewField("evidence", true, 300),
         )),
         ReviewKind("agent_reply", listOf(
             ReviewField("item_id", true, 1_000), ReviewField("to", false, 300), ReviewField("subject", true, 300),
             ReviewField("body", true, 10_000), ReviewField("language", false, 60), ReviewField("warnings", false, 1_000),
-            ReviewField("notes", false, 1_000), ReviewField("provider", true, 200), ReviewField("evidence", true, 300),
+            ReviewField("notes", false, 1_000), ReviewField("origin", true, 200), ReviewField("evidence", true, 300),
         )),
     ).associateBy { it.name }
 

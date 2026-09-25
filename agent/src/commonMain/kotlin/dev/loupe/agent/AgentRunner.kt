@@ -135,7 +135,7 @@ class AgentSession internal constructor(
 
     /** The run for a well-formed answer: parse, run the never list, and queue what survives. */
     private fun finished(obj: JsonValue.Obj): AgentRun {
-        val proposed = ActionPlanWorkflow.actions(obj, evidence, provider)
+        val proposed = ActionPlanWorkflow.actions(obj, evidence, ActionOrigin.Provider(provider, endpoint.host))
         val report = ActionGuard.checkAll(proposed)
         val proposals = AgentReview.proposals(report.allowed, atIso)
         return AgentRun(
@@ -198,14 +198,60 @@ class AgentSession internal constructor(
 class AgentRunner(
     private val config: AgentConfig,
     private val hasKey: Boolean,
+    /**
+     * What the person has paid for. [AgentTier.FREE] by default: an entitlement that defaults to
+     * the paid tier is a bug waiting to be a refund.
+     */
+    private val tier: AgentTier = AgentTier.FREE,
 ) {
-    /** Whether the tier is on, set up and (for a hosted provider) holding a key. */
-    val readiness: AgentReadiness get() = config.readiness(hasKey)
+    /**
+     * Whether a provider can be asked: the tier allows it, the config is on and complete, and (for
+     * a hosted provider) a key is held.
+     */
+    val readiness: AgentReadiness
+        get() = if (!tier.allows(AgentCapability.ASK_PROVIDER)) {
+            AgentReadiness.NeedsSetup("The agent tier is not included in your plan.")
+        } else {
+            config.readiness(hasKey)
+        }
 
     val isReady: Boolean get() = readiness.isReady
 
+    /** Whether the device may prepare actions on its own — the middle tier, which costs nothing. */
+    val canActOnDevice: Boolean get() = tier.allows(AgentCapability.ACT_ON_DEVICE)
+
     /** One line for the settings screen. */
-    val statusLine: String get() = config.statusLine(hasKey)
+    val statusLine: String
+        get() = if (!tier.allows(AgentCapability.ASK_PROVIDER)) {
+            "Off · not included in your plan"
+        } else {
+            config.statusLine(hasKey)
+        }
+
+    /**
+     * Prepared actions from what the engine already knows, with no network involved.
+     *
+     * The same never list as the provider-backed path, because the rules are about what Loupe puts
+     * in front of a person and not about who wrote it. Returns nothing at all when the tier does
+     * not include on-device actions.
+     */
+    fun planLocally(actions: List<PreparedAction>): GuardReport {
+        if (!canActOnDevice) return GuardReport(emptyList(), emptyList())
+        // An on-device plan that somehow carried a provider origin would be mislabelled, so it is
+        // refused here rather than shown with an Online badge it did not earn.
+        val (onDevice, online) = actions.partition { it.origin == ActionOrigin.OnDevice }
+        val report = ActionGuard.checkAll(onDevice)
+        if (online.isEmpty()) return report
+        return GuardReport(
+            allowed = report.allowed,
+            blocked = report.blocked + online.map {
+                GuardVerdict.Blocked(
+                    NeverRule.LABELLED,
+                    "an on-device plan cannot contain an action from ${it.origin.label}",
+                )
+            },
+        )
+    }
 
     /** The gate over a batch of local decisions. Makes no request; safe to call when the tier is off. */
     fun sift(items: List<GateInput>): GateResult = AgentGate.sift(items)
@@ -223,6 +269,7 @@ class AgentRunner(
         question: String = "",
         atIso: String = "",
     ): AgentSession? {
+        if (!tier.allows(AgentCapability.ASK_PROVIDER)) return null
         val endpoint = config.endpoint(hasKey) ?: return null
         if (endpoint.kind.needsKey && apiKey.isNullOrBlank()) return null
         if (item.itemId != evidence.itemId) return null
@@ -249,7 +296,7 @@ class AgentRunner(
 
     companion object {
         /** A runner that can never send anything: the shipped default. */
-        fun off(): AgentRunner = AgentRunner(AgentConfig(), hasKey = false)
+        fun off(): AgentRunner = AgentRunner(AgentConfig(), hasKey = false, tier = AgentTier.FREE)
     }
 }
 

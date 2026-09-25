@@ -82,7 +82,26 @@ class NeverListTest {
     fun `the shipped default sends nothing`() {
         val off = AgentRunner.off()
         assertTrue(!off.isReady)
-        assertEquals("Off", off.statusLine)
+        assertTrue(!off.canActOnDevice, "the free tier prepares nothing")
+        assertEquals("Off · not included in your plan", off.statusLine)
         assertEquals(AgentReadiness.Off, AgentConfig().readiness(hasKey = true))
+    }
+
+    @Test
+    fun `a fully configured runner still sends nothing without the tier`() {
+        // Two independent gates, and the entitlement is the outer one: a key and a base URL in the
+        // settings must not be enough on their own.
+        val free = AgentRunner(
+            AgentConfig(
+                enabled = true,
+                kind = AgentProviderKind.OPENAI_COMPATIBLE,
+                baseUrl = "https://api.deepseek.com/v1",
+                model = "deepseek-chat",
+            ),
+            hasKey = true,
+            tier = AgentTier.FREE,
+        )
+        assertTrue(!free.isReady)
+        assertEquals(null, free.open(item(), evidence(), "sk-test-0123456789abcdefghij"))
     }
 }

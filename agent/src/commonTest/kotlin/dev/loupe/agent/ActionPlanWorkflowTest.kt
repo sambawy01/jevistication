@@ -111,13 +111,13 @@ class ActionPlanWorkflowTest {
              "needs_info":["which date?"],"notes_for_reviewer":"check the amount"},
             {"type":"note","headline":"asks for a code","detail":"it wants an OTP"}]}""",
         )
-        val a = ActionPlanWorkflow.actions(o, evidence(), "DeepSeek")
+        val a = ActionPlanWorkflow.actions(o, evidence(), DEEPSEEK)
         assertEquals(4, a.size)
         assertTrue(a[0] is PreparedAction.Remind)
         assertTrue(a[1] is PreparedAction.CalendarEvent)
         assertTrue(a[2] is PreparedAction.DraftReply)
         assertTrue(a[3] is PreparedAction.NoteFinding)
-        assertTrue(a.all { it.provider == "DeepSeek" })
+        assertTrue(a.all { it.origin == DEEPSEEK })
         assertTrue(a.all { it.evidence == evidence() })
         assertEquals("Cairo", (a[1] as PreparedAction.CalendarEvent).location)
         assertEquals(listOf("which date?"), (a[2] as PreparedAction.DraftReply).needsInfo)
@@ -126,7 +126,7 @@ class ActionPlanWorkflowTest {
     @Test
     fun `an unknown type is dropped rather than guessed at`() {
         val o = obj("""{"actions":[{"type":"wire_transfer","amount":"5000"},{"type":"note","headline":"ok"}]}""")
-        val a = ActionPlanWorkflow.actions(o, evidence(), "DeepSeek")
+        val a = ActionPlanWorkflow.actions(o, evidence(), DEEPSEEK)
         assertEquals(1, a.size)
         assertTrue(a[0] is PreparedAction.NoteFinding)
     }
@@ -136,14 +136,14 @@ class ActionPlanWorkflowTest {
         val many = (0..20).joinToString(",") { """{"type":"note","headline":"h$it"}""" }
         assertEquals(
             ActionPlanWorkflow.MAX_ACTIONS,
-            ActionPlanWorkflow.actions(obj("""{"actions":[$many]}"""), evidence(), "p").size,
+            ActionPlanWorkflow.actions(obj("""{"actions":[$many]}"""), evidence(), DEEPSEEK).size,
         )
     }
 
     @Test
     fun `a control character in the model's answer is cleaned on the way in`() {
         val o = obj("""{"actions":[{"type":"note","headline":"a\u0007b","detail":"x‮y"}]}""")
-        val n = ActionPlanWorkflow.actions(o, evidence(), "p")[0] as PreparedAction.NoteFinding
+        val n = ActionPlanWorkflow.actions(o, evidence(), DEEPSEEK)[0] as PreparedAction.NoteFinding
         assertTrue(!n.headline.contains('\u0007'), n.headline)
         assertTrue(!n.detail.contains('‮'), n.detail)
     }

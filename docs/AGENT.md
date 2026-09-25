@@ -91,8 +91,25 @@ leaving the device — and probably the single feature most people would pay for
   per user, so a flat price works, and this is the tier that funds the rest.
 - **Paid + API** — draft, plan, multi-step. Real COGS, so metered or a credit pool.
 
-The code does not yet distinguish the middle tier from the third; `AgentConfig.enabled` is one
-switch. That is the next decision, not an oversight — see §8.
+All three are in the code. `AgentTier` holds the ladder and `AgentCapability` what each rung
+allows; `AgentRunner` reads it as the **outer** gate, so a key and a base URL in the settings are
+not enough on their own. The default is `AgentTier.FREE`, because an entitlement that defaults to
+the paid tier is a bug waiting to be a refund.
+
+`LocalPlanner` is the middle tier doing real work with no network: an `ExpiryAlert` becomes a
+reminder 30 days out, and a dormant `RecurringCharge` becomes a note. Two details are the never list
+applied to arithmetic rather than to a model:
+
+- An **ambiguous date** (`ExpiryAlert.dateWasAmbiguous`) produces a note saying so and never a
+  reminder, because *"never acts on something it is unsure about"* does not stop being true because
+  the uncertainty came from a date format instead of a distribution.
+- A dormant subscription produces a **note, never a cancellation**. Loupe never spends money, and it
+  does not un-spend it either: cancelling is the person's call and the last button is theirs.
+
+`AgentRunner.planLocally` runs the same `ActionGuard` over a local plan as the provider path does,
+because the rules are about what Loupe puts in front of a person and not about who wrote it — and it
+refuses a "local" plan that contains anything a provider wrote, so the Online badge cannot be
+dropped by routing.
 
 ## 5. The privacy claim changes character, and is restated rather than softened
 
@@ -106,6 +123,12 @@ was worried about.
 
 Defaults: off. `AgentConfig()` is disabled, and the off switch is not a branch inside the request
 path — it is the absence of an `AgentEndpoint`, which only `AgentConfig.endpoint()` can mint.
+
+**Labelling is structural, not a convention.** `ActionOrigin` is either `OnDevice` or
+`Provider(name, host)`, an action cannot exist without one, and the label is derived from it. So a
+reminder Loupe worked out locally cannot carry an Online badge it did not earn, and a draft a
+provider wrote cannot lose one. That matters more than it looks: users who see "Online" on something
+that never left the device stop believing the badge at all.
 
 ## 6. Provider posture: BYOK, and open weights on a host with terms
 
@@ -163,6 +186,9 @@ than promised and walked back.
 | `AgentSession` | Gate → prompt → provider → parse → guard → queue, as a state machine, so one repair turn needs no coroutines. **Never throws** (500-iteration fuzz, matching the engine's A4 contract). |
 | `EgressRecord` | What left the device, per item. |
 | `AgentReview` | Prepared actions as review proposals, tested against the live `ReviewRegistry` so the queue can never refuse what the agent produces. |
+| `ActionOrigin` | On-device or a named provider. Makes the Online label derived rather than written. |
+| `AgentTier` / `AgentCapability` | The three-rung ladder, read by `AgentRunner` as the outer gate. Defaults to free. |
+| `LocalPlanner` | The middle tier: reminders and subscription notes from `ExpiryRadar` and `RecurringMoney`, with no network at all. |
 
 `:loupe-kit` gained the `agent` review feature with four kinds and four actions, **additively** —
 the shipped `email_reply` path is untouched.
@@ -190,7 +216,8 @@ leaving the machine.
    the notification or writes the calendar entry (EventKit on iOS).
 3. **No key store binding.** The key is passed per call by design; wiring it to the iOS Keychain and
    the desktop's store is app work.
-4. **No tier entitlement.** One `enabled` switch, not the three-tier ladder of §4.
+4. **No billing.** `AgentTier` is read, never decided: nothing here talks to a store, a receipt or
+   a subscription. Whatever the app decides the person has paid for, it passes in.
 5. **No UI.** No settings screen, no preview-and-confirm sheet, no agent log.
 6. **iOS `Assist` is not yet folded in.** `AssistConfig.swift` and this module now both hold the
    base-URL rules. That duplication is a known cost of not touching shipped code on a branch, and

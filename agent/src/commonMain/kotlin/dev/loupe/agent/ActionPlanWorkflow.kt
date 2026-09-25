@@ -179,7 +179,7 @@ object ActionPlanWorkflow {
      * dropped rather than guessed at. Nothing here decides whether an action is *allowed* — the
      * caller runs [ActionGuard] over the result, and [AgentRunner] does exactly that.
      */
-    fun actions(o: JsonValue.Obj, evidence: AgentEvidence, provider: String): List<PreparedAction> {
+    fun actions(o: JsonValue.Obj, evidence: AgentEvidence, origin: ActionOrigin): List<PreparedAction> {
         val actions = (o["actions"] as? JsonValue.Arr)?.items ?: return emptyList()
         val out = mutableListOf<PreparedAction>()
         for (raw in actions.take(MAX_ACTIONS)) {
@@ -190,7 +190,7 @@ object ActionPlanWorkflow {
                     whenIso = AgentText.safe(str(a, "when").orEmpty(), 30),
                     text = AgentText.safe(str(a, "text").orEmpty(), 200),
                     because = AgentText.cleanBody(str(a, "because").orEmpty()).take(400),
-                    provider = provider,
+                    origin = origin,
                 )
 
                 "calendar" -> PreparedAction.CalendarEvent(
@@ -200,7 +200,7 @@ object ActionPlanWorkflow {
                     subject = AgentText.safe(str(a, "subject").orEmpty(), 300),
                     location = str(a, "location")?.let { AgentText.safe(it, 300) }?.takeIf { it.isNotBlank() },
                     because = AgentText.cleanBody(str(a, "because").orEmpty()).take(400),
-                    provider = provider,
+                    origin = origin,
                 )
 
                 "reply_draft" -> PreparedAction.DraftReply(
@@ -213,14 +213,14 @@ object ActionPlanWorkflow {
                         .mapNotNull { (it as? JsonValue.Str)?.value }
                         .map { AgentText.safe(it, 300) }.filter { it.isNotEmpty() }.take(10),
                     notes = AgentText.cleanBody(str(a, "notes_for_reviewer").orEmpty()).take(1_000),
-                    provider = provider,
+                    origin = origin,
                 )
 
                 "note" -> PreparedAction.NoteFinding(
                     evidence = evidence,
                     headline = AgentText.safe(str(a, "headline").orEmpty(), 300),
                     detail = AgentText.cleanBody(str(a, "detail").orEmpty()).take(2_000),
-                    provider = provider,
+                    origin = origin,
                 )
 
                 else -> null

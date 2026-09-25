@@ -75,14 +75,14 @@ class JvmTransportTest {
                 model = "qwen3",
                 name = "Ollama",
             )
-            val run = AgentRunner(config, hasKey = false)
+            val run = AgentRunner(config, hasKey = false, tier = AgentTier.CONNECTED)
                 .open(item(), evidence(), apiKey = null, atIso = "2026-09-25T10:00:00Z")!!
                 .runTo(JvmAgentTransport(timeout = Duration.ofSeconds(10)))
 
             assertTrue(run.ok, run.failure?.message ?: "")
             assertEquals(1, run.proposals.size)
             assertEquals("agent_note", run.proposals[0].kind)
-            assertEquals("Ollama", run.proposals[0].proposal["provider"])
+            assertEquals("Ollama (Online)", run.proposals[0].proposal["origin"])
             assertEquals(700, run.egress.tokensIn)
             assertEquals(40, run.egress.tokensOut)
 
@@ -157,7 +157,7 @@ class JvmTransportTest {
             reply(exchange, 401, """{"error":{"message":"bad key"}}""")
         }) { endpoint ->
             val config = AgentConfig(enabled = true, kind = AgentProviderKind.OLLAMA, baseUrl = endpoint.base, model = "qwen3")
-            val run = AgentRunner(config, hasKey = false).open(item(), evidence())!!
+            val run = AgentRunner(config, hasKey = false, tier = AgentTier.CONNECTED).open(item(), evidence())!!
                 .runTo(JvmAgentTransport(sleep = {}))
             assertEquals(1, calls.get(), "an auth failure is not a capacity problem")
             assertTrue(run.failure is AgentFailure.Auth, run.failure?.message ?: "")
@@ -173,7 +173,7 @@ class JvmTransportTest {
             exchange.responseBody.write(bytes)
         }) { endpoint ->
             val config = AgentConfig(enabled = true, kind = AgentProviderKind.OLLAMA, baseUrl = endpoint.base, model = "qwen3")
-            val run = AgentRunner(config, hasKey = false).open(item(), evidence())!!
+            val run = AgentRunner(config, hasKey = false, tier = AgentTier.CONNECTED).open(item(), evidence())!!
                 .runTo(JvmAgentTransport(sleep = {}))
             assertTrue(run.failure is AgentFailure.BadResponse, run.failure?.message ?: "")
             assertTrue(run.failure!!.message.contains("OpenAI-compatible"), run.failure!!.message)
@@ -188,7 +188,7 @@ class JvmTransportTest {
             reply(exchange, 200, answer)
         }) { endpoint ->
             val off = AgentConfig(enabled = false, kind = AgentProviderKind.OLLAMA, baseUrl = endpoint.base, model = "qwen3")
-            assertEquals(null, AgentRunner(off, hasKey = false).open(item(), evidence()))
+            assertEquals(null, AgentRunner(off, hasKey = false, tier = AgentTier.CONNECTED).open(item(), evidence()))
             assertEquals(0, calls.get(), "an off tier must not make a request")
         }
     }

@@ -69,7 +69,7 @@ class AgentReviewTest {
     fun `every proposal carries the provider and the evidence, because neither may be dropped`() {
         for (action in all) {
             val p = AgentReview.proposal(action)
-            assertEquals("DeepSeek", p.proposal["provider"])
+            assertEquals("DeepSeek (Online)", p.proposal["origin"])
             assertTrue(!p.proposal["evidence"].isNullOrBlank(), p.kind)
             assertEquals("item-1", p.proposal["item_id"])
         }

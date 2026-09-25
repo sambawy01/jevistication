@@ -41,7 +41,7 @@ object AgentReview {
                     "when" to action.whenIso.take(30),
                     "text" to action.text.take(200),
                     "because" to action.because.take(400),
-                    "provider" to action.provider.take(200),
+                    "origin" to action.origin.label.take(ActionGuard.MAX_LABEL),
                     "evidence" to e.line.take(300),
                 ),
                 actionType = "agent.remind",
@@ -61,7 +61,7 @@ object AgentReview {
                     put("subject", action.subject.take(300))
                     action.location?.let { put("location", it.take(300)) }
                     put("because", action.because.take(400))
-                    put("provider", action.provider.take(200))
+                    put("origin", action.origin.label.take(ActionGuard.MAX_LABEL))
                     put("evidence", e.line.take(300))
                 },
                 actionType = "agent.calendar",
@@ -82,7 +82,7 @@ object AgentReview {
                     "language" to action.language.take(60),
                     "warnings" to action.needsInfo.joinToString("\n").take(1_000),
                     "notes" to action.notes.take(1_000),
-                    "provider" to action.provider.take(200),
+                    "origin" to action.origin.label.take(ActionGuard.MAX_LABEL),
                     "evidence" to e.line.take(300),
                 ),
                 actionType = "agent.draft",
@@ -99,7 +99,7 @@ object AgentReview {
                     "item_id" to e.itemId.take(1_000),
                     "headline" to action.headline.take(300),
                     "detail" to action.detail.take(2_000),
-                    "provider" to action.provider.take(200),
+                    "origin" to action.origin.label.take(ActionGuard.MAX_LABEL),
                     "evidence" to e.line.take(300),
                 ),
                 actionType = "agent.note",
@@ -131,7 +131,9 @@ object AgentReview {
 
             else -> " Nothing happens until you approve it."
         }
-        return ("$what prepared by ${action.provider} (Online), because ${action.evidence.line}." + tail)
+        // The label comes from the origin, so an on-device action can never claim Online and a
+        // provider's action can never omit it.
+        return ("$what prepared by ${action.origin.label}, because ${action.evidence.line}." + tail)
             .take(MAX_SUMMARY)
     }
 

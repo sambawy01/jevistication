@@ -1297,7 +1297,22 @@ their acceptance criteria are met; entries here record increments toward them.
   real provider, previewing every call and waiting for `yes` before anything is sent. Verified end to
   end against a local OpenAI-compatible fake: one reminder prepared, and the never list refused the
   other two (a "completely safe" note and a draft carrying a one-time code). 122 tests in `:agent`,
-  green. Note for whoever runs CI on this branch: `.github/workflows/ci.yml`
+  green.
+- **2026-09-25 — The tier ladder and the middle tier that needs no model (`agent-tier`).**
+  `ActionOrigin` makes the Online label structural: an action is either `OnDevice` or from a named
+  `Provider(name, host)`, it cannot exist without saying which, and the label is derived rather than
+  written — so a locally prepared reminder cannot carry a badge it did not earn, and a provider's
+  draft cannot lose one. `AgentTier` (free / local / connected) with `AgentCapability` is the outer
+  gate in `AgentRunner`, defaulting to free, so a key and a base URL in the settings are not enough
+  on their own. `LocalPlanner` is the middle tier doing real work with no network: an `ExpiryAlert`
+  becomes a reminder 30 days out (never one in the past), a dormant `RecurringCharge` becomes a note
+  — and an ambiguous date becomes a note rather than a reminder, because "never acts on something it
+  is unsure about" does not stop being true when the uncertainty came from a date format instead of a
+  distribution. A dormant subscription is never a cancellation: Loupe does not un-spend money either.
+  `AgentRunner.planLocally` runs the same never list over a local plan, and refuses one carrying
+  anything a provider wrote, so the badge cannot be dropped by routing. The four agent review kinds
+  now carry `origin` rather than `provider`. 137 tests in `:agent`, green. Note for whoever runs CI
+  on this branch: `.github/workflows/ci.yml`
   triggers on push to `main` and on pull requests to `main`, so `agent-tier` gets no independent
   green until a PR is opened.
 

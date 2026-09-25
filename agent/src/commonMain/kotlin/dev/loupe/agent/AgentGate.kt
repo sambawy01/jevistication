@@ -24,14 +24,46 @@ data class AgentEvidence(
     val confidence: Probability,
     /** The gate's own bar, recorded so a reader can see it was met and by how much. */
     val bar: Probability,
+    /**
+     * True when this is a fact read off the item rather than a model's answer — a date, an amount,
+     * a hash.
+     *
+     * Kept distinct because it is a stronger claim, not a weaker one, and the summary should say so.
+     * docs/PRODUCT.md's mechanical-first principle is that deciding *what a document is* is a
+     * judgment and the model does that, while finding the date on it is arithmetic and the model
+     * never touches it. A reminder built on the arithmetic half deserves to say which half it is.
+     */
+    val mechanical: Boolean = false,
 ) {
     /** One line for the review item's summary: what decided this, and how sure it was. */
     val line: String
-        get() = "$judgmentId answered \"$label\" at ${pct(confidence)} (the agent's bar is ${pct(bar)})"
+        get() = if (mechanical) {
+            "$judgmentId found \"$label\" in the item itself, not from a model answer"
+        } else {
+            "$judgmentId answered \"$label\" at ${pct(confidence)} (the agent's bar is ${pct(bar)})"
+        }
 
     private fun pct(p: Probability): String {
         val whole = (p.value * 100.0 + 0.5).toInt()
         return "$whole%"
+    }
+
+    companion object {
+        /**
+         * Evidence for a fact read off the item — a date, an amount — rather than a model answer.
+         *
+         * Certain by construction, because arithmetic on the item's own text either found the thing
+         * or did not. Anything genuinely uncertain about it (a date that could be read two ways) is
+         * the caller's to refuse, and [LocalPlanner.fromExpiry] does.
+         */
+        fun mechanical(itemId: String, source: String, fact: String): AgentEvidence = AgentEvidence(
+            itemId = itemId,
+            judgmentId = source,
+            label = fact,
+            confidence = Probability.of(1.0),
+            bar = AgentGate.FLOOR,
+            mechanical = true,
+        )
     }
 }
 

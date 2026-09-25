@@ -2,6 +2,9 @@ package dev.loupe.agent
 
 import dev.loupe.engine.Probability
 
+/** The provider the fixtures pretend to be talking to. */
+internal val DEEPSEEK: ActionOrigin = ActionOrigin.Provider("DeepSeek", "api.deepseek.com")
+
 /** A gated decision, at a confidence that clears the default bar. */
 internal fun evidence(
     itemId: String = "item-1",
@@ -21,21 +24,21 @@ internal fun remind(
     text: String = "Your domain renews on the 2nd",
     whenIso: String = "2026-10-02",
     because: String = "the email says \"renews on 2 October\"",
-    provider: String = "DeepSeek",
+    origin: ActionOrigin = DEEPSEEK,
     e: AgentEvidence = evidence(),
-) = PreparedAction.Remind(evidence = e, whenIso = whenIso, text = text, because = because, provider = provider)
+) = PreparedAction.Remind(evidence = e, whenIso = whenIso, text = text, because = because, origin = origin)
 
 internal fun note(
     headline: String = "This asks for your password",
     detail: String = "The message asks you to reply with your sign-in details.",
-    provider: String = "DeepSeek",
+    origin: ActionOrigin = DEEPSEEK,
     e: AgentEvidence = evidence(),
-) = PreparedAction.NoteFinding(evidence = e, headline = headline, detail = detail, provider = provider)
+) = PreparedAction.NoteFinding(evidence = e, headline = headline, detail = detail, origin = origin)
 
 internal fun draft(
     body: String = "Hello,\n\nThank you for your message. [confirm the date]\n\nBest regards",
     subject: String = "Re: Your order",
-    provider: String = "DeepSeek",
+    origin: ActionOrigin = DEEPSEEK,
     e: AgentEvidence = evidence(),
 ) = PreparedAction.DraftReply(
     evidence = e,
@@ -45,13 +48,13 @@ internal fun draft(
     language = "English",
     needsInfo = listOf("Which date can you confirm?"),
     notes = "",
-    provider = provider,
+    origin = origin,
 )
 
 internal fun event(
     subject: String = "Passport renewal appointment",
     startIso: String = "2026-11-03T09:30",
-    provider: String = "DeepSeek",
+    origin: ActionOrigin = DEEPSEEK,
     e: AgentEvidence = evidence(),
 ) = PreparedAction.CalendarEvent(
     evidence = e,
@@ -60,7 +63,7 @@ internal fun event(
     subject = subject,
     location = null,
     because = "the letter gives 3 November at 9:30",
-    provider = provider,
+    origin = origin,
 )
 
 /** A ready hosted config, and the key the platform would hold for it. */

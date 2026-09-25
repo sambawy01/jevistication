@@ -199,9 +199,18 @@ class ActionGuardTest {
     // ------------------------------------------------------------------------ always labelled
 
     @Test
-    fun `an action that does not name its provider cannot be shown, so it is refused`() {
-        assertEquals(NeverRule.LABELLED, blockedBy(remind(provider = "")))
-        assertEquals(NeverRule.LABELLED, blockedBy(note(provider = "x".repeat(201))))
+    fun `an action from the network that cannot be labelled honestly is refused`() {
+        assertEquals(NeverRule.LABELLED, blockedBy(remind(origin = ActionOrigin.Provider("", "h"))))
+        assertEquals(NeverRule.LABELLED, blockedBy(remind(origin = ActionOrigin.Provider("DeepSeek", ""))))
+        assertEquals(NeverRule.LABELLED, blockedBy(note(origin = ActionOrigin.Provider("x".repeat(300), "h"))))
+    }
+
+    @Test
+    fun `an on-device action needs no provider, because nothing went anywhere`() {
+        val v = ActionGuard.check(remind(origin = ActionOrigin.OnDevice))
+        assertTrue(v is GuardVerdict.Allowed, "got $v")
+        assertTrue(!ActionOrigin.OnDevice.isOnline)
+        assertTrue(ActionOrigin.Provider("DeepSeek", "api.deepseek.com").isOnline)
     }
 
     // ------------------------------------------------------------------------------- trimming

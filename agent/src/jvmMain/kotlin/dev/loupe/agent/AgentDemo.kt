@@ -37,7 +37,9 @@ object AgentDemo {
             name = System.getenv("LOUPE_AGENT_NAME").orEmpty(),
         )
         val key = System.getenv("LOUPE_AGENT_KEY")?.takeIf { it.isNotBlank() }
-        val runner = AgentRunner(config, hasKey = key != null || !kind.needsKey)
+        // The demo stands in for a subscriber on the top tier; the tier gate itself is tested, not
+        // demonstrated, because there is nothing to watch about a refusal.
+        val runner = AgentRunner(config, hasKey = key != null || !kind.needsKey, tier = AgentTier.CONNECTED)
         if (!runner.isReady) {
             println("The agent tier is not usable: ${runner.statusLine}")
             println("Set LOUPE_AGENT_BASE_URL, LOUPE_AGENT_MODEL and LOUPE_AGENT_KEY.")

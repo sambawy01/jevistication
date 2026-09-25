@@ -89,6 +89,9 @@ object ActionGuard {
     /** The `email_reply` kind's subject and `to` limits. */
     const val MAX_SUBJECT: Int = 300
 
+    /** The review kinds' `origin` field limit. */
+    const val MAX_LABEL: Int = 200
+
     /** A date must look like one before it becomes a reminder or a calendar entry. */
     private val ISO_MOMENT =
         Regex("""^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?$""")
@@ -162,12 +165,27 @@ object ActionGuard {
      * malformed action is refused before any regex runs over attacker-controlled text.
      */
     fun check(action: PreparedAction): GuardVerdict {
-        // --- LABELLED: an unlabelled result cannot be shown as Online, so it cannot be shown. ---
-        if (action.provider.isBlank()) {
-            return GuardVerdict.Blocked(NeverRule.LABELLED, "the action does not name the provider that wrote it")
-        }
-        if (action.provider.length > 200) {
-            return GuardVerdict.Blocked(NeverRule.LABELLED, "the provider name is too long to label")
+        // --- LABELLED: a result that cannot be labelled honestly cannot be shown. ---
+        when (val origin = action.origin) {
+            is ActionOrigin.Provider -> {
+                if (origin.name.isBlank()) {
+                    return GuardVerdict.Blocked(
+                        NeverRule.LABELLED,
+                        "the action came from the network but does not name the provider that wrote it",
+                    )
+                }
+                if (origin.host.isBlank()) {
+                    return GuardVerdict.Blocked(
+                        NeverRule.LABELLED,
+                        "the action came from the network but does not say which host it went to",
+                    )
+                }
+                if (origin.label.length > MAX_LABEL) {
+                    return GuardVerdict.Blocked(NeverRule.LABELLED, "the provider name is too long to label")
+                }
+            }
+
+            ActionOrigin.OnDevice -> Unit
         }
 
         // --- UNSURE: the gate already refused everything but Act, but an AgentEvidence is a plain

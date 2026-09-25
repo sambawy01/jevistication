@@ -12,13 +12,13 @@ package dev.loupe.agent
  *
  * Every variant carries:
  * - [evidence] — the on-device decision that justified spending a call on this item at all;
- * - [provider] — who wrote it, so every result can be labelled **Online** with its source (§4a).
+ * - [origin] — who prepared it, which is what decides whether it is labelled **Online** (§4a).
  */
 sealed interface PreparedAction {
     val evidence: AgentEvidence
 
-    /** The provider's display name, for the Online label. */
-    val provider: String
+    /** Who prepared it: Loupe's own code on the device, or a provider over the network. */
+    val origin: ActionOrigin
 
     /** The one-line title the Review queue shows. */
     val title: String
@@ -43,7 +43,7 @@ sealed interface PreparedAction {
         val text: String,
         /** Why the agent thinks this date, quoted from the item. */
         val because: String,
-        override val provider: String,
+        override val origin: ActionOrigin,
     ) : PreparedAction {
         override val title: String get() = "Reminder $whenIso: ${text.take(80)}"
         override val verb: String get() = "Add reminder"
@@ -61,7 +61,7 @@ sealed interface PreparedAction {
         val subject: String,
         val location: String?,
         val because: String,
-        override val provider: String,
+        override val origin: ActionOrigin,
     ) : PreparedAction {
         override val title: String get() = "Calendar $startIso: ${subject.take(80)}"
         override val verb: String get() = "Add to calendar"
@@ -82,7 +82,7 @@ sealed interface PreparedAction {
         /** Questions the reviewer must answer before sending. */
         val needsInfo: List<String>,
         val notes: String,
-        override val provider: String,
+        override val origin: ActionOrigin,
     ) : PreparedAction {
         override val title: String get() = "Reply draft: ${subject.ifBlank { "(no subject)" }.take(80)}"
         override val verb: String get() = "Keep draft"
@@ -98,7 +98,7 @@ sealed interface PreparedAction {
         override val evidence: AgentEvidence,
         val headline: String,
         val detail: String,
-        override val provider: String,
+        override val origin: ActionOrigin,
     ) : PreparedAction {
         override val title: String get() = headline.take(120)
         override val verb: String get() = "Keep"

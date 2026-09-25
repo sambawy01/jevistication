@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AgentTransportTest {
-    private fun session() = AgentRunner(readyConfig(), hasKey = true)
+    private fun session() = AgentRunner(readyConfig(), hasKey = true, tier = AgentTier.CONNECTED)
         .open(item(), evidence(), TEST_KEY, atIso = "2026-09-25T10:00:00Z")!!
 
     @Test

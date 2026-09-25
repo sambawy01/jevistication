@@ -25,7 +25,8 @@ internal fun drive(session: AgentSession, responses: List<AgentHttpResponse>): A
 }
 
 class AgentRunnerTest {
-    private fun runner(config: AgentConfig = readyConfig(), hasKey: Boolean = true) = AgentRunner(config, hasKey)
+    private fun runner(config: AgentConfig = readyConfig(), hasKey: Boolean = true) =
+        AgentRunner(config, hasKey, AgentTier.CONNECTED)
 
     private fun session(
         item: AgentItem = item(),
