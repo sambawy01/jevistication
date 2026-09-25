@@ -1,0 +1,113 @@
+{
+ "schema": 1,
+ "source": "open-meteo",
+ "attribution": {
+  "text": "Weather data by Open-Meteo.com (CC BY 4.0)",
+  "url": "https://open-meteo.com/"
+ },
+ "fetchedAt": "2026-09-25T07:40:15.000Z",
+ "location": {
+  "name": "Alexandria",
+  "country": "Egypt",
+  "countryCode": "EG",
+  "admin1": "Alexandria",
+  "latitude": 31.20176,
+  "longitude": 29.91582,
+  "timezone": "Africa/Cairo",
+  "utcOffsetSeconds": 10800
+ },
+ "units": {
+  "temperature": "°C",
+  "windSpeed": "km/h",
+  "precipitation": "mm"
+ },
+ "current": {
+  "time": "2026-09-25T10:30",
+  "temperature": 27.4,
+  "apparentTemperature": 29.0,
+  "relativeHumidity": 61,
+  "precipitation": 0.0,
+  "weatherCode": 1,
+  "windSpeed": 14.2,
+  "isDay": true
+ },
+ "items": [
+  {
+   "date": "2026-09-25",
+   "weatherCode": 1,
+   "tempMax": 29.8,
+   "tempMin": 22.1,
+   "precipitationProbabilityMax": 10,
+   "precipitationSum": 0.0,
+   "sunrise": "2026-09-25T06:31",
+   "sunset": "2026-09-25T18:24",
+   "uvIndexMax": 7.1
+  },
+  {
+   "date": "2026-09-26",
+   "weatherCode": 0,
+   "tempMax": 30.6,
+   "tempMin": 22.8,
+   "precipitationProbabilityMax": 5,
+   "precipitationSum": 0.0,
+   "sunrise": "2026-09-26T06:31",
+   "sunset": "2026-09-26T18:24",
+   "uvIndexMax": 7.4
+  },
+  {
+   "date": "2026-09-27",
+   "weatherCode": 3,
+   "tempMax": 28.9,
+   "tempMin": 22.4,
+   "precipitationProbabilityMax": 35,
+   "precipitationSum": 0.4,
+   "sunrise": "2026-09-27T06:31",
+   "sunset": "2026-09-27T18:24",
+   "uvIndexMax": 6.2
+  },
+  {
+   "date": "2026-09-28",
+   "weatherCode": 61,
+   "tempMax": 26.1,
+   "tempMin": 21.0,
+   "precipitationProbabilityMax": 80,
+   "precipitationSum": 6.2,
+   "sunrise": "2026-09-28T06:31",
+   "sunset": "2026-09-28T18:24",
+   "uvIndexMax": 4.0
+  },
+  {
+   "date": "2026-09-29",
+   "weatherCode": 80,
+   "tempMax": 25.4,
+   "tempMin": 20.3,
+   "precipitationProbabilityMax": 65,
+   "precipitationSum": 3.1,
+   "sunrise": "2026-09-29T06:31",
+   "sunset": "2026-09-29T18:24",
+   "uvIndexMax": 4.8
+  },
+  {
+   "date": "2026-09-30",
+   "weatherCode": 2,
+   "tempMax": 27.7,
+   "tempMin": 20.9,
+   "precipitationProbabilityMax": 15,
+   "precipitationSum": 0.0,
+   "sunrise": "2026-09-30T06:31",
+   "sunset": "2026-09-30T18:24",
+   "uvIndexMax": 6.6
+  },
+  {
+   "date": "2026-10-01",
+   "weatherCode": 0,
+   "tempMax": 31.2,
+   "tempMin": 23.5,
+   "precipitationProbabilityMax": 0,
+   "precipitationSum": 0.0,
+   "sunrise": "2026-10-01T06:31",
+   "sunset": "2026-10-01T18:24",
+   "uvIndexMax": 7.3
+  }
+ ]
+}

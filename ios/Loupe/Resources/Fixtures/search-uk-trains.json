@@ -1,0 +1,231 @@
+{
+ "schema": 1,
+ "source": "national-rail-darwin",
+ "attribution": {
+  "text": "Powered by National Rail Enquiries",
+  "url": "https://www.nationalrail.co.uk/"
+ },
+ "fetchedAt": "2026-09-25T07:38:02.000Z",
+ "board": {
+  "type": "departures",
+  "crs": "PAD",
+  "locationName": "London Paddington",
+  "filterCrs": "RDG",
+  "filterLocationName": "Reading",
+  "generatedAt": "2026-09-25T07:38:01.512+01:00",
+  "platformAvailable": true,
+  "messages": [
+   "Disruption between London Paddington and Reading. Some trains may be delayed."
+  ]
+ },
+ "items": [
+  {
+   "serviceId": "fx01PADRDG",
+   "scheduled": "07:42",
+   "expected": "On time",
+   "platform": "9",
+   "operator": "Great Western Railway",
+   "operatorCode": "GW",
+   "origin": [
+    {
+     "name": "London Paddington",
+     "crs": "PAD",
+     "via": null
+    }
+   ],
+   "destination": [
+    {
+     "name": "Didcot Parkway",
+     "crs": "DID",
+     "via": null
+    }
+   ],
+   "isCancelled": false,
+   "cancelReason": null,
+   "delayReason": null,
+   "serviceType": "train"
+  },
+  {
+   "serviceId": "fx02PADRDG",
+   "scheduled": "07:50",
+   "expected": "07:58",
+   "platform": "7",
+   "operator": "Elizabeth line",
+   "operatorCode": "XR",
+   "origin": [
+    {
+     "name": "London Paddington",
+     "crs": "PAD",
+     "via": null
+    }
+   ],
+   "destination": [
+    {
+     "name": "Reading",
+     "crs": "RDG",
+     "via": null
+    }
+   ],
+   "isCancelled": false,
+   "cancelReason": null,
+   "delayReason": "This train has been delayed by a signalling fault",
+   "serviceType": "train"
+  },
+  {
+   "serviceId": "fx03PADRDG",
+   "scheduled": "08:00",
+   "expected": "On time",
+   "platform": "3",
+   "operator": "Great Western Railway",
+   "operatorCode": "GW",
+   "origin": [
+    {
+     "name": "London Paddington",
+     "crs": "PAD",
+     "via": null
+    }
+   ],
+   "destination": [
+    {
+     "name": "Bristol Temple Meads",
+     "crs": "BRI",
+     "via": null
+    }
+   ],
+   "isCancelled": false,
+   "cancelReason": null,
+   "delayReason": null,
+   "serviceType": "train"
+  },
+  {
+   "serviceId": "fx04PADRDG",
+   "scheduled": "08:15",
+   "expected": "08:31",
+   "platform": "5",
+   "operator": "Great Western Railway",
+   "operatorCode": "GW",
+   "origin": [
+    {
+     "name": "London Paddington",
+     "crs": "PAD",
+     "via": null
+    }
+   ],
+   "destination": [
+    {
+     "name": "Oxford",
+     "crs": "OXF",
+     "via": null
+    }
+   ],
+   "isCancelled": false,
+   "cancelReason": null,
+   "delayReason": "This train has been delayed by a late running train in front",
+   "serviceType": "train"
+  },
+  {
+   "serviceId": "fx05PADRDG",
+   "scheduled": "08:21",
+   "expected": "Cancelled",
+   "platform": null,
+   "operator": "Great Western Railway",
+   "operatorCode": "GW",
+   "origin": [
+    {
+     "name": "London Paddington",
+     "crs": "PAD",
+     "via": null
+    }
+   ],
+   "destination": [
+    {
+     "name": "Reading",
+     "crs": "RDG",
+     "via": null
+    }
+   ],
+   "isCancelled": true,
+   "cancelReason": "This train has been cancelled because of a shortage of train crew",
+   "delayReason": null,
+   "serviceType": "train"
+  },
+  {
+   "serviceId": "fx06PADRDG",
+   "scheduled": "08:30",
+   "expected": "On time",
+   "platform": "1",
+   "operator": "Great Western Railway",
+   "operatorCode": "GW",
+   "origin": [
+    {
+     "name": "London Paddington",
+     "crs": "PAD",
+     "via": null
+    }
+   ],
+   "destination": [
+    {
+     "name": "Cardiff Central",
+     "crs": "CDF",
+     "via": null
+    }
+   ],
+   "isCancelled": false,
+   "cancelReason": null,
+   "delayReason": null,
+   "serviceType": "train"
+  },
+  {
+   "serviceId": "fx07PADRDG",
+   "scheduled": "08:36",
+   "expected": "Delayed",
+   "platform": null,
+   "operator": "Elizabeth line",
+   "operatorCode": "XR",
+   "origin": [
+    {
+     "name": "London Paddington",
+     "crs": "PAD",
+     "via": null
+    }
+   ],
+   "destination": [
+    {
+     "name": "Reading",
+     "crs": "RDG",
+     "via": null
+    }
+   ],
+   "isCancelled": false,
+   "cancelReason": null,
+   "delayReason": "This train has been delayed by a fault with the signalling system",
+   "serviceType": "train"
+  },
+  {
+   "serviceId": "fx08PADRDG",
+   "scheduled": "08:45",
+   "expected": "On time",
+   "platform": "8",
+   "operator": "Great Western Railway",
+   "operatorCode": "GW",
+   "origin": [
+    {
+     "name": "London Paddington",
+     "crs": "PAD",
+     "via": null
+    }
+   ],
+   "destination": [
+    {
+     "name": "Swansea",
+     "crs": "SWA",
+     "via": null
+    }
+   ],
+   "isCancelled": false,
+   "cancelReason": null,
+   "delayReason": null,
+   "serviceType": "train"
+  }
+ ]
+}

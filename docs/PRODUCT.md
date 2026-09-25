@@ -118,6 +118,14 @@ trains and price watch; shopping compare and price-drop; a link and site safety 
 (read and rank pages); concerts, festivals and sports events. Every one is bound by §4a. It
 never books: the never list holds, and the last button is yours.
 
+*Updated 2026-09-25:* the Web tab is a **template library**. Currency, Weather and UK trains each offer
+several ready-made questions (English and Arabic) plus your own question with a decision type — yes/no, pick
+the best, score, or rank the list. Laya answers per fetched item on the phone, with the rule baseline shown
+beside it (rules only, with a banner, when the model is not installed). Each source is off by default and
+labelled Online with its source, fetch time and required attribution; every row links to the provider's
+record. Flights stays **development-only** until Duffel grants permission (its agreement bars metasearch and
+third-party access), hidden from Release builds.
+
 **Form filling that can refuse.** Which of your four addresses, work or personal email,
 shipping or billing — decided from page context rather than from field names, which is why it
 works on the forms browser autofill breaks on. And it declines to fill when the form has no

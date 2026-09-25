@@ -87,7 +87,7 @@ object LiveRun {
         "email_run" -> EMAIL
         "scan", "inbox" -> SCAN
         "mail_history" -> HISTORY
-        "watchers", "judgments", "sort", "flights", "game" -> WATCHERS
+        "watchers", "judgments", "sort", "flights", "game", "web_search" -> WATCHERS
         else -> null
     }
 

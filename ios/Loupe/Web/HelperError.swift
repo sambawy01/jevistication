@@ -12,6 +12,10 @@ enum HelperError: Error, Equatable {
     case offline
     case timeout
     case unexpected(String)
+    /// 503 NOT_CONFIGURED: the helper has this route but not Loupe's provider key or flag yet.
+    case notConfigured
+    /// A bare 404: the deployed helper does not have this route yet (it is not deployed).
+    case notDeployed
 
     struct Body: Decodable { struct Inner: Decodable { var code: String; var message: String? }; var error: Inner }
 
@@ -25,10 +29,12 @@ enum HelperError: Error, Equatable {
         case "BUSY": return .busy
         case "PROVIDER_ERROR": return .providerError
         case "BAD_REQUEST": return .badRequest(body?.error.message ?? "The helper rejected the search.")
+        case "NOT_CONFIGURED": return .notConfigured
         default: break
         }
         switch status {
         case 401, 403: return .invalidKey
+        case 404: return .notDeployed
         case 429: return .rateLimited
         case 503: return .busy
         case 500...599: return .providerError
@@ -58,6 +64,8 @@ enum HelperError: Error, Equatable {
         case .offline: return "Needs a connection"
         case .timeout: return "Search timed out"
         case .unexpected: return "Something went wrong"
+        case .notConfigured: return "Not set up yet"
+        case .notDeployed: return "Not available yet"
         }
     }
 
@@ -73,6 +81,8 @@ enum HelperError: Error, Equatable {
         case .offline: return "Needs a connection. Everything else keeps working."
         case .timeout: return "No answer within 20 seconds. Try again."
         case .unexpected(let m): return m
+        case .notConfigured: return "Loupe's helper does not have this source's provider plan set up yet. Nothing was fetched."
+        case .notDeployed: return "Loupe's online helper does not offer this search yet. Nothing was fetched."
         }
     }
 }

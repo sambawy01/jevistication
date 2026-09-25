@@ -66,8 +66,13 @@ targets:
         # every build phase, and the code that reads it is #if DEBUG. The same for the Diagnostics
         # parity fixture (Me → Diagnostics is #if DEBUG || LOUPE_DIAGNOSTICS); a TestFlight
         # diagnostics archive overrides both settings (ios/scripts/device-build.sh --diagnostics-archive).
+        # Flights is DEVELOPMENT-ONLY until Duffel grants permission (owner decision 2026-09-25: its
+        # Services Agreement bans metasearch §2.5(d) and third-party access §2.5(e)). Only Debug defines
+        # LOUPE_FLIGHTS_DEV, so a Release build has no Flights template (LoupeTests/WebLibraryTests checks this).
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) DEBUG LOUPE_FLIGHTS_DEV"
         Release:
-          EXCLUDED_SOURCE_FILE_NAMES: ["flights-lis-lhr.json", "laya-diagnostics.json"]
+          EXCLUDED_SOURCE_FILE_NAMES: ["flights-lis-lhr.json", "laya-diagnostics.json", "search-currency.json", "search-weather.json", "search-uk-trains.json"]
     info:
       path: Loupe/Info.plist
       properties:

@@ -37,7 +37,7 @@ class ActivityTest {
             listOf("scan", "email_run", "watchers", "model_load", "ocr", "ollama_pull", "feeds", "llm_job", "calibration", "mail_history"),
             ActivityNames.STATION_KINDS,
         )
-        assertEquals(listOf("judgments", "sort", "inbox", "flights", "game"), ActivityNames.MOBILE_KINDS)
+        assertEquals(listOf("judgments", "sort", "inbox", "flights", "game", "web_search"), ActivityNames.MOBILE_KINDS)
         assertEquals(listOf("read", "decisions", "flagged", "to_you", "tokens"), ActivityNames.COUNTERS)
         assertEquals(listOf("accepted", "uncertain", "flagged", "skipped"), ActivityNames.GATES)
         assertEquals(listOf("laya", "rule", "baseline", "personal"), ActivityNames.SOURCES)

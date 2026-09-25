@@ -38,6 +38,8 @@ final class WebModel: ObservableObject {
     @Published var form = SearchForm()
 
     let connectivity: Connectivity
+    /// The template library (currency, weather, UK trains): its own sources and switches.
+    let library: WebLibraryModel
     let isFixtureMode: Bool
     let autoSearch: Bool
     private let helper: FlightsHelper
@@ -57,8 +59,10 @@ final class WebModel: ObservableObject {
          ledger: LedgerService = .shared,
          fixtureMode: Bool = false, autoSearch: Bool = false,
          defaults: UserDefaults = .standard,
-         settings: ModelSettingsSource = ModelSettingsService.shared) {
+         settings: ModelSettingsSource = ModelSettingsService.shared,
+         library: WebLibraryModel? = nil) {
         self.settings = settings
+        self.library = library ?? WebLibraryModel(helper: LiveSearchHelper(installId: InstallID.value(defaults)), defaults: defaults)
         self.defaults = defaults
         self.helperEnabled = defaults.object(forKey: "web.helperEnabled") as? Bool ?? true
         self.flightsEnabled = defaults.object(forKey: "web.flightsEnabled") as? Bool ?? true
@@ -75,13 +79,30 @@ final class WebModel: ObservableObject {
         connectivity.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &bag)
+        self.library.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &bag)
     }
 
     static func make(launch: LaunchOptions) -> WebModel {
         #if DEBUG
         if launch.fixtureMode {
+            // Fixture mode: the bundled search-*.json answers, per-source switches in a throwaway
+            // store (off by default, as shipped). `-LoupeWebState notConfigured|notDeployed [sector]`
+            // forces an error state for tests and screenshots.
+            let args = ProcessInfo.processInfo.arguments
+            var forced: FixtureSearchHelper.Forced?
+            var only: Set<WebSector>?
+            if let i = args.firstIndex(of: "-LoupeWebState"), i + 1 < args.count {
+                forced = FixtureSearchHelper.Forced(rawValue: args[i + 1])
+                if i + 2 < args.count, let s = WebSector(rawValue: args[i + 2]) { only = [s] }
+            }
+            let store = UserDefaults(suiteName: "dev.loupe.fixture.web.\(UUID().uuidString)") ?? .standard
+            if args.contains("-LoupeWebSourcesOn") { for s in WebSector.allCases { store.set(true, forKey: WebLibraryModel.key(s)) } }
+            let lib = WebLibraryModel(helper: FixtureSearchHelper(forced: forced, sources: only), fixtureMode: true, defaults: store)
             let m = WebModel(helper: FixtureFlightsHelper(), keys: MemoryKeyStore("duffel_test_fixture_only_key"),
-                             connectivity: Connectivity(start: false), fixtureMode: true, autoSearch: launch.autoSearch)
+                             connectivity: Connectivity(start: false), fixtureMode: true, autoSearch: launch.autoSearch,
+                             library: lib)
             m.form = .fixtureExample
             return m
         }

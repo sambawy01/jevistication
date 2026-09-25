@@ -30,14 +30,14 @@ object ActivityNames {
     )
 
     /** The phone's own kinds (docs/LIVE-RUN-VIEW.md). */
-    val MOBILE_KINDS: List<String> = listOf("judgments", "sort", "inbox", "flights", "game")
+    val MOBILE_KINDS: List<String> = listOf("judgments", "sort", "inbox", "flights", "game", "web_search")
     val KINDS: List<String> = STATION_KINDS + MOBILE_KINDS
 
     val STATES: List<String> = listOf("running", "done", "error", "cancelled")
 
     /** Station's views, then the phone's screens that own a job. */
     val STATION_VIEWS: List<String> = listOf("playground", "scan", "email", "watchers", "review", "protection", "measure", "setup", "engine")
-    val MOBILE_VIEWS: List<String> = listOf("now", "judgments", "flights", "sources", "assist", "game")
+    val MOBILE_VIEWS: List<String> = listOf("now", "judgments", "flights", "sources", "assist", "game", "web")
     val VIEWS: List<String> = STATION_VIEWS + MOBILE_VIEWS
 
     val COUNTERS: List<String> = listOf("read", "decisions", "flagged", "to_you", "tokens")

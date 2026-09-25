@@ -1113,6 +1113,21 @@ their acceptance criteria are met; entries here record increments toward them.
   animates or casts a shadow. Simulator (iPhone 17 Pro Max, Laya flying): 60 fps steady, 10–14 decisions/s, p50 ~63 ms, p95 ~82 ms. Also reverted an
   unintended change dropping the Share Extension's App Group entitlement, and the live run UI test
   now scrolls to the privacy card, since the Play card sits high on Now.
+- **2026-09-25 — iPhone Web tab becomes a template library (owner decisions, 2026-09-25).** Templates
+  Currency (Frankfurter), Weather (Open-Meteo) and UK trains (National Rail Darwin), each with five ready-made
+  question variants in English and Arabic (`ios/Loupe/Web/WebTemplates.swift`) and a custom question box with a
+  decision type (yes/no, pick the best, score, rank). Questions compile through C2's `JudgmentAuthor` lint in
+  shared `dev.loupe.kit.web.WebQuestion` with neutral, described option labels; score/rank levels are ordinal,
+  so Laya sends them highest first (`LayaRuntimeRules`). `WebJudge` asks per fetched item on the phone and
+  writes one ledger row per item (`web:<source>:<id>`); the rule baseline (`WebRules.swift`) is shown alongside,
+  with a disagreement line; no model → rules only with the banner. Every source is off by default with its own
+  switch; results are labelled Online with source, fetch time and the provider's attribution (linked); every row
+  shows its provider record and a link to it. `NOT_CONFIGURED` and a bare 404 ("not available yet") are shown
+  honestly; the helper (`loupe-web-helper` c140705) is not deployed, so DEBUG fixture mode (`search-*.json`,
+  schema v1, excluded from Release) drives tests and screenshots. Flights is development-only
+  (`LOUPE_FLIGHTS_DEV`, Debug config only) and labelled "Development only — pending provider permission".
+  Live run kind `web_search`, view `web` (docs/LIVE-RUN-VIEW.md). Model settings: the Web tab reads
+  `features.flights`. Tests: `WebQuestionTest` (Kotlin), `WebLibraryTests`, `WebLibraryUITests`.
 
 ## Where the build stands
 

@@ -36,6 +36,7 @@ decisions × (tokens in × input price + tokens out × output price) / 1,000,000
 | Judgment sweep | `judgments` * | `judgments` * | Judgments → results |
 | Inbox import | `inbox` * | `sources` * | dock (Sources) |
 | Flights ranking | `flights` * | `flights` * | Web → results (while running) |
+| Web question (template library) | `web_search` * | `web` * | Web → template, in place (while running) |
 | Model open / download | `model_load` | `setup` | Me → Laya model; banner "Loading the multilingual model… about N s" |
 | Phishing lists | `feeds` | `protection` | Me → Online checks (while running) |
 | Writing assistant | `llm_job` | `assist` * | dock |
@@ -46,10 +47,11 @@ Cancel and the last ten finished.
 
 ## Names added beyond Station's (* above)
 
-- Kinds: `judgments`, `sort`, `inbox`, `flights`, `game`.
-- Views: `now`, `judgments`, `flights`, `sources`, `assist`, `game`.
+- Kinds: `judgments`, `sort`, `inbox`, `flights`, `game`, `web_search` (2026-09-25).
+- Views: `now`, `judgments`, `flights`, `sources`, `assist`, `game`, `web`.
 - Loops: the phone's kinds reuse Station's layouts — `inbox` the Folder Scan loop; `judgments`, `sort`,
-  `flights`, `game` the Watchers loop. No new stage ids.
+  `flights`, `game`, `web_search` the Watchers loop. Keys `act.kind.web_search`, `act.title.webSearch`,
+  `act.res.webSearch`, `act.q.web.search.*`. No new stage ids.
 - Stage keys: `act.stage.ranking`, `act.stage.playing`, `act.stage.importing` (→ `read`, `read`, `walk`).
 - Titles: `act.title.privacy`, `act.title.mail`, `act.title.judgments`, `act.title.sort`, `act.title.inbox`,
   `act.title.flights`, `act.title.game`, `act.title.modelDownload`, `act.title.writing`; `act.kind.*` for each
