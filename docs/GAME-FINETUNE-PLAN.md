@@ -4,6 +4,11 @@ Status: draft, 2026-09-25. Plan only: no code has changed. Implementation waits 
 collision words (`Prediction`, `PathText.describe`) that are being added now have landed and been
 measured, because they are part of the model's input.
 
+*Refined 2026-09-26* with findings from public projects (BACKLOG.md, *Engineering notes*, items
+5–7): a calibration-safe loss, a temperature fit and a wrong-answer confidence gate are now
+requirements (§1 G7, §5), and the head decision and GPU estimate cite outside evidence (§2, §5).
+Sources are cited where used; licences as given.
+
 ## 0. Where we start
 
 | Fact | Value | Source |
@@ -35,6 +40,7 @@ seeds are used once, at the end.
 | G4 | Laya's other jobs do not regress | Base graph answers **identical** to v1 INT8: golden 34/34 and criteria 8/8, the same argmax and max \|Δp\| = 0 on the JVM. The 42 Diagnostics questions on the device agree with the JVM as before. |
 | G5 | Fits the cadence on a phone | The whole decision (observation with prediction, encoder, head) on the owner's iPhone has **P95 ≤ 50 ms** (the L4–5 interval), with a 33 ms P50 as the goal for L6+. The measurement is then re-run with the charged delay set to the device P50 in ticks. |
 | G6 | Honest comparison | The same table also shows **baseline+sensor** (the rules pilot given the same collision words) and the **teacher**, so a win is visibly Laya's and not the words'. |
+| G7 | Confidence still means something | After the temperature fit (§5), on held-out dev states: the **spread of confidence on wrong answers** is reported, and wrong answers must not pile up at the top (no more than a small, stated share above the threshold slider's default; the exact bar is set in M0 from today's head). A head whose wrong answers sit at ~1.00 fails, whatever it flies: the threshold slider that hands the decision to the player depends on it. Also ECE before and after the fit. |
 
 ## 2. The core decision: one shared model or a game head
 
@@ -52,6 +58,7 @@ seeds are used once, at the end.
 - It matches Station's own training plan (`2026-09-25-model-training-plan.md`, rung 2 "heads on frozen Laya", with per-question model choice). The same trainer could serve both.
 - It keeps a ladder. If head-only stalls, unfreeze the top 2 encoder layers (about +10M parameters, a game file of about 25 MB INT8), still without touching the shared file (see the v2 graph below).
 - D is rejected on product grounds: the game exists to show Laya deciding. It stays as a diagnostic (§3, "ceiling").
+- **Outside evidence that head-only works** (added 2026-09-26). `huggingface.co/ichenney/laya-browser-v32b` (Apache-2.0) keeps the encoder byte-identical to upstream and trains only the 36-tensor decision head, for +17 to +29 points on its task. `github.com/bladedevoff/stuntd` (Apache-2.0) trains small heads on frozen upstream embeddings from a teacher's answers (at least 300 captures per decision site). Both are the shape of option C, and both ship the head as a small file beside an unchanged encoder, which is what makes the delta download in §7 plausible.
 
 **The one real cost of C.** The v1 graph does not expose the encoder's output. The v2 graph is **the
 v1 INT8 file with extra graph outputs added** (the final hidden states, plus the hidden states after
@@ -84,6 +91,11 @@ The same edit applies to `int8-partial`.
 4. Target: the set B of ways within ε = 5 of max Q. The label is uniform over B. If B is every way
    (a "tie" state), keep it at weight 0.2 with a uniform target (it teaches "no preference"). Keep
    decisive states at weight 1.
+
+**Legal moves from code, the model picks one** is what the game already does (the gates remove fatal
+ways, the model chooses among the rest), and it is the pattern `github.com/OmniJev/PlayJev`
+(Apache-2.0) uses: imitation plus DAgger from **code teachers** rather than human labels, training the
+head only. It supports this section's rollout teacher and the DAgger rounds below.
 
 This needs one new piece of code: a `Rollout` helper that runs `GameSession`'s tick loop (delay,
 interval, override) over a `World.copy()`, because `GameSession` only starts from a seed. A test
@@ -138,15 +150,18 @@ actually be asked (≥ 2 ways after the gates) are kept.
 - **Encoder states come from the served INT8 graph.** The encoder is frozen, so its hidden states are computed once with ONNX Runtime on the **v2 INT8 graph** (the exact serving bytes) and cached to disk (fp16, about 50 tokens × 768 × 2 B ≈ 77 KB a state, about 45 GB for 600k states, on the external disk). The head is then trained on exactly what the phone will feed it, which removes the FP32-to-INT8 train/serve gap for the encoder.
 - **Length budget.** Today 29 tokens mean and 44 max. The collision words will add some (to be measured in M0). `LayaPilotTest` already asserts that nothing is cut, with ≤ 200 tokens a sequence and ≤ 120 of state. The 256-token head budget is far away. Keep those asserts.
 - **Freeze the words.** Record `PathTextTest`'s golden digest in the head's metadata. A test fails if the words change without a new head. Any wording change means relabel and retrain.
-- **Word-bias division.** A trained head should not need it. Ablate it (§6). If it is dropped, the two content-free passes go too, and the bars show the head's raw share, labelled "Laya's answer, trained for this game; not calibrated".
+- **Word-bias division.** A trained head should not need it. Ablate it (§6). If it is dropped, the two content-free passes go too, and the bars show the head's share after its temperature fit (§5), labelled "Laya's answer, trained for this game; calibrated on game states only".
 
 ## 5. Training
 
 | Item | Plan |
 |---|---|
-| Where | **The owner's M4 Mac (16 GB, MPS) for head-only.** Caching encoder states: about 15–40 min per 300k states (ORT CPU, batched). Training the head: about 10–20 min per run on MPS (15M parameters). Estimates, measured in M0. A rented GPU is needed only for the ladder's full fine-tune (322M, AdamW ≈ 5 GB of state, about 6 h a run on the Mac if it fits at all). One A100 or H100 at about $2–3/h does it in under 1 h, so **< $50 total**. The game data holds nothing private. |
+| Where | **The owner's M4 Mac (16 GB, MPS) for head-only.** Outside reference: `ichenney/laya-browser-v32b` trained its head on about 59.5k items in about 2 GPU-hours on an RTX 3080 (lr 1e-4, bf16), consistent with this estimate and with the < $50 cap if a rented GPU is needed. Caching encoder states: about 15–40 min per 300k states (ORT CPU, batched). Training the head: about 10–20 min per run on MPS (15M parameters). Estimates, measured in M0. A rented GPU is needed only for the ladder's full fine-tune (322M, AdamW ≈ 5 GB of state, about 6 h a run on the Mac if it fits at all). One A100 or H100 at about $2–3/h does it in under 1 h, so **< $50 total**. The game data holds nothing private. |
 | Base checkpoint | `laya-multilingual` at `052592a1` (safetensors `9d628fd9…`). **The head is initialised from the base head**, so round 0 starts exactly at today's pilot. |
-| Head-only hyperparameters (start) | AdamW lr 1e-4 (sweep 3e-5 / 1e-4 / 3e-4), wd 0.01, batch 256, 3 epochs, 5% warmup then cosine, dropout 0.1, gradient clip 1.0, FP32. Loss: soft-target cross-entropy to the teacher's B-set target, times the state weight. Choose by dev-state loss, then by **dev-seed flying**. |
+| Head-only hyperparameters (start) | AdamW lr 1e-4 (sweep 3e-5 / 1e-4 / 3e-4), wd 0.01, batch 256, 3 epochs, 5% warmup then cosine, dropout 0.1, gradient clip 1.0, FP32. Loss (**requirement**, 2026-09-26): a proper scoring rule, soft-target cross-entropy to the teacher's B-set target **plus a Brier term**, times the state weight. Choose by dev-state loss, then by **dev-seed flying**. |
+| Why the loss matters | `github.com/yuvrajrox/laya-jev-eval` (no licence, ideas only) fine-tuned the upstream model and got **1.00 confidence on wrong answers** (zero-shot errors had sat at 0.37–0.84), blamed on training the decision head directly while the escalation head stayed untrained. The game head inherits the base head's act/escalation parts (§0), so this failure is possible here. Reference recipe: `github.com/intikhab49/open-jev-typed-decision-engine` (Apache-2.0), ECE 0.156 → 0.057 with a proper scoring rule. |
+| Temperature fit (**requirement**) | After training, fit one temperature for the game head on a held-out calibration split of dev states (never test), bounded to **[0.25, 5]**, and store it in the head's metadata. The bars then show the fitted share, labelled as calibrated on game states only. |
+| Release gate (**requirement**) | G7: the confidence spread on wrong answers, reported beside ECE; a head that fails it is not shipped even if it flies further. |
 | Ladder, if head-only stalls on dev | (1) Unfreeze encoder layers 21–22, lr 2e-5, fed by the v2 graph's layer-20 output: no new shared file. (2) Only then a full fine-tune, with a KL-to-base regulariser on judgment prompts. That is option A, and it needs the owner's sign-off (§8). |
 | Trainer | New `tools/game-head/` in this repo (Python, pinned requirements beside `requirements-laya.txt`). It loads `DecisionModel` from the `laya` package at the pinned commit, so the head's forward pass is upstream's code. |
 | Export | The head as its own ONNX graph: inputs `hidden [1, seq, 768]`, `attention_mask`, `marker_pos`; output `logits`. qtype is fixed to choice inside, as today. FP32, then INT8 with the existing recipe (ORT dynamic, per-channel). |
@@ -192,7 +207,7 @@ on the M4 · latency P50/P95 on the iPhone.
 | Pins | `models.json` (urlTemplate → `laya/v2/`, sizes, SHA-256s, a `game-head` file in each variant) **and** `LayaModelStore.VARIANTS`/`FILES`, in the same commit. `ModelDeliveryTests` already checks that the two agree, and its URL test moves to `laya/v2/`. |
 | Code (after the other agent lands) | JVM `OnnxBackend` and iOS `OrtLayaBackend`: an optional second session for the head, and a `LayaGameBackend` implementing `Backend`. `GameSessions.modelDecider*` takes it. Judgments keep using the base logits from the same graph. |
 | What an existing user sees | A consent screen for **one re-download of ≈ 384 MB + ≈ 15 MB**, over Wi-Fi by default. Disk precheck: the v1 files stay until v2 verifies, so about 400 MB extra while it downloads. **Until v2 is installed, the app keeps accepting the v1 pins**: judgments run on v1 and the game flies the v1 head (today's pilot). Nothing stops working. After v2 verifies, v1 is deleted. A binary delta (v1 → v2 differs only in the graph's output list) could cut this to about 15 MB. It is a separate 2–3 day item, worth it after launch. |
-| Calibration | No judgment calibration restarts (identical logits). The game has none fitted. Its content-free priors are per process and recomputed or dropped. The results card and Watch copy name the head ("trained for this game"). |
+| Calibration | No judgment calibration restarts (identical logits). The game head carries its own fitted temperature (§5), checked by G7. Its content-free priors are per process and recomputed or dropped. The results card and Watch copy name the head ("trained for this game"). |
 | Model settings | Add `features.game.head`: `game` (default) \| `base`, documented in MODEL-SETTINGS.md as a phone-only key. This is also the instant user-side fallback. |
 | Station | Nothing to change for its questions: its pins (`onnx_models.json`, revision `1c5edc17`) stay. Steps: (1) message the Station session with the v2 facts: same safetensors `9d628fd9…`, an extra graph output, a phone-only head file; (2) publish the head's safetensors, reference script and 30-state fixture under `laya/v2/`; (3) if Station later loads the head, it pins the same SHA. **If option A were ever chosen**, Station re-exports all three variants, re-pins, re-runs `tests/onnx_eval.py` and its measure snapshot, and restarts calibrations on the same day as the phone. |
 | Rollback | (1) Runtime: `features.game.head = base`, or automatically if the head is missing or fails SHA. (2) Release: an app update that pins v1 again. v1 is still hosted, so no re-upload is needed. |
@@ -206,7 +221,7 @@ on the M4 · latency P50/P95 on the iPhone.
 | M1 | JVM exporter (states → ids, markers, text, Q values). Mirror augmentation. Round-0 data | 2–3 d | ≥ 200k labelled states, label stats reported |
 | M2 | v2 graph (added outputs), head export, JVM two-graph backend, G4 identity check | 2–3 d | Golden 34/34 and criteria 8/8 identical to v1 |
 | M3 | Encoder-state cache, head training, DAgger rounds 1–3 | 3–5 d (mostly compute) | Dev seeds clearly above the baseline |
-| M4 | Test seeds 1–20 once, confirmation 1001–1100 once, ablations, BUILD.md entry | 1–2 d | G1–G3 and G6 pass or fail, recorded either way |
+| M4 | Test seeds 1–20 once, confirmation 1001–1100 once, ablations, BUILD.md entry | 1–2 d | G1–G3, G6 and G7 pass or fail, recorded either way |
 | M5 | iOS: pins, manifest, v1 fallback, two-session ORT, Diagnostics game set, settings key | 3–4 d | Simulator green, then device latency (G5) on the owner's iPhone |
 | M6 | Owner uploads `laya/v2/`, release, Station message | ½ d + owner | The installed v2 verifies on a device |
 

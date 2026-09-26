@@ -383,3 +383,64 @@ what it can do. None of them is an approved change.
 4. **`Score` is the weakest question type.** Try cumulative `Noul`s instead ("at least somewhat
    urgent?", "at least very urgent?"). `LAYA-UPGRADE-MEASURE.md` shows how fragile it is: reversing
    the order of the score levels changed 21 of 45 answers of `urgency`, the only score template.
+
+### Second research pass (2026-09-26, from `hellogumbo/awesome-jev`)
+
+Findings from public projects, relayed from the Loupe Station session. Each names its source and
+licence; "no licence" or "licence not given" means ideas only, and nothing may be copied from it. Findings, not approved
+changes, except where marked as a plan refinement.
+
+5. **Fine-tuning can collapse confidence (the most important).** In
+   `github.com/yuvrajrox/laya-jev-eval` (no licence, ideas only) a fine-tuned upstream model gave
+   **1.00 confidence on wrong answers**, so no threshold could separate its errors; zero-shot, its
+   errors sat at 0.37–0.84. The authors blame training the decision head directly with gradients,
+   which left the escalation head untrained. For any fine-tune (game, Arabic, scam), three
+   requirements follow: a proper scoring rule as the loss (soft cross-entropy on label
+   distributions plus a Brier term); a temperature per question type fitted afterwards, bounded to
+   [0.25, 5]; and **"confidence spread on wrong answers" as a release gate**. Reference recipe:
+   `github.com/intikhab49/open-jev-typed-decision-engine` (Apache-2.0): ModernBERT-150M, 30 minutes
+   on a Colab T4, ECE 0.156 → 0.057. Folded into `GAME-FINETUNE-PLAN.md` §5 as plan requirements.
+6. **Head-only fine-tuning works.** `huggingface.co/ichenney/laya-browser-v32b` (Apache-2.0) keeps
+   the encoder byte-identical to upstream and trains only the 36-tensor decision head (about 59.5k
+   synthetic items, lr 1e-4, bf16, about 2 GPU-hours on an RTX 3080) for +17 to +29 points. So game,
+   Arabic or scam heads could ship as small downloads on top of the existing 384 MB graph. This
+   supports `GAME-FINETUNE-PLAN.md`'s option C and its delta-download idea, and gives a GPU estimate
+   (plan refinement, cited there).
+7. **Teacher-trained heads with a promotion lifecycle.** `github.com/bladedevoff/stuntd`
+   (Apache-2.0): small heads on frozen upstream embeddings, trained from a teacher's answers (at
+   least 300 captures per decision site); shadow → live at 0.99 calibrated agreement → 2% of live
+   traffic re-checked → automatic demotion on drift. **Idea for the paid assistant (evaluation only;
+   needs owner approval):** the provider's answers on items the user already sent become the teacher
+   for per-user local heads, so the paid tier improves the free tier. Privacy: those answers are
+   already on the device (`EgressRecord`, AGENT.md §5) and nothing new leaves it, but the privacy
+   page would have to say that provider answers train a local head.
+8. **Self-vouching text flips verdicts.** Text such as "verified by CIB security" inside the item
+   flips typed-decision verdicts; for Jev, 96.5% → 26.5% (`github.com/zkousama/jagged`; licence not given; ideas only). Station is
+   measuring the upstream model's exposure. Affects BL-12, BL-13 and the `phishing`,
+   `pressure-tactics` and `asks-for-secrets` templates. Mitigations to evaluate: strip or neutralise
+   self-claims before the model sees the text, and have code check the claimed channel, which is
+   BL-13's design already (and PRODUCT.md §4: page content never raises trust).
+9. **Upstream-specific lessons.**
+   - **Absence questions fail.** "X is missing" should be rephrased as a presence check
+     (`github.com/PerryLink/llm-jev-laya-bench`; licence not given; ideas only). Worth a lint rule.
+   - **Calibration drifts in opposite directions by question type:** `Noul` underconfident
+     (T ≈ 0.66), `Choice` overconfident (T ≈ 1.30), `Score` strongly overconfident (T ≈ 1.92)
+     (`github.com/scienthoon/jev-ood-calibration`, MIT). Calibrate per template type × language,
+     never globally; the engine already calibrates per judgment × source × option count
+     (PRODUCT.md §8), and language is the missing axis.
+   - **Numbers inside a document are not preserved** (45% came out as 6.6%): always extract numbers
+     and compute in code (`github.com/KantaHayashiAI/jev-does-not-play-dice`; no licence stated,
+     ideas only). We already do: the receipt gate is mechanical evidence (BUILD.md 2026-09-25),
+     `ExpiryRadar` and `RecurringMoney` do the arithmetic in code, and the game's scene words are
+     categories, not sums.
+   - **A `Choice` with no none/unclear option failed confidently** (≥ 0.9) 36% of the time
+     (`github.com/suraj-phanindra/wellposed`, MIT, a 45-rule template linter). Station is running
+     it read-only over our templates. Reinforces BL-8.
+   - **More than 20 options:** split into interleaved chunks. **Mixed Arabic/English pages:**
+     filtering distractors by script beat reordering them
+     (`github.com/ChenneyZhuang/laya-browser-agent`, Apache-2.0).
+   - **A smaller download.** `github.com/yzfly/edgejev` (Apache-2.0): per-tensor dynamic INT8 of the
+     upstream model is 1,290 → 324 MB at 15.6 ms a question (4 vCPU), with an explanation of why the
+     model tolerates quantisation. Ours: `int8` 384 MB (the 22 `mlp.Wo` kept FP32) and `int8-partial`
+     357 MB; BUILD.md risk 13 records that the full ~58 MB saving was tried and rejected because it
+     changed answers. Worth re-testing their recipe against golden 34/34 and criteria 8/8.
