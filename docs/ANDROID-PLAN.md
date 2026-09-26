@@ -125,3 +125,64 @@ unknown senders is allowed by iOS but not built (PRODUCT.md §2, §11).
 4. Whether the accessibility reader is worth a direct-build channel on its own.
 5. Warn on every message, or only above a threshold with a daily cap, so warnings stay rare enough
    to be read.
+
+## Remote-access app warning (approved 2026-09-26, not started)
+
+*BACKLOG.md BL-15. Behind the same hold, then after A4b (it reuses the message check).*
+
+**What.** Two parts, both warnings only:
+
+1. **On messages:** one more `Noul` in A4b's pass, *tells you to install an app or share your
+   screen* (AnyDesk-style "bank support" scams).
+2. **On the phone:** a list of newly installed apps that hold powerful access, each sorted by a
+   `Choice` over its store description: *remote control, SMS reader, loan app, utility*.
+
+Loupe never uninstalls, disables or changes an app; a finding goes to the review queue with
+"open the app's settings" as the only action, and the last button is the user's.
+
+**How it finds the apps.**
+
+| Access | API | Visibility cost |
+|---|---|---|
+| Accessibility services | `AccessibilityManager.getInstalledAccessibilityServiceList()` | None: it lists every installed service without `QUERY_ALL_PACKAGES` |
+| SMS permissions, other apps | `PackageManager` permission queries | Needs package visibility: a `<queries>` element per intent, or `QUERY_ALL_PACKAGES` |
+| Screen sharing | `MediaProjection` is granted per session, not held; the check is "remote control" apps by description, plus the message `Noul` | — |
+
+**Play policy to check before building.** `QUERY_ALL_PACKAGES` is restricted to named use cases
+(antivirus and security apps are among them; verify the current wording and whether Loupe qualifies),
+and it needs a declaration. Prefer the narrow route (`<queries>` plus the accessibility list) if it
+catches enough. Store descriptions must come without a network call, or through an opt-in Online
+source (PRODUCT.md §4a).
+
+## Kids' chat protection (approved 2026-09-26, not started)
+
+*BACKLOG.md BL-16. Android first; behind the hold, and behind the hard requirements below.*
+
+**What.** On the child's phone, game, Discord and messaging chats are screened for grooming and
+gift-card lures with four `Noul`s: *asks to move to a private chat*, *offers in-game currency or a
+gift card*, *asks for photos or location*, *says to keep it secret*. The parent's alert carries no
+content: the category, the confidence and the time only.
+
+**Reading.** The same routes as the message scam check: notification previews in the Play build;
+the visible chat through accessibility, which PRODUCT.md §7 keeps out of the Play build. A declared
+parental-control accessibility use would change that line, so it needs an owner decision first.
+
+**Hard requirements, before any build.**
+
+1. **Consent and transparency.** The child knows it is on, in age-appropriate words; no hidden mode.
+2. **Google Play.** The stalkerware policy: the `isMonitoringTool` manifest flag, a persistent
+   notification while monitoring, prominent disclosure, the parental-control declaration, and the
+   AccessibilityService declaration.
+3. **iOS.** Check Apple's Screen Time APIs (FamilyControls, ManagedSettings, DeviceActivity) for
+   anything usable; they are not known to expose message content, so iOS is probably controls only.
+4. **Legal review.** Children's data; Egypt's Personal Data Protection Law (151/2020); COPPA and
+   GDPR-K if sold outside Egypt.
+5. **A measured false-positive rate** on a labelled set before any launch claim.
+
+**Parent alerts without our servers.** PRODUCT.md §4 rules out routing data through Loupe servers.
+Options to weigh: pairing the two phones directly, the family's own iCloud / Google account, or a
+content-free push relay that carries only category, confidence and time. Open question for the owner.
+
+**Milestone.** A10, after A9 (the first Play release) and the legal review: *done when* the four
+questions run on a fixture set with measured precision and false-positive rate, the Play
+declarations are filed, and the consent screens have been reviewed.

@@ -21,6 +21,11 @@ question types, used here as technical terms only.
 | BL-9 | Public calibration page: gated accuracy at coverage, with sample counts | website | n/a | measurement harness, a real labelled set | approved, not started | owner |
 | BL-10 | "Loupe Wrapped": a yearly on-device recap to share | iOS, Android | Free | watchers, Spotted log, ledger | approved, not started | owner |
 | BL-11 | Consider listing Loupe on `yibie/awesome-jev` | n/a | n/a | BL-9 or another measured number helps | approved, not started (finding below) | owner |
+| BL-12 | "Is this a scam?" from anywhere: text, link, screenshot or QR photo | iOS, Android | Free | Check a link, Share extension, clipboard intent, scam templates; Arabic calibration (notes) | approved, not started | Station research |
+| BL-13 | Egypt / MENA "official channel" trust pack | all | Free | Brand list, pack format; ongoing curation | approved, not started | Station research |
+| BL-14 | QR "look before you scan", plus a venue self-audit | iOS, Android | Free | BL-13 helps; phishing formula | approved, not started | Station research |
+| BL-15 | Remote-access app warning | Android | Free | Android A0–A4 (on hold); BL-1 | approved, not started | Station research |
+| BL-16 | Kids' chat protection | Android first | To decide | Android hold; legal review; measured false-positive rate | approved, not started | Station research |
 
 ---
 
@@ -207,3 +212,156 @@ of those also uses Jev, so acceptance of a Laya-only app is the maintainers' cal
 (the phishing check) or Classification & Routing (judgments). An entry must name the upstream model,
 which is fine as a technical reference but must not become user-facing copy. Disclose AI-assisted
 development. A measured number (BL-9) would strengthen it. Nothing has been submitted.
+
+## BL-12 — "Is this a scam?" from anywhere
+
+**What.** Size S; free; the acquisition hook. Hand Loupe any text, link, screenshot or photo of a
+QR code and get one verdict card, which can be read aloud in Arabic or English. On iOS this is the
+way to check a WhatsApp forward, since Loupe cannot read WhatsApp there (BL-1 is Android only);
+Google's on-device scam detection is not offered in Egypt.
+
+**Questions, in one pass.** A `Choice` for the lure: *prize, account verification, delivery fee,
+job, investment, relative in need, marketplace deposit, government benefit, none*. A `Noul` for
+*asks you to move money*, and a `Noul` for *asks for a one-time code or PIN*. The same pass fans out
+the existing `phishing`, `pressure-tactics` and `asks-for-secrets` templates
+(`templates/.../TemplateLibrary.kt`). Links go through the shared phishing formula first, as now.
+
+**Builds on, and the overlap.** Links are already covered three ways: Check a link
+(`ios/Loupe/Protection/LinkCheckView.swift`), the Share extension's on-device link verdicts
+(`ios/LoupeShare/ShareViewController.swift`), and the clipboard checks (`ios/Loupe/Clipboard/`: the
+no-prompt detection chip, the "Check what I copied" App Intent in `CheckClipboardIntent.swift`, the
+widget in `ios/LoupeWidgets/`), plus the on-device Loupe keyboard (`ios/LoupeKeyboard/`,
+`ios/Shared/Clipboard/KeyboardCheck.swift`). **What is new:** plain text with no link, screenshots
+(Vision OCR, as in `ios/Loupe/Sources/AppleExtractors.swift`), QR photos (decode on the device, then
+BL-14's checks), the lure questions, and reading the verdict aloud. The intent grows from "Check what
+I copied" into "Ask Loupe if this is safe".
+
+**Feasibility.** iOS: Share extension plus App Intents / Siri, both already in the tree. Android: a
+share target (ANDROID-PLAN.md, B1) with the same shared Kotlin. The share extension's memory limit
+(each extension already links LoupeKit, about 46 MB in Debug) may keep the model call in the app.
+
+**Open questions.** Does the model run inside the Share extension or hand off to the app? Arabic
+accuracy is not yet measured and gates the copy (see *Engineering notes* below). Voice: the system
+voices only, and never a "safe" verdict read aloud (the never list).
+
+## BL-13 — Egypt / MENA "official channel" trust pack
+
+**What.** Size S, plus ongoing curation; free. A local, downloadable registry of the real sender IDs,
+SMS short codes, domains and WhatsApp business numbers of CBE, InstaPay, Vodafone Cash / e&, Egypt
+Post, Aramex, the banks and the ministries. **The model decides only which organisation a message
+claims to be; code checks whether the channel really belongs to it.** A mismatch adds suspicion; a
+match never clears a message (content can only add suspicion, PRODUCT.md §4).
+
+**Questions.** A two-level `Choice`: first the sector (*bank, wallet, courier, government, telecom,
+retailer*), then the organisation within that sector, so no option list has more than 10 entries
+(see *Engineering notes*: the upstream `Choice` saturates with 11 or more options). Plus a `Noul`
+for *claims to be support staff*. It feeds BL-12, BL-14 and the Android message check (BL-1).
+
+**Builds on.** The shared brand list `loupe-kit/.../kit/site/Brands.kt` (ported from Station), which
+already holds names, domains and host-name tokens and doubles as the known-good list, but has **no
+Egyptian brands yet** (InstaPay, Fawry, CIB, NBE, Vodafone Cash). Adding them is a small first step.
+The downloadable part can reuse the lists' App Group delivery (`ios/Loupe/Protection/ProtectionStore.swift`)
+and the pack format's validation (`loupe-kit/.../kit/packs/PackFormat.kt`).
+
+**Feasibility.** Shared Kotlin data plus a signed download; same on every platform.
+
+**Open questions.** Who curates it, and how is each entry verified (the organisation's own published
+page)? How often is it updated, and how is a stale entry handled? Station and Loupe must share one
+list.
+
+## BL-14 — QR "look before you scan", plus a venue self-audit
+
+**What.** Size S; free. Photograph a QR code; Loupe decodes it on the device and judges the payload
+together with the sticker's OCR'd text, before the user opens anything. **Venue mode:** a business
+photographs its own table and parking QR codes weekly to catch stickers placed over them (the
+owner's restaurants are the pilot).
+
+**Questions.** A `Choice` for what the payload is: *payment page, login page, app download, Wi-Fi
+join, menu or info, contact*. A `Noul` for *the payload does not match its context* (a "menu" sticker
+that opens a payment page), and a `Noul` for *demands payment or a login*. Links then go through the
+phishing formula; BL-13 checks any organisation the sticker claims.
+
+**Builds on.** The phishing formula and link verdicts (`loupe-kit/.../kit/site`, Check a link), Vision
+OCR (`AppleExtractors.swift`). Decoding is platform code: Vision barcode detection on iOS, ML Kit
+barcode scanning on Android. Venue mode compares each week's decoded payloads with the first
+approved set, which is mechanical.
+
+**Feasibility.** iOS and Android both decode QR codes on the device with system or ML Kit APIs.
+
+**Open questions.** Venue mode's home: the consumer app, or a business pack? What a venue does when a
+code changed (alert only; Loupe never edits anything).
+
+## BL-15 — Remote-access app warning (Android)
+
+**What.** Size M; free; waits behind the Android hold. Two parts: (1) a `Noul` on messages for
+*tells you to install an app or share your screen* (AnyDesk-style "support" scams); (2) a list of
+newly installed apps that hold accessibility, SMS or other powerful access, each sorted by a
+`Choice` over its store description: *remote control, SMS reader, loan app, utility*. Full plan in
+[`ANDROID-PLAN.md`](ANDROID-PLAN.md), *Remote-access app warning*.
+
+**Builds on.** BL-1's message check (the `Noul` is one more question in the same pass); the review
+queue for "look at this app" findings (Loupe never uninstalls or changes anything).
+
+**Feasibility.** Android only. iOS apps cannot see other installed apps.
+
+**Open questions.** Play's `QUERY_ALL_PACKAGES` / package-visibility policy (see ANDROID-PLAN.md).
+Where the store description comes from without a network call.
+
+## BL-16 — Kids' chat protection
+
+**What.** Size M; tier to decide. The owner calls it "a huge differentiator". On the child's Android
+phone, screen game, Discord and messaging chats for grooming and gift-card lures, with `Noul`s for
+*asks to move to a private chat*, *offers in-game currency or a gift card*, *asks for photos or
+location*, and *says to keep it secret*. Alerts to the parent carry **no content**: the category, the
+confidence and the time only. Full plan in [`ANDROID-PLAN.md`](ANDROID-PLAN.md), *Kids' chat
+protection*.
+
+**Hard requirements, before any build.**
+
+1. **Consent and transparency:** the child knows it is on, in age-appropriate words.
+2. **Google Play:** the stalkerware / `isMonitoringTool` policy (a persistent notification,
+   disclosure, the parental-control declaration) and the AccessibilityService declaration.
+3. **iOS is heavily limited:** check Apple's Screen Time APIs (FamilyControls, ManagedSettings,
+   DeviceActivity) for anything usable; they are not known to expose message content. Android first.
+4. **Legal review:** children's data, Egypt's Personal Data Protection Law (151/2020), and COPPA /
+   GDPR-K if sold abroad.
+5. **A measured false-positive rate** before any launch claim.
+
+**Builds on.** BL-1's message reading and judging path; the `Noul` pass and the review queue.
+Reference designs (MIT; both call hosted Jev, so reuse the question design only, not the code path):
+`brainstormity/Jev-Moderation-Bot` and `CodeAlive-AI/mastra-jev-moderation` (which reports 9 of 9
+hostile messages blocked and 0 of 49 false positives on its own set).
+
+**Feasibility.** Android: notification previews (Play) or the visible chat through accessibility,
+which PRODUCT.md §7 keeps out of the Play build today, so this needs an owner decision on a declared
+parental-control accessibility use. iOS: probably not possible beyond Screen Time controls.
+
+**Open questions.** Free or paid? How the parent's alert travels from the child's phone to the
+parent's without a Loupe server (PRODUCT.md §4: never sends data to our servers). Where a labelled
+grooming set comes from, ethically.
+
+---
+
+## Engineering notes: model findings (seen by the owner, not approved changes)
+
+These are findings about the upstream model, recorded so the items above are not claimed beyond
+what it can do. None of them is an approved change.
+
+1. **Arabic is weak and uncalibrated out of the box.** The upstream model's Arabic intent accuracy
+   is reported at only 0.11–0.40, uncalibrated. Calibration per language and per question type must
+   come before any claim about Arabic scam detection; this gates the copy for BL-12, BL-13 and BL-16
+   (and BL-1). The receipt gate measurement in `BUILD.md` (Progress log, 2026-09-25) points the same
+   way: a real Arabic receipt got 0.46 yes and fell to 0.32 under a sharper wording, and the English
+   till receipt got 0.11 yes under either.
+2. **Candidate order changes the answer** (upstream Hugging Face discussion #9 on
+   `convaiinnovations/laya`). Mitigation: ask with the options in several orders and average.
+   `BUILD.md` records the same weakness in the game: the mirror probe (a mirrored scene steered the
+   mirrored way only 74%, 43% after the word-bias correction) and the word bias ("right" 0.74
+   against "left" 0.26 with every way described identically), now divided out by content-free passes
+   (`GAME-FINETUNE-PLAN.md` §0).
+3. **The `Choice` saturates with 11 or more options** (upstream discussion #2): keep option lists at
+   10 or fewer, as BL-13's two-level question does. The template library already caps a choice at
+   12 (`Template.kt`); lowering the cap to 10 is a candidate change.
+4. **`Score` is the weakest question type.** Try cumulative `Noul`s instead ("at least somewhat
+   urgent?", "at least very urgent?"). `LAYA-UPGRADE-MEASURE.md` shows how fragile it is: reversing
+   the order of the score levels changed 21 of 45 answers of `urgency`, the only score template.
