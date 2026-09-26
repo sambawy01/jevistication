@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window behind Compose: the neon ground, so launch never flashes white. -->
+    <style name="Theme.Loupe" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/ground</item>
+        <item name="android:colorAccent">@color/cyan</item>
+    </style>
+</resources>

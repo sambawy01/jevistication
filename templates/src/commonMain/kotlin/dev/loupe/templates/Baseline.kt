@@ -218,7 +218,9 @@ sealed interface Baseline {
     }
 
     companion object {
-        private val PLACEHOLDER = Regex("""\{([a-z][a-z0-9_]*)}""")
+        // The closing brace is escaped: Android's regex engine (ICU) rejects a bare `}`, which the JDK
+        // and Kotlin/Native accept (tools/android-regex-check).
+        private val PLACEHOLDER = Regex("""\{([a-z][a-z0-9_]*)\}""")
 
         /** Replaces `{name}` placeholders; an unknown one is left as written. */
         internal fun fill(text: String, values: Map<String, String>): String =

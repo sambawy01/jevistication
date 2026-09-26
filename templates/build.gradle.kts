@@ -2,10 +2,13 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("multiplatform")
+    // Loupe for Android (docs/ANDROID-PLAN.md): an Android library target beside JVM and iOS.
+    id("com.android.library")
 }
 
 repositories {
     mavenCentral()
+    google()
 }
 
 // iOS targets only on macOS; see engine/build.gradle.kts.
@@ -15,6 +18,11 @@ kotlin {
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_21)
+        }
+    }
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
     if (appleHost) {
@@ -37,6 +45,18 @@ kotlin {
             implementation("org.junit.jupiter:junit-jupiter:5.11.4")
             runtimeOnly("org.junit.platform:junit-platform-launcher")
         }
+    }
+}
+
+android {
+    namespace = "dev.loupe.templates"
+    compileSdk = 36
+    defaultConfig {
+        minSdk = 29
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 

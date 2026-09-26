@@ -329,6 +329,8 @@ data class Template(
 
     companion object {
         private val ID = Regex("""^[a-z0-9]+(?:-[a-z0-9]+)*$""")
-        private val PLACEHOLDER = Regex("""\{([a-z][a-z0-9_]*)}""")
+        // The closing brace is escaped: Android's regex engine (ICU) rejects a bare `}`, which the JDK
+        // and Kotlin/Native accept (tools/android-regex-check).
+        private val PLACEHOLDER = Regex("""\{([a-z][a-z0-9_]*)\}""")
     }
 }

@@ -2,10 +2,13 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("multiplatform")
+    // Loupe for Android (docs/ANDROID-PLAN.md): an Android library target beside JVM and iOS.
+    id("com.android.library")
 }
 
 repositories {
     mavenCentral()
+    google()
 }
 
 // Laya's prompt and sequence logic (LayaPrompt, LayaTokenizer, the model-input types and the
@@ -18,6 +21,11 @@ kotlin {
     jvm {
         compilerOptions {
             jvmTarget.set(JvmTarget.JVM_21)
+        }
+    }
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
     if (appleHost) {
@@ -34,6 +42,18 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+    }
+}
+
+android {
+    namespace = "dev.loupe.backend.laya"
+    compileSdk = 36
+    defaultConfig {
+        minSdk = 29
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 

@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # `android`: Loupe for Android (docs/ANDROID-PLAN.md) is built on its own branch until it merges.
+    branches: [main, android]
   pull_request:
     branches: [main]
   # Manual runs also run the iOS job below.
@@ -22,8 +23,16 @@ jobs:
           java-version: "21"
       # engine, templates and loupe-kit declare their iOS targets only on macOS hosts, so on Linux
       # this builds and runs every JVM test and skips Kotlin/Native cleanly.
+      # Also builds and unit-tests Loupe for Android (the runner image carries the Android SDK;
+      # ANDROID_HOME comes from it) and lints the Android modules.
       - name: Build and test
         run: ./gradlew build --no-daemon --stacktrace
+      - name: Upload the Android debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: loupe-android-debug-apk
+          path: android-app/build/outputs/apk/debug/android-app-debug.apk
+          if-no-files-found: error
 
   # iOS (Kotlin/Native) tests and the LoupeKit XCFramework. macOS runners bill at 10x Linux
   # minutes, so this runs only on manual dispatch; run it before merging KMP changes.

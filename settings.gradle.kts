@@ -1,3 +1,13 @@
+// The Android Gradle Plugin comes from Google's Maven repository, which the Gradle Plugin Portal
+// does not mirror; Kotlin and Compose resolve from the portal as before.
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 rootProject.name = "loupe"
 
 include("engine")
@@ -11,6 +21,8 @@ include("sources-common")
 include("sources-desktop")
 include("loupe-desktop")
 include("loupe-kit")
+// Loupe for Android (docs/ANDROID-PLAN.md): the Compose app over the shared KMP modules.
+include("android-app")
 
 // Laya on iOS: ONNX Runtime and the Hugging Face tokenizer through cinterop. Needs macOS and the
 // native pieces ios-native/build.sh produces (gitignored); without them the module is left out and

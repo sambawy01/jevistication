@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The two palette colours the window needs before Compose draws (ui/Theme.kt has the rest). -->
+<resources>
+    <color name="ground">#FF070B18</color>
+    <color name="cyan">#FF22D3EE</color>
+</resources>

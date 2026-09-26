@@ -38,7 +38,7 @@ model and the same answers as the iPhone app and Loupe Station.
 
 | # | What | Done when |
 |---|---|---|
-| A0 | Android targets in the KMP modules, `:android-app` skeleton, CI builds an APK | `./gradlew check` green with Android unit tests |
+| A0 | Android targets in the KMP modules, `:android-app` skeleton, CI builds an APK | `./gradlew check` green with Android unit tests. **Done 2026-09-26** (branch `android`; record below) |
 | A1 | `backend-onnx-android` + parity | The 34+8 parity vectors match iOS and JVM exactly on an emulator and on a real device; p50/p95 latency and memory recorded on a mid-range phone |
 | A2 | Model download with consent + SHA-256 | Download, verify, resume, delete from settings |
 | A3 | Now, Judgments, Unsure queue, Ledger, Model settings | Same screens and strings as iOS; UI tests on an emulator |
@@ -48,6 +48,126 @@ model and the same answers as the iPhone app and Loupe Station.
 | A7 | Game and mascot | 60 fps on a mid-range device, gates identical to iOS |
 | A8 | Third-party notices for the Android set | BUILD.md risk 11 closed for Android |
 | A9 | Play internal testing release | Signed AAB on the internal track; privacy policy, data-safety form |
+
+## How to build Android
+
+On the Mac mini (paths are the owner's; any Android SDK works):
+
+```sh
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+export ANDROID_HOME=/Volumes/Sambawy/toolchains/android-sdk ANDROID_SDK_ROOT=$ANDROID_HOME
+export GRADLE_USER_HOME=/Volumes/Sambawy/gradle-home      # keeps Gradle caches off the internal disk
+echo "sdk.dir=$ANDROID_HOME" > local.properties           # gitignored; one per checkout
+
+./gradlew :android-app:assembleDebug        # android-app/build/outputs/apk/debug/android-app-debug.apk
+./gradlew check                             # JVM + iOS simulator + Android unit tests + Android lint
+tools/android-regex-check/check.sh          # every shared regex literal compiled by Android's ICU, on a device
+tools/android-api-check/check.py            # no API above minSdk 29 in our compiled Android classes
+```
+
+The SDK needs `platforms;android-36`, `build-tools;35.0.0` and `platform-tools`; the emulator smoke
+test also needs `emulator` and `system-images;android-35;google_apis;arm64-v8a`:
+
+```sh
+export ANDROID_AVD_HOME=/Volumes/Sambawy/android-avd
+avdmanager create avd -n loupe-a0-api35 -k "system-images;android-35;google_apis;arm64-v8a" -d pixel_6
+emulator -avd loupe-a0-api35 -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect &
+adb wait-for-device && adb install -r android-app/build/outputs/apk/debug/android-app-debug.apk
+adb shell am start -W -n com.loupeai.android/.MainActivity && adb exec-out screencap -p > home.png
+adb emu kill
+```
+
+**Build choices.** AGP **8.9.3**: API 36 (Play's target level for new apps and updates since
+2026-08-31) needs AGP 8.9.1 or newer, and 8.9 needs Gradle 8.11.1 or newer (the wrapper is 8.14.3).
+Kotlin 2.1.0 is tested by JetBrains up to AGP 8.7.2 only; the gate below is the evidence that 8.9.3
+works with it. `compileSdk`/`targetSdk` 36, `minSdk` 29, Java 17 bytecode for Android. The app uses
+Jetpack Compose from the 2024.12.01 BOM (Compose 1.7, the line Compose Multiplatform 1.7.3 is built
+on) and `activity-compose` 1.9.3; newer AndroidX lines are built with newer Kotlin.
+
+**Source sets.** Each shared module has an `androidTarget()`. Where the JVM actuals already suit
+Android, they moved from `jvmMain` to a `jvmCommonMain` source set shared by `jvm` and `android`
+(persistence, sources-common, game, loupe-kit), so there is one implementation, not two. They now use
+only APIs Android has at API 29 (`Paths.get`, `Collectors.toList`, a strict UTF-8 decode in place of
+`Files.readString`, which Android lacks). The engine's Android actuals follow iOS instead of the JVM:
+the portable IDNA, script table and number formatter, and the embedded Public Suffix List, so every
+phone gives the same answers whatever its Unicode data or locale (`"%.2f"` prints Arabic-Indic digits
+on an Arabic-locale phone). Only SHA-256 (`MessageDigest`) and NFKC (`java.text.Normalizer`) come
+from the platform.
+
+**Traps found at A0.**
+
+1. *Android's regex engine is ICU, not the JDK's.* `Regex("""\{([a-z][a-z0-9_]*)}""")` (templates,
+   `Template.kt` and `Baseline.kt`) compiles on the JDK and Kotlin/Native but throws
+   `PatternSyntaxException` on Android: ICU rejects a bare `}`. The app crashed on first launch in the
+   emulator while every unit test was green, because Android unit tests run on the host JDK. Fixed by
+   escaping it (`\}`, the same pattern everywhere). `tools/android-regex-check/check.sh` compiles all
+   133 statically known regex literals of the shared modules on a device; 10 built at run time were
+   reviewed by hand (`Regex.escape` → `\Q…\E`, which ICU accepts; digit prefixes; `\d{4}`).
+2. *Lint does not look at `jvmCommonMain`.* A planted `Path.of` (API 34) passed `lint`. The
+   bytecode check `tools/android-api-check/check.py` catches it (it reads every class our Android
+   build compiled and looks each JDK/Android reference up in the SDK's `api-versions.xml`).
+
+## A0 record (2026-09-26)
+
+Evidence lives in `/Volumes/Sambawy/loupe-android-evidence/` (logs, screenshots, logcat).
+
+| Gate (from `clean`, `--no-build-cache`) | Result | Time |
+|---|---|---|
+| `./gradlew check` | green | 2 min 7 s (origin/main without Android, fresh clone: 2 min 31 s) |
+| `./gradlew :android-app:assembleDebug` | green | 6 s after `check` |
+| `./gradlew :loupe-kit:assembleLoupeKitDebugXCFramework` | green (backend-onnx-ios skipped, as without ios-native/build.sh) | 26 s |
+| `tools/android-regex-check/check.sh` (API 35 emulator) | 133 compiled, 0 rejected | — |
+| `tools/android-api-check/check.py` | 661 classes, 0 problems at minSdk 29 | — |
+| Android lint, all eight Android modules | no issues | (part of `check`) |
+
+| Tests in `check` | JVM | iOS simulator | Android debug | Android release |
+|---|---|---|---|---|
+| engine | 294 | 289 | 294 | 294 |
+| templates | 30 | 30 | 30 | 30 |
+| persistence | 9 | 7 | 7 | 7 |
+| sources-common | 39 | 39 | 39 | 39 |
+| game | 109 (5 skipped: no model) | 90 | 90 | 90 |
+| backend-laya-common | 4 | 4 | 4 | 4 |
+| loupe-kit | 212 | 212 | 212 | 212 |
+| android-app | — | — | 6 | 6 |
+| **total** | 697 | 671 | 682 | 682 |
+
+Android unit tests run the whole `commonTest` suite on the host JVM against the Android variants
+(`androidUnitTest` depends on `commonTest`), plus `engine`'s `PlatformAndroidTest` (the Android
+actuals: SHA-256 vectors, the embedded PSL against its recorded SHA-256, IDNA, scripts, ASCII
+digits under an `ar-EG` locale) and the app's `HomeSummaryTest` and `PaletteTest`. JVM-only
+suites (engine `PlatformParityTest`, game's model tests, persistence `GsonParityTest`) stay in
+`jvmTest`.
+
+**Emulator** (Pixel 6 AVD, `android-35` `google_apis` arm64): the debug APK installs, launches cold
+in about 0.8 s, logs `shared engine ok: 55 templates, PSL 2026-09-21_18-50-07_UTC, links [safe,
+caution, danger]`, and logcat has no crash. Screenshots `a0-home.png`, `a0-home-scrolled.png`; the
+R8 release build, signed with the debug key for the test only, runs the same (`a0-home-release.png`).
+
+**Size.** Debug APK 25.8 MB (AGP stores debug APKs uncompressed and unshrunk; 8.7 MB deflated).
+Release APK with R8 and resource shrinking: **1.9 MB** (unsigned). No model, no native code beyond
+Compose's 10 KB `libandroidx.graphics.path.so`, no dependency beyond Compose, `activity-compose` and
+the shared modules.
+
+**CI.** `.github/workflows/ci.yml` now also runs on pushes to `android`; its Linux job's
+`./gradlew build` builds, tests and lints the Android modules, and the debug APK is uploaded as the
+`loupe-android-debug-apk` artifact.
+
+**Debug signing certificate** (this Mac's `~/.android/debug.keystore`), for the Google OAuth Android
+client (item 2 below): SHA-1 `E1:70:ED:F1:BC:46:F8:29:E8:E3:D8:F0:1E:49:3B:60:53:F3:E0:65`.
+
+**Warnings left.** Gradle: `Retrieving attribute with a null key` appears only once AGP is
+applied (it is not on origin/main; not traced further); the other two notices (`addCandidate` from the
+XCFramework block, `Task.project at execution time`) are on origin/main too. AGP 8.9.3 is above
+Kotlin 2.1.0's tested AGP range (see Build choices). The app uses the platform's default fonts;
+Rajdhani and JetBrains Mono (iOS) are not bundled yet. `./gradlew build` (not part of the gate)
+fails on macOS at the root `:commonizeNativeDistribution` ("no repositories are defined"); origin/main
+fails the same way, and CI runs `build` on Linux, where that task does not exist.
+
+**Left for later milestones.** No Android `actual` is stubbed: every `expect` has a full
+implementation. The phone's own PDF and image readers (`PlatformExtractors`) come with A4; A0's unit
+tests use the desktop readers on the host JVM, as `jvmTest` does. The regex and API checks are
+scripts run by hand, not yet part of `check` or CI.
 
 ## Needed from the owner
 

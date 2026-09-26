@@ -1,11 +1,15 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
 plugins {
     kotlin("multiplatform")
+    // Loupe for Android (docs/ANDROID-PLAN.md): an Android library target beside JVM and iOS.
+    id("com.android.library")
 }
 
 repositories {
     mavenCentral()
+    google()
 }
 
 // LoupeKit: the iOS-facing umbrella over :engine, :templates and :game, shipped as one XCFramework.
@@ -85,6 +89,12 @@ val generateTestPaths by tasks.registering {
 kotlin {
     // A JVM target keeps the module an ordinary participant in `./gradlew build` on Linux CI.
     jvm()
+    // Loupe for Android: :android-app depends on this module as the iPhone app does on LoupeKit.
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
 
     if (appleHost) {
         val xcf = XCFramework("LoupeKit")
@@ -106,7 +116,17 @@ kotlin {
         }
     }
 
-    applyDefaultHierarchyTemplate()
+    // jvmCommon: the JVM actuals, shared as is by the desktop JVM and Android (docs/ANDROID-PLAN.md,
+    // "no logic forks").
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
+    applyDefaultHierarchyTemplate {
+        common {
+            group("jvmCommon") {
+                withJvm()
+                withAndroidTarget()
+            }
+        }
+    }
 
     sourceSets {
         commonMain {
@@ -129,8 +149,10 @@ kotlin {
             }
         }
         // The sample's PDFs need a real reader: PDFBox (through :sources-desktop) on the JVM,
-        // PDFKit on the iOS simulator — the readers each app uses.
-        jvmTest.dependencies {
+        // PDFKit on the iOS simulator — the readers each app uses. Android's unit tests run on the
+        // host JVM and share the JVM's (jvmCommonTest); the phone's own PDF reader comes with the
+        // Android sources milestone (A4), and is never PDFBox.
+        getByName("jvmCommonTest").dependencies {
             implementation(project(":sources-desktop"))
         }
         if (appleHost && layaIos != null) {
@@ -145,3 +167,16 @@ kotlin {
         }
     }
 }
+
+android {
+    namespace = "dev.loupe.kit"
+    compileSdk = 36
+    defaultConfig {
+        minSdk = 29
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+

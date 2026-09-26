@@ -2,10 +2,13 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("multiplatform")
+    // Loupe for Android (docs/ANDROID-PLAN.md): an Android library target beside JVM and iOS.
+    id("com.android.library")
 }
 
 repositories {
     mavenCentral()
+    google()
 }
 
 // Sources in common code (epic #7 child 2): the SourceItem model, the pure-Kotlin extractors (text,
@@ -40,12 +43,27 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_21)
         }
     }
+    androidTarget {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
     if (appleHost) {
         iosArm64()
         iosSimulatorArm64()
     }
 
-    applyDefaultHierarchyTemplate()
+    // jvmCommon: the JVM actuals, shared as is by the desktop JVM and Android (docs/ANDROID-PLAN.md,
+    // "no logic forks"). Written against APIs Android has at minSdk 29.
+    @OptIn(org.jetbrains.kotlin.gradle.ExperimentalKotlinGradlePluginApi::class)
+    applyDefaultHierarchyTemplate {
+        common {
+            group("jvmCommon") {
+                withJvm()
+                withAndroidTarget()
+            }
+        }
+    }
 
     sourceSets {
         all { languageSettings.optIn("kotlin.io.encoding.ExperimentalEncodingApi") }
@@ -63,6 +81,18 @@ kotlin {
             implementation("org.junit.jupiter:junit-jupiter:5.11.4")
             runtimeOnly("org.junit.platform:junit-platform-launcher")
         }
+    }
+}
+
+android {
+    namespace = "dev.loupe.sources.common"
+    compileSdk = 36
+    defaultConfig {
+        minSdk = 29
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 }
 
