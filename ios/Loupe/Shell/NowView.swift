@@ -3,6 +3,7 @@ import LoupeKit
 
 struct NowView: View {
     @EnvironmentObject private var launcher: GameLauncher
+    @EnvironmentObject private var router: AppRouter
     @ObservedObject var service: JudgmentsService = .shared
     @ObservedObject var watchers: WatchersService = .shared
     @ObservedObject var sources: SourcesService = .shared
@@ -17,6 +18,7 @@ struct NowView: View {
     @State private var showQueue = false
     @State private var opened = false
     @ObservedObject private var readiness = ModelReadiness.shared
+    @ObservedObject private var protection = ProtectionStore.shared
 
     var body: some View {
         NavigationStack {
@@ -179,7 +181,7 @@ struct NowView: View {
                     }
                 } else {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Findings").font(Typeface.display(24)).foregroundStyle(Palette.ink)
+                        Text("Newest findings").font(Typeface.display(24)).foregroundStyle(Palette.ink)
                         Spacer()
                         Text(summary.modelRan ? "Decision model + arithmetic"
                              : ModelSettingsService.shared.wasLayaOff(Features.shared.WATCHERS) ? "Mechanical only · decision model off" : "Mechanical only · model not installed")
@@ -190,15 +192,25 @@ struct NowView: View {
                         GetLayaButton(title: "Get the decision model for the watchers' model half", id: "findings.getLaya")
                             .padding(.horizontal, 4)
                     }
-                    ForEach(Array(summary.findings.enumerated()), id: \.element.key) { i, f in
+                    // The newest one or two; the rest, the subscriptions and the expiry timeline are on Guard.
+                    ForEach(Array(watchers.nowFindings().enumerated()), id: \.element.key) { i, f in
                         FindingCard(finding: f, index: i, item: ItemIndex.item(f.itemId),
                                     onVerdict: { watchers.answer(f, $0) },
                                     onOpen: { openItem = watchers.item(f.itemId) })
                     }
-                    Text("Warnings only. \(summary.itemsChecked) item(s), \(summary.emailsChecked) email(s) and \(summary.linksChecked) link(s) checked on \(summary.todayIso). An item with nothing raised is not cleared.")
-                        .font(.caption).foregroundStyle(Palette.inkSoft).padding(.horizontal, 4)
                 }
-                if summary.itemsChecked > 0 { CensusCard(census: summary.census) }
+                if let headline = protection.summary.headline {
+                    Button { router.openSpotted() } label: {
+                        SpottedNowCard(headline: headline, dangerous: protection.summary.dangerousThisWeek)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("now.spotted")
+                }
+                if summary.itemsChecked > 0 {
+                    Button { router.open(.guardTab) } label: { GuardDoorCard(summary: summary) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("now.guard")
+                }
             } else {
                 HStack(spacing: 10) {
                     ProgressView()

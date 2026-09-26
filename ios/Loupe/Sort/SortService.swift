@@ -163,6 +163,7 @@ final class SortService: ObservableObject {
             },
             rows: { rows in
                 ledger.record(rows)
+                JudgmentRunLog.stamp(Set(rows.map(\.judgmentId)))   // the results screen's "Last run"
                 for (id, group) in Dictionary(grouping: rows, by: { $0.judgmentId }) {
                     job.rows(group, threshold: thresholds[id] ?? 0.7, model: model)
                 }

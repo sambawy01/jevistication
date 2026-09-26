@@ -7,13 +7,15 @@ import LoupeKit
 /// judgment's criteria hash, so rewording a judgment starts its queue and numbers again.
 struct UnsureQueueView: View {
     @ObservedObject var service: JudgmentsService
+    /// Opened from one judgment's results: only that judgment's queue. Nil: across every judgment.
+    var judgmentId: String? = nil
     @State private var skipped: Set<String> = []
     @State private var happy = false
 
     private func id(_ e: UnsureEntry) -> String { "\(e.judgment.id)|\(e.itemId)" }
 
     var body: some View {
-        let all = service.unsure()
+        let all = service.unsure(judgmentId: judgmentId)
         let waiting = all.filter { !skipped.contains(id($0)) }
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
@@ -23,6 +25,9 @@ struct UnsureQueueView: View {
                         Text("Needs you: \(all.count)")
                             .font(Typeface.display(26)).foregroundStyle(Palette.ink)
                             .accessibilityIdentifier("queue.count")
+                        if let id = judgmentId, let j = service.judgment(id) {
+                            Text("Only \"\(j.title)\"").font(Typeface.mono(11)).foregroundStyle(Palette.cyan)
+                        }
                         Text("Check the decision model's decisions one at a time. The ones it was unsure about come first; about one in five is a random pick from answers it was sure of, so the measurements are not built only from hard cases.")
                             .font(.footnote).foregroundStyle(Palette.inkSoft)
                     }
@@ -104,6 +109,7 @@ struct UnsureQueueView: View {
             }
             Button("Skip") { skipped.insert(id(e)) }
                 .buttonStyle(.bordered)
+                .frame(minHeight: 44)
                 .accessibilityIdentifier("queue.skip")
         }
         .frame(maxWidth: .infinity, alignment: .leading)

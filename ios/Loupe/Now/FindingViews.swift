@@ -123,45 +123,64 @@ struct FindingCard: View {
     }
 }
 
-/// The subscriptions census: a monthly total and every recurring merchant.
-struct CensusCard: View {
-    let census: SubscriptionCensus
+/// Now's door to Guard: how many warnings, the subscriptions' monthly total and the next expiry, one tap away.
+struct GuardDoorCard: View {
+    let summary: WatcherSummary
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Subscriptions").font(.headline).foregroundStyle(Palette.ink)
-                Spacer()
-                if census.sample { Pill(text: "Sample", color: Palette.inkSoft) }
-            }
-            if census.rows.isEmpty {
-                Text("No merchant charged three or more times in \(census.chargesFound) charge(s) read. A cadence needs three.")
-                    .font(.caption).foregroundStyle(Palette.inkSoft)
-            } else {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(WatchersService.money(census.monthlyTotalMinor))
-                        .font(Typeface.display(30)).foregroundStyle(Palette.ink)
-                        .accessibilityIdentifier("census.total")
-                    Text("a month").font(.subheadline).foregroundStyle(Palette.inkSoft)
-                }
-                ForEach(census.rows, id: \.merchant) { r in
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(r.merchant).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
-                            Text("\(r.cadence), \(r.occurrences) charges, last \(r.lastChargedIso)")
-                                .font(.caption).foregroundStyle(Palette.inkSoft)
-                        }
-                        Spacer()
-                        Text(r.monthlyMinor.map { WatchersService.money($0.int64Value) + "/mo" } ?? "irregular")
-                            .font(Typeface.mono(13)).foregroundStyle(Palette.ink)
+        let open = summary.findings.filter { $0.verdict != .confirmed }.count
+        let next = summary.expiries.first { $0.daysRemaining >= 0 } ?? summary.expiries.first
+        HStack(spacing: 12) {
+            NeonIcon(name: "shield.lefthalf.filled", color: Palette.cyan, size: 24, active: open > 0)
+                .frame(width: 32)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(open == 0 ? "Guard: nothing raised" : "Guard: \(open) warning\(open == 1 ? "" : "s")")
+                    .font(.headline).foregroundStyle(Palette.ink)
+                HStack(spacing: 10) {
+                    if !summary.census.rows.isEmpty {
+                        Label(WatchersService.money(summary.census.monthlyTotalMinor) + "/mo", systemImage: "repeat")
+                    }
+                    if let next {
+                        Label(GuardModel.daysLeftLine(next.daysRemaining), systemImage: "calendar.badge.exclamationmark")
                     }
                 }
-                Text("From \(census.chargesFound) charge(s) in receipts and statements. Amounts as written, currency not converted.")
+                .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+                .lineLimit(1).minimumScaleFactor(0.8)
+                Text("Subscriptions, expiry dates and every finding")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
         }
+        .frame(minHeight: 44)
         .card()
-        .accessibilityIdentifier("now.census")
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens Guard")
+    }
+}
+
+/// Now's card for browsing protection: "Loupe spotted N risky sites this week", opening Guard → Protection → Spotted.
+struct SpottedNowCard: View {
+    let headline: String
+    let dangerous: Int
+
+    var body: some View {
+        HStack(spacing: 12) {
+            NeonIcon(name: "safari", color: dangerous > 0 ? Palette.dangerText : Palette.warnText, size: 24, active: true)
+                .frame(width: 32)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(headline).font(.headline).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(dangerous > 0 ? "\(dangerous) dangerous · see what was spotted" : "See what was spotted")
+                    .font(.caption).foregroundStyle(Palette.inkSoft)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
+        }
+        .frame(minHeight: 44)
+        .card()
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens Guard, Protection, Spotted")
     }
 }
 

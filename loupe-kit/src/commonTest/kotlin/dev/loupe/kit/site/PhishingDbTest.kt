@@ -155,3 +155,40 @@ class PhishingDbTest {
         assertTrue(problems.isEmpty(), problems.joinToString("\n"))
     }
 }
+
+/** The flat index file the Safari extension maps (2026-09-26): a round trip matches as the index does. */
+class PhishingDbBinaryTest {
+    @Test
+    fun roundTripMatchesLikeTheIndex() {
+        val index = PhishingDb.build(
+            listOf("https://evil.example/login?x=1\nhttp://www.bad-host.example/\nhttps://sub.phish.example/a"),
+            listOf("listed-domain.example\nwww.other.example"),
+            "2026-09-26T00:00:00Z",
+        )
+        val bytes = PhishingDbBinary.encode(index)
+        assertEquals(PhishingDbBinary.MAGIC, bytes.copyOfRange(0, 8).decodeToString())
+        assertEquals(0, bytes.size % 8)
+        val back = assertNotNull(PhishingDbBinary.decode(bytes))
+        assertEquals("2026-09-26T00:00:00Z", back.listDate)
+        assertEquals(index.linkCount, back.linkCount)
+        assertEquals(index.hostCount, back.hostCount)
+        for (u in listOf(
+            "https://evil.example/login?x=1", "https://evil.example/other", "https://bad-host.example/",
+            "https://x.listed-domain.example/", "https://sub.phish.example/b", "https://example.com/", "https://other.example/",
+        )) assertEquals(index.match(u), back.match(u), u)
+        assertEquals(FeedHit(PhishingDb.SOURCE, "url"), back.match("https://evil.example/login?x=1"))
+        assertEquals(FeedHit(PhishingDb.SOURCE, "domain"), back.match("https://deep.listed-domain.example/page"))
+    }
+
+    @Test
+    fun emptyAndBrokenFiles() {
+        val empty = PhishingDbBinary.encode(PhishingDb.build(emptyList(), emptyList(), null))
+        assertEquals(PhishingDbBinary.HEADER_BYTES, empty.size)
+        assertNull(assertNotNull(PhishingDbBinary.decode(empty)).listDate)
+        assertNull(PhishingDbBinary.decode(ByteArray(10)))
+        assertNull(PhishingDbBinary.decode(empty.copyOf(empty.size + 8)))
+        val bad = empty.copyOf()
+        bad[0] = 'X'.code.toByte()
+        assertNull(PhishingDbBinary.decode(bad))
+    }
+}

@@ -108,28 +108,69 @@ object WatcherRun {
      * (the mechanical half runs alone and [WatcherReport.layaOff] is set); `accept_confidence`
      * replaces the radar's 0.5 threshold and `text_chars` its 4,000-character budget.
      */
-    fun run(items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule, policy: RunPolicy): WatcherReport {
+    fun run(items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule, policy: RunPolicy): WatcherReport =
+        run(items, today, backend, rule, policy) { _, _, _ -> }
+
+    /**
+     * [run] reporting its real progress: `progress(watcherId, done, total)` as each watcher starts and ends
+     * (ids as [WatcherKind.id], in run order: expiry, recurring, term-change, impersonation, site-fraud), and per
+     * document while the expiry radar's model half judges them. Called on the running thread; the result is the
+     * same as [run]'s.
+     */
+    fun run(
+        items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule, policy: RunPolicy,
+        progress: (watcher: String, done: Int, total: Int) -> Unit,
+    ): WatcherReport {
         val model = backend.takeIf { policy.useLaya }
         val book = addressBook(items)
         val texty = items.filter { it.hasText && it.duplicateOf == null && it.kind != ItemKind.CONTACT }
         val emails = texty.filter { it.kind == ItemKind.EMAIL && it.email?.fromAddress != null }
+        progress(WatcherKind.EXPIRY.id, 0, 1)
         val candidates = expiryCandidates(texty, today, rule)
+        val alerts = model?.let { m ->
+            val docs = candidates.map { c -> c.item }
+            progress(WatcherKind.EXPIRY.id, 0, docs.size)
+            // One document at a time, so the run can say how far the model half is (same result: each document is
+            // judged on its own and the alerts are sorted by days left either way).
+            docs.flatMapIndexed { i, doc ->
+                expiryAlerts(listOf(doc), m, today, rule, policy).also { progress(WatcherKind.EXPIRY.id, i + 1, docs.size) }
+            }.sortedBy { it.daysRemaining }
+        }
+        progress(WatcherKind.EXPIRY.id, 1, 1)
+        progress(WatcherKind.RECURRING.id, 0, 1)
         val charges = charges(texty)
+        val recurring = RecurringMoney.census(charges.map { it.second }, today)
+        progress(WatcherKind.RECURRING.id, 1, 1)
+        progress(WatcherKind.TERM_CHANGE.id, 0, 1)
+        val terms = termChanges(texty)
+        progress(WatcherKind.TERM_CHANGE.id, 1, 1)
+        progress(WatcherKind.IMPERSONATION.id, 0, 1)
+        val impostors = impersonation(emails, book)
+        progress(WatcherKind.IMPERSONATION.id, 1, 1)
+        progress(WatcherKind.SITE_FRAUD.id, 0, 1)
+        val fraud = fraud(emails)
+        progress(WatcherKind.SITE_FRAUD.id, 1, 1)
         return WatcherReport(
             today = today,
             rule = rule,
             expiryCandidates = candidates,
-            expiryAlerts = model?.let { expiryAlerts(candidates.map { c -> c.item }, it, today, rule, policy) },
-            recurring = RecurringMoney.census(charges.map { it.second }, today),
+            expiryAlerts = alerts,
+            recurring = recurring,
             chargesFound = charges.size,
-            termChanges = termChanges(texty),
-            impersonation = impersonation(emails, book),
-            fraud = fraud(emails),
+            termChanges = terms,
+            impersonation = impostors,
+            fraud = fraud,
             emailsChecked = emails.size,
             linksChecked = emails.sumOf { it.email!!.links.size },
             layaOff = !policy.useLaya,
         )
     }
+
+    /** [runIsoWith] reporting progress (see the progress [run]); for Swift. */
+    fun runIsoWithProgress(
+        items: List<SourceItem>, todayIso: String, backend: Backend?, policy: RunPolicy,
+        progress: (watcher: String, done: Int, total: Int) -> Unit,
+    ): WatcherReport = run(items, LocalDate.parse(todayIso), backend, SIX_MONTHS, policy, progress)
 
     /** [runIso] under Model settings. */
     fun runIsoWith(items: List<SourceItem>, todayIso: String, backend: Backend?, policy: RunPolicy): WatcherReport =

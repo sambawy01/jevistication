@@ -7,7 +7,7 @@ protocol FlightsHelper {
 }
 
 struct HelperEndpoint {
-    static let base = URL(string: "https://loupe-web-helper-production.up.railway.app")!
+    static let base = LoupeHelper.base
     static let timeout: TimeInterval = 20
 
     static func healthRequest(base: URL = base) -> URLRequest {

@@ -1,43 +1,19 @@
 import SwiftUI
 
-struct WebTabView: View {
+/// Judgments → Web questions (owner decision 2026-09-26; the Web tab before): the template library, one card per
+/// online source, each opening its questions. The navigation (templates, Flights, results) and the Web settings
+/// button are on the Judgments stack; this is the section's scrolling content.
+struct WebQuestionsSection: View {
     @EnvironmentObject private var web: WebModel
-    @State private var showSettings = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) { library }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 12)
-            }
-            .neonGround()
-            .navigationTitle("Web")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showSettings = true } label: { Image(systemName: "gearshape") }
-                        .accessibilityLabel("Web settings")
-                        .accessibilityIdentifier("web.settings")
-                }
-            }
-            .sheet(isPresented: $showSettings) {
-                WebSettingsSheet().environmentObject(web).environmentObject(web.library)
-            }
-            .navigationDestination(for: WebSector.self) { sector in
-                if sector == .flights {
-                    FlightsScreen()
-                } else {
-                    TemplateView(sector: sector)
-                }
-            }
-            .navigationDestination(isPresented: Binding(
-                get: { web.searchState == .results },
-                set: { if !$0 { web.searchState = .idle } })) {
-                ResultsView()
-            }
+        ScrollView {
+            VStack(spacing: 16) { library }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
         }
-        .environmentObject(web.library)
         .environment(\.layoutDirection, MS.direction)
+        .accessibilityIdentifier("judgments.web")
         .task {
             if web.autoSearch && web.searchState == .idle && WebBuild.flightsDevFlag { await web.search() }
         }
@@ -50,6 +26,7 @@ struct WebTabView: View {
         }
         VStack(alignment: .leading, spacing: 6) {
             Text(WS.t("library.title")).font(Typeface.display(26)).foregroundStyle(Palette.ink)
+                .accessibilityAddTraits(.isHeader)
             Text(WS.t("library.intro")).font(.footnote).foregroundStyle(Palette.inkSoft)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

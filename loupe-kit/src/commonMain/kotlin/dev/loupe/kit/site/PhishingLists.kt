@@ -287,9 +287,9 @@ class LongList {
  * host, then the page's registrable domain listed bare.
  */
 class PhishingDbIndex(
-    private val urls: LongArray,
-    private val hosts: LongArray,
-    private val domains: LongArray,
+    internal val urls: LongArray,
+    internal val hosts: LongArray,
+    internal val domains: LongArray,
     val listDate: String?,
     val linkCount: Int,
     val hostCount: Int,
@@ -316,5 +316,69 @@ class PhishingDbIndex(
         val reg = Hosts.registrableDomain(host) ?: host
         if (has(domains, PhishingDb.hash64(reg)) && !ListUrls.isSuppressed(reg)) return FeedHit(source, "domain")
         return null
+    }
+}
+
+/**
+ * Phishing.Database's index as one flat file (2026-09-26, the Safari extension): the app writes it
+ * into the App Group next to the lists it downloaded, and an extension maps it into memory and
+ * binary-searches it instead of re-reading the 100 MB of text (which would not fit an extension's
+ * memory). Little-endian:
+ *
+ *     0   "LPDBIDX1"                       8 bytes
+ *     8   urls, hosts, domains             3 x Int64 (entry counts)
+ *     32  linkCount, hostCount, truncated  3 x Int64
+ *     56  dateBytes                        Int64, then the list date (UTF-8), zero-padded to 8
+ *     ..  urls[], hosts[], domains[]       Int64 each, sorted ascending (signed), unique
+ *
+ * The hashes are [PhishingDb.hash64] of [ListUrls.normalize]'s key, host and registrable domain, the
+ * same values [PhishingDbIndex] holds, so a reader matches exactly as [PhishingDbIndex.match] does.
+ */
+object PhishingDbBinary {
+    const val MAGIC = "LPDBIDX1"
+    const val HEADER_BYTES = 64
+
+    private fun putLong(b: ByteArray, at: Int, v: Long) {
+        for (i in 0 until 8) b[at + i] = ((v ushr (8 * i)) and 0xFF).toByte()
+    }
+
+    private fun getLong(b: ByteArray, at: Int): Long {
+        var v = 0L
+        for (i in 7 downTo 0) v = (v shl 8) or (b[at + i].toLong() and 0xFF)
+        return v
+    }
+
+    fun encode(index: PhishingDbIndex): ByteArray {
+        val date = (index.listDate ?: "").encodeToByteArray()
+        val datePadded = (date.size + 7) / 8 * 8
+        val n = index.urls.size + index.hosts.size + index.domains.size
+        val out = ByteArray(HEADER_BYTES + datePadded + 8 * n)
+        MAGIC.encodeToByteArray().copyInto(out, 0)
+        putLong(out, 8, index.urls.size.toLong())
+        putLong(out, 16, index.hosts.size.toLong())
+        putLong(out, 24, index.domains.size.toLong())
+        putLong(out, 32, index.linkCount.toLong())
+        putLong(out, 40, index.hostCount.toLong())
+        putLong(out, 48, if (index.truncated) 1L else 0L)
+        putLong(out, 56, date.size.toLong())
+        date.copyInto(out, HEADER_BYTES)
+        var at = HEADER_BYTES + datePadded
+        for (a in listOf(index.urls, index.hosts, index.domains)) for (v in a) { putLong(out, at, v); at += 8 }
+        return out
+    }
+
+    /** The index back from [encode]'s bytes, or null when they are not a whole, valid file. */
+    fun decode(bytes: ByteArray): PhishingDbIndex? {
+        if (bytes.size < HEADER_BYTES || bytes.copyOfRange(0, 8).decodeToString() != MAGIC) return null
+        val counts = (0 until 7).map { getLong(bytes, 8 + 8 * it) }
+        if (counts.any { it < 0 || it > Int.MAX_VALUE / 8 }) return null
+        val (nu, nh, nd) = Triple(counts[0].toInt(), counts[1].toInt(), counts[2].toInt())
+        val dateLen = counts[6].toInt()
+        val start = HEADER_BYTES + (dateLen + 7) / 8 * 8
+        if (bytes.size.toLong() != start.toLong() + 8L * (nu.toLong() + nh + nd)) return null
+        fun arr(from: Int, n: Int) = LongArray(n) { getLong(bytes, from + 8 * it) }
+        val date = bytes.copyOfRange(HEADER_BYTES, HEADER_BYTES + dateLen).decodeToString().ifEmpty { null }
+        return PhishingDbIndex(arr(start, nu), arr(start + 8 * nu, nh), arr(start + 8 * (nu + nh), nd), date,
+            counts[3].toInt(), counts[4].toInt(), counts[5] != 0L)
     }
 }

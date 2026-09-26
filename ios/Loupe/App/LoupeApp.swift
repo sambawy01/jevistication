@@ -23,6 +23,10 @@ struct LoupeApp: App {
         // BGTaskScheduler wants every handler registered before launch finishes.
         BackgroundSorter.shared.register()
         BackgroundSorter.shared.schedule()
+        // Browsing protection (2026-09-26): the Spotted log (Guard's badge) and Loupe for Safari's state,
+        // read at launch and again whenever the app becomes active.
+        _ = ProtectionStore.shared
+        _ = SafariSetup.shared
     }
 
     var body: some Scene {
@@ -31,13 +35,13 @@ struct LoupeApp: App {
             if ProcessInfo.processInfo.arguments.contains("-LoupeMascotGallery") {
                 MascotGallery().preferredColorScheme(.dark)
             } else {
-                RootView(initialTab: LaunchOptions.current.initialTab)
+                RootView(initialTab: LaunchOptions.current.initialTab, initialSection: LaunchOptions.current.initialSection)
                     .environmentObject(web)
                     .tint(Palette.blue)
                     .preferredColorScheme(.dark)
             }
             #else
-            RootView(initialTab: LaunchOptions.current.initialTab)
+            RootView(initialTab: LaunchOptions.current.initialTab, initialSection: LaunchOptions.current.initialSection)
                 .environmentObject(web)
                 .tint(Palette.blue)
                 .preferredColorScheme(.dark)
@@ -53,6 +57,8 @@ struct LaunchOptions {
     var autoSearch = false       // -LoupeAutoSearch: run the fixture search on appear
     var ephemeralKey = false     // -LoupeEphemeralKeychain: in-memory key store, starts empty
     var initialTab: AppTab = .now
+    /// `-LoupeTab web` (the old Web tab): Judgments on Web questions.
+    var initialSection: JudgmentsView.Section?
     var skipOnboarding = false   // -LoupeSkipOnboarding: never show the first-launch sheet
     var game: GameMode?          // -LoupeGame human|watch: open the game at launch
     var noModel = false          // -LoupeNoModel: Laya reads as not installed (tests own their model state)
@@ -77,8 +83,9 @@ struct LaunchOptions {
         o.fixtureMode = args.contains("-LoupeFixtures")
         o.autoSearch = args.contains("-LoupeAutoSearch")
         o.ephemeralKey = args.contains("-LoupeEphemeralKeychain") || o.fixtureMode
-        if let i = args.firstIndex(of: "-LoupeTab"), i + 1 < args.count, let t = AppTab(rawValue: args[i + 1]) {
-            o.initialTab = t
+        if let i = args.firstIndex(of: "-LoupeTab"), i + 1 < args.count, let route = AppTab.route(args[i + 1]) {
+            o.initialTab = route.tab
+            o.initialSection = route.judgments
         }
         o.skipOnboarding = args.contains("-LoupeSkipOnboarding")
         if let i = args.firstIndex(of: "-LoupeGame"), i + 1 < args.count { o.game = GameMode(rawValue: args[i + 1]) }

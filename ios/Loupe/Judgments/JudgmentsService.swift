@@ -51,6 +51,10 @@ final class JudgmentsService: ObservableObject {
     /// Not @Published: it is drawn lazily while a view reads it; answers publish through `corrections`.
     fileprivate(set) var batch: [UnsureEntry] = []
     fileprivate var batchStamp = ""
+    /// The queue opened from one judgment's results: that judgment's own batch, drawn the same way.
+    fileprivate var judgmentBatches: [String: (stamp: String, entries: [UnsureEntry])] = [:]
+    /// `counts(_:)` per judgment wording, until the ledger is read again (corrections do not change them).
+    private var countsMemo: [String: JudgmentCounts] = [:]
 
     let ledger: LedgerService
     private let items: () -> [SourceItem]
@@ -85,6 +89,7 @@ final class JudgmentsService: ObservableObject {
     func refreshLedger() {
         rows = ledger.allRows()
         corrections = ledger.correctionIndex()
+        countsMemo.removeAll()
     }
 
     func judgment(_ id: String) -> UserJudgment? { judgments.first { $0.id == id } }
@@ -155,8 +160,14 @@ final class JudgmentsService: ObservableObject {
 
     // MARK: Reading results
 
+    /// Memoised per wording and threshold until the ledger is read again: My judgments recomputes its cards on
+    /// every change here (a correction included), and over 10,000 rows each count is a full pass.
     func counts(_ j: UserJudgment) -> JudgmentCounts {
-        JudgmentResults.shared.counts(all: rows, judgment: j, corrections: corrections)
+        let key = "\(j.id)|\(j.criteriaHash)|\(j.threshold)|\(j.onFailure.name)|\(rows.count)"
+        if let hit = countsMemo[key] { return hit }
+        let c = JudgmentResults.shared.counts(all: rows, judgment: j, corrections: corrections)
+        countsMemo[key] = c
+        return c
     }
 
     func results(_ j: UserJudgment) -> [ResultRow] {
@@ -227,6 +238,7 @@ final class JudgmentsService: ObservableObject {
                    end.error != nil ? "act.res.failed" : end.cancelled ? "act.res.stopped" : "act.res.judgments",
                    ["done": Int(end.done), "uncertain": 0])
         settings.recordRun(Features.shared.JUDGMENTS, layaOff: end.layaOff)
+        if end.done > 0 { JudgmentRunLog.stamp([j.id]) }
         ledger.flush()
         self.bridge = nil
         sweep = end
@@ -315,6 +327,47 @@ extension JudgmentsService {
     /// "Needs you: N" — how many items the current batch still holds.
     var needsYou: Int { unsure().count }
 
+    /// The queue for one judgment (opened from its results), or across all of them for nil. Drawn by the same
+    /// rule (most torn first plus the audit arm) over that judgment alone, and held the same way.
+    func unsure(judgmentId: String?) -> [UnsureEntry] {
+        guard let id = judgmentId else { return unsure() }
+        guard let j = judgment(id) else { return [] }
+        let s = "\(stamp)|\(id)"
+        if let held = judgmentBatches[id], held.stamp == s, !held.entries.isEmpty { return held.entries }
+        let entries = JudgmentMeasure.shared.queue(all: rows, judgments: [j], corrections: corrections,
+                                                   items: items(), size: JudgmentMeasure.shared.QUEUE_SIZE)
+        judgmentBatches[id] = (s, entries)
+        return entries
+    }
+
+    /// Answers from the results screen (one item, or many at once): exactly the records the queue writes —
+    /// `JudgmentMeasure.correction` keyed by item + criteria hash, `confirmed` when it agrees with the model's
+    /// pick, and a retraction for nil — appended to the corrections log, with one publish for the batch.
+    func recordCorrections(_ j: UserJudgment, _ changes: [(itemId: String, label: String?, modelPick: String)]) {
+        guard !changes.isEmpty else { return }
+        let at = Self.now()
+        var next = corrections
+        var keys = Set<CorrectionKey>()
+        for c in changes {
+            let key = CorrectionKey(judgmentId: j.id, criteriaHash: j.criteriaHash, itemId: c.itemId)
+            if let label = c.label {
+                ledger.recordCorrection(JudgmentMeasure.shared.correction(judgment: j, itemId: c.itemId, label: label,
+                                                                          confirmed: label == c.modelPick, at: at))
+            } else {
+                ledger.recordCorrection(JudgmentMeasure.shared.retraction(key: key, at: at))
+            }
+            next[key] = c.label
+            keys.insert(key)
+        }
+        corrections = next
+        // An item answered here leaves the queue's batches, as an answer given in the queue does.
+        batch.removeAll { keys.contains($0.key) }
+        if var held = judgmentBatches[j.id] {
+            held.entries.removeAll { keys.contains($0.key) }
+            judgmentBatches[j.id] = held
+        }
+    }
+
     /// A one-tap answer: a correction keyed by item + the judgment's current criteria hash.
     func answer(_ entry: UnsureEntry, label: String) {
         let record = JudgmentMeasure.shared.correction(judgment: entry.judgment, itemId: entry.itemId, label: label,
@@ -323,6 +376,7 @@ extension JudgmentsService {
         setCorrection(entry.key, label)
         answered.append(entry)
         batch.removeAll { $0.key == entry.key }
+        judgmentBatches[entry.judgment.id]?.entries.removeAll { $0.key == entry.key }
     }
 
     var canUndo: Bool { !answered.isEmpty }
@@ -333,6 +387,7 @@ extension JudgmentsService {
         ledger.recordCorrection(JudgmentMeasure.shared.retraction(key: entry.key, at: Self.now()))
         setCorrection(entry.key, nil)
         batch.insert(entry, at: 0)
+        judgmentBatches[entry.judgment.id]?.entries.insert(entry, at: 0)
         notice = "Undid your last answer."
     }
 

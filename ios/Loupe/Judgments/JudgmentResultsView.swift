@@ -1,67 +1,261 @@
 import SwiftUI
 import LoupeKit
 
-/// One judgment's results over the scanned items (F2), the phone twin of the desktop's Results
-/// screen: run over the sample with Laya (off the main thread, cancellable), or say plainly that
-/// the model is not installed — never fake scores. Numbers are the model's raw probabilities.
+/// One judgment's results (F2) as a dashboard (owner feedback 2026-09-26): the question and the answer split
+/// as a tappable donut, who answered, the model's confidence against its threshold, breakdowns by source, kind
+/// and date, what decided, the way into the Unsure queue, then the list itself — filtered by whatever was
+/// tapped, searchable, sortable, grouped by answer, correctable inline and in bulk. Runs stay as before: over
+/// the scanned items with the decision model (off the main thread, cancellable), or it says plainly that the
+/// model is not installed — never fake scores. Numbers are the model's raw probabilities.
 struct JudgmentResultsView: View {
     @ObservedObject var service: JudgmentsService
     let judgmentId: String
     var autoRun = false
+    @StateObject private var model: ResultsModel
     @State private var confirmCriteria = false
     @State private var didAutoRun = false
+    @State private var openItem: Int32?
+    @State private var changing: Int32?
+    @State private var showQueue = false
+    @State private var showMeasure = false
     @ObservedObject private var readiness = ModelReadiness.shared
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+
+    init(service: JudgmentsService, judgmentId: String, autoRun: Bool = false) {
+        self.service = service
+        self.judgmentId = judgmentId
+        self.autoRun = autoRun
+        _model = StateObject(wrappedValue: ResultsModel(judgmentId: judgmentId))
+    }
 
     var body: some View {
-        ScrollView {
+        Group {
             if let j = service.judgment(judgmentId) {
-                LazyVStack(alignment: .leading, spacing: 12) {
-                    header(j)
-                    LayaOffBanner(feature: Features.shared.JUDGMENTS)
-                    modelCard(j)
-                    if let s = service.sweep, s.judgmentId == j.id { sweepCard(s) }
-                    // The run, live and in place: the pipeline, the mascot engine, the decision diamonds and cards.
-                    LiveRunSection(view: "judgments") { q in
-                        service.judgments.first { Activity.shared.questionId(id: $0.id) == q }?.title
-                    }
-                    criteriaCard(j)
-                    results(j)
-                }
-                .padding(16)
+                content(j)
             } else {
                 Text("This judgment was deleted.").foregroundStyle(Palette.inkSoft).padding(24)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity).neonGround()
             }
         }
-        .neonGround()
-        .navigationTitle("Results")
+        .navigationTitle(service.judgment(judgmentId)?.title ?? "Results")
         .navigationBarTitleDisplayMode(.inline)
         .task {
+            #if DEBUG
+            if let n = ResultsFixture.requested {
+                let t0 = CFAbsoluteTimeGetCurrent()
+                await ResultsFixture.seed(service, judgmentId: judgmentId, n: n)
+                print("LOUPE-PERF results fixture seed n=\(n) \(Int((CFAbsoluteTimeGetCurrent() - t0) * 1000))ms")
+            }
+            #endif
+            model.markStart()
+            await model.refresh(service)
             await service.checkModel()
+            #if DEBUG
+            if ResultsFixture.requested != nil { return }
+            #endif
             if autoRun && !didAutoRun && readiness.isReady && service.gate == .ready {
                 didAutoRun = true
                 await service.startSweep(judgmentId)
             }
         }
+        .onChange(of: rebuildStamp) { _, _ in Task { await model.refresh(service) } }
     }
 
-    private func header(_ j: UserJudgment) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(j.title).font(Typeface.display(26)).foregroundStyle(Palette.ink)
-                Spacer()
-                if j.warnOnly { Pill(text: "warn-only", color: Palette.amber) }
+    /// A run added rows, or the judgment was reworded / re-thresholded: rebuild the index.
+    private var rebuildStamp: String {
+        let j = service.judgment(judgmentId)
+        return "\(service.rows.count)|\(j?.criteriaHash ?? "")|\(j?.threshold ?? 0)"
+    }
+
+    private var reduceMotion: Bool { Motion.reduced(systemReduceMotion) }
+
+    private func content(_ j: UserJudgment) -> some View {
+        let muted = ResultsBuilder.mutedOption(j)
+        return ScrollViewReader { proxy in
+            let toList = {
+                if reduceMotion { proxy.scrollTo("list", anchor: .top) } else {
+                    withAnimation(.easeOut(duration: 0.35)) { proxy.scrollTo("list", anchor: .top) }
+                }
             }
-            Text(j.question).font(.subheadline).foregroundStyle(Palette.blue)
-            Text("\(j.shapeName) · acts at \(pct(j.threshold)) raw · \(j.templateId == nil ? "written by you" : "from a template")")
-                .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
-            if j.baseline != nil, service.autoBaseline(j).baselineAnswers {
-                Pill(text: j.useBaseline ? "answers by baseline rule" : "baseline rule answers (auto)", color: Palette.amber)
+            List {
+                Section {
+                    Group {
+                        LayaOffBanner(feature: Features.shared.JUDGMENTS)
+                        // With results, the summary leads and the run controls follow it; without, the run leads.
+                        let hasResults = (model.index?.count ?? 0) > 0
+                        if !hasResults { modelCard(j) }
+                        if let s = service.sweep, s.judgmentId == j.id { sweepCard(s) }
+                        // The run, live and in place: the pipeline, the mascot engine, the decision diamonds and cards.
+                        LiveRunSection(view: "judgments") { q in
+                            service.judgments.first { Activity.shared.questionId(id: $0.id) == q }?.title
+                        }
+                        dashboard(j, muted: muted, toList: toList)
+                        if hasResults { modelCard(j) }
+                        criteriaCard(j)
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+                    // Each button in a card acts on its own (a default-style button would make the whole row one tap).
+                    .buttonStyle(.borderless)
+                }
+                if let index = model.index, index.count > 0 {
+                    Section {
+                        Color.clear.frame(height: 1).id("list")
+                            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
+                        if model.sections.isEmpty {
+                            Text(model.filter.isEmpty ? "No results." : "Nothing matches these filters.")
+                                .font(.subheadline).foregroundStyle(Palette.inkSoft)
+                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                                .accessibilityIdentifier("results.noMatch")
+                        }
+                        ForEach(model.sections) { section in
+                            ResultsGroupHeader(title: model.bucketTitle(section.bucket),
+                                               color: ResultsLook.bucket(section.bucket, muted: muted),
+                                               count: section.rows.count, key: section.bucket.key)
+                                .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+                            ForEach(section.rows, id: \.self) { i in
+                                row(i, j, muted: muted)
+                            }
+                        }
+                    } header: {
+                        ResultsFilterBar(model: model)
+                            .listRowInsets(EdgeInsets())
+                    }
+                } else {
+                    Section {
+                        Text(model.building ? "Reading the results…" :
+                                service.gate == .ready ? "\"\(j.title)\" has not run yet. Run it and results appear here." : "No results yet.")
+                            .font(.subheadline).foregroundStyle(Palette.inkSoft)
+                            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                            .accessibilityIdentifier("results.empty")
+                    }
+                }
             }
-            NavigationLink(value: JudgmentRoute.measure(j.id)) {
-                Label("Measure: calibration, baseline, threshold", systemImage: "chart.bar.xaxis")
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .environment(\.defaultMinListRowHeight, 1)
+            .neonGround()
+            .scrollDismissesKeyboard(.immediately)
+            .navigationDestination(item: $openItem) { i in
+                ResultItemView(model: model, service: service, index: i, muted: muted)
             }
-            .accessibilityIdentifier("results.measure")
+            .navigationDestination(isPresented: $showQueue) { UnsureQueueView(service: service, judgmentId: j.id) }
+            .navigationDestination(isPresented: $showMeasure) { MeasureView(service: service, judgmentId: j.id) }
+            .safeAreaInset(edge: .bottom) {
+                if model.selecting {
+                    ResultsBulkBar(model: model) { option in
+                        model.correct(Array(model.selected), to: option, service: service)
+                        model.selecting = false
+                    }
+                } else if let change = model.lastChange {
+                    ResultsUndoBar(text: change.summary, undo: { model.undoLast(service: service) }, dismiss: { model.dismissChange() })
+                }
+            }
+            .confirmationDialog("Change the answer", isPresented: Binding(get: { changing != nil }, set: { if !$0 { changing = nil } }),
+                                titleVisibility: .visible) {
+                if let i = changing, let r = model.record(i) {
+                    ForEach(model.options.indices, id: \.self) { o in
+                        if r.canCorrect(to: o) && r.answer != o {
+                            Button(model.optionTitle(o)) { model.correct([i], to: o, service: service) }
+                        }
+                    }
+                }
+            }
+            .onAppear { model.reconcile(service) }
+            #if DEBUG
+            .overlay(alignment: .topTrailing) {
+                if ResultsFixture.showPerf {
+                    Text(model.perf.line).font(Typeface.mono(9)).foregroundStyle(Palette.inkSoft)
+                        .padding(4).background(Palette.ground.opacity(0.8))
+                        .accessibilityIdentifier("results.perf")
+                }
+            }
+            #endif
         }
+    }
+
+    // MARK: Dashboard
+
+    @ViewBuilder private func dashboard(_ j: UserJudgment, muted: Int?, toList: @escaping () -> Void) -> some View {
+        if let index = model.index, index.count > 0 {
+            ResultsSummaryCard(model: model, judgment: j, muted: muted, onFilter: toList)
+                .onAppear { model.didPaint() }
+            Button { showQueue = true } label: {
+                NeedsYouEntry(count: index.summary.count(.unsure))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("results.needsYou")
+            WhoAnsweredCard(model: model, onFilter: toList)
+            ConfidenceCard(model: model, muted: muted, onFilter: toList)
+            BreakdownsCard(model: model, muted: muted, onFilter: toList)
+            ReasonsCard(model: model, judgment: j, onFilter: toList)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(j.question).font(Typeface.display(24)).foregroundStyle(Palette.ink)
+                Text("\(JudgmentRunLog.line(j.id)) · \(j.shapeName) · acts at \(pct(j.threshold))")
+                    .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card()
+        }
+    }
+
+    private func row(_ i: Int32, _ j: UserJudgment, muted: Int?) -> some View {
+        let r = model.record(i)!
+        let item = model.row(i)?.item ?? fixtureItem(r.itemId)
+        let selected = model.selected.contains(i)
+        return ResultRowCell(
+            record: r, item: item, options: model.options,
+            answerTitle: r.answer.map { model.optionTitle($0) } ?? (r.unusable ? "could not judge" : "unsure"),
+            answerColor: ResultsLook.bucket(r.bucket, muted: muted),
+            optionTitle: { model.optionTitle($0) },
+            selecting: model.selecting, selected: selected,
+            open: {
+                if model.selecting {
+                    if selected { model.selected.remove(i) } else { model.selected.insert(i) }
+                } else {
+                    openItem = i
+                }
+            },
+            correct: { model.correct([i], to: $0, service: service) })
+        .listRowBackground(selected ? Palette.accentSoft : Color.clear)
+        .listRowSeparatorTint(Palette.hairline)
+        .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 16))
+        .swipeActions(edge: .leading, allowsFullSwipe: true) {
+            if r.correction == nil, r.answer != nil || (r.top >= 0 && !r.unusable) {
+                Button { model.correct([i], to: nil, service: service) } label: { Label("Confirm", systemImage: "checkmark.seal") }
+                    .tint(Palette.mint)
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            let others = model.options.indices.filter { r.canCorrect(to: $0) && r.answer != $0 }
+            if others.count <= 2 {
+                ForEach(others, id: \.self) { o in
+                    Button { model.correct([i], to: o, service: service) } label: { Text("Mark: \(model.optionTitle(o))") }
+                        .tint(o == muted ? Palette.blueBright : Palette.blue)
+                }
+            } else {
+                Button { changing = i } label: { Label("Change…", systemImage: "tag") }.tint(Palette.blue)
+            }
+        }
+        .contextMenu {
+            ForEach(model.options.indices, id: \.self) { o in
+                if r.canCorrect(to: o) {
+                    Button("Mark as \(model.optionTitle(o))") { model.correct([i], to: o, service: service) }
+                }
+            }
+        }
+    }
+
+    private func fixtureItem(_ id: String) -> SourceItem? {
+        #if DEBUG
+        return ResultsFixture.items[id]
+        #else
+        return nil
+        #endif
     }
 
     // MARK: Model and run
@@ -90,18 +284,19 @@ struct JudgmentResultsView: View {
         case .ready:
             let items = service.sampleItems()
             VStack(alignment: .leading, spacing: 8) {
-                Text("A run judges every sample item that has text, skipping ones already judged under this wording. It runs on this phone, in the background, and can be cancelled.")
-                    .font(.footnote).foregroundStyle(Palette.inkSoft)
                 HStack {
                     Button { Task { await service.startSweep(j.id) } } label: { Label("Run on new items", systemImage: "play.fill") }
                         .buttonStyle(.neonPrimary)
                         .accessibilityIdentifier("results.run")
                     Button("Re-run all") { Task { await service.startSweep(j.id, rerunAll: true) } }
                         .buttonStyle(.bordered)
+                        .frame(minHeight: 44)
                 }
                 .disabled(service.running || items.isEmpty)
-                Text(items.isEmpty ? "No items scanned yet — turn on the sample in Sources." : "\(items.count) items · \(SourcesService.sampleLabel)")
+                Text(items.isEmpty ? "No items scanned yet — turn on the sample in Sources."
+                     : "\(items.count) items · a run judges the ones with text not yet judged under this wording, on this phone, cancellable.")
                     .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading).card()
         }
@@ -115,6 +310,7 @@ struct JudgmentResultsView: View {
                 Spacer()
                 if s.running {
                     Button("Cancel", role: .cancel) { service.cancelSweep() }
+                        .frame(minHeight: 44)
                         .accessibilityIdentifier("results.cancel")
                 }
             }
@@ -133,11 +329,24 @@ struct JudgmentResultsView: View {
         .frame(maxWidth: .infinity, alignment: .leading).card()
     }
 
-    // MARK: Criteria in prompt
+    // MARK: Criteria in prompt, Measure
 
     private func criteriaCard(_ j: UserJudgment) -> some View {
         let applies = JudgmentBook.shared.criteriaApplicable(judgment: j)
-        return VStack(alignment: .leading, spacing: 6) {
+        let counts = service.counts(j)
+        return VStack(alignment: .leading, spacing: 8) {
+            Button { showMeasure = true } label: {
+                HStack {
+                    Label("Measure: calibration, baseline, threshold", systemImage: "chart.bar.xaxis")
+                    Spacer()
+                    Image(systemName: "chevron.right").foregroundStyle(Palette.inkSoft)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(Palette.cyan)
+            .accessibilityIdentifier("results.measure")
             Toggle("Show the criteria to the model", isOn: Binding(
                 get: { j.criteriaInPrompt },
                 set: { _ in confirmCriteria = true }))
@@ -145,6 +354,17 @@ struct JudgmentResultsView: View {
                 .accessibilityIdentifier("results.criteriaInPrompt")
             Text(applies ? JudgmentBook.shared.CRITERIA_WARNING : "This judgment has no per-option criteria to show.")
                 .font(.caption).foregroundStyle(Palette.inkSoft)
+            if j.baseline != nil, service.autoBaseline(j).baselineAnswers {
+                Pill(text: j.useBaseline ? "answers by baseline rule" : "baseline rule answers (auto)", color: Palette.amber)
+            }
+            if counts.unusable > 0 {
+                Text("\(counts.unusable) item(s) could not be judged. \(j.onFailure == .loud ? "This judgment is loud: check them yourself; silence is not \"nothing found\"." : "Nothing was done with them.")")
+                    .font(.caption).foregroundStyle(Palette.red)
+            }
+            if counts.earlierWording > 0 {
+                Text("\(counts.earlierWording) decision(s) under earlier wording are kept in the ledger and not counted here.")
+                    .font(.caption).foregroundStyle(Palette.inkSoft)
+            }
         }
         .card()
         .confirmationDialog("Calibration starts again", isPresented: $confirmCriteria, titleVisibility: .visible) {
@@ -156,169 +376,10 @@ struct JudgmentResultsView: View {
         }
     }
 
-    // MARK: Results
-
-    @ViewBuilder private func results(_ j: UserJudgment) -> some View {
-        let rows = service.results(j)
-        let counts = service.counts(j)
-        if rows.isEmpty {
-            Text(service.gate == .ready ? "\"\(j.title)\" has not run yet. Run it and results appear here." : "No results yet.")
-                .font(.subheadline).foregroundStyle(Palette.inkSoft).padding(.vertical, 8)
-                .accessibilityIdentifier("results.empty")
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
-                Caption(text: "\(counts.decisions) judged · \(counts.acted) answered · \(counts.unsure) unsure")
-                Text("Raw model probabilities, uncalibrated. At or above \(pct(j.threshold)) the engine answers; below it, it is unsure and the item waits for you.")
-                    .font(.caption).foregroundStyle(Palette.inkSoft)
-                if counts.unusable > 0 {
-                    Text("\(counts.unusable) item(s) could not be judged. \(j.onFailure == .loud ? "This judgment is loud: check them yourself; silence is not \"nothing found\"." : "Nothing was done with them.")")
-                        .font(.caption).foregroundStyle(Palette.red)
-                }
-            }
-            ForEach(rows, id: \.itemId) { r in
-                NavigationLink { ResultDetailView(judgment: j, result: r) } label: { ResultRowView(judgment: j, result: r) }
-                    .buttonStyle(.plain)
-            }
-        }
-    }
-
     private func stat(_ n: String, _ label: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(n).font(Typeface.display(20)).foregroundStyle(Palette.blue)
+            Text(n).font(Typeface.display(20)).monospacedDigit().foregroundStyle(Palette.blue)
             Text(label).font(.caption2).foregroundStyle(Palette.inkSoft)
-        }
-    }
-}
-
-func pct(_ p: Double) -> String { "\(Int((p * 100).rounded()))%" }
-
-struct ResultRowView: View {
-    let judgment: UserJudgment
-    let result: ResultRow
-
-    private var tone: Color {
-        if result.unusable { return Palette.red }
-        return result.acted ? Palette.ink : Palette.amber
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(result.item?.name ?? result.itemId).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink).lineLimit(1)
-                Spacer()
-                Text(result.unusable ? "—" : pct(result.topMass)).font(Typeface.mono(12, weight: .medium)).foregroundStyle(tone)
-            }
-            Text(result.status(judgment: judgment)).font(.footnote.weight(.medium)).foregroundStyle(tone).lineLimit(2)
-            ConfidenceBar(value: result.unusable ? 0 : result.topMass, threshold: judgment.threshold, color: tone)
-            if let item = result.item { ItemRefHeader(item: item) }
-            HStack(spacing: 6) {
-                Text(source).font(Typeface.mono(10)).foregroundStyle(Palette.inkSoft).lineLimit(1)
-                Spacer()
-                if result.mechanical { Pill(text: "answered by rule", color: Palette.mint) }
-                if !result.acted && !result.unusable { Pill(text: "unsure", color: Palette.amber, symbol: "questionmark") }
-                if result.inputCutNote != nil { Pill(text: "cut", color: Palette.inkSoft, symbol: "scissors") }
-            }
-            if let note = result.inputCutNote { Text(note).font(.caption2).foregroundStyle(Palette.inkSoft) }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .card()
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("results.row")
-    }
-
-    private var source: String {
-        guard let i = result.item else { return "no longer scanned" }
-        return ([i.sourceLabel, i.kind.title] + [i.dateIso].compactMap { $0 }).joined(separator: " · ")
-    }
-}
-
-struct ConfidenceBar: View {
-    let value: Double
-    let threshold: Double
-    var color: Color = Palette.blue
-
-    var body: some View {
-        GeometryReader { g in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Palette.hairline)
-                Capsule().fill(color.opacity(0.8)).frame(width: max(0, min(1, value)) * g.size.width)
-                Rectangle().fill(Palette.ink.opacity(0.5)).frame(width: 1.5).offset(x: threshold * g.size.width)
-            }
-        }
-        .frame(height: 6)
-        .accessibilityHidden(true)
-    }
-}
-
-/// One item: the whole raw distribution, the notes, its facts and what the model read.
-struct ResultDetailView: View {
-    let judgment: UserJudgment
-    let result: ResultRow
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text(result.item?.name ?? result.itemId).font(Typeface.display(24)).foregroundStyle(Palette.ink)
-                if let item = result.item {
-                    ItemRefHeader(item: item)
-                    ItemActions(item: item)
-                } else {
-                    Text("This item is no longer scanned, so it cannot be opened.").font(.caption).foregroundStyle(Palette.inkSoft)
-                }
-                VStack(alignment: .leading, spacing: 8) {
-                    Caption(text: result.mechanical ? "What the rule said" : "What the model said (raw)")
-                    ForEach(result.masses(judgment: judgment), id: \.first) { pair in
-                        let label = (pair.first as String?) ?? ""
-                        let mass = (pair.second as? KotlinDouble)?.doubleValue ?? 0
-                        VStack(alignment: .leading, spacing: 3) {
-                            HStack {
-                                Text(judgment.shown(label)).font(.subheadline)
-                                Spacer()
-                                Text(pct(mass)).font(Typeface.mono(12))
-                            }
-                            ConfidenceBar(value: mass, threshold: judgment.threshold)
-                        }
-                    }
-                    Text(result.status(judgment: judgment)).font(.footnote.weight(.semibold))
-                    ForEach([result.ruleNote, result.row.failure.map { "Unusable answer: \($0)" }, result.inputCutNote, result.criteriaCutNote].compactMap { $0 }, id: \.self) {
-                        Text($0).font(.caption).foregroundStyle(Palette.inkSoft)
-                    }
-                    Text("Preview only: Loupe changes nothing on this phone.").font(.caption).foregroundStyle(Palette.inkSoft)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading).card()
-                SecondOpinionSection(judgment: judgment, result: result, assist: AssistService.shared)
-                if let item = result.item {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Caption(text: "Mechanical facts")
-                        fact("Source", item.sourceLabel)
-                        fact("Type", "\(item.kind.title) (\(item.mime))")
-                        if let d = item.dateIso { fact("Date", "\(d) (from the \(item.dateOrigin?.title ?? "file"))") }
-                        if let e = item.email {
-                            fact("From", [e.fromName, e.fromAddress.map { "<\($0)>" }].compactMap { $0 }.joined(separator: " "))
-                            if let s = e.subject { fact("Subject", s) }
-                        }
-                        if let dup = item.duplicateOf { fact("Exact duplicate of", dup) }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading).card()
-                    VStack(alignment: .leading, spacing: 6) {
-                        Caption(text: "What the model read")
-                        Text(String(item.text.prefix(2000)) + (item.text.count > 2000 ? "\n…" : ""))
-                            .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading).card()
-                }
-            }
-            .padding(16)
-        }
-        .neonGround()
-        .navigationTitle("Item")
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private func fact(_ k: String, _ v: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(k).font(.caption.weight(.semibold)).foregroundStyle(Palette.inkSoft).frame(width: 90, alignment: .leading)
-            Text(v).font(.caption).foregroundStyle(Palette.ink)
         }
     }
 }

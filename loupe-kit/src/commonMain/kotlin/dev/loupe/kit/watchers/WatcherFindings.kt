@@ -1,6 +1,9 @@
 package dev.loupe.kit.watchers
 
 import dev.loupe.engine.Cadence
+import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
 import dev.loupe.persistence.CorrectionKey
 import dev.loupe.persistence.CorrectionRecord
 import dev.loupe.sources.common.SourceItem
@@ -61,7 +64,23 @@ data class CensusRow(
     /** The typical charge brought to a month (weekly × 52/12, quarterly ÷ 3, annual ÷ 12); null when irregular. */
     val monthlyMinor: Long?,
     val sample: Boolean,
-)
+    /** The items the charges were read from (receipts, statements), oldest charge first: the evidence. */
+    val itemIds: List<String> = emptyList(),
+    /**
+     * The next charge the cadence predicts (`yyyy-MM-dd`): the last charge plus one period. Null when the cadence
+     * is irregular or the predicted day has already passed without a charge (then nothing honest can be said).
+     */
+    val nextExpectedIso: String? = null,
+    /** The user's answer about this merchant (Confirm, or null); set-aside merchants leave the census. */
+    val verdict: FindingVerdict? = null,
+) {
+    /**
+     * The corrections log key of the user's answer about this merchant ("subscription:<merchant>", under the
+     * `watcher:recurring` judgment). Distinct from the "no charge for N days" finding's key, so dismissing that
+     * warning does not take the merchant out of the census.
+     */
+    val key: String get() = "subscription:" + merchant
+}
 
 /** The recurring-money census, as Now shows it. */
 data class SubscriptionCensus(
@@ -69,6 +88,31 @@ data class SubscriptionCensus(
     /** Sum of [CensusRow.monthlyMinor] over rows with a regular cadence. */
     val monthlyTotalMinor: Long,
     val chargesFound: Int,
+    val sample: Boolean,
+    /** Merchants the user answered "not a subscription" or set aside: left out of [rows] and the total. */
+    val setAside: Int = 0,
+)
+
+/**
+ * One document on the expiry timeline: every date the radar's mechanical half found near an expiry word within a
+ * year (or already passed), whether or not it is inside the rule. Only the ones inside the rule are findings.
+ */
+data class ExpiryRow(
+    val itemId: String,
+    val itemName: String,
+    val expiryIso: String,
+    /** Negative once the date has passed. */
+    val daysRemaining: Long,
+    /** The date could be read two ways; the earlier reading was used. */
+    val ambiguous: Boolean,
+    /** Inside the validity rule (so it is also a finding, with [findingKey]). */
+    val breachesRule: Boolean,
+    /** What the decision model judged the document to be; null when it did not run or did not judge it a listed type. */
+    val documentType: String?,
+    /** The finding's key when the row is a finding (answerable), else null. */
+    val findingKey: String?,
+    /** The line of the document with the expiry word, verbatim. */
+    val line: String?,
     val sample: Boolean,
 )
 
@@ -85,6 +129,8 @@ data class WatcherSummary(
     val linksChecked: Int,
     val todayIso: String,
     val ruleName: String,
+    /** The expiry timeline, soonest first, without documents whose finding the user set aside. */
+    val expiries: List<ExpiryRow> = emptyList(),
 )
 
 /**
@@ -108,18 +154,34 @@ object WatcherFindings {
         corrections: Map<CorrectionKey, String> = emptyMap(),
     ): WatcherSummary {
         fun isSample(item: SourceItem) = item.sourceId in sampleSourceIds
-        val census = census(report, items, ::isSample)
-        val sampleMerchants = census.rows.filter { it.sample }.map { it.merchant }.toSet()
+        fun answer(kind: WatcherKind, key: String): FindingVerdict? {
+            val label = corrections[CorrectionKey(judgmentId(kind), CRITERIA, key)]
+            return FindingVerdict.entries.firstOrNull { it.label == label }
+        }
+        val fullCensus = census(report, items, ::isSample).let { c ->
+            c.copy(rows = c.rows.map { it.copy(verdict = answer(WatcherKind.RECURRING, it.key)) })
+        }
+        val keptRows = fullCensus.rows.filter { it.verdict == null || it.verdict == FindingVerdict.CONFIRMED }
+        val census = fullCensus.copy(
+            rows = keptRows,
+            monthlyTotalMinor = keptRows.sumOf { it.monthlyMinor ?: 0L },
+            sample = keptRows.isNotEmpty() && keptRows.all { it.sample },
+            setAside = fullCensus.rows.size - keptRows.size,
+        )
+        val sampleMerchants = fullCensus.rows.filter { it.sample }.map { it.merchant }.toSet()
         val all = findings(report, ::isSample).map { f ->
             if (f.watcher == WatcherKind.RECURRING) f.copy(sample = f.itemName in sampleMerchants) else f
         }.map { f ->
-            val label = corrections[CorrectionKey(judgmentId(f.watcher), CRITERIA, f.key)]
-            f.copy(verdict = FindingVerdict.entries.firstOrNull { it.label == label })
+            f.copy(verdict = answer(f.watcher, f.key))
         }
+        // A merchant answered "not a subscription" or set aside takes its "no charge for N days" warning with it.
+        val setAsideMerchants = fullCensus.rows.filter { it !in keptRows }.map { it.merchant }.toSet()
         val shown = all.filter { it.verdict == null || it.verdict == FindingVerdict.CONFIRMED }
+            .filterNot { it.watcher == WatcherKind.RECURRING && it.itemName in setAsideMerchants }
+        val setAsideKeys = all.filter { it !in shown }.map { it.key }.toSet()
         return WatcherSummary(
             findings = shown,
-            setAside = all.size - shown.size,
+            setAside = all.count { it.verdict != null && it.verdict != FindingVerdict.CONFIRMED },
             census = census,
             modelRan = report.expiryAlerts != null,
             itemsChecked = items.count { it.hasText && it.duplicateOf == null },
@@ -127,8 +189,45 @@ object WatcherFindings {
             linksChecked = report.linksChecked,
             todayIso = report.today.toString(),
             ruleName = report.rule.name,
+            expiries = expiries(report, ::isSample).filter { it.findingKey == null || it.findingKey !in setAsideKeys },
         )
     }
+
+    /** Every expiry candidate as a timeline row, soonest first (see [ExpiryRow]). */
+    fun expiries(report: WatcherReport, isSample: (SourceItem) -> Boolean): List<ExpiryRow> {
+        val alerts = report.expiryAlerts?.associateBy { it.itemId }
+        return report.expiryCandidates.map { c ->
+            ExpiryRow(
+                itemId = c.item.id,
+                itemName = c.item.name,
+                expiryIso = c.expiry.toString(),
+                daysRemaining = c.daysRemaining,
+                ambiguous = c.ambiguous,
+                breachesRule = c.breachesRule,
+                documentType = alerts?.get(c.item.id)?.documentType,
+                findingKey = if (c.breachesRule) "expiry:" + c.item.id else null,
+                line = c.item.text.lines().firstOrNull { EXPIRY_LINE.containsMatchIn(it) }?.trim(),
+                sample = isSample(c.item),
+            )
+        }.sortedBy { it.daysRemaining }
+    }
+
+    /**
+     * A census merchant as a finding, so the user can answer it (Confirm, Not a subscription, Set aside) through
+     * [correction] and [retraction], keyed by [CensusRow.key].
+     */
+    fun censusFinding(row: CensusRow): WatcherFinding = WatcherFinding(
+        key = row.key,
+        watcher = WatcherKind.RECURRING,
+        title = row.merchant,
+        evidence = listOf("${row.cadence.replaceFirstChar { it.uppercase() }}, ${row.occurrences} charges, typically ${money(row.typicalMinor)}, last ${row.lastChargedIso}"),
+        why = "Arithmetic on the charges found.",
+        itemId = row.itemIds.lastOrNull() ?: "",
+        itemName = row.merchant,
+        otherItemId = null,
+        sample = row.sample,
+        verdict = row.verdict,
+    )
 
     /** The correction record for a verdict (`at` is an ISO instant from the caller's clock). */
     fun correction(finding: WatcherFinding, verdict: FindingVerdict, at: String): CorrectionRecord =
@@ -250,7 +349,10 @@ object WatcherFindings {
 
     fun census(report: WatcherReport, items: List<SourceItem>, isSample: (SourceItem) -> Boolean): SubscriptionCensus {
         val texty = items.filter { it.hasText && it.duplicateOf == null }
-        val byMerchant = WatcherRun.charges(texty).groupBy({ it.second.merchant }, { it.first })
+        val charges = WatcherRun.charges(texty)
+        val byMerchant = charges.groupBy({ it.second.merchant }, { it.first })
+        val evidence = charges.groupBy { it.second.merchant }
+            .mapValues { (_, cs) -> cs.sortedBy { it.second.date }.map { it.first.id }.distinct() }
         val rows = report.recurring.map { rc ->
             CensusRow(
                 merchant = rc.merchant,
@@ -261,6 +363,8 @@ object WatcherFindings {
                 daysSinceLastCharge = rc.daysSinceLastCharge,
                 monthlyMinor = monthly(rc.cadence, rc.typicalAmountMinor),
                 sample = byMerchant[rc.merchant].orEmpty().let { it.isNotEmpty() && it.all(isSample) },
+                itemIds = evidence[rc.merchant].orEmpty(),
+                nextExpectedIso = nextExpected(rc.cadence, rc.lastCharged, report.today)?.toString(),
             )
         }
         return SubscriptionCensus(
@@ -269,6 +373,18 @@ object WatcherFindings {
             chargesFound = report.chargesFound,
             sample = rows.isNotEmpty() && rows.all { it.sample },
         )
+    }
+
+    /** The last charge plus one period of [cadence]; null when irregular or when that day is already behind [today]. */
+    fun nextExpected(cadence: Cadence, lastCharged: LocalDate, today: LocalDate): LocalDate? {
+        val period = when (cadence) {
+            Cadence.WEEKLY -> DatePeriod(days = 7)
+            Cadence.MONTHLY -> DatePeriod(months = 1)
+            Cadence.QUARTERLY -> DatePeriod(months = 3)
+            Cadence.ANNUAL -> DatePeriod(years = 1)
+            Cadence.IRREGULAR -> return null
+        }
+        return lastCharged.plus(period).takeIf { it >= today }
     }
 
     fun monthly(cadence: Cadence, typicalMinor: Long): Long? = when (cadence) {

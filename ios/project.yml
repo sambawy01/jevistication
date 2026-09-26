@@ -48,6 +48,8 @@ targets:
         embed: false
       # "Send to Loupe" (epic #7 child 7), embedded in the app.
       - target: LoupeShare
+      # Loupe for Safari (2026-09-26, browsing protection): a Safari Web Extension, embedded in the app.
+      - target: LoupeSafari
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.loupe-ai.ios
@@ -119,6 +121,11 @@ targets:
     sources:
       - path: LoupeShare
       - path: Shared
+    dependencies:
+      # Browsing protection (2026-09-26): a shared link's verdict right in the share sheet, from the
+      # same phishing formula (static; only what the checks use is linked).
+      - framework: ../loupe-kit/build/XCFrameworks/debug/LoupeKit.xcframework
+        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.loupe-ai.ios.share
@@ -126,6 +133,8 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
         CODE_SIGN_ENTITLEMENTS: LoupeShare/LoupeShare.entitlements
+        OTHER_LDFLAGS: ["$(inherited)", "-lc++"]
+        DEAD_CODE_STRIPPING: YES
         "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     info:
       path: LoupeShare/Info.plist
@@ -141,6 +150,56 @@ targets:
               NSExtensionActivationSupportsText: true
               NSExtensionActivationSupportsWebURLWithMaxCount: 5
               NSExtensionActivationSupportsAttachmentsWithMaxCount: 20
+  # Loupe for Safari (2026-09-26): a Safari Web Extension (manifest v3). The content script sends each
+  # top-level page's website name to the background script, which asks SafariWebExtensionHandler
+  # (Swift, LoupeKit's phishing formula) for a verdict; suspicious and dangerous sites get Loupe's
+  # warning over the page. Same App Group as the app: it reads the lists and switches the app keeps.
+  LoupeSafari:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: LoupeSafari
+        excludes: ["Resources/**"]
+      - path: Shared
+      - path: Loupe/Online/SiteDns.swift
+      - path: LoupeSafari/Resources/manifest.json
+        buildPhase: resources
+      - path: LoupeSafari/Resources/background.js
+        buildPhase: resources
+      - path: LoupeSafari/Resources/content.js
+        buildPhase: resources
+      - path: LoupeSafari/Resources/popup.html
+        buildPhase: resources
+      - path: LoupeSafari/Resources/popup.js
+        buildPhase: resources
+      - path: LoupeSafari/Resources/popup.css
+        buildPhase: resources
+      - path: LoupeSafari/Resources/images
+        type: folder
+        buildPhase: resources
+      - path: LoupeSafari/Resources/_locales
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - framework: ../loupe-kit/build/XCFrameworks/debug/LoupeKit.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.loupe-ai.ios.safari
+        PRODUCT_NAME: LoupeSafari
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_ENTITLEMENTS: LoupeSafari/LoupeSafari.entitlements
+        OTHER_LDFLAGS: ["$(inherited)", "-lc++"]
+        DEAD_CODE_STRIPPING: YES
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+    info:
+      path: LoupeSafari/Info.plist
+      properties:
+        CFBundleDisplayName: Loupe
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.Safari.web-extension
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).SafariWebExtensionHandler
   LoupeTests:
     type: bundle.unit-test
     platform: iOS

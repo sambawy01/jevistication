@@ -134,4 +134,51 @@ class WatcherRunTest {
         assertEquals("-4.5", WatcherFindings.signed(-4.5))
         assertEquals(433, WatcherFindings.monthly(Cadence.WEEKLY, 100))
     }
+
+    @Test
+    fun theGuardsExpiryTimelineAndCensusEvidence() {
+        val report = WatcherRun.run(items, today, null)
+        val summary = WatcherFindings.summarise(report, items, setOf("sample"))
+        // Every candidate is on the timeline, soonest first; the ones inside the rule carry their finding's key.
+        assertEquals(report.expiryCandidates.size, summary.expiries.size)
+        assertEquals(summary.expiries.sortedBy { it.daysRemaining }, summary.expiries)
+        val passport = summary.expiries.single { "passport" in it.itemName }
+        assertEquals("2027-01-14", passport.expiryIso)
+        assertEquals(113L, passport.daysRemaining)
+        assertEquals("expiry:" + passport.itemId, passport.findingKey)
+        assertNull(passport.documentType, "no model, so no document type")
+        assertTrue(passport.sample)
+
+        // The census keeps where each charge came from, and the next charge its cadence predicts.
+        val streamflix = summary.census.rows.single { it.merchant == "Streamflix" }
+        assertEquals(4, streamflix.itemIds.size)
+        val next = streamflix.nextExpectedIso
+        if (next != null) assertTrue(LocalDate.parse(next) >= today)
+        assertEquals(WatcherFindings.nextExpected(Cadence.MONTHLY, LocalDate.parse(streamflix.lastChargedIso), today)?.toString(), next)
+        assertEquals(LocalDate(2026, 10, 20), WatcherFindings.nextExpected(Cadence.MONTHLY, LocalDate(2026, 9, 20), today))
+        assertNull(WatcherFindings.nextExpected(Cadence.MONTHLY, LocalDate(2026, 7, 1), today), "a passed day is not a prediction")
+        assertNull(WatcherFindings.nextExpected(Cadence.IRREGULAR, LocalDate(2026, 9, 20), today))
+
+        // "Not a subscription" takes the merchant out of the census and its total; the passport set aside leaves the timeline.
+        val notSub = WatcherFindings.correction(WatcherFindings.censusFinding(streamflix), FindingVerdict.NOT_RELEVANT, "2026-09-23T10:00:00Z")
+        assertEquals("subscription:Streamflix", notSub.itemId)
+        val passportFinding = summary.findings.single { it.key == passport.findingKey }
+        val dismiss = WatcherFindings.correction(passportFinding, FindingVerdict.DISMISSED, "2026-09-23T10:00:01Z")
+        val index = listOf(notSub, dismiss).associate { CorrectionKey(it.judgmentId, it.criteriaHash, it.itemId) to it.label!! }
+        val after = WatcherFindings.summarise(report, items, setOf("sample"), index)
+        assertTrue(after.census.rows.none { it.merchant == "Streamflix" })
+        assertEquals(1, after.census.setAside)
+        assertEquals(summary.census.monthlyTotalMinor - 999, after.census.monthlyTotalMinor)
+        assertTrue(after.expiries.none { it.itemId == passport.itemId })
+    }
+
+    @Test
+    fun theRunReportsEachWatchersProgressAndTheSameResult() {
+        val steps = mutableListOf<Triple<String, Int, Int>>()
+        val policy = dev.loupe.kit.settings.RunPolicy.defaults(dev.loupe.kit.settings.Features.WATCHERS)
+        val withProgress = WatcherRun.run(items, today, null, WatcherRun.SIX_MONTHS, policy) { w, d, t -> steps += Triple(w, d, t) }
+        assertEquals(WatcherRun.run(items, today, null), withProgress)
+        assertEquals(listOf("expiry", "recurring", "term-change", "impersonation", "site-fraud"), steps.map { it.first }.distinct())
+        assertEquals(Triple("site-fraud", 1, 1), steps.last())
+    }
 }

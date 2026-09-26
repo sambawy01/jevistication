@@ -1,12 +1,53 @@
 import SwiftUI
 
+/// The five tabs (owner decision 2026-09-26): Now · Guard · Judgments · Sources · Me. The Web tab's template library
+/// moved into Judgments as "Web questions"; "web" still opens it (`AppTab.route`).
 enum AppTab: String, CaseIterable {
-    case now, judgments, web, sources, me
+    case now
+    case guardTab = "guard"
+    case judgments, sources, me
+
+    /// Where a tab name (the DEBUG `-LoupeTab` launch argument, a deep link) goes. The old "web" tab is Judgments →
+    /// Web questions.
+    static func route(_ name: String) -> (tab: AppTab, judgments: JudgmentsView.Section?)? {
+        if name == "web" { return (.judgments, .web) }
+        return AppTab(rawValue: name).map { ($0, nil) }
+    }
+}
+
+/// Switches tabs from inside a tab ("See all in Guard" on Now, "Turn on Mail" on Guard) and asks Judgments for a
+/// section (Web questions). Owned by RootView, in the environment of every tab.
+@MainActor
+final class AppRouter: ObservableObject {
+    @Published var tab: AppTab
+    /// A section Judgments should show; it clears it once shown.
+    @Published var judgmentsSection: JudgmentsView.Section?
+    /// A browsing-protection screen Guard should push (Now's "Loupe spotted …" card); Guard clears it once pushed.
+    @Published var guardPush: ProtectionRoute?
+
+    init(tab: AppTab = .now, judgmentsSection: JudgmentsView.Section? = nil) {
+        self.tab = tab
+        self.judgmentsSection = judgmentsSection
+    }
+
+    /// Guard → Protection → Spotted.
+    func openSpotted() {
+        guardPush = .spotted
+        tab = .guardTab
+    }
+
+    func open(_ tab: AppTab, judgments section: JudgmentsView.Section? = nil) {
+        if let section { judgmentsSection = section }
+        self.tab = tab
+    }
 }
 
 struct RootView: View {
     @State var initialTab: AppTab
-    @State private var selection: AppTab = .now
+    var initialSection: JudgmentsView.Section? = nil
+    @StateObject private var router = AppRouter()
+    /// Browsing protection's Spotted log: its unseen entries badge the Guard tab.
+    @ObservedObject private var protection = ProtectionStore.shared
     @StateObject private var launcher = GameLauncher()
     @ObservedObject private var sources = SourcesService.shared
     @AppStorage("onboarding.seen") private var onboardingSeen = false
@@ -44,7 +85,7 @@ struct RootView: View {
         .onOpenURL { url in
             guard url.isFileURL else { return }
             showGetLaya = false
-            selection = .judgments
+            router.open(.judgments, judgments: .mine)
             PacksService.shared.open(url)
         }
     }
@@ -52,7 +93,7 @@ struct RootView: View {
     private func start() {
         guard !started else { return }
         started = true
-        selection = initialTab
+        router.open(initialTab, judgments: initialSection)
         sources.start()
         #if DEBUG
         DeviceDiag.run(sources)
@@ -67,31 +108,33 @@ struct RootView: View {
     }
 
     private var tabs: some View {
-        TabView(selection: $selection) {
+        TabView(selection: $router.tab) {
             NowView()
                 .tabItem { Label("Now", systemImage: "dot.radiowaves.left.and.right") }
                 .tag(AppTab.now)
-                .environment(\.mascotTabSelected, selection == .now)
+                .environment(\.mascotTabSelected, router.tab == .now)
+            GuardView()
+                .tabItem { Label("Guard", systemImage: "shield.lefthalf.filled") }
+                .badge(protection.unseenCount)
+                .tag(AppTab.guardTab)
+                .environment(\.mascotTabSelected, router.tab == .guardTab)
             JudgmentsView(service: JudgmentsService.shared)
                 .tabItem { Label("Judgments", systemImage: "checklist") }
                 .tag(AppTab.judgments)
-                .environment(\.mascotTabSelected, selection == .judgments)
-            WebTabView()
-                .tabItem { Label("Web", systemImage: "globe.americas.fill") }
-                .tag(AppTab.web)
-                .environment(\.mascotTabSelected, selection == .web)
+                .environment(\.mascotTabSelected, router.tab == .judgments)
             SourcesView(sources: sources)
                 .tabItem { Label("Sources", systemImage: "externaldrive.fill.badge.checkmark") }
                 .tag(AppTab.sources)
-                .environment(\.mascotTabSelected, selection == .sources)
+                .environment(\.mascotTabSelected, router.tab == .sources)
             MeView()
                 .tabItem { Label("Me", systemImage: "person.crop.circle.fill") }
                 .tag(AppTab.me)
-                .environment(\.mascotTabSelected, selection == .me)
+                .environment(\.mascotTabSelected, router.tab == .me)
         }
         // Jobs running off-screen, and the model-load banner (the live run views are in place on each screen).
         .overlay(alignment: .bottom) { ActivityDock() }
         .environmentObject(launcher)
+        .environmentObject(router)
         .fullScreenCover(item: $launcher.mode) { mode in
             GameView(mode: mode, seed: launcher.seed)
         }

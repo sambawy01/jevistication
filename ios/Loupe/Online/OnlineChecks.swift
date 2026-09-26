@@ -2,149 +2,6 @@ import CryptoKit
 import Foundation
 import LoupeKit
 
-/// Opt-in online phishing checks (owner decision C, 2026-09-24), bound by PRODUCT.md §4a: **off by
-/// default**, each source with its own switch, every result labelled "Online" with its source and
-/// fetch time, the minimum sent, and everything works with them off. The scoring is LoupeKit's shared
-/// formula (`OnlineSignals`, docs/PHISHING-FORMULA.md §5); this file only fetches.
-///
-/// - Domain facts: `POST {helper}/v1/domain-facts {"domain": d}` on loupe-web-helper, for the ICANN
-///   registrable domain only (PRIVATE suffixes off; hosting-platform pages are never sent). A 404 means
-///   the helper has not deployed the route: "online checks not available yet".
-/// - Phishing lists: Phishing.Database (MIT; on by default once the lists are on; `PhishingDatabase.swift`),
-///   OpenPhish's community feed (off by default: personal, non-commercial use only) and PhishTank's
-///   keyless list, each with its own switch, downloaded to the phone and matched on the phone.
-///   Nothing per link leaves it.
-/// - Formula v1.2 site facts (off by default): DNS facts (MX, SPF, DMARC, DNSSEC, BIMI) and the domain
-///   blocklists (Spamhaus DBL, SURBL, URIBL; non-commercial licences), asked of this phone's own
-///   resolver only (`SiteDns.swift`), for ICANN registrable domains of links.
-/// - Google Safe Browsing (API v5, local-list mode; `SafeBrowsing.swift`) with the user's own key from
-///   the Keychain: a local list of hash prefixes; only on a local match are 4-byte prefixes sent to
-///   Google, never a URL.
-struct OnlinePhishingSettings: Equatable {
-    var domainFacts = false
-    /// "Known-phishing lists": the master switch for the downloaded lists.
-    var feeds = false
-    /// OpenPhish's community feed: off by default (free for personal, non-commercial use only).
-    var openPhish = false
-    var phishTank = false
-    /// Phishing.Database (MIT): on by default whenever the lists are on (owner decision B).
-    var phishingDb = true
-    /// How often the large Phishing.Database ACTIVE files are refreshed, 1–168 hours (NEW files: hourly).
-    var refreshHours = 6
-    var safeBrowsing = false
-    /// Formula v1.2 §5b: MX / SPF / DMARC / DNSSEC / BIMI from this phone's own resolver.
-    var dnsFacts = false
-    /// Formula v1.2 §5c: domain blocklists over DNS (master switch; each list non-commercial, low volume).
-    var dnsbl = false
-    var dnsblSpamhaus = true
-    var dnsblSurbl = true
-    var dnsblUribl = true
-
-    var anyOn: Bool { domainFacts || feeds || safeBrowsing || dnsFacts || dnsbl }
-
-    /// The lists downloaded while "Known-phishing lists" is on.
-    var lists: [String] {
-        guard feeds else { return [] }
-        return (openPhish ? ["openphish"] : []) + (phishTank ? ["phishtank"] : []) + (phishingDb ? ["phishingdb"] : [])
-    }
-
-    /// The blocklists asked while the blocklist switch is on, in Dnsbl.ZONES order.
-    var dnsblLists: [String] {
-        guard dnsbl else { return [] }
-        return (dnsblSpamhaus ? ["spamhaus_dbl"] : []) + (dnsblSurbl ? ["surbl"] : []) + (dnsblUribl ? ["uribl"] : [])
-    }
-
-    static let keys = (domainFacts: "online.phishing.domainFacts", feeds: "online.phishing.feeds",
-                       openPhish: "online.phishing.openphish", phishTank: "online.phishing.phishtank",
-                       phishingDb: "online.phishing.phishingdb", refreshHours: "online.phishing.refreshHours",
-                       safeBrowsing: "online.phishing.safeBrowsing", dnsFacts: "online.phishing.dnsFacts",
-                       dnsbl: "online.phishing.dnsbl", dnsblSpamhaus: "online.phishing.dnsbl.spamhaus",
-                       dnsblSurbl: "online.phishing.dnsbl.surbl", dnsblUribl: "online.phishing.dnsbl.uribl")
-
-    static func load(_ d: UserDefaults) -> OnlinePhishingSettings {
-        func flag(_ k: String, _ fallback: Bool) -> Bool { (d.object(forKey: k) as? Bool) ?? fallback }
-        let hours = (d.object(forKey: keys.refreshHours) as? Int) ?? Int(PhishingDb.shared.DEFAULT_REFRESH_HOURS)
-        return OnlinePhishingSettings(
-            domainFacts: flag(keys.domainFacts, false), feeds: flag(keys.feeds, false), openPhish: flag(keys.openPhish, false),
-            phishTank: flag(keys.phishTank, false), phishingDb: flag(keys.phishingDb, true),
-            refreshHours: Int(PhishingDb.shared.clampRefreshHours(h: Int32(hours))), safeBrowsing: flag(keys.safeBrowsing, false),
-            dnsFacts: flag(keys.dnsFacts, false), dnsbl: flag(keys.dnsbl, false), dnsblSpamhaus: flag(keys.dnsblSpamhaus, true),
-            dnsblSurbl: flag(keys.dnsblSurbl, true), dnsblUribl: flag(keys.dnsblUribl, true))
-    }
-
-    func save(_ d: UserDefaults) {
-        d.set(domainFacts, forKey: Self.keys.domainFacts)
-        d.set(feeds, forKey: Self.keys.feeds)
-        d.set(openPhish, forKey: Self.keys.openPhish)
-        d.set(phishTank, forKey: Self.keys.phishTank)
-        d.set(phishingDb, forKey: Self.keys.phishingDb)
-        d.set(refreshHours, forKey: Self.keys.refreshHours)
-        d.set(safeBrowsing, forKey: Self.keys.safeBrowsing)
-        d.set(dnsFacts, forKey: Self.keys.dnsFacts)
-        d.set(dnsbl, forKey: Self.keys.dnsbl)
-        d.set(dnsblSpamhaus, forKey: Self.keys.dnsblSpamhaus)
-        d.set(dnsblSurbl, forKey: Self.keys.dnsblSurbl)
-        d.set(dnsblUribl, forKey: Self.keys.dnsblUribl)
-    }
-}
-
-enum OnlineCheckError: Error, Equatable {
-    /// The helper answered 404: the route is not deployed yet.
-    case notAvailableYet
-    /// 429 `PROVIDER_RATE_LIMITED` (or any 429): back off.
-    case rateLimited
-    case offline
-    case badKey
-    case unexpected(String)
-
-    static func from(status: Int, data: Data) -> OnlineCheckError {
-        switch status {
-        case 404: return .notAvailableYet
-        case 429: return .rateLimited
-        case 400, 401, 403: return .badKey
-        default:
-            let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]).flatMap { ($0?["error"] as? [String: Any])?["code"] as? String }
-            return .unexpected(code ?? "HTTP \(status)")
-        }
-    }
-}
-
-// MARK: - Domain facts (loupe-web-helper)
-
-final class DomainFactsClient {
-    static let timeout: TimeInterval = 15
-    let base: URL
-    private let session: URLSession
-
-    init(base: URL = HelperEndpoint.base, session: URLSession) {
-        self.base = base
-        self.session = session
-    }
-
-    /// The request for one domain: the JSON body `{"domain": d}` and nothing about the user. The
-    /// helper's rate limiter wants an `X-Loupe-Install`; a fresh random UUID per request means two
-    /// lookups cannot be linked to one phone.
-    static func request(domain: String, base: URL = HelperEndpoint.base) -> URLRequest {
-        var r = URLRequest(url: base.appendingPathComponent("v1/domain-facts"), timeoutInterval: timeout)
-        r.httpMethod = "POST"
-        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.setValue("application/json", forHTTPHeaderField: "Accept")
-        r.setValue(UUID().uuidString, forHTTPHeaderField: "X-Loupe-Install")
-        r.httpBody = try? JSONSerialization.data(withJSONObject: ["domain": domain], options: [.sortedKeys])
-        return r
-    }
-
-    func facts(for domain: String) async throws -> DomainFacts {
-        let data: Data, response: URLResponse
-        do { (data, response) = try await session.data(for: Self.request(domain: domain, base: base)) }
-        catch { throw OnlineCheckError.offline }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 else { throw OnlineCheckError.from(status: status, data: data) }
-        do { return try OnlineSignals.shared.parseDomainFacts(json: String(decoding: data, as: UTF8.self), domain: domain) }
-        catch { throw OnlineCheckError.unexpected("The helper sent a reply this version cannot read.") }
-    }
-}
-
 // MARK: - Phishing lists (downloaded, matched on the phone)
 
 final class PhishingFeeds {
@@ -210,7 +67,9 @@ final class PhishingFeeds {
 
 @MainActor
 final class OnlineChecksService: ObservableObject {
-    static let shared = OnlineChecksService()
+    /// The app's service: lists in the App Group (Loupe for Safari and "Send to Loupe" read them) and
+    /// the switches mirrored there (the extensions' read of what the user turned on).
+    static let shared = OnlineChecksService(groupDefaults: ProtectionGroup.defaults)
 
     @Published private(set) var settings: OnlinePhishingSettings
     /// The last run's status, for the "Online" label: never "checked" when nothing came back.
@@ -219,6 +78,8 @@ final class OnlineChecksService: ObservableObject {
 
     let key: KeyStore
     private let defaults: UserDefaults
+    /// The App Group's defaults, written with every change (nil in tests unless they pass one).
+    private let groupDefaults: UserDefaults?
     private let facts: DomainFactsClient
     let feeds: PhishingFeeds
     let phishingDb: PhishingDatabaseStore
@@ -233,16 +94,17 @@ final class OnlineChecksService: ObservableObject {
          session: URLSession? = nil,
          key: KeyStore = KeychainStore(service: "com.loupe-ai.ios.safebrowsing", account: "google-safe-browsing-key"),
          dir: URL? = nil,
+         groupDefaults: UserDefaults? = nil,
          base: URL = HelperEndpoint.base,
          now: @escaping () -> Date = Date.init,
          resolver: DnsQuery? = nil,
          pause: @escaping (Double) async -> Void = { s in try? await Task.sleep(nanoseconds: UInt64(s * 1_000_000_000)) }) {
         self.defaults = defaults
+        self.groupDefaults = groupDefaults
         self.key = key
         self.now = now
         let s = session ?? Self.ephemeralSession()
-        let root = dir ?? (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            .appendingPathComponent("online-phishing"))
+        let root = dir ?? Self.sharedRoot()
         facts = DomainFactsClient(base: base, session: s)
         feeds = PhishingFeeds(dir: root.appendingPathComponent("feeds"), session: s, now: now)
         phishingDb = PhishingDatabaseStore(dir: root.appendingPathComponent("phishingdb"), session: s, now: now, pause: pause)
@@ -250,6 +112,19 @@ final class OnlineChecksService: ObservableObject {
         safeBrowsing = SafeBrowsingClient(dir: root.appendingPathComponent("safe-browsing"), session: s, key: { key.read() }, now: now)
         settings = OnlinePhishingSettings.load(defaults)
         keySet = key.read() != nil
+        if let groupDefaults { settings.save(groupDefaults) }
+    }
+
+    /// The lists' folder in the App Group (2026-09-26, browsing protection), moved there once from the
+    /// app's own Application Support so the extensions read what the app downloaded.
+    static func sharedRoot(fm: FileManager = .default) -> URL {
+        let root = ProtectionGroup.phishingRoot(fm)
+        let old = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("online-phishing")
+        if old.standardizedFileURL != root.standardizedFileURL, fm.fileExists(atPath: old.path), !fm.fileExists(atPath: root.path) {
+            try? fm.createDirectory(at: root.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try? fm.moveItem(at: old, to: root)
+        }
+        return root
     }
 
     static func ephemeralSession(protocols: [AnyClass] = []) -> URLSession {
@@ -266,6 +141,7 @@ final class OnlineChecksService: ObservableObject {
         s.refreshHours = Int(PhishingDb.shared.clampRefreshHours(h: Int32(clamping: s.refreshHours)))
         settings = s
         s.save(defaults)
+        if let groupDefaults { s.save(groupDefaults) }
         if !s.feeds || (!s.openPhish && !s.phishTank) { feeds.remove() }
         if !s.feeds || !s.phishingDb { phishingDb.remove() }
         if !s.dnsFacts && !s.dnsbl { siteFacts.forget() }
@@ -297,23 +173,50 @@ final class OnlineChecksService: ObservableObject {
 
     /// The online data for one triage run, or nil with every switch off — then **no request is made**.
     func context(items: [SourceItem], raws: [String: String]) async -> OnlineContext? {
-        let s = settings
-        guard s.anyOn else { return nil }
+        await run(factsDomains: { MailTriage.shared.onlineLookups(items: items, raws: raws, max: 40) },
+                  dnsDomains: { Array(MailTriage.shared.onlineLookups(items: items, raws: raws, max: 20)) },
+                  safeBrowsingUrls: { MailTriage.shared.onlineUrls(items: items, raws: raws, max: 60) }).context
+    }
+
+    /// Check a link (2026-09-26): the online data for one link, and what went out for it. Only the
+    /// link's ICANN registrable domain is looked up (none for a hosting-platform page or an IP); the
+    /// lists are matched on the phone; Safe Browsing is asked only as it always is (hash prefixes on
+    /// a local match). nil context with every switch off: then nothing is sent.
+    func linkContext(url: String) async -> (context: OnlineContext?, disclosure: OnlineDisclosure) {
+        let domains = OnlineSignals.shared.lookupDomainOfUrl(url: url).map { [$0] } ?? []
+        return await run(factsDomains: { domains }, dnsDomains: { domains }, safeBrowsingUrls: { [url] })
+    }
+
+    /// Brings the lists up to date and rewrites Phishing.Database's index for Loupe for Safari, when
+    /// the lists are on (nothing happens with them off). The Protection screen calls it on open.
+    func refreshListsForProtection() async {
+        guard settings.feeds else { return }
+        _ = await run(factsDomains: { [] }, dnsDomains: { [] }, safeBrowsingUrls: { [] }, onlyLists: true)
+    }
+
+    private func run(factsDomains: () -> [String], dnsDomains: () -> [String], safeBrowsingUrls: () -> [String],
+                     onlyLists: Bool = false) async -> (context: OnlineContext?, disclosure: OnlineDisclosure) {
+        var s = settings
+        guard s.anyOn else { return (nil, .none) }
+        if onlyLists { s = OnlinePhishingSettings(feeds: s.feeds, openPhish: s.openPhish, phishTank: s.phishTank, phishingDb: s.phishingDb, refreshHours: s.refreshHours) }
         let at = Self.iso.string(from: now())
         var notes: [String] = []
+        var disclosure = OnlineDisclosure()
         var factsOut: [String: DomainFacts] = [:]
 
         if s.domainFacts {
-            let domains = MailTriage.shared.onlineLookups(items: items, raws: raws, max: 40)
+            let domains = factsDomains()
             var withFacts = 0, without = 0
             loop: for d in domains {
                 if let hit = cache[d], now().timeIntervalSince(hit.1) < 6 * 3600 {
                     let f = hit.0
                     factsOut[d] = f
+                    disclosure.sent.append(.init(what: d, to: "the Loupe web helper"))
                     if f.hasFacts { withFacts += 1 } else { without += 1 }
                     continue
                 }
                 if let until = backoffUntil, now() < until { notes.append("Domain facts: the helper asked Loupe to wait; try later."); break }
+                disclosure.sent.append(.init(what: d, to: "the Loupe web helper"))
                 do {
                     let f = try await facts.facts(for: d)
                     cache[d] = (f, now())
@@ -365,8 +268,9 @@ final class OnlineChecksService: ObservableObject {
             if !entries.isEmpty {
                 index = FeedIndex(entries: entries)
                 feedsAt = lists.compactMap { feeds.fetchedAt($0) }.min().map { Self.iso.string(from: $0) }
-                notes.append("Online · " + entries.keys.sorted().map { $0 == "openphish" ? "OpenPhish" : "PhishTank" }.joined(separator: ", ") +
-                             " list on this phone · \(entries.values.map(\.count).reduce(0, +)) entries · fetched \(feedsAt ?? at)")
+                let names = entries.keys.sorted().map { $0 == "openphish" ? "OpenPhish" : "PhishTank" }.joined(separator: ", ")
+                notes.append("Online · " + names + " list on this phone · \(entries.values.map(\.count).reduce(0, +)) entries · fetched \(feedsAt ?? at)")
+                disclosure.matchedOnDevice.append("\(names) list on this iPhone")
             }
             if s.phishingDb {
                 job.step("phishingdb", key: "act.stage.downloading", state: "running")
@@ -380,6 +284,7 @@ final class OnlineChecksService: ObservableObject {
                 pdb = await Task.detached(priority: .utility) { store.loadedIndex() }.value
                 if let pdb {
                     notes.append("Online · Phishing.Database list on this phone · \(pdb.linkCount) links, \(pdb.hostCount) hosts · list date \(pdb.listDate ?? at)")
+                    disclosure.matchedOnDevice.append("Phishing.Database list on this iPhone (\(pdb.linkCount) links, \(pdb.hostCount) hosts, list date \((pdb.listDate ?? at).prefix(10)))")
                 }
             }
             if lists.isEmpty && !s.phishingDb { notes.append("Phishing lists: every list is off.") }
@@ -389,16 +294,20 @@ final class OnlineChecksService: ObservableObject {
         var dnsOut: [String: DnsFacts] = [:]
         var blOut: [String: [String: DnsblResult]] = [:]
         if s.dnsFacts || !s.dnsblLists.isEmpty {
-            let domains = Array(MailTriage.shared.onlineLookups(items: items, raws: raws, max: 20))
+            let domains = dnsDomains()
             let lookup = siteFacts, dnsOn = s.dnsFacts, lists = s.dnsblLists
             let r = await Task.detached(priority: .utility) { lookup.lookup(domains: domains, dns: dnsOn, lists: lists, at: at) }.value
             dnsOut = r.dns
             blOut = r.dnsbl
             if r.noAnswer { notes.append("DNS: this network's resolver did not answer; DNS facts skipped.") }
-            if dnsOn { notes.append("Online · DNS (this phone's resolver) · \(dnsOut.count) domain\(dnsOut.count == 1 ? "" : "s") · fetched \(at)") }
+            if dnsOn {
+                notes.append("Online · DNS (this phone's resolver) · \(dnsOut.count) domain\(dnsOut.count == 1 ? "" : "s") · fetched \(at)")
+                for d in domains { disclosure.sent.append(.init(what: d, to: "this iPhone's DNS resolver")) }
+            }
             if !lists.isEmpty {
                 let names = lists.compactMap { Dnsbl.shared.zone(id: $0)?.name }.joined(separator: ", ")
                 notes.append("Online · Domain blocklists (\(names)) · \(blOut.count) domain\(blOut.count == 1 ? "" : "s") · fetched \(at)")
+                for d in domains { disclosure.sent.append(.init(what: d, to: "the blocklists \(names) (through this iPhone's DNS resolver)")) }
             }
         }
 
@@ -409,8 +318,10 @@ final class OnlineChecksService: ObservableObject {
             } else {
                 do {
                     try await safeBrowsing.update()
-                    hits = try await safeBrowsing.dangerous(MailTriage.shared.onlineUrls(items: items, raws: raws, max: 60))
+                    let urls = safeBrowsingUrls()
+                    hits = urls.isEmpty ? [] : try await safeBrowsing.dangerous(urls)
                     notes.append("Online · Google Safe Browsing (your key) · fetched \(at)")
+                    disclosure.conditional.append("Google Safe Browsing (your key): its list of hash prefixes is on this iPhone; only if the link matched one would a 4-byte hash prefix go to Google, never the link.")
                 } catch OnlineCheckError.badKey {
                     notes.append("Google Safe Browsing: Google refused the key.")
                 } catch {
@@ -418,9 +329,11 @@ final class OnlineChecksService: ObservableObject {
                 }
             }
         }
-        status = notes.joined(separator: "\n")
-        return OnlineContext(nowIso: at, facts: factsOut, feeds: index, safeBrowsingHits: hits,
-                             safeBrowsingFetchedAt: s.safeBrowsing ? at : nil, feedsFetchedAt: feedsAt,
-                             phishingDb: pdb, dns: dnsOut, dnsbl: blOut, dnsblFetchedAt: blOut.isEmpty ? nil : at)
+        if !onlyLists { status = notes.joined(separator: "\n") }
+        disclosure.onlineNotes = notes.filter { $0.hasPrefix("Online ·") }
+        let context = OnlineContext(nowIso: at, facts: factsOut, feeds: index, safeBrowsingHits: hits,
+                                    safeBrowsingFetchedAt: s.safeBrowsing ? at : nil, feedsFetchedAt: feedsAt,
+                                    phishingDb: pdb, dns: dnsOut, dnsbl: blOut, dnsblFetchedAt: blOut.isEmpty ? nil : at)
+        return (context, disclosure)
     }
 }

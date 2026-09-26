@@ -3,11 +3,13 @@ import XCTest
 final class LoupeUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    func testWebTabShowsKeyOnboarding() {
+    func testWebQuestionsShowKeyOnboarding() {
         let app = XCUIApplication()
         app.launchArguments = ["-LoupeEphemeralKeychain", "-LoupeSkipOnboarding"]
         app.launch()
-        app.tabBars.buttons["Web"].tap()
+        // The Web tab's library is Judgments → Web questions (owner decision 2026-09-26).
+        app.tabBars.buttons["Judgments"].tap()
+        app.segmentedControls["judgments.section"].buttons["Web questions"].tap()
         // Flights is a development-only template (owner decision 2026-09-25).
         let flights = app.descendants(matching: .any)["web.template.flights"].firstMatch
         for _ in 0..<4 where !(flights.exists && flights.isHittable) { app.swipeUp() }

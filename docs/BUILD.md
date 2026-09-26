@@ -1527,7 +1527,121 @@ their acceptance criteria are met; entries here record increments toward them.
   `RenameShotsUITests` and `GameUITests` were re-run on both sizes (on the SE,
   `GameUITests.testFireButtonFiresWithoutPausingAndIsAbsentInWatch` fails its home-indicator bound, a
   check written for Face ID phones; untouched here).
+- **2026-09-26 — iPhone: a Guard tab for everything that watches over you; Web questions move into Judgments
+  (owner decision, 2026-09-26).** Owner's report: "the mobile app doesn't have anything about … watchers for
+  subscription or expiry". The five watchers existed but only surfaced as cards in the Now feed. Tabs are now
+  Now · Guard · Judgments · Sources · Me (`AppTab`, `AppRouter`). *Guard* (`ios/Loupe/Guard/`): a status header
+  (mascot, open warnings, the sources watched, the five watchers as tiles, last run, "0 bytes out" or what the
+  online checks send, Run now); *Subscriptions* (the recurring-money census: monthly total, each merchant sorted
+  by monthly cost with last charge and — only when the cadence is regular and the day is still ahead — the next
+  expected charge; a detail with the receipts it came from and Confirm / Not a subscription / Set aside, written
+  to the corrections log under `subscription:<merchant>`, with Undo); *Expiring soon* (every expiry candidate as a
+  timeline grouped overdue / this week (0–7 days) / this month (8–30) / later, with date, days left, source item,
+  "Inside the rule" and "Ambiguous date" marks; the model half — what the document is — behind the existing
+  "Needs the decision model" card while the dates still show); *Impersonation*, *Site fraud* and *Term changes*
+  (a section each, empty states that say what to turn on); *Protection* (`GuardProtectionSection`: the mail link
+  checks summary and Me → Online phishing checks; the Safari extension / Check a link work fills it in). Real
+  progress while the watchers run: LoupeKit `WatcherRun.run(…, progress)` / `runIsoWithProgress` reports each
+  watcher as it starts and ends and the expiry radar's model half document by document (same result as `run`,
+  tested); the Guard's strip observes its own `WatcherProgressFeed`, so ticks redraw only the strip. LoupeKit
+  additions (defaults, so the desktop is unchanged): `WatcherSummary.expiries` (`ExpiryRow`), `CensusRow.itemIds`
+  / `nextExpectedIso` / `verdict`, `SubscriptionCensus.setAside`, `WatcherFindings.censusFinding` /
+  `nextExpected` / `expiries`. Now keeps the newest one or two findings and a "Guard" card that opens the tab. Browsing protection's hooks: the Guard tab carries `ProtectionStore.unseenCount` as its badge, and Now shows "Loupe spotted N risky sites this week" (`summary.headline`) opening Guard → Protection → Spotted (`AppRouter.openSpotted`).
+  *Web questions:* the Web tab's template library is Judgments' third segment with the same templates, Flights,
+  results and Web settings; `-LoupeTab web` opens it (`AppTab.route`). DEBUG `-LoupeGuardSection
+  expiry|subscriptions|protection` scrolls Guard for screenshots; `-LoupeModelState missing` now also keeps the
+  watchers' model half off. Tests: `WatcherRunTest` (+2, JVM), `LoupeTests/GuardModelTests.swift` (13: grouping,
+  sort, totals, locked model half, progress strip, routing, answers over the sample),
+  `LoupeUITests/GuardUITests.swift` (5), `NowFindingsUITests` and `LoupeUITests` updated for the moved Web tab.
+- **2026-09-26 — iPhone: browsing protection — Loupe for Safari, Check a link, share-sheet verdicts and a Spotted
+  log (owner decision: a Safari Web Extension plus a manual link check).** Uncommitted pending review. Guard →
+  Protection (`GuardProtectionSection` now opens with `ProtectionSectionContent`). All verdicts are the phishing
+  formula shared with mail triage and Loupe Station (`SiteCheck.checkUrl`, PHISHING-FORMULA.md); levels map danger →
+  Dangerous, caution → Suspicious, safe → "No warning signs found" (never "safe").
+  - *Check a link* (`ios/Loupe/Protection/`): the system Paste control (clipboard read only on that tap) or typing;
+    normalisation in `LinkInput` (scheme added, first link taken from a pasted message, defanged `hxxp` / `[.]`,
+    quotes and trailing punctuation, non-web schemes refused, IDN read as punycode and shown both ways); score,
+    reasons, reassuring / other facts, what ran on this iPhone, the Online labels, and a privacy line from
+    `OnlineDisclosure` ("0 bytes out" or "Sent: the domain example.com only, to …", recorded from what
+    `OnlineChecksService.linkContext` actually did: the ICANN registrable domain to the helper and/or the DNS
+    resolver / blocklists; lists matched on the phone; Safe Browsing's prefix rule unchanged). Recent checks: App
+    Group `protection/recent-checks.json`, 50, address without query or fragment, clearable. Shorteners are named
+    and never expanded (that would visit the link). QR codes: not done.
+  - *Send to Loupe*: a shared web link (URL or the first link in shared text) gets its verdict in the share sheet
+    (`DeviceLinkCheck`: mechanical checks + the lists already in the App Group, no network), goes to recent checks
+    and, when flagged, Spotted; the link still goes to the Inbox as before.
+  - *Loupe for Safari* (new XcodeGen target `LoupeSafari`, `com.loupe-ai.ios.safari`, embedded, App Group
+    `group.com.loupe-ai.ios`): manifest v3, permissions `nativeMessaging` and `storage` only, one content script on
+    `http://*/*` and `https://*/*` (top frame, `document_start`) — no `<all_urls>`, no `tabs`, no `webNavigation`,
+    no `host_permissions`: an automatic warning needs a script on every site, and nothing else is asked. The
+    content script sends `location.hostname` only; the background script caches per site (30 min, memory), asks the
+    native side twice when online checks are on (on-device verdict first, then with online facts, updating the
+    page), badges the toolbar button (`!` / `?`), remembers Continue anyway per site in `storage.session`, and the
+    toolbar popup shows the tab's verdict. `SafariWebExtensionHandler` hands messages to `SafariVerdictEngine`
+    (`ios/Shared/Protection/`, compiled into the app too so tests drive it): switches read from the App Group
+    (the app mirrors `OnlinePhishingSettings` there), domain facts (3 s timeout, memory cache 6 h, backoff) and the
+    DNS blocklists for the registrable domain only, never DNS facts or Safe Browsing (the key stays in the app).
+  - *Lists in the App Group*: the online-phishing folder moved from Application Support into the group (moved once
+    on first launch); after each rebuild the app writes Phishing.Database's flat index (`PhishingDbBinary`, new in
+    loupe-kit: header + three sorted Int64 hash arrays; iOS writer `PhishingDbFile`). The extensions map it
+    (`MappedPhishingIndex`) and give LoupeKit a per-URL slice, so matching (suppression, url → host → domain) stays
+    LoupeKit's. OpenPhish / PhishTank text is read by the extensions only under 3 MB.
+  - *Spotted* (`SpottedLog`, App Group `protection/spotted.json`): suspicious and dangerous verdicts from Safari,
+    shared links and Check a link — time, website name (never an address), level, score, top 3 reasons, where,
+    what the user did (went back / continued / unknown); 90 days, merged within 30 min, clearable, per-entry delete;
+    Darwin notification to the app on write. `ProtectionStore.unseenCount` (Guard's tab badge: RootView should
+    `.badge(ProtectionStore.shared.unseenCount)`, not wired here) and `summary.headline` ("Loupe spotted N risky
+    sites this week", for Now). Local notification (`SpottedNotifier`) for a dangerous Safari site ("Loupe blocked
+    a fake PayPal page · paypa1-secure.com …"), suspicious only when switched on, at most once an hour per site,
+    never after Continue anyway (12 h); permission asked once, the first time protection is seen on.
+  - *Turning it on* (`SafariSetup`): iOS 26.2+ `SFSafariSettings.openExtensionsSettings` from one button, state read
+    with `SFSafariExtensionManager.stateOfExtension` on launch, every foreground and on Guard; the card flips to
+    "On · Safari protected" with the happy mascot. iOS < 26.2 or an error: the steps with a drawn illustration of
+    the settings page. The iOS 26.3 page (seen in the simulator): "Allow Extension", then under Permissions
+    "Webpage Contents and Browsing History … You have not allowed this extension on any websites yet" and, once
+    allowed, "All Websites · Ask" → Allow; the caption says exactly that. Offered once at the end of onboarding.
+  - *Measured*: in the real extension process (simulator, iOS 26.3): first verdict after launch 80.7 ms
+    (dangerous) and 42.9 ms (safe), footprint 36.0–36.6 MB; in-process (300 fresh names): p50 2.0 ms, p95 5.0 ms,
+    cached 0.0 ms, +3.4 MB. Each extension links LoupeKit statically: ~46 MB per appex in Debug.
+  - *Tests*: `PhishingDbBinaryTest` (JVM + iOS), `LinkCheckTests` (15), `SafariExtensionTests` (13),
+    `SafariSetupTests` (5), `SpottedTests` (10), `LinkCheckUITests` (2); opt-in `SafariExtensionUITests` (Settings →
+    extension on → Safari shows the warning on a local page served as `xn--pypal-4ve.127.0.0.1.nip.io`).
 
+- **2026-09-26 — iPhone: judgment results as a dashboard (owner feedback: "a clickable summary and a data
+  display with visual elements" instead of scrolling thousands of files and reading each one).** One judgment's
+  results screen (`ios/Loupe/Judgments/JudgmentResultsView.swift` over `ios/Loupe/Judgments/Results/`), top to
+  bottom: the question, last run (`JudgmentRunLog`: the ledger rows carry no time, so runs and the passive sort
+  stamp it per judgment), items judged and the threshold; the answer split as a Swift Charts donut (each option;
+  rule answers in their option's dimmed hue; Unsure · needs you; Could not judge) with a legend of 44 pt buttons,
+  counts and largest-remainder percentages that always sum to 100; "N need you →" (the Unsure queue for this
+  judgment only, `JudgmentsService.unsure(judgmentId:)`); Who answered (rules by check, the decision model, you,
+  waiting); the model's confidence histogram per answer with the threshold line and a "borderline" button (±10
+  points); breakdowns by source, kind and month, only when there are two or more; What decided (each rule and what
+  it means; the model gives a confidence, not reasons, and the screen says so). Every segment, bar, bin and row
+  sets one filter facet and scrolls to the list; tapping again clears it. The list is a recycled `List` with a
+  sticky bar (search, the active filters as removable chips, sort least sure / newest / name, Select), grouped by
+  answer; rows show a thumbnail or glyph, the name, the answer pill (a menu to correct), confidence and source;
+  swipe right to confirm, left to mark; multi-select to confirm or mark many; an Undo bar. Item detail: preview,
+  answer, who answered and why (rule meaning, payment evidence, the raw distribution against the threshold),
+  correct / remove my answer / undo, second opinion, facts, what the model read. *Aggregation:* LoupeKit's
+  `ResultRow`s are read once per run into Swift `ResultRecord`s off the main thread (`ResultsIndex`); one pass
+  counts everything; a correction moves one record (`setCorrection`, tested equal to a recount); the list walks a
+  sort order computed once, and a longer search only narrows the previous match. *Corrections* go through
+  `JudgmentsService.recordCorrections`: the queue's own `JudgmentMeasure.correction` / `retraction` records,
+  `confirmed` when they agree with the model's pick, one publish per batch; the item leaves the queue's batches.
+  `counts(_:)` is memoised per wording until the ledger is re-read (My judgments recounted every row on every
+  correction). *Measured* (simulator, iPhone 17 Pro, 10,000 fixture items): index build from 10,000 records 105 ms;
+  from the ledger (the shared `JudgmentResults.rows` + records + index) 593 ms in the unit test, 440–1,270 ms in the
+  app (four runs, 17 Pro and SE); first paint of the summary 610–1,680 ms after the screen asks; a segment tap 2.4–4.3 ms; a search keystroke
+  0.2 ms (narrowing) to 15 ms (worst, from scratch); a correction 1.1 ms plus 8 ms to refilter. DEBUG:
+  `-LoupeResultsFixture <n>` (with `-LoupeFixtures -LoupeJudgmentDemo is-receipt`) judges n synthetic items with a
+  stand-in scorer through the real sweep; `-LoupeResultsPerf` shows the numbers on screen. *Tests:*
+  `ResultsDashboardTests` (10: counts, percentages summing to 100 over 500 random splits, histogram bins against the
+  threshold, filter combinations, folded incremental search, sort orders, incremental correction = recount, the
+  service path into the ledger and Measure with bulk and undo, and the two 10,000-item perf checks) and
+  `ResultsDashboardUITests` (a donut segment filters the list, its chip clears it, correcting an item moves the
+  header and Undo restores it; swipe to correct; screenshots with `TEST_RUNNER_LOUPE_SHOTS`). Not done: which words
+  decided (the gates do not expose their matches and the model gives none); thumbnails for fixture items (glyphs).
 
 ## Where the build stands
 

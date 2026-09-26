@@ -2,13 +2,17 @@ import SwiftUI
 import LoupeKit
 
 /// The Judgments tab (epic #7 child 3): My judgments, the template Library (C1) and Write your own
-/// (C2). Mirrors the desktop's Library / Judgments / Results screens.
+/// (C2). Mirrors the desktop's Library / Judgments / Results screens. Web questions (the former Web tab's template
+/// library, owner decision 2026-09-26) are its third section: questions answered over online sources.
 struct JudgmentsView: View {
-    enum Section: String, CaseIterable { case mine = "My judgments", library = "Library" }
+    enum Section: String, CaseIterable { case mine = "My judgments", library = "Library", web = "Web questions" }
 
     @ObservedObject var service: JudgmentsService
     @ObservedObject var packs: PacksService = .shared
+    @EnvironmentObject private var web: WebModel
+    @EnvironmentObject private var router: AppRouter
     @State private var section: Section = .mine
+    @State private var showWebSettings = false
     @State private var path = NavigationPath()
     @State private var writing = false
     @State private var demoDone = false
@@ -26,6 +30,7 @@ struct JudgmentsView: View {
                 switch section {
                 case .mine: MyJudgmentsList(service: service, openLibrary: { section = .library })
                 case .library: LibraryView(service: service)
+                case .web: WebQuestionsSection()
                 }
             }
             .neonGround()
@@ -33,9 +38,30 @@ struct JudgmentsView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { PacksMenu(packs: packs) }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { writing = true } label: { Label("Write your own", systemImage: "square.and.pencil") }
-                        .accessibilityIdentifier("judgments.write")
+                    if section == .web {
+                        Button { showWebSettings = true } label: { Image(systemName: "gearshape") }
+                            .accessibilityLabel("Web settings")
+                            .accessibilityIdentifier("web.settings")
+                    } else {
+                        Button { writing = true } label: { Label("Write your own", systemImage: "square.and.pencil") }
+                            .accessibilityIdentifier("judgments.write")
+                    }
                 }
+            }
+            // Web questions: a template, Flights (development only) and the flight results, pushed on this stack.
+            .navigationDestination(for: WebSector.self) { sector in
+                Group {
+                    if sector == .flights { FlightsScreen() } else { TemplateView(sector: sector) }
+                }
+                .environment(\.layoutDirection, MS.direction)
+            }
+            .navigationDestination(isPresented: Binding(
+                get: { web.searchState == .results },
+                set: { if !$0 { web.searchState = .idle } })) {
+                ResultsView().environment(\.layoutDirection, MS.direction)
+            }
+            .sheet(isPresented: $showWebSettings) {
+                WebSettingsSheet().environmentObject(web).environmentObject(web.library)
             }
             .navigationDestination(for: JudgmentRoute.self) { route in
                 switch route {
@@ -54,10 +80,20 @@ struct JudgmentsView: View {
                 }
             }
         }
+        .environmentObject(web.library)
         .onAppear {
             service.load()
             runDemo()
+            takeRequestedSection()
         }
+        .onChange(of: router.judgmentsSection) { _, _ in takeRequestedSection() }
+    }
+
+    /// A section asked for from elsewhere (the old Web tab's launch argument, "Open in Loupe" for a pack).
+    private func takeRequestedSection() {
+        guard let requested = router.judgmentsSection else { return }
+        section = requested
+        router.judgmentsSection = nil
     }
 
     private var demoRoute: JudgmentRoute? {

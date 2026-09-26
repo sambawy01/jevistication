@@ -1,0 +1,14 @@
+{
+    "extension_name": {
+        "message": "Loupe",
+        "description": "The display name for the extension."
+    },
+    "extension_description": {
+        "message": "Warns you before a phishing or look-alike website. Loupe checks the name of each site you open on this iPhone; nothing leaves your phone unless you turned on Loupe's online checks, and then only the domain.",
+        "description": "Description of what the extension does."
+    },
+    "action_title": {
+        "message": "Loupe",
+        "description": "The toolbar button's title."
+    }
+}

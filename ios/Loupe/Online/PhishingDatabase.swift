@@ -161,13 +161,31 @@ final class PhishingDatabaseStore {
         let (links, domains) = inputs
         var stamps: [String: Date] = [:]
         for u in links + domains { if let d = stamp(u) { stamps[u.lastPathComponent] = d } }
-        if stamps.isEmpty { index = nil; return nil }
-        if let index, stamps == indexStamp { return index }
+        if stamps.isEmpty { index = nil; try? FileManager.default.removeItem(at: indexFile); return nil }
+        if let index, stamps == indexStamp {
+            if !FileManager.default.fileExists(atPath: indexFile.path) { writeIndexFile(index) }
+            return index
+        }
         let date = listDate()
-        index = PhishingDb.shared.buildFromFiles(linkPaths: links.map(\.path), domainPaths: domains.map(\.path),
-                                                 listDate: date, maxEntries: PhishingDb.shared.MAX_ENTRIES)
+        let built = PhishingDb.shared.buildFromFiles(linkPaths: links.map(\.path), domainPaths: domains.map(\.path),
+                                                     listDate: date, maxEntries: PhishingDb.shared.MAX_ENTRIES)
+        index = built
         indexStamp = stamps
-        return index
+        writeIndexFile(built)
+        return built
+    }
+
+    /// Phishing.Database's flat index for Loupe for Safari and "Send to Loupe" (2026-09-26): they map
+    /// this file instead of reading the lists (`MappedPhishingIndex`). Rewritten with every rebuild.
+    var indexFile: URL { dir.appendingPathComponent(ProtectionGroup.phishingDbIndexName) }
+
+    private func writeIndexFile(_ index: PhishingDbIndex) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        guard PhishingDbFile.shared.write(index: index, path: indexFile.path) else { return }
+        var url = indexFile
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        try? url.setResourceValues(values)
     }
 
     private static let httpDate: DateFormatter = {

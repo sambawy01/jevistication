@@ -11,7 +11,7 @@ enum WS {
     }
 
     static let table: [String: (String, String)] = [
-        "library.title": ("Ask the web", "اسأل الويب"),
+        "library.title": ("Web questions", "أسئلة الويب"),
         "library.intro": ("Pick a template, then a ready-made question or your own. Loupe fetches the data online and answers on this phone.",
                           "اختر قالبًا، ثم سؤالًا جاهزًا أو سؤالك الخاص. يجلب Loupe البيانات عبر الإنترنت ويجيب على هذا الهاتف."),
         "sector.currency": ("Currency", "العملات"),
