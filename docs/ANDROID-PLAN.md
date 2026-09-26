@@ -59,3 +59,69 @@ model and the same answers as the iPhone app and Loupe Station.
 - The 384 MB model on low-memory phones: measure at A1, keep `int8-partial` as a fallback; never load two sessions.
 - Gmail restricted scope: `gmail.readonly` needs Google's verification before public release (same as iOS).
 - Background limits vary by manufacturer: passive mode must tolerate being killed and resume.
+
+## Message scam check (approved 2026-09-26, not started)
+
+*Owner-approved idea, BACKLOG.md BL-1. Planning only: it waits behind the same hold as the rest of
+this plan (every iPhone feature working on a device first), and then behind A4.*
+
+**What.** Loupe judges incoming WhatsApp and SMS messages on the phone and warns when one looks like
+a scam. Egypt and MENA first: WhatsApp scams ("I'm your cousin, new number"), InstaPay and Vodafone
+Cash transfer fraud (a request to send money to a wallet number or InstaPay address, a fake
+"transfer received" screenshot or message), and fake delivery SMS (a courier name, a small fee, a
+link). This is the headline Android feature: iOS cannot do it at all. Inspiration: JevBystander,
+an Android accessibility app that reads the visible WeChat chat and returns typed answers without
+taking any action.
+
+**How it reads messages.**
+
+| Route | Reach | Channel |
+|---|---|---|
+| `NotificationListenerService` (B8, already in A4) | The notification's sender and text (WhatsApp's `MessagingStyle` carries the recent messages of the thread); nothing when the user hides previews | Play build, opt-in in system settings |
+| Accessibility, visible chat only | The open chat's text on screen, read when the user opens it | Direct build only, behind the build flag (PRODUCT.md §7) |
+| Default SMS handler | Full SMS inbox | Not planned: PRODUCT.md §11 keeps SMS unbuilt, and taking over the SMS app is a large ask |
+
+Android 15 hides one-time-code notifications from listener apps; that is fine, since Loupe never
+reads or fills codes (the never list).
+
+**How it judges.** Mechanical first, then one small question, as everywhere else:
+
+1. Links in the message go through the shared phishing formula and the downloaded lists
+   (`loupe-kit` `site`, engine `SiteFraud`), the same verdict as Check a link on iOS.
+2. Rules: a wallet number or InstaPay address plus a request to send money; a courier name plus a
+   fee plus a link; a sender not in contacts claiming to be family (engine `Impersonation`, the
+   address book as in `WatcherRun`); urgency wording in English and Arabic.
+3. The Loupe Decision Model answers one `Choice` over the message text (for example *normal /
+   asks for money or a code / impersonates someone / fake delivery or prize / unclear*) only when
+   the rules have not settled it. Message text is data, never instructions (PRODUCT.md §8).
+
+**What the user sees.** A Loupe notification with the reasons ("asks you to send money to a wallet
+number; the sender is not in your contacts"), and an entry in the Spotted log. It warns and never
+blesses: no "this message is safe". It never replies, blocks, deletes or opens anything, and it
+takes no action in WhatsApp.
+
+**Privacy.** Nothing leaves the phone. Messages are judged in memory and not stored; the Spotted log
+keeps the verdict, the reasons and the sender's display name, not the text. Online phishing checks
+apply only to links and only when the user has turned them on (PRODUCT.md §4a).
+
+**What iOS offers instead.** iOS gives no app access to another app's messages or notifications. It
+has: Send to Loupe from the share sheet (checks a shared link on the spot), the clipboard check
+(`ios/Loupe/Clipboard/`), and the Loupe keyboard, which checks a copied or pasted link on the device
+with no network code (`ios/Shared/Clipboard/KeyboardCheck.swift`). An SMS filter extension for
+unknown senders is allowed by iOS but not built (PRODUCT.md §2, §11).
+
+**Milestone.** A4b, after A4 (B8 notifications); the site checks come with the shared `loupe-kit` from A0:
+
+| # | What | Done when |
+|---|---|---|
+| A4b | Message scam check over WhatsApp and SMS notifications; the visible-chat reader in the direct build | Warns on a fixture set of Egyptian scam messages (English, Arabic, Franco-Arabic) with measured precision and recall per rule and for the model question; no message text on disk; battery measured on a mid-range phone |
+
+**Open questions.**
+
+1. A labelled set of real Egyptian and MENA scam messages: where it comes from, and consent for it.
+2. How well the model reads Egyptian Arabic and Franco-Arabic (Arabic written in Latin letters): unmeasured.
+3. Whether the Play listing needs a declaration for notification access, and what the data-safety
+   form says (to verify at A9).
+4. Whether the accessibility reader is worth a direct-build channel on its own.
+5. Warn on every message, or only above a threshold with a daily cap, so warnings stay rare enough
+   to be read.
