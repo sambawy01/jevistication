@@ -1315,6 +1315,39 @@ their acceptance criteria are met; entries here record increments toward them.
   on this branch: `.github/workflows/ci.yml`
   triggers on push to `main` and on pull requests to `main`, so `agent-tier` gets no independent
   green until a PR is opened.
+- **2026-09-26 — Fast Decisions wired in as an outside eval set (`agent-tier`).** `fastino/fast-decisions`
+  (Apache-2.0), the classification suite behind Fastino's GLiNER2.5-Decide, whose published table
+  lists **Laya Router at 46.6%** against their own 340M model at 60.2%. The development split is 17
+  domains × 100 rows = 1,700 rows, 29 heads, 2,900 head-instances. `FastDecisions` in `:loupe-kit`
+  parses it, turns each single-label head into a `Judgment.Choice` with fixtures so the whole §7
+  harness applies (coverage, selective accuracy, ECE, Brier, baseline comparison), and scores the
+  suite with the card's own protocol — one prediction per head, labels as given, exact set match,
+  the mean of the 17 domain accuracies *and* the pooled figure, because quoting one while implying
+  the other is how a benchmark number drifts. The three multi-label heads get no `Choice` and say
+  why: a `Choice` answers with one label, so representing "food and service both apply" would be
+  scoring a different task.
+  **The finding.** Running the two reference predictors first gives every published number a floor:
+  the oracle majority prior scores **25.8% average / 28.8% pooled**, and matching the label's own
+  name against the text scores **35.2% / 36.7%**. So about a third of this suite is answerable from
+  the label names alone, Laya Router's 46.6% is ~11 points above that, and the best model anywhere
+  on it is ~25 points above it. Nobody is doing well here, which is worth knowing before treating
+  60.2 vs 46.6 as a verdict.
+  **Why it is worth keeping.** Two heads are already Loupe features — `email_triage.is_phishing`
+  (53 no / 47 yes) and `ticket_route.contains_pii` (52 yes / 48 no), both near-balanced binaries
+  with floors of 53%/52% majority and 57%/53% label-names. That is an external, third-party-authored
+  test for the phishing formula and the privacy check, on data this project did not write. Thirteen
+  more heads are the routing and document-type decisions the watchers make.
+  **How the data is handled.** Not vendored. `tools/fetch-fast-decisions.sh` downloads all 17 files
+  and verifies each against `tools/fast-decisions.sha256`, so a silently regenerated upstream file
+  fails the fetch instead of quietly moving a number; a trimmed four-row sample covering every shape
+  (binary, four-head, multi-label, 28-label) is committed with its NOTICE, exactly as the
+  Phishing.Database fixtures are. `./gradlew :loupe-kit:fastDecisions` prints the table. The dataset
+  card says "Do not report a score computed on the files in this repo as the benchmark" — the
+  published figures are the held-out 300-per-domain test split, which is not distributed — so the
+  runner prints that warning itself and nothing here is ever called "the benchmark".
+  **Not done:** no model has been scored on it. Laya's weights are on Hugging Face, which this
+  container's egress proxy denies, so the loader, the protocol and the floors are proven and the
+  model run belongs on a machine that has the weights.
 
 ## Where the build stands
 

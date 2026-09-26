@@ -22,3 +22,7 @@ ios-native/tokenizers-ffi/target/
 
 # iOS device signing: the owner's Team ID (ios/Config/Signing.local.xcconfig.example is the template)
 ios/Config/Signing.local.xcconfig
+
+# Fast Decisions (tools/fetch-fast-decisions.sh): someone else's dataset, fetched not vendored.
+# The trimmed sample the parser tests read is committed under loupe-kit/src/commonTest/fixtures.
+third-party/fast-decisions/

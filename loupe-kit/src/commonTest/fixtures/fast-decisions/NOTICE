@@ -1,0 +1,15 @@
+Four rows of the Fast Decisions development split, one each from agent_handoff, email_triage,
+restaurant_review and support_intent, with the `input` text trimmed to 220 characters. Fetched on
+2026-09-26. They are here so the parser is tested against the real shape -- a binary head, a
+four-head row, a multi-label head, and a twenty-eight-label head -- and never for scoring.
+
+The full split is not in this repository. `tools/fetch-fast-decisions.sh` downloads all 17 files
+and verifies each against `tools/fast-decisions.sha256`.
+
+Fast Decisions, https://huggingface.co/datasets/fastino/fast-decisions
+Apache License 2.0, Fastino AI.
+The accompanying model card is https://huggingface.co/fastino/GLiNER2.5-Decide.
+
+The dataset card asks, and this repository honours it: "Do not report a score computed on the files
+in this repo as the benchmark." The published table is the held-out 300-per-domain test split,
+which is not distributed. Any figure produced here is a development-split figure.
