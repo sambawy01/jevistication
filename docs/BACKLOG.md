@@ -10,7 +10,7 @@ question types, used here as technical terms only.
 
 | ID | Idea | Platform | Tier | Depends on | Status | Source |
 |---|---|---|---|---|---|---|
-| BL-1 | Scam checking for WhatsApp / SMS messages as they arrive | Android | Free | Android A0–A4 (on hold, see ANDROID-PLAN.md) | approved, not started | JevBystander |
+| BL-1 | Scam checking for WhatsApp / SMS messages as they arrive | Android | Free | Android A0–A4 (see ANDROID-PLAN.md) | approved, not started | JevBystander |
 | BL-2 | "Before you pay" checklist for rental ads, job offers and listings | iOS, Android | Free | Templates, site checks | approved, not started | jev-rental |
 | BL-3 | Scam-post labels in social feeds | Station extension; mobile limited | Free | Station browser extension; Loupe for Safari | approved, not started | owner |
 | BL-4 | Bank-statement CSV import with a model pass for unknown columns | iOS, Android, desktop | Free | `CsvRows`, `RecurringMoney` | approved, not started | jev-table-import-mapper |
@@ -24,8 +24,8 @@ question types, used here as technical terms only.
 | BL-12 | "Is this a scam?" from anywhere: text, link, screenshot or QR photo | iOS, Android | Free | Check a link, Share extension, clipboard intent, scam templates; Arabic calibration (notes) | approved, not started | Station research |
 | BL-13 | Egypt / MENA "official channel" trust pack | all | Free | Brand list, pack format; ongoing curation | approved, not started | Station research |
 | BL-14 | QR "look before you scan", plus a venue self-audit | iOS, Android | Free | BL-13 helps; phishing formula | approved, not started | Station research |
-| BL-15 | Remote-access app warning | Android | Free | Android A0–A4 (on hold); BL-1 | approved, not started | Station research |
-| BL-16 | Kids' chat protection | Android first | To decide | Android hold; legal review; measured false-positive rate | approved, not started | Station research |
+| BL-15 | Remote-access app warning | Android | Free | Android A0–A4; BL-1 | approved, not started | Station research |
+| BL-16 | Kids' chat protection | Android first | To decide | Android A4b; legal review; measured false-positive rate | approved, not started | Station research |
 
 ---
 
@@ -293,7 +293,7 @@ code changed (alert only; Loupe never edits anything).
 
 ## BL-15 — Remote-access app warning (Android)
 
-**What.** Size M; free; waits behind the Android hold. Two parts: (1) a `Noul` on messages for
+**What.** Size M; free; Android only. Two parts: (1) a `Noul` on messages for
 *tells you to install an app or share your screen* (AnyDesk-style "support" scams); (2) a list of
 newly installed apps that hold accessibility, SMS or other powerful access, each sorted by a
 `Choice` over its store description: *remote control, SMS reader, loan app, utility*. Full plan in
@@ -333,8 +333,14 @@ Reference designs (MIT; both call hosted Jev, so reuse the question design only,
 hostile messages blocked and 0 of 49 false positives on its own set).
 
 **Feasibility.** Android: notification previews (Play) or the visible chat through accessibility,
-which PRODUCT.md §7 keeps out of the Play build today, so this needs an owner decision on a declared
-parental-control accessibility use. iOS: probably not possible beyond Screen Time controls.
+**allowed in the Play build for this feature only (owner decision, 2026-09-26)**, as a scoped
+exception in PRODUCT.md §7, declared to Google as parental control. Conditions: on only in kids'
+mode on the child's device; a persistent, non-dismissible "Loupe protection is on" notification
+while it runs; the `isMonitoringTool` / parental-control and accessibility-use declarations, with a
+prominent in-app disclosure and consent screen before it is turned on; it reads only the configured
+chat and game apps, stores no text, and sends only content-free alerts through the encrypted relay
+below. Outside kids' mode, §7's exclusion is unchanged. iOS: probably not possible beyond Screen
+Time controls.
 
 **Parent alerts: decided (owner, 2026-09-26) — an end-to-end encrypted relay.** Recorded as a
 scoped exception in PRODUCT.md §4: for this feature only, the promise is "no server can read
@@ -349,8 +355,7 @@ anything" instead of "no Loupe server".
 - Obligations: the privacy policy discloses the relay; key rotation and unpairing; replay
   protection; and the relay necessarily sees metadata (timing and device tokens), which is stated.
 
-**Open questions.** **Owner decision still open:** a declared parental-control accessibility use in
-the Play build (PRODUCT.md §7 keeps accessibility out of it today). Free or paid? Where a labelled
+**Open questions.** Free or paid? Where a labelled
 grooming set comes from, ethically.
 
 ---

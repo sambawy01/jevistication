@@ -424,6 +424,21 @@ on a discretionary policy review. Note also that full UI control hands a model t
 37% accurate on hard decisions the ability to act on live accounts — the cooperative path's
 worst case is a wrong deep link.
 
+**Scoped exception: kids' chat protection** *(owner decision, 2026-09-26; BACKLOG.md BL-16; planned,
+not built).* The Play build may use an `AccessibilityService` for this one feature, declared to Google
+as parental control, and for nothing else. Its conditions:
+
+- enabled only in kids' mode, on the child's device;
+- a persistent, non-dismissible "Loupe protection is on" notification while it runs;
+- Play's `isMonitoringTool` / parental-control declaration and the accessibility-use declaration,
+  with a prominent in-app disclosure and a consent screen before it is turned on;
+- it reads only the chat and game apps configured in kids' mode, stores no text, and sends only
+  content-free alerts through the end-to-end encrypted relay (§4);
+- it only reads; it never acts in another app.
+
+Everywhere outside kids' mode, the exclusion above stands exactly as written: the Play build is
+cooperative-only.
+
 **One brain, always.** If any surface ever gets its own separate model and ledger, the premise
 — one judgment that learns you everywhere — quietly dies. Mobile surfaces share storage inside
 the app bundle. If desktop happens, the ledger syncs through the user's own iCloud or Drive,

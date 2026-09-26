@@ -1,6 +1,7 @@
 # Loupe for Android — plan
 
-Status: plan, 2026-09-25. **On hold until the iPhone app's features all work on a real device** (owner, 2026-09-25): Android then reuses proven code instead of chasing a moving target.
+Status: **in development, in parallel with iOS** (owner, 2026-09-26). The Loupe Station session builds it on branch `android` (a worktree on /Volumes/Sambawy); changes to shared modules merge to `main` only after review and a green iOS suite.
+*History:* from 2026-09-25 to 2026-09-26 Android was on hold until every iPhone feature worked on a real device; the owner lifted the hold on 2026-09-26.
 It follows the iOS route (epic #6 / #7): the same Kotlin Multiplatform core, a native UI, the same
 model and the same answers as the iPhone app and Loupe Station.
 
@@ -62,8 +63,7 @@ model and the same answers as the iPhone app and Loupe Station.
 
 ## Message scam check (approved 2026-09-26, not started)
 
-*Owner-approved idea, BACKLOG.md BL-1. Planning only: it waits behind the same hold as the rest of
-this plan (every iPhone feature working on a device first), and then behind A4.*
+*Owner-approved idea, BACKLOG.md BL-1. Planning only until the owner says "Go"; it comes after A4.*
 
 **What.** Loupe judges incoming WhatsApp and SMS messages on the phone and warns when one looks like
 a scam. Egypt and MENA first: WhatsApp scams ("I'm your cousin, new number"), InstaPay and Vodafone
@@ -128,7 +128,7 @@ unknown senders is allowed by iOS but not built (PRODUCT.md §2, §11).
 
 ## Remote-access app warning (approved 2026-09-26, not started)
 
-*BACKLOG.md BL-15. Behind the same hold, then after A4b (it reuses the message check).*
+*BACKLOG.md BL-15. After A4b (it reuses the message check).*
 
 **What.** Two parts, both warnings only:
 
@@ -156,7 +156,7 @@ source (PRODUCT.md §4a).
 
 ## Kids' chat protection (approved 2026-09-26, not started)
 
-*BACKLOG.md BL-16. Android first; behind the hold, and behind the hard requirements below.*
+*BACKLOG.md BL-16. Android first; behind the hard requirements below.*
 
 **What.** On the child's phone, game, Discord and messaging chats are screened for grooming and
 gift-card lures with four `Noul`s: *asks to move to a private chat*, *offers in-game currency or a
@@ -164,8 +164,14 @@ gift card*, *asks for photos or location*, *says to keep it secret*. The parent'
 content: the category, the confidence and the time only.
 
 **Reading.** The same routes as the message scam check: notification previews in the Play build;
-the visible chat through accessibility, which PRODUCT.md §7 keeps out of the Play build. A declared
-parental-control accessibility use would change that line, so it needs an owner decision first.
+the visible chat through an `AccessibilityService`. **Decided (owner, 2026-09-26): allowed in the
+Play build for this feature only**, declared to Google as parental control, a scoped exception in
+PRODUCT.md §7. Conditions: on only in kids' mode on the child's device; a persistent, non-dismissible
+"Loupe protection is on" notification while it runs; the `isMonitoringTool` / parental-control and
+accessibility-use declarations, with a prominent in-app disclosure and consent screen before it is
+turned on; it reads only the configured chat and game apps, stores no text, and sends only
+content-free alerts through the encrypted relay below. Outside kids' mode the Play build stays
+cooperative-only.
 
 **Hard requirements, before any build.**
 
@@ -191,9 +197,6 @@ PRODUCT.md §4: for this feature only, "no server can read anything" replaces "n
 - Obligations: the privacy policy discloses the relay; key rotation and unpairing; replay
   protection (for example, a per-pair counter or nonce checked on the parent device); and it is
   stated that the relay necessarily sees metadata (timing and device tokens).
-
-**Still open for the owner:** the declared parental-control accessibility use in the Play build
-(see *Reading* above).
 
 **Milestone.** A10, after A9 (the first Play release) and the legal review: *done when* the four
 questions run on a fixture set with measured precision and false-positive rate, the Play
