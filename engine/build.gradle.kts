@@ -2,9 +2,12 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     kotlin("multiplatform")
-    // Loupe for Android (docs/ANDROID-PLAN.md): an Android library target beside JVM and iOS.
-    id("com.android.library")
 }
+
+// Loupe for Android (docs/ANDROID-PLAN.md): an Android library target beside JVM and iOS, only where
+// settings.gradle.kts found an Android SDK (it says so when it did not).
+val androidHost = gradle.extra["loupe.android"] as Boolean
+if (androidHost) apply(plugin = "com.android.library")
 
 repositories {
     mavenCentral()
@@ -95,9 +98,11 @@ kotlin {
             jvmTarget.set(JvmTarget.JVM_21)
         }
     }
-    androidTarget {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
+    if (androidHost) {
+        androidTarget {
+            compilerOptions {
+                jvmTarget.set(JvmTarget.JVM_17)
+            }
         }
     }
     if (appleHost) {
@@ -130,23 +135,27 @@ kotlin {
                 kotlin.srcDir(generatePslEmbedded)
             }
         }
-        androidMain {
-            // Android takes the same embedded snapshot as iOS: no classpath resource lookup in the
-            // APK, and the bytes are the very file the JVM reads.
-            kotlin.srcDir(generatePslEmbedded)
+        if (androidHost) {
+            androidMain {
+                // Android takes the same embedded snapshot as iOS: no classpath resource lookup in
+                // the APK, and the bytes are the very file the JVM reads.
+                kotlin.srcDir(generatePslEmbedded)
+            }
         }
     }
 }
 
-android {
-    namespace = "dev.loupe.engine"
-    compileSdk = 36
-    defaultConfig {
-        minSdk = 29
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+if (androidHost) {
+    extensions.configure<com.android.build.api.dsl.LibraryExtension> {
+        namespace = "dev.loupe.engine"
+        compileSdk = 36
+        defaultConfig {
+            minSdk = 29
+        }
+        compileOptions {
+            sourceCompatibility = JavaVersion.VERSION_17
+            targetCompatibility = JavaVersion.VERSION_17
+        }
     }
 }
 

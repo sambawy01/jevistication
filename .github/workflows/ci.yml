@@ -6,15 +6,23 @@ on:
     branches: [main, android]
   pull_request:
     branches: [main]
-  # Manual runs also run the iOS job below.
+  # Manual runs also run the iOS job and the Android emulator job below.
   workflow_dispatch:
+  # Nightly: the Android emulator job only (GitHub runs schedules from the default branch's file).
+  schedule:
+    - cron: "17 2 * * *"
 
 permissions:
   contents: read
 
 jobs:
   build:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
+    env:
+      # settings.gradle.kts skips the Android targets, with a warning, when it finds no Android SDK;
+      # in CI that is a failure, so Android is never skipped silently.
+      LOUPE_REQUIRE_ANDROID: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -27,6 +35,10 @@ jobs:
       # ANDROID_HOME comes from it) and lints the Android modules.
       - name: Build and test
         run: ./gradlew build --no-daemon --stacktrace
+      # Lint does not analyse jvmCommonMain; this checks every class the Android build compiled
+      # against the SDK's api-versions.xml at minSdk 29 (docs/ANDROID-PLAN.md, Traps).
+      - name: Android API level check
+        run: python3 tools/android-api-check/check.py --min-sdk 29
       - name: Upload the Android debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -49,3 +61,30 @@ jobs:
         run: ./gradlew :engine:iosSimulatorArm64Test :templates:iosSimulatorArm64Test --no-daemon --stacktrace
       - name: LoupeKit XCFramework
         run: ./gradlew :loupe-kit:assembleLoupeKitXCFramework --no-daemon --stacktrace
+
+  # Android's regex engine is ICU, not the JDK's: every shared regex literal is compiled on an API 29
+  # emulator (minSdk), where the host JDK's unit tests cannot see a rejection. Nightly and on manual
+  # dispatch only: an emulator boot costs minutes.
+  android-emulator:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Regex check on an API 29 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 29
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          script: tools/android-regex-check/check.sh

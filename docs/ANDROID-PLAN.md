@@ -2,8 +2,9 @@
 
 Status: **in development, in parallel with iOS** (owner, 2026-09-26). The Loupe Station session builds it on branch `android` (a worktree on /Volumes/Sambawy); changes to shared modules merge to `main` only after review and a green iOS suite.
 *History:* from 2026-09-25 to 2026-09-26 Android was on hold until every iPhone feature worked on a real device; the owner lifted the hold on 2026-09-26.
-It follows the iOS route (epic #6 / #7): the same Kotlin Multiplatform core, a native UI, the same
-model and the same answers as the iPhone app and Loupe Station.
+It follows the iOS route (epic #6 / #7): the same Kotlin Multiplatform core, a native UI and the same
+model as the iPhone app and Loupe Station, aiming at the same answers. Where Android does not give
+them yet is listed under "Known parity gaps" below.
 
 ## Decisions
 
@@ -89,10 +90,19 @@ Android, they moved from `jvmMain` to a `jvmCommonMain` source set shared by `jv
 (persistence, sources-common, game, loupe-kit), so there is one implementation, not two. They now use
 only APIs Android has at API 29 (`Paths.get`, `Collectors.toList`, a strict UTF-8 decode in place of
 `Files.readString`, which Android lacks). The engine's Android actuals follow iOS instead of the JVM:
-the portable IDNA, script table and number formatter, and the embedded Public Suffix List, so every
-phone gives the same answers whatever its Unicode data or locale (`"%.2f"` prints Arabic-Indic digits
-on an Arabic-locale phone). Only SHA-256 (`MessageDigest`) and NFKC (`java.text.Normalizer`) come
-from the platform.
+the portable IDNA, script table and number formatter, and the embedded Public Suffix List, so these
+do not follow the phone's Unicode data or locale (`"%.2f"` prints Arabic-Indic digits on an
+Arabic-locale phone). SHA-256 (`MessageDigest`) and NFKC (`java.text.Normalizer`) come from the
+platform, and so does the regex engine: those are where Android's answers can still differ (see
+"Known parity gaps").
+
+**Builds without an Android SDK.** `settings.gradle.kts` looks for an SDK as the Android tools do
+(`ANDROID_HOME`, then `ANDROID_SDK_ROOT`, then `sdk.dir` in `local.properties`). Without one it
+prints `WARNING: Android SDK not found (...): Android targets skipped`, leaves out `:android-app`,
+and the shared modules apply neither the Android library plugin nor `androidTarget()`; `./gradlew
+check` then builds and tests the JVM and iOS targets as before (the iOS session's Mac, a Linux box).
+`LOUPE_REQUIRE_ANDROID=1` turns the skip into a build failure; CI sets it, so CI never skips Android
+silently.
 
 **Traps found at A0.**
 
@@ -101,11 +111,64 @@ from the platform.
    `PatternSyntaxException` on Android: ICU rejects a bare `}`. The app crashed on first launch in the
    emulator while every unit test was green, because Android unit tests run on the host JDK. Fixed by
    escaping it (`\}`, the same pattern everywhere). `tools/android-regex-check/check.sh` compiles all
-   133 statically known regex literals of the shared modules on a device; 10 built at run time were
-   reviewed by hand (`Regex.escape` → `\Q…\E`, which ICU accepts; digit prefixes; `\d{4}`).
+   133 statically known regex literals on a device, with the flags Kotlin passes for their
+   `RegexOption`s; 9 built at run time were reviewed by hand (`Regex.escape` → `\Q…\E`, which ICU
+   accepts; digit prefixes; `\d{4}`). `extract.py` finds `Regex(…)`, `"…".toRegex(…)` and
+   `Pattern.compile(…)` in code (not comments or strings) in the shared modules' `commonMain`,
+   `jvmCommonMain` and `androidMain` and in `:android-app`. A regex that compiles is not yet one that
+   matches the same text: see "Known parity gaps", B1.
 2. *Lint does not look at `jvmCommonMain`.* A planted `Path.of` (API 34) passed `lint`. The
    bytecode check `tools/android-api-check/check.py` catches it (it reads every class our Android
-   build compiled and looks each JDK/Android reference up in the SDK's `api-versions.xml`).
+   build compiled and looks each JDK/Android reference up in the SDK's `api-versions.xml`: method
+   and field references on their owner, and class references, i.e. `is`/`as`, catch clauses, class
+   literals and supertypes, on the class). CI runs it after the build.
+
+## Known parity gaps
+
+Android does **not** yet give the iPhone's and Loupe Station's answers for every input on every
+phone. Two gaps are known and measured; their fixes wait on a cross-platform decision (they change
+shared regex semantics or the NFKC implementation, which the iOS app and Station share), so A0 only
+records them. Measurements: `/Volumes/Sambawy/loupe-android-evidence/a0-fix/parity-probe-*.txt`
+(the same `ParityProbe` class run on the host JDK 21 and, through `app_process`, on the API 29 and
+API 35 emulators).
+
+**B1. Regex character classes and case folding.** Android's `java.util.regex` is ICU, whose `\d`,
+`\s`, `\w`, `\b`, `\p{…}` and case-insensitive matching are Unicode-aware; the JDK's are ASCII unless
+`UNICODE_CHARACTER_CLASS` is set, and Kotlin/Native's regex follows the JDK's rules (reported by
+review; not re-measured here). The same pattern therefore compiles on all three but matches
+different text:
+
+| Probe | JDK 21 | Android API 29 | Android API 35 |
+|---|---|---|---|
+| `\d` finds Arabic-Indic `٣` (U+0663) | no | **yes** | **yes** |
+| `\s` finds NBSP (U+00A0) | no | **yes** | **yes** |
+| `\w` finds `é` (U+00E9) | no | **yes** | **yes** |
+| `caf\b` finds a boundary inside `café` | yes | **no** | **no** |
+| `\p{Alpha}` finds `é` | no | **yes** | **yes** |
+| IGNORE_CASE `ss` finds `ß` (and `ß` finds `SS`) | no | **yes** | **yes** |
+| IGNORE_CASE `i` finds `İ` (U+0130), and back | yes | **no** | **no** |
+
+So on a phone, dates written in Arabic-Indic digits, amounts after a no-break space, accented words
+at a `\b` and German or Turkish case pairs can match where the iPhone and Station do not, or the
+reverse. Affected shared code (regexes using those classes or IGNORE_CASE on user text):
+`engine/.../DateFacts.kt`, `engine/.../TermChange.kt`, `loupe-kit/.../watchers/WatcherRun.kt`,
+`loupe-kit/.../privacy/Evidence.kt`, `loupe-kit/.../mail/Classify.kt`,
+`sources-common/.../CsvRows.kt`, `sources-common/.../Mime.kt` (and user baselines,
+`Baseline.Pattern`, which are IGNORE_CASE). The regex check proves only that every pattern
+**compiles** on ICU. Options for the decision: spell the ASCII classes out (`[0-9]`, `[ \t\n\x0B\f\r]`,
+`[A-Za-z0-9_]`) in shared code so every engine agrees, or deliberately adopt Unicode classes
+everywhere (`UNICODE_CHARACTER_CLASS` on the JDK; not available on Kotlin/Native).
+
+**B2. NFKC and IDNA data.** NFKC on Android is the device's ICU (`java.text.Normalizer`), whose
+Unicode version rises with the API level, so the same string can normalise differently on two
+phones: U+1E030 (MODIFIER LETTER CYRILLIC SMALL A, Unicode 15) becomes `а` (U+0430) under JDK 21
+and on API 35, but stays unchanged on API 29 (ICU of Unicode 11). NFKC feeds the IDNA step
+(`idnaToAscii`) and loupe-kit's homograph check (`Hosts`, `nfkc`). The JDK's `java.net.IDN`,
+which the desktop's IDNA is pinned against, implements IDNA 2003 over Unicode **3.2**; the portable
+port Android and iOS use follows it, but its NFKC step comes from the platform, so characters newer
+than Unicode 3.2 can take different paths. Options: ship one NFKC table (generated from the JDK's
+data, as the script table is) for every platform, or pin the answer to Unicode 3.2 and reject newer
+code points in hosts, as IDNA 2003 does.
 
 ## A0 record (2026-09-26)
 
@@ -144,14 +207,24 @@ in about 0.8 s, logs `shared engine ok: 55 templates, PSL 2026-09-21_18-50-07_UT
 caution, danger]`, and logcat has no crash. Screenshots `a0-home.png`, `a0-home-scrolled.png`; the
 R8 release build, signed with the debug key for the test only, runs the same (`a0-home-release.png`).
 
-**Size.** Debug APK 25.8 MB (AGP stores debug APKs uncompressed and unshrunk; 8.7 MB deflated).
+**Size.** Debug APK 25.34 MB (25,339,789 bytes; AGP stores debug APKs uncompressed and unshrunk).
 Release APK with R8 and resource shrinking: **1.9 MB** (unsigned). No model, no native code beyond
 Compose's 10 KB `libandroidx.graphics.path.so`, no dependency beyond Compose, `activity-compose` and
 the shared modules.
 
 **CI.** `.github/workflows/ci.yml` now also runs on pushes to `android`; its Linux job's
-`./gradlew build` builds, tests and lints the Android modules, and the debug APK is uploaded as the
-`loupe-android-debug-apk` artifact.
+`./gradlew build` (with `LOUPE_REQUIRE_ANDROID=1`) builds, tests and lints the Android modules, then
+`tools/android-api-check/check.py` checks the compiled classes at minSdk 29, and the debug APK is
+uploaded as the `loupe-android-debug-apk` artifact. The `android-emulator` job runs
+`tools/android-regex-check/check.sh` on an API 29 emulator (reactivecircus/android-emulator-runner),
+nightly and on manual dispatch, not on every push.
+
+**Memory: whole-file reads.** `PlatformFiles.readText` (persistence, `jvmCommonMain`) reads the file
+into a byte array, decodes it strictly into a `CharBuffer` and copies that into a `String`: at the
+peak about five times the file's size in memory (N bytes + 2N for the chars + up to 2N for the
+string). The ledger and corrections files are read whole this way, as on desktop. That is fine at A0
+sizes; before A5 (passive mode, a growing ledger) it should read line by line, and
+`SourceFs.readBytes` likewise holds each source file whole.
 
 **Debug signing certificate** (this Mac's `~/.android/debug.keystore`), for the Google OAuth Android
 client (item 2 below): SHA-1 `E1:70:ED:F1:BC:46:F8:29:E8:E3:D8:F0:1E:49:3B:60:53:F3:E0:65`.
@@ -162,12 +235,36 @@ XCFramework block, `Task.project at execution time`) are on origin/main too. AGP
 Kotlin 2.1.0's tested AGP range (see Build choices). The app uses the platform's default fonts;
 Rajdhani and JetBrains Mono (iOS) are not bundled yet. `./gradlew build` (not part of the gate)
 fails on macOS at the root `:commonizeNativeDistribution` ("no repositories are defined"); origin/main
-fails the same way, and CI runs `build` on Linux, where that task does not exist.
+fails the same way, and CI runs `build` on Linux, where that task does not exist. A root
+`repositories { mavenCentral() }` gets past that task, but `build` then fails at
+`:sources-common:compileCommonMainKotlinMetadata`: `RegexOption.DOT_MATCHES_ALL` in `Text.kt`
+(commonMain) is not in the common standard library. That failure is independent of Android (it
+happens with the Android targets skipped too) and is shared code, so it is left for a shared fix and
+the root block was not added.
 
 **Left for later milestones.** No Android `actual` is stubbed: every `expect` has a full
 implementation. The phone's own PDF and image readers (`PlatformExtractors`) come with A4; A0's unit
-tests use the desktop readers on the host JVM, as `jvmTest` does. The regex and API checks are
-scripts run by hand, not yet part of `check` or CI.
+tests use the desktop readers on the host JVM, as `jvmTest` does. The API check runs in CI after the
+build; the regex check needs a device, so it runs in CI's nightly emulator job, and by hand.
+
+## A0 fix record (2026-09-26, after review)
+
+Evidence: `/Volumes/Sambawy/loupe-android-evidence/a0-fix/`.
+
+| Gate | Result |
+|---|---|
+| `./gradlew clean check --no-build-cache`, with the SDK | green, 2 min 20 s; 2,852 tests, 0 failed, 24 skipped (no model) |
+| the same in a copy with no SDK (`ANDROID_HOME`/`ANDROID_SDK_ROOT` unset, no `local.properties`) | green, 1 min 50 s; the warning line printed; 1,476 JVM and iOS-simulator tests, 0 failed, 24 skipped |
+| the same copy with `LOUPE_REQUIRE_ANDROID=1` | fails at settings, as intended |
+| `:android-app:assembleDebug assembleRelease` | green; debug 25,339,789 bytes, release 1,871,827 bytes (unsigned) |
+| `:loupe-kit:assembleLoupeKitDebugXCFramework` | green, 30 s |
+| `tools/android-api-check/check.py` (api-versions.xml of platform 36 and of 35) | 663 classes, 0 problems at minSdk 29 |
+| `tools/android-regex-check/check.sh`, API 29 (`google_apis` arm64-v8a) and API 35 emulators | 133 compiled, 0 rejected, on both |
+| Launch smoke test: debug on API 29 and 35, R8 release (signed with the debug key for the test) on 35 | cold start 0.5 to 0.8 s, `shared engine ok … links [safe, caution, danger]`, no crash in logcat |
+
+The merged manifest (`aapt2 dump xmltree`, debug and release) keeps `androidx.startup`'s lifecycle
+and profile-installer initializers and no longer has `EmojiCompatInitializer`, so nothing asks Google
+Play services' font provider for an emoji font; emoji use the phone's system font.
 
 ## Needed from the owner
 

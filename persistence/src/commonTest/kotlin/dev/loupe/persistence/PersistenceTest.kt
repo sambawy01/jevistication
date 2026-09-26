@@ -103,6 +103,18 @@ class PersistenceTest {
     }
 
     @Test
+    fun aJudgmentWhoseBaselinePatternDoesNotCompileIsSkippedOnLoad() {
+        val withPattern = allJudgments().first { it.baseline is dev.loupe.templates.Baseline.Pattern }
+        val good = JudgmentCodec.encode(withPattern)
+        val badBaseline = JsonValue.Obj(LinkedHashMap(good.req("baseline").asObj.fields).apply { put("pattern", JsonValue.Str("(unclosed")) })
+        val bad = JsonValue.Obj(LinkedHashMap(good.fields).apply { put("id", JsonValue.Str("j-bad")); put("baseline", badBaseline) })
+        // Decoding the one judgment says why; loading the file keeps the others instead of failing.
+        val e = assertFailsWith<IllegalArgumentException> { JudgmentCodec.decode(bad) }
+        assertTrue("(unclosed" in (e.message ?: ""), e.message)
+        assertEquals(listOf(withPattern), JudgmentCodec.decodeFile(JsonText.pretty(JsonValue.Arr(listOf(bad, good)))))
+    }
+
+    @Test
     fun theParserRejectsWhatIsNotJson() {
         for (bad in listOf("", "{", "{\"a\":}", "[1,]", "{\"a\":1}x", "\"\\q\"", "01", "tru")) {
             assertFailsWith<IllegalArgumentException>(bad) { JsonValue.parse(bad) }

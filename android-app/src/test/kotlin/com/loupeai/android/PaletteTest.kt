@@ -34,5 +34,18 @@ class PaletteTest {
         assertEquals(Palette.dangerText, Palette.level("danger").first)
         assertEquals(Palette.warnText, Palette.level("caution").first)
         assertEquals(Palette.okText, Palette.level("safe").first)
+        assertEquals(Palette.okSoft, Palette.level("safe").second)
+    }
+
+    @Test
+    fun `an unknown level fails safe to caution and is reported`() {
+        for (unknown in listOf("", "Safe", "ok", "critical", "unknown")) {
+            val reported = mutableListOf<String>()
+            assertEquals(Palette.warnText to Palette.warnSoft, Palette.level(unknown) { reported += it }, unknown)
+            assertEquals(listOf(unknown), reported)
+        }
+        val quiet = mutableListOf<String>()
+        for (known in listOf("danger", "caution", "safe")) Palette.level(known) { quiet += it }
+        assertEquals(emptyList(), quiet)
     }
 }

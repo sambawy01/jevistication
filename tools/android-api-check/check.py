@@ -7,9 +7,12 @@ tests cannot see a missing Android API either. This reads every class file the A
 produced for our own modules and looks up each JDK/Android method and field they reference in the
 SDK's `api-versions.xml`, walking superclasses and interfaces.
 
+Each method and field reference is looked up on its owner; each class reference (CONSTANT_Class:
+`is`/`as` checks, catch clauses, class literals, `new`, supertypes) on the class itself.
+
 It reports:
   NEWAPI   a reference whose API level is above minSdk (a crash on older phones), and
-  MISSING  a reference to a java.*/javax.*/android.* member Android does not have at all.
+  MISSING  a reference to a java.*/javax.*/android.* class or member Android does not have at all.
 
 Usage: tools/android-api-check/check.py [--min-sdk 29] [--sdk-platform 36]
 Needs ANDROID_HOME and a prior Android build (e.g. ./gradlew :android-app:assembleDebug).
@@ -47,8 +50,20 @@ def load_api(path):
     return api
 
 
+def class_name(name):
+    """The class a CONSTANT_Class name denotes: arrays (`[[Ljava/time/Instant;`) name their element
+    type; an array of a primitive (`[I`) names none."""
+    stripped = name.lstrip("[")
+    if stripped == name:
+        return name
+    return stripped[1:-1] if stripped.startswith("L") and stripped.endswith(";") else None
+
+
 def refs_in_class(data):
-    """(kind, owner, name, descriptor) for each Methodref/InterfaceMethodref/Fieldref in a class file."""
+    """(kind, owner, name, descriptor) for each Methodref/InterfaceMethodref/Fieldref in a class
+    file, and ("class", name, None, None) for each CONSTANT_Class: the classes of type checks,
+    casts, catch clauses, class literals, `new` and the class's own supertypes, which reference no
+    member and would otherwise go unchecked."""
     count = struct.unpack(">H", data[8:10])[0]
     pool = [None] * count
     i, idx = 10, 1
@@ -88,6 +103,10 @@ def refs_in_class(data):
             owner = pool[pool[entry[1]][1]][1]
             nat = pool[entry[2]]
             out.append((entry[0], owner, pool[nat[1]][1], pool[nat[2]][1]))
+        elif entry and entry[0] == "class":
+            name = class_name(pool[entry[1]][1])
+            if name is not None:
+                out.append(("class", name, None, None))
     return out
 
 
@@ -112,7 +131,8 @@ def main():
     ap.add_argument("--min-sdk", type=int, default=29)
     ap.add_argument("--sdk-platform", default="36")
     args = ap.parse_args()
-    db = pathlib.Path(os.environ["ANDROID_HOME"]) / "platforms" / f"android-{args.sdk_platform}" / "data" / "api-versions.xml"
+    sdk = os.environ.get("ANDROID_HOME") or os.environ["ANDROID_SDK_ROOT"]
+    db = pathlib.Path(sdk) / "platforms" / f"android-{args.sdk_platform}" / "data" / "api-versions.xml"
     api = load_api(db)
     problems, classes = set(), 0
     for module in MODULES:
@@ -125,11 +145,15 @@ def main():
             for kind, owner, name, desc in refs_in_class(path.read_bytes()):
                 if owner.startswith("[") or not owner.startswith(CHECKED_PREFIXES) or owner in DESUGARED:
                     continue
-                key = name if kind == "field" else name + desc
                 where = f"{path.relative_to(ROOT)}"
                 if owner not in api:
                     problems.add(f"MISSING class {owner} ({where})")
                     continue
+                if kind == "class":
+                    if api[owner][0] > args.min_sdk:
+                        problems.add(f"NEWAPI {api[owner][0]} class {owner} ({where})")
+                    continue
+                key = name if kind == "field" else name + desc
                 level = lookup(api, owner, key)
                 if level is None and owner in HIDDEN_SUPER:
                     continue

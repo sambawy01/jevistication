@@ -3,9 +3,12 @@ import org.jetbrains.kotlin.gradle.plugin.mpp.apple.XCFramework
 
 plugins {
     kotlin("multiplatform")
-    // Loupe for Android (docs/ANDROID-PLAN.md): an Android library target beside JVM and iOS.
-    id("com.android.library")
 }
+
+// Loupe for Android (docs/ANDROID-PLAN.md): an Android library target beside JVM and iOS, only where
+// settings.gradle.kts found an Android SDK (it says so when it did not).
+val androidHost = gradle.extra["loupe.android"] as Boolean
+if (androidHost) apply(plugin = "com.android.library")
 
 repositories {
     mavenCentral()
@@ -90,9 +93,11 @@ kotlin {
     // A JVM target keeps the module an ordinary participant in `./gradlew build` on Linux CI.
     jvm()
     // Loupe for Android: :android-app depends on this module as the iPhone app does on LoupeKit.
-    androidTarget {
-        compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_17)
+    if (androidHost) {
+        androidTarget {
+            compilerOptions {
+                jvmTarget.set(JvmTarget.JVM_17)
+            }
         }
     }
 
@@ -168,15 +173,17 @@ kotlin {
     }
 }
 
-android {
-    namespace = "dev.loupe.kit"
-    compileSdk = 36
-    defaultConfig {
-        minSdk = 29
-    }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+if (androidHost) {
+    extensions.configure<com.android.build.api.dsl.LibraryExtension> {
+        namespace = "dev.loupe.kit"
+        compileSdk = 36
+        defaultConfig {
+            minSdk = 29
+        }
+        compileOptions {
+            sourceCompatibility = JavaVersion.VERSION_17
+            targetCompatibility = JavaVersion.VERSION_17
+        }
     }
 }
 

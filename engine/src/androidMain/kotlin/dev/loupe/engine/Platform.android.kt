@@ -4,10 +4,14 @@ import java.security.MessageDigest
 import java.text.Normalizer
 
 /*
- * Android actuals. The rule is "the same answers as the iPhone and Loupe Station on every phone",
- * so wherever the JVM actual leans on data that varies with the device (ICU's Unicode version,
- * the user's locale), Android takes the portable implementation iOS already uses, which the
- * jvmTest parity tests pin to the JDK. Only SHA-256 and NFKC come from the platform.
+ * Android actuals. The aim is the iPhone's and Loupe Station's answers on every phone, so wherever
+ * the JVM actual leans on data that varies with the device (ICU's Unicode version, the user's
+ * locale), Android takes the portable implementation iOS already uses, which the jvmTest parity
+ * tests pin to the JDK. SHA-256 and NFKC come from the platform.
+ *
+ * That aim is not met everywhere yet: NFKC here is the device's ICU, whose Unicode version varies
+ * by API level, and the shared regexes run on ICU, whose \d \s \w \b \p{..} and case folding
+ * differ from the JDK's and Kotlin/Native's. See docs/ANDROID-PLAN.md, "Known parity gaps" (B1, B2).
  */
 
 /** `MessageDigest`, as on the JVM: SHA-256 is fixed by the standard, so there is nothing to vary. */
@@ -21,7 +25,8 @@ internal actual fun bundledPublicSuffixListSha256(): String = PslEmbedded.SHA256
 
 /**
  * Android's `java.net.IDN` is ICU's IDNA, whose results depend on the device's Unicode version; the
- * portable IDNA 2003 port (as on iOS) keeps every phone on one answer.
+ * portable IDNA 2003 port (as on iOS) follows the JDK's rules instead. Its NFKC step is still the
+ * device's (docs/ANDROID-PLAN.md, "Known parity gaps", B2).
  */
 internal actual fun idnaToAscii(label: String): String? =
     Idna.toAsciiLabel(label) { Normalizer.normalize(it, Normalizer.Form.NFKC) }

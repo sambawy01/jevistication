@@ -2,7 +2,8 @@
 <!-- Loupe for Android. A0 asks for no permissions: no network, no storage, no notifications.
      Backups are off (allowBackup and fullBackupContent for Android 10-11, dataExtractionRules for 12+): the ledger and
      judgments stay on the phone (PRODUCT.md). -->
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="false"
@@ -21,5 +22,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- No font download: androidx.emoji2 (pulled in by Compose) registers EmojiCompatInitializer
+             with androidx.startup, which asks Google Play services' font provider for the Noto
+             Color Emoji font at first launch. Loupe makes no network requests it does not explain,
+             so the initializer is removed and emoji render with the phone's own system font. The
+             other startup initializers (lifecycle, profile installer) stay. androidx.startup is a
+             runtime-only dependency of Compose, hence lint's MissingClass is ignored here. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:ignore="MissingClass"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+                tools:node="remove" />
+        </provider>
     </application>
 </manifest>

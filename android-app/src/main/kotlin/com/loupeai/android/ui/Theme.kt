@@ -1,5 +1,6 @@
 package com.loupeai.android.ui
 
+import android.util.Log
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -56,11 +57,25 @@ object Palette {
     val track = Color(0xFF1A2A55)
     val accentSoft = Color(0xFF2F6BFF).copy(alpha = 0.18f)
 
-    /** A verdict level's text colour and tint: the formula's three levels, never "safe" wording. */
-    fun level(level: String): Pair<Color, Color> = when (level) {
+    /**
+     * A verdict level's text colour and tint: the formula's three levels, never "safe" wording.
+     *
+     * Fails safe: only an explicit "safe" gets the green; a level this build does not know (a
+     * newer formula, a typo, an empty string) is shown as caution, never as all clear, and reported
+     * through [onUnknown] (a debug log line by default).
+     */
+    fun level(level: String, onUnknown: (String) -> Unit = ::logUnknownLevel): Pair<Color, Color> = when (level) {
         "danger" -> dangerText to dangerSoft
         "caution" -> warnText to warnSoft
-        else -> okText to okSoft
+        "safe" -> okText to okSoft
+        else -> {
+            onUnknown(level)
+            warnText to warnSoft
+        }
+    }
+
+    private fun logUnknownLevel(level: String) {
+        Log.d("LoupePalette", "unknown verdict level \"$level\": shown as caution")
     }
 }
 

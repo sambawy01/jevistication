@@ -117,12 +117,13 @@ sealed interface Baseline {
         /** What the pattern means, in words; a regex is not a description. */
         val meaning: String,
     ) : Baseline {
-        init {
-            // Compiled eagerly so a bad pattern fails when the template is defined, not mid-sweep.
-            Regex(pattern)
-        }
-
-        private val regex by lazy { Regex(pattern, RegexOption.IGNORE_CASE) }
+        // Compiled eagerly, exactly as [answer] uses it, so a bad pattern fails when the judgment is
+        // defined or loaded, never mid-sweep. A pattern can come from the user's judgments.json, and
+        // the regex engines differ (ICU on Android rejects some patterns the JDK and Kotlin/Native
+        // accept), so the failure is an IllegalArgumentException that says which pattern and why:
+        // JudgmentCodec.decodeFile skips that one judgment, and an authoring screen can ask
+        // [problem] first. A valid pattern behaves exactly as before.
+        private val regex: Regex = compile(pattern)
 
         override val description: String
             get() = "'$whenFound' if the text contains $meaning, otherwise '$otherwise'"
@@ -136,6 +137,27 @@ sealed interface Baseline {
 
         override fun relabel(labels: Map<String, String>): Baseline =
             copy(whenFound = labels[whenFound] ?: whenFound, otherwise = labels[otherwise] ?: otherwise)
+
+        companion object {
+            /** Why [pattern] cannot be a baseline on this platform's regex engine; null when it can. */
+            fun problem(pattern: String): String? = try {
+                compile(pattern)
+                null
+            } catch (e: IllegalArgumentException) {
+                e.message
+            }
+
+            private fun compile(pattern: String): Regex = try {
+                Regex(pattern, RegexOption.IGNORE_CASE)
+            } catch (e: Exception) {
+                // PatternSyntaxException on the JVM and Android, IllegalArgumentException on Kotlin/Native.
+                throw IllegalArgumentException(
+                    "baseline pattern \"$pattern\" is not a valid regular expression here: " +
+                        (e.message?.lineSequence()?.firstOrNull() ?: e.toString()),
+                    e,
+                )
+            }
+        }
     }
 
     /**

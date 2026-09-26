@@ -10,8 +10,10 @@ plugins {
     // Loupe for Android (docs/ANDROID-PLAN.md). AGP 8.9.1 is the first release that compiles against
     // API 36, which Google Play requires of new apps and updates from 2026-08-31; 8.9.3 is that
     // line's last patch. It needs Gradle >= 8.11.1 (the wrapper is 8.14.3). Kotlin 2.1.0 is tested by
-    // JetBrains up to AGP 8.7.2 only, so gradle.properties silences its "newer AGP" notice; the full
-    // gate (check, the APK, the XCFramework) is the evidence that the pair works.
+    // JetBrains up to AGP 8.7.2 only; this pair prints no compatibility notice (checked in the A0
+    // build logs), so nothing is silenced. The full gate (check, the APKs, the XCFramework) is the
+    // evidence that the pair works. The Android plugins are applied only where settings.gradle.kts
+    // found an Android SDK; resolving them here needs Google's Maven repository, not an SDK.
     id("com.android.library") version "8.9.3" apply false
     id("com.android.application") version "8.9.3" apply false
     kotlin("android") version "2.1.0" apply false

@@ -8,8 +8,9 @@ import dev.loupe.templates.TemplateLibrary
 
 /**
  * What the A0 home screen shows: proof that the shared Kotlin (engine, templates, loupe-kit) runs on
- * the phone. Everything here is a pure, deterministic call: no model, no network, no files, so the
- * same answers come out on the phone, in the unit tests, on the iPhone and on Loupe Station.
+ * the phone. Everything here is a pure, deterministic call: no model, no network, no files. For
+ * these inputs the phone gives the answers the unit tests, the iPhone and Loupe Station give; that
+ * is not yet true of every input on every phone (docs/ANDROID-PLAN.md, "Known parity gaps").
  *
  * The calls are chosen to cross each Android `actual` the app depends on: the embedded Public Suffix
  * List and IDNA (engine), and NFKC through the homograph check (loupe-kit).
