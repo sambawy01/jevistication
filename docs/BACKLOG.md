@@ -336,8 +336,21 @@ hostile messages blocked and 0 of 49 false positives on its own set).
 which PRODUCT.md §7 keeps out of the Play build today, so this needs an owner decision on a declared
 parental-control accessibility use. iOS: probably not possible beyond Screen Time controls.
 
-**Open questions.** Free or paid? How the parent's alert travels from the child's phone to the
-parent's without a Loupe server (PRODUCT.md §4: never sends data to our servers). Where a labelled
+**Parent alerts: decided (owner, 2026-09-26) — an end-to-end encrypted relay.** Recorded as a
+scoped exception in PRODUCT.md §4: for this feature only, the promise is "no server can read
+anything" instead of "no Loupe server".
+
+- The child's device encrypts each alert to the paired parent device's public key; pairing is in
+  person (for example, a QR code carrying a key exchange).
+- The payload is content-free: category, confidence, timestamp and at most the app name. Never
+  message text.
+- Transport: a push service (FCM and/or APNs, or a minimal Loupe relay) that carries only ciphertext
+  it cannot read and stores nothing beyond short-lived delivery queues.
+- Obligations: the privacy policy discloses the relay; key rotation and unpairing; replay
+  protection; and the relay necessarily sees metadata (timing and device tokens), which is stated.
+
+**Open questions.** **Owner decision still open:** a declared parental-control accessibility use in
+the Play build (PRODUCT.md §7 keeps accessibility out of it today). Free or paid? Where a labelled
 grooming set comes from, ethically.
 
 ---

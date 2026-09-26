@@ -179,10 +179,23 @@ parental-control accessibility use would change that line, so it needs an owner 
    GDPR-K if sold outside Egypt.
 5. **A measured false-positive rate** on a labelled set before any launch claim.
 
-**Parent alerts without our servers.** PRODUCT.md §4 rules out routing data through Loupe servers.
-Options to weigh: pairing the two phones directly, the family's own iCloud / Google account, or a
-content-free push relay that carries only category, confidence and time. Open question for the owner.
+**Parent alerts: an end-to-end encrypted relay (owner decision, 2026-09-26).** A scoped exception in
+PRODUCT.md §4: for this feature only, "no server can read anything" replaces "no Loupe server".
+
+- The child's device encrypts each alert to the paired parent device's public key; pairing is in
+  person (for example, a QR code carrying a key exchange).
+- The payload is content-free: category, confidence, timestamp and at most the app name. Never
+  message text.
+- Transport: FCM (and APNs for an iPhone parent), or a minimal Loupe relay, carrying only ciphertext
+  it cannot read and storing nothing beyond short-lived delivery queues.
+- Obligations: the privacy policy discloses the relay; key rotation and unpairing; replay
+  protection (for example, a per-pair counter or nonce checked on the parent device); and it is
+  stated that the relay necessarily sees metadata (timing and device tokens).
+
+**Still open for the owner:** the declared parental-control accessibility use in the Play build
+(see *Reading* above).
 
 **Milestone.** A10, after A9 (the first Play release) and the legal review: *done when* the four
 questions run on a fixture set with measured precision and false-positive rate, the Play
-declarations are filed, and the consent screens have been reviewed.
+declarations are filed, the consent screens have been reviewed, and the encrypted relay passes
+pairing, unpairing, key-rotation and replay tests with no plaintext at the relay.

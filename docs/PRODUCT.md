@@ -214,6 +214,22 @@ This is the spine. Each line is a promise, not a default.
 The last two claims are distinct and we never blur them: *"never leaves your device"* is true of
 photos, files and SMS. *"We never see it"* is what is true of Gmail and Sheets.
 
+**Scoped exception: kids' chat protection parent alerts** *(owner decision, 2026-09-26;
+BACKLOG.md BL-16; planned, not built).* For this one feature, and only this one, the promise changes
+from *"no Loupe server"* to ***"no server can read anything"***. Everything else is unchanged: the free
+tier, mail and file paths keep *"nothing leaves the device"*, and connected accounts keep *"we never
+see it"*.
+
+- **End-to-end encrypted.** The child's device encrypts each alert to the paired parent device's
+  public key. Pairing is in person (for example, a QR code carrying a key exchange).
+- **Content-free.** An alert carries the category, the confidence, the time and at most the app
+  name. Never message text.
+- **The relay reads nothing.** A push service (FCM and/or APNs, or a minimal Loupe relay) carries
+  only ciphertext it cannot decrypt, and stores nothing beyond short-lived delivery queues.
+- **Obligations that come with it:** the privacy policy discloses the relay; key rotation and
+  unpairing are supported; alerts are protected against replay; and it is stated plainly that the
+  relay necessarily sees metadata (timing and device tokens), even though it cannot read content.
+
 ---
 
 ## 4a. Online helper rules
