@@ -199,7 +199,8 @@ class AgentRunner(
     private val config: AgentConfig,
     private val hasKey: Boolean,
     /**
-     * What the person has paid for. [AgentTier.FREE] by default: an entitlement that defaults to
+     * What the person has paid for. [AgentTier.FREE] by default, which already includes every local
+     * feature; only the AI assistant needs [AgentTier.ASSISTANT]. An entitlement that defaults to
      * the paid tier is a bug waiting to be a refund.
      */
     private val tier: AgentTier = AgentTier.FREE,
@@ -210,14 +211,14 @@ class AgentRunner(
      */
     val readiness: AgentReadiness
         get() = if (!tier.allows(AgentCapability.ASK_PROVIDER)) {
-            AgentReadiness.NeedsSetup("The agent tier is not included in your plan.")
+            AgentReadiness.NeedsSetup("The AI assistant is not included in your plan.")
         } else {
             config.readiness(hasKey)
         }
 
     val isReady: Boolean get() = readiness.isReady
 
-    /** Whether the device may prepare actions on its own — the middle tier, which costs nothing. */
+    /** Whether the device may prepare actions on its own. Free: it needs no provider and costs nothing. */
     val canActOnDevice: Boolean get() = tier.allows(AgentCapability.ACT_ON_DEVICE)
 
     /** One line for the settings screen. */

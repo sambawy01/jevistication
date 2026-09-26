@@ -13,7 +13,7 @@ class AgentWireTest {
             as AgentConfig.UrlCheck.Good).endpoint
 
     @Test
-    fun `the request body is the Swift side's bytes, with keys sorted`() {
+    fun `the request body is the Swift side's bytes - with keys sorted`() {
         val body = AgentWire.requestBody(listOf(AgentMessage("user", "hi")), "deepseek-chat", 1_200)
         assertEquals(
             """{"max_tokens":1200,"messages":[{"content":"hi","role":"user"}],"model":"deepseek-chat",""" +
@@ -29,12 +29,12 @@ class AgentWireTest {
     }
 
     @Test
-    fun `the schema instruction names json, which DeepSeek needs to honour json mode`() {
+    fun `the schema instruction names json - which DeepSeek needs to honour json mode`() {
         assertTrue(AgentWire.schemaInstruction("{}").contains("JSON"), "the word json must appear")
     }
 
     @Test
-    fun `no endpoint means no call, which is the off switch`() {
+    fun `no endpoint means no call - which is the off switch`() {
         assertNull(AgentWire.call(null, TEST_KEY, "m", "p", listOf(AgentMessage("user", "x")), 10))
     }
 
@@ -78,14 +78,14 @@ class AgentWireTest {
     }
 
     @Test
-    fun `a non-json answer says the base URL may be wrong, which is what it usually means`() {
+    fun `a non-json answer says the base URL may be wrong - which is what it usually means`() {
         val r = AgentWire.readCompletion(AgentHttpResponse(200, "<html>404</html>"), "m")
         val f = (r.exceptionOrNull() as AgentWire.WireError).failure
         assertTrue(f is AgentFailure.BadResponse && f.message.contains("OpenAI-compatible"), f.message)
     }
 
     @Test
-    fun `json of the wrong shape is reported, not crashed on`() {
+    fun `json of the wrong shape is reported - not crashed on`() {
         for (body in listOf("""{"ok":true}""", """{"choices":[]}""", """{"choices":[{}]}""")) {
             val r = AgentWire.readCompletion(AgentHttpResponse(200, body), "m")
             assertTrue(r.isFailure, "\"$body\" should fail")
@@ -143,7 +143,7 @@ class AgentWireTest {
     }
 
     @Test
-    fun `extracted json is the object, not a guess at it`() {
+    fun `extracted json is the object - not a guess at it`() {
         val o = AgentWire.extractJson("""{"actions":[{"type":"note","headline":"x"}]}""")
         assertNotNull(o)
         assertEquals(1, (o["actions"] as JsonValue.Arr).items.size)

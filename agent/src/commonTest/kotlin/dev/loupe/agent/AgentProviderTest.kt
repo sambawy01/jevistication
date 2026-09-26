@@ -16,7 +16,7 @@ class AgentProviderTest {
     }
 
     @Test
-    fun `a hosted provider needs a key, and says so`() {
+    fun `a hosted provider needs a key - and says so`() {
         val c = readyConfig()
         val r = c.readiness(hasKey = false)
         assertTrue(r is AgentReadiness.NeedsSetup && r.problem == "Add your key.", "got $r")
@@ -51,7 +51,7 @@ class AgentProviderTest {
     }
 
     @Test
-    fun `a url carrying a credential, a query or a fragment is refused`() {
+    fun `a url carrying a credential - a query or a fragment is refused`() {
         val cases = listOf(
             "https://user:pass@api.deepseek.com/v1",
             "https://api.deepseek.com/v1?key=abc",
@@ -90,7 +90,7 @@ class AgentProviderTest {
     }
 
     @Test
-    fun `a ready config reports on, its provider, and Online`() {
+    fun `a ready config reports on - its provider - and Online`() {
         assertEquals("On · DeepSeek · Online", readyConfig().statusLine(hasKey = true))
     }
 }

@@ -35,7 +35,7 @@ class AgentReviewTest {
     }
 
     @Test
-    fun `an agent action takes no parameters, so it cannot be steered into doing something else`() {
+    fun `an agent action takes no parameters - so it cannot be steered into doing something else`() {
         for (action in all) {
             val p = AgentReview.proposal(action)
             assertEquals(emptyMap(), p.actionParams)
@@ -44,13 +44,13 @@ class AgentReviewTest {
     }
 
     @Test
-    fun `the four action types are exactly the agent's, and none of them spends`() {
+    fun `the four action types are exactly the agent's - and none of them spends`() {
         val types = all.map { AgentReview.proposal(it).actionType }.toSet()
         assertEquals(setOf("agent.remind", "agent.calendar", "agent.draft", "agent.note"), types)
     }
 
     @Test
-    fun `the summary names the provider, says Online, and says nothing has happened yet`() {
+    fun `the summary names the provider - says Online - and says nothing has happened yet`() {
         val s = AgentReview.summaryFor(remind())
         assertTrue(s.contains("DeepSeek"), s)
         assertTrue(s.contains("(Online)"), s)
@@ -66,7 +66,7 @@ class AgentReviewTest {
     }
 
     @Test
-    fun `every proposal carries the provider and the evidence, because neither may be dropped`() {
+    fun `every proposal carries the provider and the evidence - because neither may be dropped`() {
         for (action in all) {
             val p = AgentReview.proposal(action)
             assertEquals("DeepSeek (Online)", p.proposal["origin"])
@@ -76,7 +76,7 @@ class AgentReviewTest {
     }
 
     @Test
-    fun `the source key is content-derived, so the same action is never queued twice`() {
+    fun `the source key is content-derived - so the same action is never queued twice`() {
         val a = AgentReview.proposal(remind())
         val b = AgentReview.proposal(remind())
         assertEquals(a.sourceKey, b.sourceKey)

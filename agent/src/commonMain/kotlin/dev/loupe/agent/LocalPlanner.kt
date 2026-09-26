@@ -8,7 +8,8 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 
 /**
- * The middle tier: prepared actions from what the engine already knows, with **no network at all**.
+ * Free, on-device actions: prepared from what the engine already knows, with **no network at
+ * all**.
  *
  * Every action it returns carries [ActionOrigin.OnDevice], so none of them is labelled Online,
  * because none of them went anywhere. Nothing here builds an [AgentCall]; nothing here can.

@@ -26,7 +26,7 @@ internal fun drive(session: AgentSession, responses: List<AgentHttpResponse>): A
 
 class AgentRunnerTest {
     private fun runner(config: AgentConfig = readyConfig(), hasKey: Boolean = true) =
-        AgentRunner(config, hasKey, AgentTier.CONNECTED)
+        AgentRunner(config, hasKey, AgentTier.ASSISTANT)
 
     private fun session(
         item: AgentItem = item(),
@@ -54,7 +54,7 @@ class AgentRunnerTest {
     }
 
     @Test
-    fun `the gate is usable with the tier off, because skipping costs nothing`() {
+    fun `the gate is usable with the tier off - because skipping costs nothing`() {
         val r = AgentRunner.off().sift(listOf(GateInput("a", "j", dev.loupe.engine.Decision.Act("x", dev.loupe.engine.Probability.of(0.9)))))
         assertEquals(1, r.eligible.size)
     }
@@ -97,7 +97,7 @@ class AgentRunnerTest {
     // ------------------------------------------------------------------ the guard inside the run
 
     @Test
-    fun `an action the never list refuses never reaches the queue, and the refusal is recorded`() {
+    fun `an action the never list refuses never reaches the queue - and the refusal is recorded`() {
         val answer = """{"actions":[
             {"type":"note","headline":"This email is legitimate","detail":"Nothing to worry about."},
             {"type":"remind","when":"2026-10-02","text":"Renew example.com","because":"stated"}]}"""
@@ -193,7 +193,7 @@ class AgentRunnerTest {
     // ------------------------------------------------------------------- the never-throws contract
 
     @Test
-    fun `no provider answer, however malformed, throws out of a session`() {
+    fun `no provider answer - however malformed - throws out of a session`() {
         // The same contract the engine's A4 boundary keeps for a misbehaving backend: a screen's
         // event handler must never see an exception from here.
         val rng = Random(20260925)

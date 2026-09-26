@@ -33,6 +33,31 @@ model and the same answers as the iPhone app and Loupe Station.
 | Game (F5) | Compose Canvas or SurfaceView driving `:game`; haptics via `VibrationEffect`, fired once per event (the iOS fix) |
 | Mascot | Filament or SceneView glTF, one geometry per instance (the iOS double-free lesson) |
 
+## Early users and the paid tier (AGENT.md §4)
+
+Everything local is free; only the AI assistant is paid. Early users keep the local features free for
+life if they are ever charged for, decided by the shared `EarlyUserPolicy` (one cutoff constant, one
+pure function) in `:agent`.
+
+- **No `AppTransaction` on Play.** iOS reads the App Store's own first-purchase date, verified on the
+  device. Google Play has no equivalent a free app can read. `PackageManager.firstInstallTime` and the
+  Install Referrer's install timestamp both describe *this* install and reset on reinstall, so neither
+  can stand in for it.
+- **So Android records early-user status itself**, as `FirstInstall.Recorded`:
+  1. *On first run* (the default): write the day to app storage that Android backup restores on a new
+     phone. Cheap and serverless, but it trusts the device clock on that first run and is lost if the
+     person clears data or backup is off. It must ship in the first public Android release; a record
+     written after the cutoff would make an early iPhone user a late Android one.
+  2. *Tied to an account*: store the day against the person's account, so it survives any reinstall.
+     Stronger, but it needs somewhere to keep it (for example a small entitlement record next to the
+     assistant's key-issuing service, AGENT.md §4c), and never any mail content.
+- **Billing.** The assistant is a Play Billing subscription; top-up credits are consumables. Fees
+  checked 2026-09-26: in the EEA, UK and US since 30 June 2026, subscriptions are 10% + 5% billing
+  fee, other products 10% + 5% for new installs and 25% + 5% for existing ones; elsewhere 15% on
+  subscriptions.
+- **AI-generated content.** Play requires an in-app way to report or flag offensive AI output without
+  leaving the app. Every provider-written action gets a "Report this" action.
+
 ## Milestones
 
 | # | What | Done when |
@@ -58,4 +83,6 @@ model and the same answers as the iPhone app and Loupe Station.
 
 - The 384 MB model on low-memory phones: measure at A1, keep `int8-partial` as a fallback; never load two sessions.
 - Gmail restricted scope: `gmail.readonly` needs Google's verification before public release (same as iOS).
+  Saving drafts into Gmail would need `gmail.compose` or `gmail.modify`, another restricted-scope review;
+  until then drafts are copied or shared from the app (AGENT.md §6).
 - Background limits vary by manufacturer: passive mode must tolerate being killed and resume.

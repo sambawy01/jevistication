@@ -27,7 +27,7 @@ class LocalPlannerTest {
         dateWasAmbiguous = ambiguous,
     )
 
-    // ---------------------------------------------------------------------------- the middle tier
+    // ------------------------------------------------------------------ free, on-device actions
 
     @Test
     fun `an expiry becomes a reminder that never went anywhere`() {
@@ -40,7 +40,7 @@ class LocalPlannerTest {
     }
 
     @Test
-    fun `the evidence says the date is a fact of the item, not a model answer`() {
+    fun `the evidence says the date is a fact of the item - not a model answer`() {
         val a = LocalPlanner.fromExpiry(alert(), today)
         assertTrue(a.evidence.mechanical)
         assertEquals("expiry-radar", a.evidence.judgmentId)
@@ -68,7 +68,7 @@ class LocalPlannerTest {
     }
 
     @Test
-    fun `a dormant subscription becomes a note, never a cancellation`() {
+    fun `a dormant subscription becomes a note - never a cancellation`() {
         val charge = RecurringCharge(
             merchant = "Streaming Co",
             cadence = Cadence.MONTHLY,
@@ -126,8 +126,8 @@ class LocalPlannerTest {
     //                                                                     never list still runs
 
     @Test
-    fun `the local tier needs no provider at all`() {
-        val runner = AgentRunner(AgentConfig(), hasKey = false, tier = AgentTier.LOCAL)
+    fun `the free tier acts on the device and needs no provider at all`() {
+        val runner = AgentRunner(AgentConfig(), hasKey = false, tier = AgentTier.FREE)
         assertTrue(runner.canActOnDevice)
         assertTrue(!runner.isReady, "it cannot ask a provider, and does not need to")
         val report = runner.planLocally(LocalPlanner.plan(expiries = listOf(alert()), today = today))
@@ -136,9 +136,10 @@ class LocalPlannerTest {
     }
 
     @Test
-    fun `the free tier prepares nothing locally either`() {
+    fun `the shipped default prepares local actions too`() {
+        // Local is free, so the runner that can never send anything still plans on the device.
         val report = AgentRunner.off().planLocally(LocalPlanner.plan(expiries = listOf(alert()), today = today))
-        assertEquals(0, report.allowed.size)
+        assertEquals(1, report.allowed.size)
         assertEquals(0, report.blocked.size)
     }
 
@@ -146,7 +147,7 @@ class LocalPlannerTest {
     fun `the never list runs over a local plan too`() {
         // The rules are about what Loupe shows a person, not about who wrote it: a locally prepared
         // note that quoted a card number found in a document would be just as wrong.
-        val runner = AgentRunner(AgentConfig(), hasKey = false, tier = AgentTier.LOCAL)
+        val runner = AgentRunner(AgentConfig(), hasKey = false, tier = AgentTier.FREE)
         val report = runner.planLocally(
             listOf(
                 note(detail = "The document shows 4012 8888 8888 1881.", origin = ActionOrigin.OnDevice),
@@ -159,7 +160,7 @@ class LocalPlannerTest {
 
     @Test
     fun `a local plan cannot smuggle in something a provider wrote`() {
-        val runner = AgentRunner(AgentConfig(), hasKey = false, tier = AgentTier.LOCAL)
+        val runner = AgentRunner(AgentConfig(), hasKey = false, tier = AgentTier.FREE)
         val report = runner.planLocally(listOf(remind(origin = DEEPSEEK)))
         assertEquals(0, report.allowed.size)
         assertEquals(NeverRule.LABELLED, report.blocked.single().rule)
@@ -168,14 +169,36 @@ class LocalPlannerTest {
 
     @Test
     fun `the tiers allow exactly what they say they do`() {
-        assertEquals(setOf(AgentCapability.EXPLAIN), AgentTier.FREE.allowed)
         assertEquals(
             setOf(AgentCapability.EXPLAIN, AgentCapability.ACT_ON_DEVICE),
-            AgentTier.LOCAL.allowed,
+            AgentTier.FREE.allowed,
         )
-        assertEquals(AgentCapability.entries.toSet(), AgentTier.CONNECTED.allowed)
-        assertTrue(!AgentTier.LOCAL.allows(AgentCapability.ASK_PROVIDER))
-        assertEquals(AgentTier.LOCAL, AgentTier.parse("local"))
+        assertEquals(AgentCapability.entries.toSet(), AgentTier.ASSISTANT.allowed)
+        assertTrue(!AgentTier.FREE.allows(AgentCapability.ASK_PROVIDER))
+        assertTrue(!AgentTier.FREE.isPaid)
+        assertTrue(AgentTier.ASSISTANT.isPaid)
+    }
+
+    @Test
+    fun `every local capability is free and only provider-backed ones are paid`() {
+        // The pricing rule itself (docs/AGENT.md §4), checked over every capability, so one added
+        // later cannot slip into the wrong tier.
+        for (capability in AgentCapability.entries) {
+            assertEquals(capability.needsProvider, capability.isPaid, "$capability")
+            assertEquals(!capability.needsProvider, AgentTier.FREE.allows(capability), "$capability")
+            assertTrue(AgentTier.ASSISTANT.allows(capability), "$capability")
+        }
+        assertEquals(setOf(AgentCapability.ASK_PROVIDER), AgentCapability.entries.filter { it.isPaid }.toSet())
+        // Exactly one paid tier, and it is the assistant.
+        assertEquals(listOf(AgentTier.ASSISTANT), AgentTier.entries.filter { it.isPaid })
+    }
+
+    @Test
+    fun `a stored code parses - and a retired one never grants the paid tier`() {
+        assertEquals(AgentTier.FREE, AgentTier.parse("free"))
+        assertEquals(AgentTier.ASSISTANT, AgentTier.parse("assistant"))
+        assertEquals(null, AgentTier.parse("local"))
+        assertEquals(null, AgentTier.parse("connected"))
         assertEquals(null, AgentTier.parse("enterprise"))
     }
 }

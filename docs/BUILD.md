@@ -1348,6 +1348,18 @@ their acceptance criteria are met; entries here record increments toward them.
   **Not done:** no model has been scored on it. Laya's weights are on Hugging Face, which this
   container's egress proxy denies, so the loader, the protocol and the floors are proven and the
   model run belongs on a machine that has the weights.
+- **2026-09-26 — Two tiers: everything local free, the AI assistant paid (`agent-tier`).** Owner
+  decision, replacing the three-rung ladder. `AgentCapability` now says whether it `needsProvider`,
+  and `AgentTier` (`FREE`, `ASSISTANT`) derives what each tier allows from that, so every local
+  capability is free and only the provider-backed one is paid, checked over every capability by a
+  test. Retired codes `local` and `connected` parse to nothing, so a stale code cannot grant the paid
+  tier. New `EarlyUserPolicy`: one cutoff constant (unset, so everyone is early) and a pure
+  `keepsLocalFree(FirstInstall)`, fed by `AppTransaction` on iOS and a first-run record on Android.
+  AGENT.md §4 rewritten (tiers, grandfathering, store rules checked against the live Apple and Google
+  pages, where the provider key comes from); §6 records the hard constraint that the assistant goes
+  straight from the device to the provider, never through a Loupe relay or model server, and that
+  drafts stay in the app until a Gmail compose scope is reviewed. Test names with commas renamed so
+  the Kotlin/Native test compile passes. 145 tests in `:agent`, green.
 
 ## Where the build stands
 

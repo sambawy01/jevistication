@@ -21,7 +21,7 @@ class ActionGuardTest {
     // ---------------------------------------------------------------- an ordinary action passes
 
     @Test
-    fun `a plain reminder, note, draft and event are allowed`() {
+    fun `a plain reminder - note - draft and event are allowed`() {
         for (a in listOf(remind(), note(), draft(), event())) {
             val v = ActionGuard.check(a)
             assertTrue(v is GuardVerdict.Allowed, "${a::class.simpleName} should pass, got $v")
@@ -206,7 +206,7 @@ class ActionGuardTest {
     }
 
     @Test
-    fun `an on-device action needs no provider, because nothing went anywhere`() {
+    fun `an on-device action needs no provider - because nothing went anywhere`() {
         val v = ActionGuard.check(remind(origin = ActionOrigin.OnDevice))
         assertTrue(v is GuardVerdict.Allowed, "got $v")
         assertTrue(!ActionOrigin.OnDevice.isOnline)
@@ -216,7 +216,7 @@ class ActionGuardTest {
     // ------------------------------------------------------------------------------- trimming
 
     @Test
-    fun `an over-long action is trimmed to the queue's limits, not rejected`() {
+    fun `an over-long action is trimmed to the queue's limits - not rejected`() {
         val long = draft(body = "a".repeat(40_000), subject = "s".repeat(900))
         val out = allowed(long) as PreparedAction.DraftReply
         assertEquals(ActionGuard.MAX_BODY, out.body.length)

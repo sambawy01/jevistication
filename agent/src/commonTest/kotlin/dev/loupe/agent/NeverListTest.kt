@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  */
 class NeverListTest {
     @Test
-    fun `the never list is complete, with the promises from the spec`() {
+    fun `the never list is complete - with the promises from the spec`() {
         assertEquals(
             listOf(
                 "never_spends",
@@ -31,13 +31,13 @@ class NeverListTest {
     }
 
     @Test
-    fun `spending and acting without approval are structural, not checks that could be skipped`() {
+    fun `spending and acting without approval are structural - not checks that could be skipped`() {
         assertTrue(NeverRule.SPEND.structural, "no PreparedAction may be able to move money")
         assertTrue(NeverRule.APPROVAL.structural, "the queue must be the only output")
     }
 
     @Test
-    fun `there are four prepared action types, and none of them can move money or send anything`() {
+    fun `there are four prepared action types - and none of them can move money or send anything`() {
         // A new variant is a deliberate act: adding one fails this test until someone has decided
         // what it may do, written its guard case, and registered its review kind.
         val variants = PreparedAction::class.let {
@@ -57,7 +57,7 @@ class NeverListTest {
     }
 
     @Test
-    fun `the agent has no Backend implementation, because a hosted judgment is forbidden`() {
+    fun `the agent has no Backend implementation - because a hosted judgment is forbidden`() {
         // Backend.kt: "There is deliberately no hosted implementation. A network call breaks the
         // offline guarantee the product rests on, so the interface has no place to put one."
         // Nothing in this module implements it, and the workflow's output cannot become a
@@ -82,7 +82,8 @@ class NeverListTest {
     fun `the shipped default sends nothing`() {
         val off = AgentRunner.off()
         assertTrue(!off.isReady)
-        assertTrue(!off.canActOnDevice, "the free tier prepares nothing")
+        // Sends nothing, but local actions are free, so the shipped default can still prepare them.
+        assertTrue(off.canActOnDevice, "on-device actions are in the free tier")
         assertEquals("Off · not included in your plan", off.statusLine)
         assertEquals(AgentReadiness.Off, AgentConfig().readiness(hasKey = true))
     }

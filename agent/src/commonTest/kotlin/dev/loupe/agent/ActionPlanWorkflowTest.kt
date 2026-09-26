@@ -20,13 +20,13 @@ class ActionPlanWorkflowTest {
     }
 
     @Test
-    fun `the prompt allows proposing nothing, so a model is not pushed into inventing an action`() {
+    fun `the prompt allows proposing nothing - so a model is not pushed into inventing an action`() {
         assertTrue(ActionPlanWorkflow.systemPrompt().contains("Proposing\nnothing is a good answer") ||
             ActionPlanWorkflow.systemPrompt().contains("Proposing nothing is a good answer"))
     }
 
     @Test
-    fun `the user turn carries the item and what the engine concluded, and nothing else`() {
+    fun `the user turn carries the item and what the engine concluded - and nothing else`() {
         val p = ActionPlanWorkflow.userPrompt(item(), evidence(), question = "Is this a renewal notice?")
         assertTrue(p.contains("Is this a renewal notice?"), p)
         assertTrue(p.contains("j-renewal answered"), p)
@@ -36,7 +36,7 @@ class ActionPlanWorkflowTest {
     }
 
     @Test
-    fun `the quoted thread is cut, so earlier mail is never sent`() {
+    fun `the quoted thread is cut - so earlier mail is never sent`() {
         val threaded = "Please renew.\n\nOn 1 September 2026, Ali wrote:\n> my card details are 4111 1111 1111 1111"
         val p = ActionPlanWorkflow.userPrompt(item(text = threaded), evidence())
         assertTrue(p.contains("Please renew."), p)
@@ -76,7 +76,7 @@ class ActionPlanWorkflowTest {
     }
 
     @Test
-    fun `an empty action list is valid, because proposing nothing is allowed`() {
+    fun `an empty action list is valid - because proposing nothing is allowed`() {
         assertEquals(emptyList(), ActionPlanWorkflow.validate(obj("""{"actions":[]}""")))
     }
 

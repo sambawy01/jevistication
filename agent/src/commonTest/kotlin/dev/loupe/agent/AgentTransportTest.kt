@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class AgentTransportTest {
-    private fun session() = AgentRunner(readyConfig(), hasKey = true, tier = AgentTier.CONNECTED)
+    private fun session() = AgentRunner(readyConfig(), hasKey = true, tier = AgentTier.ASSISTANT)
         .open(item(), evidence(), TEST_KEY, atIso = "2026-09-25T10:00:00Z")!!
 
     @Test
@@ -20,7 +20,7 @@ class AgentTransportTest {
     }
 
     @Test
-    fun `onCall sees each call before it is sent, which is where the preview is shown`() {
+    fun `onCall sees each call before it is sent - which is where the preview is shown`() {
         val seen = mutableListOf<String>()
         var answered = false
         session().runTo(
@@ -34,7 +34,7 @@ class AgentTransportTest {
     }
 
     @Test
-    fun `a transport that throws becomes an unreachable run, not an exception`() {
+    fun `a transport that throws becomes an unreachable run - not an exception`() {
         val run = session().runTo(AgentTransport { throw RuntimeException("connection reset") })
         assertTrue(!run.ok)
         assertTrue(run.failure is AgentFailure.Unreachable, run.failure?.message ?: "")
@@ -75,7 +75,7 @@ class AgentTransportTest {
     }
 
     @Test
-    fun `the delay grows, honours Retry-After, and is capped`() {
+    fun `the delay grows - honours Retry-After - and is capped`() {
         assertEquals(0.6, AgentRetry.delaySeconds(0))
         assertEquals(1.2, AgentRetry.delaySeconds(1))
         assertEquals(2.4, AgentRetry.delaySeconds(2))

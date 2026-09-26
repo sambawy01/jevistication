@@ -17,7 +17,7 @@ class FastDecisionsTest {
     // ------------------------------------------------------------------ the real shape parses
 
     @Test
-    fun `the committed sample parses into rows, heads and cases`() {
+    fun `the committed sample parses into rows - heads and cases`() {
         assertEquals(4, sample.rowCount)
         assertEquals(8, sample.cases.size, "1 + 4 + 2 + 1 head-instances")
         assertEquals(
@@ -53,7 +53,7 @@ class FastDecisionsTest {
     }
 
     @Test
-    fun `the item text survives, newlines and all`() {
+    fun `the item text survives - newlines and all`() {
         val email = sample.cases("is_phishing").single()
         assertTrue(email.text.contains("From: Lydia Harper"), email.text.take(60))
         assertTrue(email.text.contains('\n'), "the escaped newlines must decode")
@@ -81,7 +81,7 @@ class FastDecisionsTest {
     }
 
     @Test
-    fun `a multi-label head has no Choice, and says why`() {
+    fun `a multi-label head has no Choice - and says why`() {
         val e = assertFailsWith<IllegalArgumentException> { FastDecisions.judgment(sample.head("aspects")) }
         assertTrue(e.message!!.contains("multi-label"), e.message!!)
         assertTrue(!FastDecisions.isHarnessable(sample.head("aspects")))
@@ -89,7 +89,7 @@ class FastDecisionsTest {
     }
 
     @Test
-    fun `fixtures carry the item, the gold label and their own source group`() {
+    fun `fixtures carry the item - the gold label and their own source group`() {
         val f = FastDecisions.fixtures(sample, sample.head("intent")).single()
         assertEquals("sample#3", f.item.id)
         assertEquals("refund_request", f.trueLabel)
@@ -106,13 +106,13 @@ class FastDecisionsTest {
     }
 
     @Test
-    fun `a text matching no label takes the first candidate, deterministically`() {
+    fun `a text matching no label takes the first candidate - deterministically`() {
         val h = sample.head("intent")
         assertEquals(listOf("order_status"), FastDecisions.lexicalPredict(h, "zzz qqq"))
     }
 
     @Test
-    fun `ties break alphabetically, so the figure is reproducible`() {
+    fun `ties break alphabetically - so the figure is reproducible`() {
         val h = sample.head("category")
         // "billing" and "support" both score 1; "billing" sorts first.
         assertEquals(listOf("billing"), FastDecisions.lexicalPredict(h, "support and billing"))
@@ -147,7 +147,7 @@ class FastDecisionsTest {
     }
 
     @Test
-    fun `scoring is exact set match, per head`() {
+    fun `scoring is exact set match - per head`() {
         val d = synthetic("d", heads = 1, rows = 10, correctRows = 7)
         val s = FastDecisions.score(listOf(d)) { listOf("a") }
         assertEquals(1, s.perDomain.size)
@@ -157,7 +157,7 @@ class FastDecisionsTest {
     }
 
     @Test
-    fun `the average is the mean of domains and pooled weights heads, and they differ`() {
+    fun `the average is the mean of domains and pooled weights heads - and they differ`() {
         // One head at 100%, four heads at 0%: the mean of domains is 50%, pooled is 20%. Quoting
         // one while implying the other is how a benchmark number drifts.
         val good = synthetic("good", heads = 1, rows = 10, correctRows = 10)
@@ -227,7 +227,7 @@ class FastDecisionsTest {
     }
 
     @Test
-    fun `a head with one label is refused, because a Choice needs a choice`() {
+    fun `a head with one label is refused - because a Choice needs a choice`() {
         val line = """{"input":"x","output":{"classifications":[
             {"task":"t","true_label":["a"],"labels":["a"],"multi_label":false}]}}""".replace("\n", "")
         assertFailsWith<IllegalArgumentException> { FastDecisions.parse("d", line) }
@@ -246,7 +246,7 @@ class FastDecisionsTest {
     }
 
     @Test
-    fun `the heads Loupe already ships are named, and belong to domains in the suite`() {
+    fun `the heads Loupe already ships are named - and belong to domains in the suite`() {
         assertEquals(listOf("email_triage.is_phishing", "ticket_route.contains_pii"), FastDecisions.LOUPE_HEADS)
         for (id in FastDecisions.LOUPE_HEADS) {
             assertTrue(id.substringBefore('.') in FastDecisions.DOMAINS, id)

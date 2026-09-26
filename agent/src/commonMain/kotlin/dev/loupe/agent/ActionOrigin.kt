@@ -8,9 +8,9 @@ package dev.loupe.agent
  * to lose by hand, so it is a type: an action cannot exist without saying where it came from, and
  * the label is derived rather than written.
  *
- * The distinction is the whole point of the middle tier. A reminder that Loupe's own code worked
- * out from a date in a document went nowhere and must not carry an Online badge — labelling it one
- * would be a false admission, and users who see "Online" on something that never left the device
+ * The distinction is the whole point of the free on-device actions. A reminder that Loupe's own
+ * code worked out from a date in a document went nowhere and must not carry an Online badge —
+ * labelling it one would be a false admission, and users who see "Online" on something that never left the device
  * stop believing the badge at all. A draft a provider wrote must carry it, always.
  */
 sealed interface ActionOrigin {
@@ -23,7 +23,7 @@ sealed interface ActionOrigin {
     /**
      * Prepared on the device, by Loupe's own code, from what the engine already knew.
      *
-     * No network, no provider, no cost — the middle tier. Nothing to label Online, because nothing
+     * No network, no provider, no cost, and free. Nothing to label Online, because nothing
      * went anywhere.
      */
     data object OnDevice : ActionOrigin {

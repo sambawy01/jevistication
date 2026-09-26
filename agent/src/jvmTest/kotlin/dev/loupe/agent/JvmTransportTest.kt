@@ -75,7 +75,7 @@ class JvmTransportTest {
                 model = "qwen3",
                 name = "Ollama",
             )
-            val run = AgentRunner(config, hasKey = false, tier = AgentTier.CONNECTED)
+            val run = AgentRunner(config, hasKey = false, tier = AgentTier.ASSISTANT)
                 .open(item(), evidence(), apiKey = null, atIso = "2026-09-25T10:00:00Z")!!
                 .runTo(JvmAgentTransport(timeout = Duration.ofSeconds(10)))
 
@@ -115,7 +115,7 @@ class JvmTransportTest {
     }
 
     @Test
-    fun `a rate-limited answer is retried exactly once, after the provider's own delay`() {
+    fun `a rate-limited answer is retried exactly once - after the provider's own delay`() {
         val calls = AtomicInteger()
         val slept = mutableListOf<Double>()
         withServer({ exchange ->
@@ -157,7 +157,7 @@ class JvmTransportTest {
             reply(exchange, 401, """{"error":{"message":"bad key"}}""")
         }) { endpoint ->
             val config = AgentConfig(enabled = true, kind = AgentProviderKind.OLLAMA, baseUrl = endpoint.base, model = "qwen3")
-            val run = AgentRunner(config, hasKey = false, tier = AgentTier.CONNECTED).open(item(), evidence())!!
+            val run = AgentRunner(config, hasKey = false, tier = AgentTier.ASSISTANT).open(item(), evidence())!!
                 .runTo(JvmAgentTransport(sleep = {}))
             assertEquals(1, calls.get(), "an auth failure is not a capacity problem")
             assertTrue(run.failure is AgentFailure.Auth, run.failure?.message ?: "")
@@ -173,7 +173,7 @@ class JvmTransportTest {
             exchange.responseBody.write(bytes)
         }) { endpoint ->
             val config = AgentConfig(enabled = true, kind = AgentProviderKind.OLLAMA, baseUrl = endpoint.base, model = "qwen3")
-            val run = AgentRunner(config, hasKey = false, tier = AgentTier.CONNECTED).open(item(), evidence())!!
+            val run = AgentRunner(config, hasKey = false, tier = AgentTier.ASSISTANT).open(item(), evidence())!!
                 .runTo(JvmAgentTransport(sleep = {}))
             assertTrue(run.failure is AgentFailure.BadResponse, run.failure?.message ?: "")
             assertTrue(run.failure!!.message.contains("OpenAI-compatible"), run.failure!!.message)
@@ -181,20 +181,20 @@ class JvmTransportTest {
     }
 
     @Test
-    fun `nothing is reachable when the tier is off, whatever the server would have said`() {
+    fun `nothing is reachable when the tier is off - whatever the server would have said`() {
         val calls = AtomicInteger()
         withServer({ exchange ->
             calls.incrementAndGet()
             reply(exchange, 200, answer)
         }) { endpoint ->
             val off = AgentConfig(enabled = false, kind = AgentProviderKind.OLLAMA, baseUrl = endpoint.base, model = "qwen3")
-            assertEquals(null, AgentRunner(off, hasKey = false, tier = AgentTier.CONNECTED).open(item(), evidence()))
+            assertEquals(null, AgentRunner(off, hasKey = false, tier = AgentTier.ASSISTANT).open(item(), evidence()))
             assertEquals(0, calls.get(), "an off tier must not make a request")
         }
     }
 
     @Test
-    fun `a redirect is an answer, not a detour to another host`() {
+    fun `a redirect is an answer - not a detour to another host`() {
         // A 30x to somewhere the user never named must never carry their key there.
         withServer({ exchange ->
             exchange.responseHeaders.add("Location", "https://elsewhere.example/v1/chat/completions")

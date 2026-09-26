@@ -13,7 +13,7 @@ class AgentGateTest {
     private fun act(p: Double, label: String = "renewal") = Decision.Act(label, Probability.of(p))
 
     @Test
-    fun `an act above the bar is eligible, and carries what decided it`() {
+    fun `an act above the bar is eligible - and carries what decided it`() {
         val v = AgentGate.consider("item-1", "j-renewal", act(0.93))
         assertTrue(v is GateVerdict.Eligible, "got $v")
         assertEquals("item-1", v.evidence.itemId)
@@ -46,7 +46,7 @@ class AgentGateTest {
     }
 
     @Test
-    fun `a cut input is skipped, because part of an item is not the item`() {
+    fun `a cut input is skipped - because part of an item is not the item`() {
         val cut = Truncation(textBudget = Extent(kept = 2_000, total = 9_000, unit = Extent.Measure.CHARACTERS))
         val v = AgentGate.consider("i", "j", act(0.99), truncation = cut)
         assertTrue(v is GateVerdict.Skipped, "got $v")
@@ -78,7 +78,7 @@ class AgentGateTest {
     }
 
     @Test
-    fun `the evidence line names the judgment, the answer and both numbers`() {
+    fun `the evidence line names the judgment - the answer and both numbers`() {
         val v = AgentGate.consider("i", "j-phishing", act(0.93, "phishing")) as GateVerdict.Eligible
         assertEquals("j-phishing answered \"phishing\" at 93% (the agent's bar is 80%)", v.evidence.line)
     }
