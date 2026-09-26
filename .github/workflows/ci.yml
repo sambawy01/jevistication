@@ -39,6 +39,8 @@ jobs:
       # against the SDK's api-versions.xml at minSdk 29 (docs/ANDROID-PLAN.md, Traps).
       - name: Android API level check
         run: python3 tools/android-api-check/check.py --min-sdk 29
+      - name: Regex extractor tests
+        run: python3 tools/android-regex-check/test_extract.py
       - name: Upload the Android debug APK
         uses: actions/upload-artifact@v4
         with:

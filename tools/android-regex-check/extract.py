@@ -5,8 +5,9 @@ Android's java.util.regex is ICU, not the JDK's engine, and it rejects some patt
 Kotlin/Native accept (an unescaped `}` is the one found at A0). Unit tests run on the host JDK and
 cannot see this, so check.sh compiles every pattern on an emulator or phone instead.
 
-Found: `Regex(<expr>[, options])`, `<literal>.toRegex([options])` and
-`Pattern.compile(<expr>[, flags])`, in code only (not in comments or strings), in the shared
+Found: `Regex(<expr>[, options])`, `<literal>.toRegex([options])`,
+`Pattern.compile(<expr>[, flags])` and `Baseline.Pattern(<expr>, ...)` (a template baseline,
+compiled with IGNORE_CASE), in code only (not in comments or strings), in the shared
 modules' commonMain / jvmCommonMain / androidMain and in :android-app's main sources.
 
 Output: one line per pattern, `<file>:<line>\t<base64 of the pattern>\t<java.util.regex flags>`.
@@ -31,6 +32,8 @@ JAVA_FLAGS = {
     "UNIX_LINES": 1, "CASE_INSENSITIVE": 2, "COMMENTS": 4, "MULTILINE": 8, "LITERAL": 16,
     "DOTALL": 32, "UNICODE_CASE": 64, "CANON_EQ": 128, "UNICODE_CHARACTER_CLASS": 256,
 }
+# Baseline.Pattern compiles with RegexOption.IGNORE_CASE.
+BASELINE_FLAGS = 2 | 64
 KOTLIN_OPTIONS = {
     "IGNORE_CASE": 2 | 64, "MULTILINE": 8, "LITERAL": 16, "UNIX_LINES": 1, "COMMENTS": 4,
     "DOT_MATCHES_ALL": 32, "CANON_EQ": 128,
@@ -158,6 +161,8 @@ def skip_string(src: str, i: int) -> int:
     if src.startswith('"""', i):
         j = i + 3
         while True:
+            if j >= len(src):
+                raise ValueError(f"unterminated raw string starting at offset {i}")
             if src.startswith("${", j):
                 j = skip_template(src, j + 2)
                 continue
@@ -168,7 +173,11 @@ def skip_string(src: str, i: int) -> int:
                 return j
             j += 1
     j = i + 1
-    while src[j] != '"':
+    while True:
+        if j >= len(src):
+            raise ValueError(f"unterminated string starting at offset {i}")
+        if src[j] == '"':
+            break
         if src[j] == "\\":
             j += 2
             continue
@@ -183,6 +192,8 @@ def skip_template(src: str, j: int) -> int:
     """Past the closing brace of a `${...}` template whose body starts at src[j]."""
     depth = 1
     while depth:
+        if j >= len(src):
+            raise ValueError("unterminated string template")
         if src[j] == '"':
             j = skip_string(src, j)
             continue
@@ -228,6 +239,17 @@ def patterns_in(src: str):
         value, end, dynamic = parsed
         flags = flags_of(call_args(src, end))
         out.append((m.start(), None if dynamic else value, "built at run time" if dynamic else None, flags))
+    # Baseline.Pattern(<pattern>, ...): templates compile their first argument with IGNORE_CASE
+    # (Baseline.kt), i.e. CASE_INSENSITIVE | UNICODE_CASE. `class Pattern(` is the declaration itself.
+    for m in re.finditer(r"(?<![\w.])(?:Baseline\.)?Pattern\(\s*", src):
+        if not is_code[m.start()] or re.search(r"\bclass\s+$", src[:m.start()]):
+            continue
+        parsed = parse_expression(src, m.end(), consts)
+        if parsed is None:
+            out.append((m.start(), None, "not a literal", BASELINE_FLAGS))
+            continue
+        value, _, dynamic = parsed
+        out.append((m.start(), None if dynamic else value, "built at run time" if dynamic else None, BASELINE_FLAGS))
     for m in re.finditer(r"\.toRegex\(", src):
         if not is_code[m.start()]:
             continue

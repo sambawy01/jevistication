@@ -96,13 +96,17 @@ Arabic-locale phone). SHA-256 (`MessageDigest`) and NFKC (`java.text.Normalizer`
 platform, and so does the regex engine: those are where Android's answers can still differ (see
 "Known parity gaps").
 
-**Builds without an Android SDK.** `settings.gradle.kts` looks for an SDK as the Android tools do
-(`ANDROID_HOME`, then `ANDROID_SDK_ROOT`, then `sdk.dir` in `local.properties`). Without one it
+**Builds without an Android SDK.** `settings.gradle.kts` looks for an SDK as the Android Gradle
+Plugin does: `sdk.dir` in `local.properties`, else `ANDROID_HOME`, else `ANDROID_SDK_ROOT`; the
+first one set decides, and a path that is not a directory counts as no SDK. Without one it
 prints `WARNING: Android SDK not found (...): Android targets skipped`, leaves out `:android-app`,
 and the shared modules apply neither the Android library plugin nor `androidTarget()`; `./gradlew
 check` then builds and tests the JVM and iOS targets as before (the iOS session's Mac, a Linux box).
 `LOUPE_REQUIRE_ANDROID=1` turns the skip into a build failure; CI sets it, so CI never skips Android
-silently.
+silently. *IDE sync:* Android Studio / IntelliJ sync with the environment the IDE was started with,
+so with no `local.properties` and no `ANDROID_HOME` in that environment the project syncs without
+the Android targets and `:android-app`; Android Studio writes `local.properties` with `sdk.dir` on
+first open, after which a re-sync picks Android up.
 
 **Traps found at A0.**
 
@@ -111,10 +115,11 @@ silently.
    `PatternSyntaxException` on Android: ICU rejects a bare `}`. The app crashed on first launch in the
    emulator while every unit test was green, because Android unit tests run on the host JDK. Fixed by
    escaping it (`\}`, the same pattern everywhere). `tools/android-regex-check/check.sh` compiles all
-   133 statically known regex literals on a device, with the flags Kotlin passes for their
-   `RegexOption`s; 9 built at run time were reviewed by hand (`Regex.escape` → `\Q…\E`, which ICU
-   accepts; digit prefixes; `\d{4}`). `extract.py` finds `Regex(…)`, `"…".toRegex(…)` and
-   `Pattern.compile(…)` in code (not comments or strings) in the shared modules' `commonMain`,
+   138 statically known regex literals on a device (133 before `Baseline.Pattern(…)` literals were
+   included), with the flags Kotlin passes for their `RegexOption`s; 10 built at run time were
+   reviewed by hand (`Regex.escape` → `\Q…\E`, which ICU accepts; digit prefixes; `\d{4}`; the
+   user's own baseline patterns from `judgments.json`, validated at load). `extract.py` finds
+   `Regex(…)`, `"…".toRegex(…)`, `Pattern.compile(…)` and `Baseline.Pattern(…)` in code (not comments or strings) in the shared modules' `commonMain`,
    `jvmCommonMain` and `androidMain` and in `:android-app`. A regex that compiles is not yet one that
    matches the same text: see "Known parity gaps", B1.
 2. *Lint does not look at `jvmCommonMain`.* A planted `Path.of` (API 34) passed `lint`. The
@@ -122,6 +127,13 @@ silently.
    build compiled and looks each JDK/Android reference up in the SDK's `api-versions.xml`: method
    and field references on their owner, and class references, i.e. `is`/`as`, catch clauses, class
    literals and supertypes, on the class). CI runs it after the build.
+
+**API note for iOS (A0 fix).** `Baseline.Pattern` now compiles its regex when it is constructed and
+throws `IllegalArgumentException` with the pattern and the engine's reason; the new
+`Baseline.Pattern.problem(pattern)` (`String?`, null when the pattern compiles) is new public API in
+LoupeKit, additive only: in Swift `BaselinePattern.companion.problem(pattern:)` (header checked).
+Swift callers need no change. The constructor threw on a bad pattern before too (without
+`@Throws`, so a Swift caller should ask `problem(pattern:)` first rather than construct blindly).
 
 ## Known parity gaps
 
@@ -259,7 +271,8 @@ Evidence: `/Volumes/Sambawy/loupe-android-evidence/a0-fix/`.
 | `:android-app:assembleDebug assembleRelease` | green; debug 25,339,789 bytes, release 1,871,827 bytes (unsigned) |
 | `:loupe-kit:assembleLoupeKitDebugXCFramework` | green, 30 s |
 | `tools/android-api-check/check.py` (api-versions.xml of platform 36 and of 35) | 663 classes, 0 problems at minSdk 29 |
-| `tools/android-regex-check/check.sh`, API 29 (`google_apis` arm64-v8a) and API 35 emulators | 133 compiled, 0 rejected, on both |
+| `tools/android-regex-check/check.sh`, API 29 (`google_apis` arm64-v8a) and API 35 emulators | 133 compiled, 0 rejected, on both; after the second round (with `Baseline.Pattern(…)` literals, IGNORE_CASE) 138 compiled, 0 rejected, on both, `NEEDS_REPLY` included |
+| the failure path: a planted `Regex("""\{([a-z]+)}""")` on API 29 | `FAIL … Syntax error in regexp pattern near index 11`, `138 compiled, 1 rejected`, exit status 1 (the plant was removed) |
 | Launch smoke test: debug on API 29 and 35, R8 release (signed with the debug key for the test) on 35 | cold start 0.5 to 0.8 s, `shared engine ok … links [safe, caution, danger]`, no crash in logcat |
 
 The merged manifest (`aapt2 dump xmltree`, debug and release) keeps `androidx.startup`'s lifecycle

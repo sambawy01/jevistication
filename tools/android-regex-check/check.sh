@@ -17,4 +17,12 @@ python3 "$here/extract.py" > "$work/patterns.txt"
 echo "device: $("$adb" shell getprop ro.product.model | tr -d '\r'), API $("$adb" shell getprop ro.build.version.sdk | tr -d '\r')"
 "$adb" push "$work/classes.dex" /data/local/tmp/regexcheck.dex > /dev/null
 "$adb" push "$work/patterns.txt" /data/local/tmp/regexcheck-patterns.txt > /dev/null
-"$adb" shell CLASSPATH=/data/local/tmp/regexcheck.dex app_process /system/bin RegexCheck /data/local/tmp/regexcheck-patterns.txt
+# adb passes app_process's exit status through (shell protocol v2), but an older adb or device
+# reports 0 whatever happened; so the summary line must also say "0 rejected", or this fails.
+set +e
+out="$("$adb" shell CLASSPATH=/data/local/tmp/regexcheck.dex app_process /system/bin RegexCheck /data/local/tmp/regexcheck-patterns.txt)"
+status=$?
+set -e
+printf '%s\n' "$out"
+if [ "$status" -ne 0 ]; then exit "$status"; fi
+printf '%s\n' "$out" | tr -d '\r' | grep -Eq '^android regex check: [0-9]+ compiled, 0 rejected$' || { echo "regex check: no clean summary from the device" >&2; exit 1; }
