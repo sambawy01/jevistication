@@ -57,6 +57,13 @@ enum ProtectionGroup {
         static let notifySuspicious = "protection.notify.suspicious"
     }
 
+    /// "Also notify me about suspicious sites": on unless the user turned it off (owner decision 2026-09-26:
+    /// every on-device feature is on by default; the check itself runs on this iPhone). The app and the
+    /// extensions read it through here so they agree on the default.
+    static func notifySuspicious(_ d: UserDefaults) -> Bool {
+        d.object(forKey: Keys.notifySuspicious) as? Bool ?? true
+    }
+
     /// Posts the Darwin notification [name] (no payload; any process in the group may listen).
     static func post(_ name: String) {
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName(name as CFString), nil, nil, true)

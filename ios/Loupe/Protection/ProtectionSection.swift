@@ -14,6 +14,8 @@ struct ProtectionSectionContent: View {
             NavigationLink(value: ProtectionRoute.checkLink) { checkLinkRow }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("protect.checkLink")
+            // Clipboard checks (2026-09-26): the chip's switch, the last checks, the Loupe keyboard.
+            ClipboardCard(store: store)
             NavigationLink(value: ProtectionRoute.spotted) { SpottedRow(store: store) }
                 .buttonStyle(.plain)
         }

@@ -135,7 +135,9 @@ fun closestLegal(preferred: Action, legal: List<Action>): Action {
  * **Rules only remove.** Before the model is asked, [gates] narrows the legal set
  * ([Mechanics.legalActions], which has already removed every move that crashes):
  *
- * - the fuel gate ([fuelFocus]): low on fuel with a depot in reach, only the ways toward it;
+ * - the fuel gates ([FuelGate.SHIPPED]): low on fuel with a depot in reach, only the ways toward it
+ *   ([fuelFocus]); and a way the fuel projection says runs dry goes when another way reaches fuel
+ *   ([dryGate]) — running out of fuel is a crash too;
  * - the gun gate ([fireGate]): of each way's two gun settings, the pointless or harmful one goes —
  *   firing with nothing in line (it wastes the reload), holding fire at a target in line, firing
  *   at a depot in line. A way is never removed by it: when its preferred setting is not legal, the
@@ -173,6 +175,8 @@ class ModelPilot(
     val question: String = QUESTION,
     /** Characters of state (Model settings' `features.game.text_chars`; [STATE_BUDGET] by default). */
     private val stateBudget: Int = STATE_BUDGET,
+    /** Which fuel rule removes ways before the model is asked ([FuelGate.SHIPPED] by default). */
+    val fuelGate: FuelGate = FuelGate.SHIPPED,
 ) : Pilot {
     override val name: String = "model"
 
@@ -185,7 +189,7 @@ class ModelPilot(
     private val priors = HashMap<List<String>, List<Double>>()
 
     override fun decide(observation: Observation): PilotDecision {
-        val offered = gates(observation, observation.legal.actions)
+        val offered = gates(observation, observation.legal.actions, fuelGate)
         if (offered.size == 1) {
             return PilotDecision(offered.single(), DecisionSource.MECHANICAL, observedTick = observation.tick)
         }
@@ -308,8 +312,28 @@ class ModelPilot(
             }
         }
 
+        /**
+         * The dry gate: when the fuel projection ([FuelOutlook]) says some ways run dry and another
+         * reaches fuel, the ways that run dry go. Rules only remove: it never picks among the ways
+         * that reach fuel, and with no way reaching fuel it removes nothing (every way burns the same).
+         */
+        fun dryGate(o: Observation, legal: List<Action>): List<Action> {
+            val fuel = legal.map { it.steer }.distinct().associateWith { o.path(it)?.predicted?.fuel }
+            if (fuel.values.none { it?.reaches == true }) return legal
+            return legal.filter { fuel[it.steer]?.runsDry != true }.ifEmpty { legal }
+        }
+
+        /** The fuel rule [gates] applies, then the gun gate. */
+        fun fuelGated(o: Observation, legal: List<Action>, gate: FuelGate): List<Action> = when (gate) {
+            FuelGate.THIRST -> fuelFocus(o, legal)
+            FuelGate.DRY -> dryGate(o, legal)
+            FuelGate.BOTH -> dryGate(o, fuelFocus(o, legal))
+            FuelGate.NONE -> legal
+        }
+
         /** Both gates, fuel first: a low tank outranks a target. */
-        fun gates(o: Observation, legal: List<Action>): List<Action> = fireGate(o, fuelFocus(o, legal))
+        fun gates(o: Observation, legal: List<Action>, fuel: FuelGate = FuelGate.SHIPPED): List<Action> =
+            fireGate(o, fuelGated(o, legal, fuel))
 
         const val JUDGMENT_ID: String = "game.river.way"
         const val QUESTION: String = "Which way is safest?"
@@ -325,5 +349,26 @@ class ModelPilot(
 
         /** Characters of state; [PathText.scene] stays well inside it, so it is never cut. */
         const val STATE_BUDGET: Int = 600
+    }
+}
+
+/** Which fuel rule [ModelPilot.gates] applies before the model is asked. Rules only remove ways. */
+enum class FuelGate {
+    /** Under 60% (under 90% with the depot within 10 rows) and a depot in reach: only the ways toward it. */
+    THIRST,
+
+    /** Ways the fuel projection says run dry go, when another way reaches fuel ([ModelPilot.dryGate]). */
+    DRY,
+
+    /** [THIRST], then [DRY]. */
+    BOTH,
+
+    /** No fuel rule. */
+    NONE,
+    ;
+
+    companion object {
+        /** Both, measured 2026-09-26 (docs/BUILD.md): the dry gate alone was no better than the old one, both together were. */
+        val SHIPPED: FuelGate = BOTH
     }
 }

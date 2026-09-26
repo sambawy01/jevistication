@@ -56,7 +56,7 @@ tasks.named<Test>("jvmTest") {
     systemProperty("loupe.models.dir", models.absolutePath)
     // PilotMeasurementTest's size and arms: -Ploupe.game.seeds=20 -Ploupe.game.seconds=90 for the
     // full measurement recorded in docs/BUILD.md; the defaults keep `check` short.
-    for (key in listOf("loupe.game.seeds", "loupe.game.seconds", "loupe.game.variants", "loupe.game.threads", "loupe.game.out", "loupe.game.first")) {
+    for (key in listOf("loupe.game.seeds", "loupe.game.seconds", "loupe.game.variants", "loupe.game.threads", "loupe.game.out", "loupe.game.first", "loupe.game.gap", "loupe.game.trace", "loupe.game.probe")) {
         providers.gradleProperty(key).orNull?.let { systemProperty(key, it) }
     }
     // Declared as inputs so a result is never replayed from the build cache across the weights

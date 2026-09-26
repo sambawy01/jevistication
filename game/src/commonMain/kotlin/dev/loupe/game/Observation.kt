@@ -58,6 +58,19 @@ data class Observation(
     /** The [PathAhead] for [steer], if one was looked at. */
     fun path(steer: Int): PathAhead? = paths.firstOrNull { it.steer == steer }
 
+    /** True when some way reaches fuel ([FuelOutlook.reaches]): only then is running dry one way's fault. */
+    val fuelSomewhere: Boolean get() = paths.any { it.predicted?.fuel?.reaches == true }
+
+    /**
+     * True when flying [steer] is predicted to crash: a collision ([Prediction.clear] false), or
+     * running out of fuel ([FuelOutlook.runsDry]) while another way reaches fuel. False when no
+     * prediction was made.
+     */
+    fun predictedCrash(steer: Int): Boolean {
+        val p = path(steer)?.predicted ?: return false
+        return !p.clear || (p.fuel?.runsDry == true && fuelSomewhere)
+    }
+
     companion object {
         const val NEAR_ROWS: Int = 6
         const val FAR_ROW: Int = 9
@@ -108,8 +121,8 @@ data class Observation(
                 bridgeAheadRows = bridge?.let { (it.y - py).roundToInt() },
                 legal = legal,
             )
-            // Each way is predicted as it would be flown: with the gun setting the gates leave it.
-            val offered = ModelPilot.gates(seen, legal.actions)
+            // Each way is predicted as it would be flown: with the gun setting the gun gate leaves it.
+            val offered = ModelPilot.fireGate(seen, legal.actions)
             return seen.copy(
                 paths = listOf(-1, 0, 1).map { steer ->
                     val move = offered.firstOrNull { it.steer == steer } ?: Action.of(steer, false)
@@ -212,8 +225,8 @@ object StateText {
 /**
  * The words the model pilot reads: for each way, what happens if the plane flies it (from the
  * [Prediction] in its [PathAhead]), and a one-clause scene. Discrete and relative — "crash: boat
- * in 1 s", "safe, heli moving away", "fuel that way" — never raw columns: measured 2026-09-25,
- * Laya read the numeric [StateText] near chance.
+ * in 1 s", "crash: out of fuel in 9 s", "safe, heli moving away", "fuel that way" — never raw
+ * columns: measured 2026-09-25, Laya read the numeric [StateText] near chance.
  *
  * Built by code from exact facts, never summarised, nothing from outside the game. Fuel distances:
  * up to 3 rows "very close", up to 6 "close", beyond that "ahead" (a path looks
@@ -227,46 +240,58 @@ object PathText {
     }
 
     /**
-     * What happens along [steer], from its [Prediction]: "crash: boat crossing in, 1 s", "crash:
-     * land in 0.5 s", "safe, heli moving away", "safe"; then fuel, as before. Times are rounded to
-     * the half second, never below 0.5 s. Picked on the dev seeds (docs/BUILD.md, 2026-09-25): with
-     * "safe" and "crash" — words that match the question — Laya flew a way predicted to crash, when a
-     * safe one was on offer, 4% of the time; with "clear" / "hit in", 37%.
+     * What happens along [steer]. First what ends the run, if anything: a collision from its
+     * [Prediction] ("crash: boat crossing in, 1 s", "crash: land in 0.5 s"), else running out of fuel
+     * from its [FuelOutlook] when another way reaches fuel ("crash: out of fuel in 9 s"); otherwise
+     * "safe" (and "heli moving away" when one is). Then, under [FUEL_WANTED]%, where the fuel is:
+     * "fuel close" on the path, else "fuel that way" on the way toward the nearest depot.
+     *
+     * Picked on the dev seeds (docs/BUILD.md, 2026-09-25 and 2026-09-26): "safe" and "crash", the
+     * question's own word, are what the model reads (a way predicted to crash was flown, when a safe
+     * one was on offer, 4% of the time; with "clear" / "hit in", 37%). Running dry reads as a crash
+     * for the same reason. Fuel said as a time ("fuel in 2 s") or on every decision lost rows on the
+     * dev seeds, so the fuel phrases are the earlier ones.
      */
     fun describe(o: Observation, steer: Int): String {
         val p = o.path(steer) ?: return SAFE
         val parts = mutableListOf<String>()
         val pr = p.predicted
-        if (pr != null) {
-            val t = pr.hitTicks
-            if (t != null) {
-                val at = seconds(t)
-                parts += when {
-                    pr.hitWith == "land" || pr.hitWith == "bridge" -> "crash: ${pr.hitWith} in $at"
-                    pr.crossing -> "crash: ${pr.hitWith} crossing in, $at"
-                    else -> "crash: ${pr.hitWith} in $at"
-                }
-            } else {
+        val fuel = pr?.fuel
+        val crash = pr?.let { collision(it) }
+        when {
+            crash != null -> parts += crash
+            fuel != null && fuel.runsDry && o.fuelSomewhere -> parts += "crash: out of fuel in ${seconds(fuel.dryTicks!!)}"
+            else -> {
                 parts += SAFE
-                pr.leaving?.let { parts += "$it moving away" }
+                pr?.leaving?.let { parts += "$it moving away" }
             }
         }
-        if (o.fuelPercent < FUEL_WANTED) {
-            val onPath = p.depotRows
-            if (onPath != null) {
-                parts += "fuel ${near(onPath)}"
-            } else {
-                o.depot?.let { d ->
-                    val side = when {
-                        d.across < -1.0 -> -1
-                        d.across > 1.0 -> 1
-                        else -> 0
-                    }
-                    if (side == steer) parts += "fuel that way"
-                }
-            }
+        fuelWords(o, p, steer)?.let { parts += it }
+        return parts.joinToString(", ")
+    }
+
+    /** "crash: boat crossing in, 1 s", "crash: land in 0.5 s", or null when no collision is predicted. */
+    fun collision(pr: Prediction): String? {
+        val t = pr.hitTicks ?: return null
+        val at = seconds(t)
+        return when {
+            pr.hitWith == "land" || pr.hitWith == "bridge" -> "crash: ${pr.hitWith} in $at"
+            pr.crossing -> "crash: ${pr.hitWith} crossing in, $at"
+            else -> "crash: ${pr.hitWith} in $at"
         }
-        return if (parts.isEmpty()) SAFE else parts.joinToString(", ")
+    }
+
+    /** Where the fuel is, below [FUEL_WANTED]%: "fuel close" on this path, "fuel that way" toward the nearest depot. */
+    private fun fuelWords(o: Observation, p: PathAhead, steer: Int): String? {
+        if (o.fuelPercent >= FUEL_WANTED) return null
+        p.depotRows?.let { return "fuel ${near(it)}" }
+        val d = o.depot ?: return null
+        val side = when {
+            d.across < -TOWARD -> -1
+            d.across > TOWARD -> 1
+            else -> 0
+        }
+        return if (side == steer) "fuel that way" else null
     }
 
     /** Ticks as seconds, to the half second, at least 0.5: "0.5 s", "1 s", "1.5 s". */
@@ -276,6 +301,9 @@ object PathText {
     }
 
     const val SAFE: String = "safe"
+
+    /** Columns off the plane's line beyond which a depot is to one side, not straight ahead (see [FuelOutlook.heads]). */
+    const val TOWARD: Double = 1.0
 
     /** The scene beside the ways: the tank, and "low" under half. */
     fun scene(o: Observation): String = if (o.fuelPercent < FUEL_LOW) "fuel ${o.fuelPercent}%, low" else "fuel ${o.fuelPercent}%"

@@ -3,16 +3,13 @@ import LoupeKit
 
 // Moved from ios/Loupe/Online/OnlineChecks.swift on 2026-09-26 so that Loupe for Safari and
 // "Send to Loupe" read the same switches and ask the helper the same way (browsing protection).
-
-/// The web helper's address, shared by the app (`HelperEndpoint`) and the extensions.
-enum LoupeHelper {
-    static let base = URL(string: "https://loupe-web-helper-production.up.railway.app")!
-}
+// The switches only: no network code lives in this file, because the Loupe keyboard compiles it
+// (2026-09-26, clipboard checks). The helper's client is in DomainFactsClient.swift.
 
 /// Opt-in online phishing checks (owner decision C, 2026-09-24), bound by PRODUCT.md §4a: **off by
 /// default**, each source with its own switch, every result labelled "Online" with its source and
 /// fetch time, the minimum sent, and everything works with them off. The scoring is LoupeKit's shared
-/// formula (`OnlineSignals`, docs/PHISHING-FORMULA.md §5); this file only fetches.
+/// formula (`OnlineSignals`, docs/PHISHING-FORMULA.md §5); these are only the switches.
 ///
 /// - Domain facts: `POST {helper}/v1/domain-facts {"domain": d}` on loupe-web-helper, for the ICANN
 ///   registrable domain only (PRIVATE suffixes off; hosting-platform pages are never sent). A 404 means
@@ -98,62 +95,3 @@ struct OnlinePhishingSettings: Equatable {
         d.set(dnsblUribl, forKey: Self.keys.dnsblUribl)
     }
 }
-
-enum OnlineCheckError: Error, Equatable {
-    /// The helper answered 404: the route is not deployed yet.
-    case notAvailableYet
-    /// 429 `PROVIDER_RATE_LIMITED` (or any 429): back off.
-    case rateLimited
-    case offline
-    case badKey
-    case unexpected(String)
-
-    static func from(status: Int, data: Data) -> OnlineCheckError {
-        switch status {
-        case 404: return .notAvailableYet
-        case 429: return .rateLimited
-        case 400, 401, 403: return .badKey
-        default:
-            let code = (try? JSONSerialization.jsonObject(with: data) as? [String: Any]).flatMap { ($0?["error"] as? [String: Any])?["code"] as? String }
-            return .unexpected(code ?? "HTTP \(status)")
-        }
-    }
-}
-
-// MARK: - Domain facts (loupe-web-helper)
-
-final class DomainFactsClient {
-    static let timeout: TimeInterval = 15
-    let base: URL
-    private let session: URLSession
-
-    init(base: URL = LoupeHelper.base, session: URLSession) {
-        self.base = base
-        self.session = session
-    }
-
-    /// The request for one domain: the JSON body `{"domain": d}` and nothing about the user. The
-    /// helper's rate limiter wants an `X-Loupe-Install`; a fresh random UUID per request means two
-    /// lookups cannot be linked to one phone.
-    static func request(domain: String, base: URL = LoupeHelper.base, timeout: TimeInterval = DomainFactsClient.timeout) -> URLRequest {
-        var r = URLRequest(url: base.appendingPathComponent("v1/domain-facts"), timeoutInterval: timeout)
-        r.httpMethod = "POST"
-        r.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        r.setValue("application/json", forHTTPHeaderField: "Accept")
-        r.setValue(UUID().uuidString, forHTTPHeaderField: "X-Loupe-Install")
-        r.httpBody = try? JSONSerialization.data(withJSONObject: ["domain": domain], options: [.sortedKeys])
-        return r
-    }
-
-    /// [timeout]: the app waits 15 s; Loupe for Safari waits less, so a page is never held up long.
-    func facts(for domain: String, timeout: TimeInterval = DomainFactsClient.timeout) async throws -> DomainFacts {
-        let data: Data, response: URLResponse
-        do { (data, response) = try await session.data(for: Self.request(domain: domain, base: base, timeout: timeout)) }
-        catch { throw OnlineCheckError.offline }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 else { throw OnlineCheckError.from(status: status, data: data) }
-        do { return try OnlineSignals.shared.parseDomainFacts(json: String(decoding: data, as: UTF8.self), domain: domain) }
-        catch { throw OnlineCheckError.unexpected("The helper sent a reply this version cannot read.") }
-    }
-}
-

@@ -61,10 +61,11 @@ struct HUDSnapshot: Equatable {
     var maxSustained = 0.0
     /// Percent of decisions that landed within one decision interval; nil before any.
     var onTimePercent: Double?
-    /// Decisions where a way was predicted to crash and another predicted safe, and of those, the
-    /// ones where the pilot flew a safe way (`DecisionStats.collisionChoices` / `collisionsAvoided`).
-    var collisionChoices = 0
-    var collisionsAvoided = 0
+    /// Decisions where a way was predicted to crash (a collision, or running out of fuel) and another
+    /// predicted safe, and of those, the ones where the pilot flew a safe way
+    /// (`DecisionStats.crashChoices` / `crashesAvoided`).
+    var crashChoices = 0
+    var crashesAvoided = 0
     /// Separate times the safety net took over.
     var takeovers = 0
 }
@@ -81,8 +82,8 @@ struct RunResults: Equatable {
     /// Decisions landed per second over the whole run (simulation time).
     var averagePerSecond: Double = 0
     var onTimePercent: Double?
-    var collisionChoices: Int = 0
-    var collisionsAvoided: Int = 0
+    var crashChoices: Int = 0
+    var crashesAvoided: Int = 0
     var takeovers: Int = 0
     var totalDecisions: Int
     var modelDecisions: Int
@@ -455,8 +456,8 @@ final class GameController: ObservableObject {
             maxSustained: maxSustained,
             averagePerSecond: seconds > 0 ? Double(s.total) / seconds : 0,
             onTimePercent: s.onTimePercent()?.doubleValue,
-            collisionChoices: Int(s.collisionChoices),
-            collisionsAvoided: Int(s.collisionsAvoided),
+            crashChoices: Int(s.crashChoices),
+            crashesAvoided: Int(s.crashesAvoided),
             takeovers: Int(s.takeovers),
             totalDecisions: Int(s.total),
             modelDecisions: Int(s.count(source: .model)),
@@ -589,8 +590,8 @@ final class GameController: ObservableObject {
         h.dropped = Int(stats.dropped)
         h.lateAnswers = Int(stats.lateAnswers)
         h.onTimePercent = stats.onTimePercent()?.doubleValue
-        h.collisionChoices = Int(stats.collisionChoices)
-        h.collisionsAvoided = Int(stats.collisionsAvoided)
+        h.crashChoices = Int(stats.crashChoices)
+        h.crashesAvoided = Int(stats.crashesAvoided)
         h.takeovers = Int(stats.takeovers)
         // Sustained: the 2-second rate, counted only once the run has had two seconds to fill it.
         if !w.over, let start = runStart, (lastTime ?? start) - start > 2.5, stats.total > 0 {

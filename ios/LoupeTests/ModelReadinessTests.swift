@@ -127,6 +127,33 @@ final class ModelReadinessTests: XCTestCase {
         XCTAssertNil(ModelReadiness.State(launchValue: "maybe"))
     }
 
+    // MARK: Relaunch (bug 2026-09-26: onboarding came back on every launch)
+
+    /// The installed model must read as ready the moment readiness is created, with no run-loop turn:
+    /// RootView takes its launch decision from that first value. Before the fix the replayed `.ready`
+    /// arrived a turn later, the launch read `.missing`, and Get the Loupe Decision Model came back.
+    func testInstalledModelIsReadyImmediatelyAtLaunch() {
+        let m = FakeModel()
+        m.installed = true
+        m.status.send(.ready)                                // LayaModel.init: refresh() found the files
+        let r = readiness(m)                                  // no settle(): this is the launch
+        XCTAssertEqual(r.state, .ready, "an installed model reads as ready before the first run-loop turn")
+        XCTAssertFalse(RootView.getLayaAtLaunch(ready: r.isReady, launch: LaunchOptions()),
+                       "a relaunch with the model installed must not open Get the Loupe Decision Model")
+    }
+
+    /// A status published off the main thread still arrives (on the main thread).
+    func testStatusFromABackgroundThreadStillArrives() {
+        let m = FakeModel()
+        let r = readiness(m)
+        m.installed = true
+        let sent = expectation(description: "sent")
+        DispatchQueue.global().async { m.status.send(.ready); sent.fulfill() }
+        wait(for: [sent], timeout: 2)
+        settle()
+        XCTAssertEqual(r.state, .ready)
+    }
+
     // MARK: Onboarding
 
     func testGetLayaShowsAtLaunchUntilTheModelIsHere() {

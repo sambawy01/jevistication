@@ -21,7 +21,7 @@ struct SortSection: View {
         } header: {
             Text("Sorting")
         } footer: {
-            Text("Runs every judgment over every source that is on, skipping what is already sorted under the current wording, then the watchers. While charging it waits for iOS to offer a window; it stops when the phone is hot or in Low Power Mode, and pauses whenever you use the model yourself. Off unless you turn it on.")
+            Text("Runs every judgment over every source that is on, skipping what is already sorted under the current wording, then the watchers. While charging it waits for iOS to offer a window; it stops when the phone is hot or in Low Power Mode, and pauses whenever you use the model yourself. On unless you turn it off.")
         }
     }
 

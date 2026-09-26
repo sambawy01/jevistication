@@ -88,7 +88,8 @@ struct SpottedEntryRow: View {
         HStack(spacing: 10) {
             NeonIcon(name: entry.level.symbol, color: entry.level.color, size: 18)
             VStack(alignment: .leading, spacing: 2) {
-                Text(entry.domain).font(Typeface.mono(13)).foregroundStyle(Palette.ink).lineLimit(1)
+                // As written (punycode) when the name uses international letters, so a look-alike never reads as the real site.
+                Text(entry.domain == entry.host ? entry.domain : entry.host).font(Typeface.mono(13)).foregroundStyle(Palette.ink).lineLimit(1)
                 Text("\(entry.level.title) · \(entry.origin.title) · \(entry.at.formatted(date: .abbreviated, time: .shortened))")
                     .font(.caption).foregroundStyle(Palette.inkSoft).lineLimit(1)
             }

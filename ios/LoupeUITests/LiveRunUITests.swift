@@ -15,6 +15,14 @@ final class LiveRunUITests: XCTestCase {
         try? shot.pngRepresentation.write(to: URL(fileURLWithPath: Self.shots + "/\(name).png"))
     }
 
+    /// A live run's stage line with this label. Now keeps its own (off-screen) live run under the pushed Privacy
+    /// screen, so "liverun.stage" matches two elements and the first may be the hidden one: match on the label.
+    private func stage(_ app: XCUIApplication, _ format: String, _ args: CVarArg...) -> XCUIElement {
+        let label = NSPredicate(format: format, argumentArray: args)
+        let id = NSPredicate(format: "identifier == %@", "liverun.stage")
+        return app.descendants(matching: .any).matching(NSCompoundPredicate(andPredicateWithSubpredicates: [id, label])).firstMatch
+    }
+
     private func counter(_ app: XCUIApplication, _ id: String) -> Int {
         Int((app.descendants(matching: .any)["liverun.counter.\(id)"].value as? String) ?? "") ?? -1
     }
@@ -33,13 +41,16 @@ final class LiveRunUITests: XCTestCase {
         card.tap()
         let rerun = app.buttons["privacy.rerun"]
         XCTAssertTrue(rerun.waitForExistence(timeout: 30))
+        // On a fresh install the first check runs before the sample is read ("Files checked: 0"), and the check over
+        // the sample follows once the launch's scans settle (the sample, and Files, on by default since 2026-09-26).
+        // Wait for that one to finish, so the tap below starts a run rather than queueing behind an automatic one.
+        let settled = stage(app, "label BEGINSWITH %@ AND NOT (label BEGINSWITH %@)", "Files checked:", "Files checked: 0 ")
+        XCTAssertTrue(settled.waitForExistence(timeout: 120), "the check over the sample finished")
         expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: rerun)
         waitForExpectations(timeout: 60)
         rerun.tap()
         // The new run is live: its stage line says it is reading (the last run's result line said "Files checked").
-        let stage = app.descendants(matching: .any)["liverun.stage"]
-        expectation(for: NSPredicate(format: "label == %@", "Reading and deciding"), evaluatedWith: stage)
-        waitForExpectations(timeout: 30)
+        XCTAssertTrue(stage(app, "label == %@", "Reading and deciding").waitForExistence(timeout: 30))
         return app
     }
 
@@ -61,9 +72,8 @@ final class LiveRunUITests: XCTestCase {
         XCTAssertTrue(app.descendants(matching: .any)["liverun.node.walk"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["liverun.q3"].exists)
         // It finishes with the Folder Scan result line, the cards and the cost estimate.
-        let stage = app.descendants(matching: .any)["liverun.stage"]
-        expectation(for: NSPredicate(format: "label BEGINSWITH %@", "Files checked"), evaluatedWith: stage)
-        waitForExpectations(timeout: 60)
+        XCTAssertTrue(stage(app, "label BEGINSWITH %@ AND NOT (label BEGINSWITH %@)", "Files checked:", "Files checked: 0 ")
+            .waitForExistence(timeout: 60), "the run ends in its result line")
         let label = app.descendants(matching: .any)["liverun.cost.label"]
         for _ in 0..<6 where !label.isHittable { app.swipeUp() }
         XCTAssertEqual(label.label, "estimate · Claude Sonnet 5 list price as of 24 Sep 2026")

@@ -8,8 +8,13 @@ final class GetLayaUITests: XCTestCase {
 
     private func any(_ app: XCUIApplication, _ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
 
-    /// The one-time game intro may follow onboarding (depends on this simulator's history).
+    /// The one-time steps may follow Get the model (depends on this simulator's history): the permissions step,
+    /// protection, then the game intro. Each is skipped when shown.
     private func passIntroIfShown(_ app: XCUIApplication) {
+        let permissions = app.buttons["permissions.skip"]
+        if permissions.waitForExistence(timeout: 3) { permissions.tap() }
+        let protect = app.buttons["protect.step.continue"]
+        if protect.waitForExistence(timeout: 2) { protect.tap() }
         let skip = app.buttons["onboarding.skip"]
         if skip.waitForExistence(timeout: 3) { skip.tap() }
     }

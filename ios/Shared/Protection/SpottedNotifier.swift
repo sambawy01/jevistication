@@ -64,7 +64,7 @@ final class SpottedNotifier {
 
     func continued(host: String) -> Bool { stamps(Self.continuedKey, keep: Self.continuedFor)[host] != nil }
 
-    var notifySuspicious: Bool { defaults.bool(forKey: ProtectionGroup.Keys.notifySuspicious) }
+    var notifySuspicious: Bool { ProtectionGroup.notifySuspicious(defaults) }
 
     /// The rules, without the centre: level, the suspicious switch, continue, and the per-site limit.
     func shouldNotify(host: String, level: ProtectionLevel, userContinued: Bool) -> Bool {

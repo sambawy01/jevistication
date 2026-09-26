@@ -55,11 +55,38 @@ class PathTextTest {
         val w = open()
         w.addDepot(Depot(w.playerX + 5, w.playerY + 12))
         assertEquals("safe", PathText.describe(observe(w), 1))
-        w.setFuel(40.0)
+        w.setFuel(60.0)
         val low = observe(w)
         assertEquals("safe, fuel that way", PathText.describe(low, 1))
         assertEquals("safe", PathText.describe(low, -1))
-        assertEquals("fuel 40%, low", PathText.scene(low))
+        assertEquals("fuel 60%", PathText.scene(low))
+    }
+
+    @Test
+    fun `a way that runs dry while another reaches fuel reads as a crash`() {
+        val w = open()
+        w.addDepot(Depot(w.playerX + 5, w.playerY + 12))
+        w.setFuel(30.0)
+        val o = observe(w)
+        assertTrue(o.path(1)!!.predicted!!.fuel!!.reaches)
+        val dry = o.path(-1)!!.predicted!!.fuel!!
+        assertTrue(dry.runsDry)
+        assertEquals("crash: out of fuel in ${PathText.seconds(dry.dryTicks!!)}", PathText.describe(o, -1))
+        assertEquals("crash: out of fuel in 12 s", PathText.describe(o, -1), "30% at 2.5% a second")
+        assertEquals("safe, fuel that way", PathText.describe(o, 1))
+        assertEquals("fuel 30%, low", PathText.scene(o))
+        // A collision is said first: it comes sooner.
+        w.addEnemy(Enemy(EnemyKind.BOAT, w.playerX - 3.0, w.playerY + 4, 0.0))
+        assertTrue(PathText.describe(observe(w), -1).startsWith("crash: boat"))
+    }
+
+    @Test
+    fun `with no way reaching fuel running dry is no way's fault - nothing is said`() {
+        val w = open()
+        w.setFuel(10.0)
+        val o = observe(w)
+        assertTrue(o.paths.all { it.predicted!!.fuel!!.runsDry })
+        assertEquals(listOf("safe", "safe", "safe"), listOf(-1, 0, 1).map { PathText.describe(o, it) })
     }
 
     @Test
@@ -123,6 +150,6 @@ class PathTextTest {
     }
 
     private companion object {
-        const val GOLDEN = "8743dc419eadd7bc"
+        const val GOLDEN = "1642ad4bb499f3df"
     }
 }

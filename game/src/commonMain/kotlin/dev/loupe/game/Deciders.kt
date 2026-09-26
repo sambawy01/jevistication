@@ -156,22 +156,22 @@ class DecisionStats(private val window: Int = 256) {
 
     /**
      * Decisions (by the pilot, not mechanics) whose offered ways included one predicted to crash
-     * ([Prediction]) and one predicted safe: the only decisions where avoiding a predicted
-     * collision was a choice.
+     * ([Observation.predictedCrash]: a collision, or running out of fuel while another way reaches
+     * fuel) and one predicted safe: the only decisions where avoiding a predicted crash was a choice.
      */
-    var collisionChoices: Int = 0; private set
+    var crashChoices: Int = 0; private set
 
-    /** Of [collisionChoices], those where the way flown was predicted safe. */
-    var collisionsAvoided: Int = 0; private set
+    /** Of [crashChoices], those where the way flown was predicted safe. */
+    var crashesAvoided: Int = 0; private set
 
-    /** Counts one landed decision toward [collisionChoices] / [collisionsAvoided]. */
-    fun recordCollisionChoice(observation: Observation, flown: Action) {
-        val ways = ModelPilot.gates(observation, observation.legal.actions).map { it.steer }.distinct()
+    /** Counts one landed decision toward [crashChoices] / [crashesAvoided]; [gate] is the pilot's fuel rule. */
+    fun recordCrashChoice(observation: Observation, flown: Action, gate: FuelGate = FuelGate.SHIPPED) {
+        val ways = ModelPilot.gates(observation, observation.legal.actions, gate).map { it.steer }.distinct()
         if (ways.size < 2) return
-        val safe = ways.map { observation.path(it)?.predicted?.clear }
-        if (safe.any { it == true } && safe.any { it == false }) {
-            collisionChoices++
-            if (observation.path(flown.steer)?.predicted?.clear == true) collisionsAvoided++
+        val crash = ways.map { observation.predictedCrash(it) }
+        if (crash.any { it } && crash.any { !it }) {
+            crashChoices++
+            if (!observation.predictedCrash(flown.steer)) crashesAvoided++
         }
     }
 

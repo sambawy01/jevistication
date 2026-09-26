@@ -43,6 +43,10 @@ final class RenameShotsUITests: XCTestCase {
         XCTAssertTrue(any(app, "getLaya.screen").waitForExistence(timeout: 10))
         save("get-model-nohost")
         app.buttons["getLaya.later"].tap()
+        let permissions = app.buttons["permissions.skip"]
+        if permissions.waitForExistence(timeout: 3) { permissions.tap() }
+        let protect = app.buttons["protect.step.continue"]
+        if protect.waitForExistence(timeout: 2) { protect.tap() }
         let skip = app.buttons["onboarding.skip"]
         if skip.waitForExistence(timeout: 3) { skip.tap() }
 

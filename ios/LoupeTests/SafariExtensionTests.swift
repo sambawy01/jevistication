@@ -122,11 +122,13 @@ final class SafariExtensionTests: XCTestCase {
         _ = await e.handle(["type": "action", "host": "paypa1.com", "action": "back"])
         XCTAssertEqual(e.log.entries().first?.action, .wentBack)
 
-        // Already allowed this session: no log entry, no notification.
+        // Already allowed this session: no log entry, no notification. (The first ask above may have notified:
+        // suspicious sites notify by default since 2026-09-26; what matters is nothing after continuing.)
+        let before = center.posted.count
         let fresh = engine()
         _ = await ask(fresh, "xn--pypal-4ve.com", allowed: true)
         XCTAssertTrue(fresh.log.entries().isEmpty || fresh.log.entries().allSatisfy { $0.host != "xn--pypal-4ve.com" })
-        XCTAssertTrue(center.posted.isEmpty, "never a notification for a site the user chose to continue to")
+        XCTAssertEqual(center.posted.count, before, "never a notification for a site the user chose to continue to")
     }
 
     func testHelloRecordsWhenSafariLastAsked() async {

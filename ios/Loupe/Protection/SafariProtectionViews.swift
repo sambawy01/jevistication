@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The words shared by the card, the onboarding offer and the steps.
+/// The words shared by the card (also in onboarding's protection step) and the steps.
 enum SafariCopy {
     static let what = "Loupe can warn you before a phishing or look-alike website in Safari. iOS doesn't let apps see Chrome or other browsers, so this protects Safari only."
     static let beforeTap = "Safari will ask to let Loupe see the sites you visit; Loupe checks them on this iPhone."
@@ -191,38 +191,3 @@ struct SafariSettingsIllustration: View {
     }
 }
 
-/// The one-time offer at the end of onboarding (skippable: the sheet's "Not now" leaves it).
-struct SafariOnboardingOffer: View {
-    @ObservedObject var setup: SafariSetup = .shared
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("PROTECT SAFARI").font(Typeface.mono(11, weight: .medium)).tracking(0.8).foregroundStyle(Palette.cyan)
-            if setup.isOn {
-                Label("On · Safari protected", systemImage: "checkmark.shield.fill").font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Palette.okText)
-            } else {
-                Text("Get a warning before a phishing or look-alike website. " + SafariCopy.beforeTap)
-                    .font(.subheadline).foregroundStyle(Palette.overlayInk.opacity(0.85))
-                    .fixedSize(horizontal: false, vertical: true)
-                Button {
-                    Task { await setup.turnOn() }
-                } label: {
-                    Label("Turn on Safari protection", systemImage: "safari").font(.subheadline.weight(.semibold))
-                }
-                .buttonStyle(.bordered)
-                .tint(Palette.cyan)
-                .accessibilityIdentifier("onboarding.safari")
-            }
-        }
-        .task { await setup.refresh() }
-        .sheet(item: Binding(get: { setup.manual.map { ManualSheet(reason: $0) } }, set: { if $0 == nil { setup.manual = nil } })) { _ in
-            SafariStepsView()
-        }
-    }
-
-    private struct ManualSheet: Identifiable {
-        let reason: SafariSetup.ManualReason
-        var id: String { "\(reason)" }
-    }
-}

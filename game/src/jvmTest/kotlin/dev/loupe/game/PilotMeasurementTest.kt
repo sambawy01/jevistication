@@ -106,14 +106,24 @@ class PilotMeasurementTest {
             it.words = Words792::describe
             it.neutralWords = listOf("open water", "land close")
         }.named("v2")
+        // 2a5f67b (main before the fuel work): collision words, the 60% fuel gate.
+        name == "main" -> ModelPilot(backend, fuelGate = FuelGate.THIRST).also { it.words = WordsMain::describe }.named(name)
+        // Shipped: the fuel projection in the words, both fuel gates.
         name == "after" -> ModelPilot(backend)
+        name.startsWith("m:") -> Variant.model(name, backend)
         name == "gates-only" -> GatesOnlyPilot()
-        name == "baseline+sensor" -> SensorBaselinePilot()
+        name.startsWith("gates:") -> GatesOnlyPilot(Variant.gate(name.removePrefix("gates:"))).named(name)
+        name == "baseline+sensor" -> SensorBaselinePilot(fuel = false)
+        name == "baseline+fuel" -> SensorBaselinePilot(fuel = true)
         else -> BaselinePilot()
     }
 
-    private fun Pilot.named(n: String): Pilot = object : Pilot by this {
-        override val name: String = n
+    private fun Pilot.named(n: String): Pilot {
+        val g = (this as? GatedPilot)?.gate ?: (this as? ModelPilot)?.fuelGate ?: FuelGate.SHIPPED
+        return object : Pilot by this, GatedPilot {
+            override val name: String = n
+            override val gate: FuelGate = g
+        }
     }
 
     private val seeds: List<Long> = (System.getProperty("loupe.game.seeds")?.toInt() ?: 4).let { n ->
@@ -121,6 +131,16 @@ class PilotMeasurementTest {
         (first until first + n).toList()
     }
     private val seconds: Int = System.getProperty("loupe.game.seconds")?.toInt() ?: 45
+
+    init {
+        when (System.getProperty("loupe.game.gap")) {
+            "min" -> FuelOutlook.unseenGap = { d, l -> d.depotGapMin(l) }
+            "mean" -> FuelOutlook.unseenGap = { d, l -> (d.depotGapMin(l) + d.depotGapMax(l)) / 2 }
+            "max" -> FuelOutlook.unseenGap = { d, l -> d.depotGapMax(l) }
+            "two" -> FuelOutlook.unseenGap = { d, l -> d.depotGapMin(l) + d.depotGapMax(l) }
+            "three" -> FuelOutlook.unseenGap = { d, l -> 3 * (d.depotGapMin(l) + d.depotGapMax(l)) / 2 }
+        }
+    }
 
     @Test
     fun `Laya against the baseline on the phone's river`() {
@@ -132,6 +152,127 @@ class PilotMeasurementTest {
         report(Measure.table(runs))
         report(Measure.summary(runs))
         assertEquals(0, runs.sumOf { r -> r.decisions.count { it.source == DecisionSource.FAILURE } }, "the model path failed")
+    }
+
+    /** A decision-by-decision trace of one run (`-Ploupe.game.trace=<variant>`, first seed): diagnosis only. */
+    @Test
+    fun `trace one run`() {
+        val variant = System.getProperty("loupe.game.trace") ?: return
+        withModel { backend ->
+            val pilot = pilotNamed(variant, backend)
+            val out = StringBuilder()
+            val tracer = object : Pilot {
+                override val name = pilot.name
+                override fun decide(observation: Observation): PilotDecision {
+                    val d = pilot.decide(observation)
+                    val gate = (pilot as? GatedPilot)?.gate ?: FuelGate.SHIPPED
+                    val ways = ModelPilot.gates(observation, observation.legal.actions, gate).map { it.steer }
+                    val describe = if (variant.startsWith("m:")) Variant.WORDS.getValue(variant.split(':')[1]) else PathText::describe
+                    val words = ways.joinToString(" | ") { "${ModelPilot.way(it)}=${describe(observation, it)}" }
+                    val depot = observation.depot?.let { f("depot %.0f ahead %.1f across", it.ahead, it.across) } ?: "no depot"
+                    out.append(f("t%d fuel %d%% x=%.1f %s | legal %s | %s -> %s (%s)\n", observation.tick, observation.fuelPercent, observation.playerX, depot,
+                        observation.legal.actions.map { it.steer }.distinct(), words, d.action, d.source))
+                    return d
+                }
+            }
+            var simNanos = 0L
+            GameSession(seeds.first(), Control.Piloted(LockstepDecider(tracer, 4)), clock = { simNanos }, difficulty = Difficulty.PROGRESSIVE).use { s ->
+                while (!s.world.over && s.world.tick < seconds * Rules.TICK_HZ) {
+                    val before = s.world.tick
+                    val refuel = s.world.tally.refuelTicks
+                    s.tick()
+                    simNanos += 1_000_000_000L / Rules.TICK_HZ
+                    if (s.lastOverride?.tick == before) out.append("  override at $before: ${s.lastOverride}\n")
+                    if (s.world.tally.refuelTicks > refuel) out.append("  refuel tick ${s.world.tick} fuel ${s.world.fuel.toInt()}\n")
+                    for (e in s.world.events) if (e is GameEvent.Destroyed && e.what == "depot") out.append("  DEPOT SHOT at ${s.world.tick}\n")
+                }
+                out.append("END ${s.world.death} rows ${s.world.cameraY}\n")
+            }
+            report(out.toString())
+        }
+    }
+
+    private fun f(format: String, vararg args: Any?): String = String.format(Locale.ROOT, format, *args)
+
+    /**
+     * A controlled probe of wordings (`-Ploupe.game.probe=1`): synthetic scenes of two or three ways,
+     * each with a right answer, asked with the pilot's own word-bias correction, every scene also
+     * asked with the ways swapped round. Reports, per question and fuel wording, the share of scenes
+     * answered right: fuel taken when both ways are safe, a crash never flown for fuel, dry ways avoided.
+     */
+    @Test
+    fun `probe fuel wordings`() {
+        System.getProperty("loupe.game.probe") ?: return
+        withModel { backend ->
+            data class Words(val name: String, val toward: String, val other: String, val dry: String)
+            val words = listOf(
+                Words("fuel-in/no-fuel", "fuel in 2 s", "no fuel this way", "crash: out of fuel in 8 s"),
+                Words("fuel-in/-", "fuel in 2 s", "", "crash: out of fuel in 8 s"),
+                Words("gets-fuel/-", "gets fuel in 2 s", "", "crash: out of fuel in 8 s"),
+                Words("refuels/-", "refuels in 2 s", "", "crash: tank empty in 8 s"),
+                Words("refuels/no-refuel", "refuels in 2 s", "no refuel", "crash: tank empty in 8 s"),
+                Words("fuel/-/empty", "fuel in 2 s", "", "crash: tank empty in 8 s"),
+            )
+            val questions = listOf(
+                "Which way is safest?",
+                "Which way is safest? Running out of fuel is a crash.",
+                "Which way is safe and gets fuel?",
+                "Which way is safe and refuels?",
+                "Which way is safest and has fuel?",
+                "Which way is safe, with fuel?",
+            )
+            fun d(head: String, tail: String) = if (tail.isEmpty()) head else "$head, $tail"
+            val only = System.getProperty("loupe.game.probe")
+            val scenes = listOf("fuel 90%", "fuel 65%", "fuel 40%, low")
+            for (q in questions) for (w in words) {
+                if (only != "1" && !only!!.split(',').any { it == w.name || q.startsWith(it) }) continue
+                val t = listOf("0.5 s", "2 s", "4 s")
+                fun tw(i: Int) = w.toward.replace("2 s", t[i % 3])
+                // (name, descriptions by way, the acceptable answers)
+                val cases = listOf(
+                    Triple("take fuel, 2 ways", listOf(d("safe", w.other), d("safe", tw(0))), setOf(1)),
+                    Triple("take fuel, 2 ways, later", listOf(d("safe", w.other), d("safe", tw(2))), setOf(1)),
+                    Triple("take fuel, 3 ways", listOf(d("safe", w.other), d("safe", tw(1)), d("safe", w.other)), setOf(1)),
+                    Triple("take fuel, 3 ways, side", listOf(d("safe", w.other), d("safe", w.other), d("safe", tw(1))), setOf(2)),
+                    Triple("take fuel beside moving away", listOf(d("safe, heli moving away", w.other), d("safe", tw(1))), setOf(1)),
+                    Triple("no crash for fuel", listOf(d("crash: land in 1 s", tw(0)), d("safe", w.other)), setOf(1)),
+                    Triple("no crash for fuel, 3", listOf(d("crash: boat crossing in, 0.5 s", tw(1)), d("safe", w.other), d("safe", w.other)), setOf(1, 2)),
+                    Triple("dry vs fuel", listOf(d(w.dry, w.other), d("safe", tw(1))), setOf(1)),
+                    Triple("dry vs fuel, 3", listOf(d("safe", tw(2)), d(w.dry, w.other), d(w.dry, w.other)), setOf(0)),
+                    Triple("dry vs collision-free fuel", listOf(d(w.dry, w.other), d("safe", tw(2)), d("crash: land in 0.5 s", w.other)), setOf(1)),
+                    Triple("collision, fuel words around", listOf(d("crash: heli in 0.5 s", w.other), d("safe", w.other)), setOf(1)),
+                    Triple("collisions, 3", listOf(d("crash: land in 1.5 s", w.other), d("safe", w.other), d("crash: boat in 1 s", w.other)), setOf(1)),
+                )
+                var right = 0
+                var asked = 0
+                var crashFlown = 0
+                val wrong = mutableListOf<String>()
+                for (scene in scenes) for ((name, descs, want) in cases) {
+                    for (swap in listOf(false, true)) {
+                        val order = if (swap) descs.indices.reversed().toList() else descs.indices.toList()
+                        val labels = when (descs.size) {
+                            2 -> listOf("straight", "right")
+                            else -> listOf("left", "straight", "right")
+                        }
+                        val shown = order.map { descs[it] }
+                        val j = Judgment.Choice(ModelPilot.JUDGMENT_ID, q, labels, FailurePosture.NULL_ACTION, labels.zip(shown).toMap())
+                        val raw = j.validate(backend.score(j, TextState.build(listOf("river" to scene), 600)).masses).let { dist -> labels.map { dist.getValue(it).value } }
+                        val prior = DoubleArray(labels.size)
+                        for (same in ModelPilot.NEUTRAL) {
+                            val nj = Judgment.Choice(ModelPilot.JUDGMENT_ID, q, labels, FailurePosture.NULL_ACTION, labels.associateWith { same })
+                            val nd = nj.validate(backend.score(nj, TextState.build(listOf("river" to ModelPilot.NEUTRAL_SCENE), 600)).masses)
+                            labels.forEachIndexed { i, l -> prior[i] += nd.getValue(l).value / ModelPilot.NEUTRAL.size }
+                        }
+                        val best = raw.indices.maxBy { raw[it] / prior[it] }
+                        val picked = order[best]
+                        asked++
+                        if (picked in want) right++ else wrong += "$name@${scene.take(8)}${if (swap) "/sw" else ""}"
+                        if (descs[picked].startsWith("crash")) crashFlown++
+                    }
+                }
+                report(f("probe %-58s %-18s right %2d/%d  crash flown %d  wrong: %s", "\"$q\"", w.name, right, asked, crashFlown, wrong.groupingBy { it.substringBefore('@') }.eachCount()))
+            }
+        }
     }
 
     @Test
@@ -164,7 +305,16 @@ object Measure {
         val pickedHit: Boolean = false,
         /** What the way flown was predicted to hit, if anything. */
         val pickedHitWith: String? = null,
+        /** The ways on offer included one predicted to crash (a collision or running dry) and one safe. */
+        val safeAndCrash: Boolean = false,
+        val pickedCrash: Boolean = false,
+        /** The way flown was predicted to run dry (and no collision). */
+        val pickedDry: Boolean = false,
+        val fuelPercent: Int = 0,
     )
+
+    /** A way is predicted to crash: a collision, or running dry while another way reaches fuel. */
+    fun crash(o: Observation, steer: Int): Boolean = o.predictedCrash(steer)
 
     data class Run(
         val pilot: String,
@@ -183,6 +333,9 @@ object Measure {
         val dropped: Int,
         val lateAnswers: Int,
         val decisions: List<Decision>,
+        /** Depots the plane flew past (below it at the end), and of those, the ones neither refuelled on nor shot. */
+        val depotsPassed: Int = 0,
+        val depotsMissed: Int = 0,
     )
 
     /** Ticks after a decision in which an override or a death counts as "what happened next". */
@@ -197,8 +350,10 @@ object Measure {
                 val d = pilot.decide(observation)
                 val b = shadow.decide(observation).action
                 val sorted = d.raw?.values?.sortedDescending()
-                val ways = ModelPilot.gates(observation, observation.legal.actions).map { it.steer }
+                val gate = (pilot as? GatedPilot)?.gate ?: (pilot as? ModelPilot)?.fuelGate ?: FuelGate.SHIPPED
+                val ways = ModelPilot.gates(observation, observation.legal.actions, gate).map { it.steer }
                 val hits = ways.map { observation.path(it)?.predicted?.clear == false }
+                val crashes = ways.map { crash(observation, it) }
                 val picked = observation.path(d.action.steer)?.predicted
                 log += Decision(
                     tick = observation.tick, source = d.source, action = d.action, baseline = b,
@@ -208,11 +363,18 @@ object Measure {
                     clearAndHit = hits.any { it } && hits.any { !it },
                     pickedHit = picked?.clear == false,
                     pickedHitWith = picked?.hitWith,
+                    safeAndCrash = crashes.any { it } && crashes.any { !it },
+                    pickedCrash = crash(observation, d.action.steer),
+                    pickedDry = picked?.clear == true && crash(observation, d.action.steer),
+                    fuelPercent = observation.fuelPercent,
                 )
                 return d
             }
         }
         val overrides = mutableListOf<Long>()
+        val seenDepots = HashSet<Pair<Double, Double>>()
+        val reachedDepots = HashSet<Pair<Double, Double>>()
+        val shotDepots = HashSet<Pair<Double, Double>>()
         var simNanos = 0L
         GameSession(seed, Control.Piloted(LockstepDecider(recorder, delayTicks)), clock = { simNanos }, difficulty = difficulty).use { s ->
             while (!s.world.over && s.world.tick < maxTicks) {
@@ -220,6 +382,12 @@ object Measure {
                 s.tick()
                 simNanos += 1_000_000_000L / Rules.TICK_HZ
                 if (s.lastOverride?.tick == before) overrides += before
+                val plane = s.world.player
+                for (dp in s.world.depots) {
+                    val k = dp.x to dp.y
+                    seenDepots += k
+                    if (!dp.alive) shotDepots += k else if (dp.overlaps(plane)) reachedDepots += k
+                }
             }
             val w = s.world
             val deathTick = if (w.over) w.tick else Long.MAX_VALUE
@@ -233,6 +401,8 @@ object Measure {
                 pilot.name, seed, w.cameraY, w.score, w.level, w.death, w.tally.kills, w.tally.depotsShot,
                 w.tally.bridges, w.tally.refuelTicks, overrides.size, w.tick, s.stats.requested, s.stats.dropped,
                 s.stats.lateAnswers, log,
+                depotsPassed = seenDepots.count { (_, y) -> y + Depot.HEIGHT < w.playerY },
+                depotsMissed = seenDepots.count { k -> k.second + Depot.HEIGHT < w.playerY && k !in reachedDepots && k !in shotDepots },
             )
         }
     }
@@ -278,6 +448,7 @@ object Measure {
                     group.sumOf { it.dropped }, group.sumOf { it.lateAnswers }, group.sumOf { it.requested },
                 ),
             )
+            appendLine(f("  depots flown past %d, missed (neither refuelled on nor shot) %d", group.sumOf { it.depotsPassed }, group.sumOf { it.depotsMissed }))
             if (model.isNotEmpty()) {
                 val offered = model.groupingBy { it.offered }.eachCount().toSortedMap()
                 appendLine(
@@ -316,6 +487,16 @@ object Measure {
                         group.count { it.death == DeathCause.ENEMY },
                     ),
                 )
+                val any = all.filter { it.safeAndCrash }
+                val anyBad = any.filter { it.pickedCrash }
+                appendLine(
+                    f(
+                        "  predicted-crash avoidance (collision or fuel): %d decisions offered a safe way and a predicted crash; flew a predicted crash %d (%.1f%%), of which running dry %d; fuel deaths %d",
+                        any.size, anyBad.size, pct(anyBad.size, any.size), anyBad.count { it.pickedDry },
+                        group.count { it.death == DeathCause.FUEL },
+                    ),
+                )
+                appendLine(f("  per-seed rows %s", group.sortedBy { it.seed }.joinToString(" ") { f("%d:%.0f", it.seed, it.rows) }))
             }
         }
     }
@@ -377,25 +558,194 @@ object Measure {
     private fun pct(n: Int, d: Int): Double = if (d == 0) 0.0 else 100.0 * n / d
 
     private fun f(format: String, vararg args: Any?): String = String.format(Locale.ROOT, format, *args)
+
 }
 
 /**
- * The baseline with the collision sensor: its own move, unless that way is predicted to hit and a
- * legal way is predicted clear — then the clear way nearest its preference, gun as it wanted.
+ * The baseline with the sensor: its own move, unless that way is predicted to crash — a collision,
+ * or (with [fuel]) running dry while another way reaches fuel — and a legal way is predicted safe:
+ * then the safe way nearest its preference, gun as it wanted.
  */
-class SensorBaselinePilot : Pilot {
-    override val name: String = "baseline+sensor"
+class SensorBaselinePilot(private val fuel: Boolean = false) : Pilot {
+    override val name: String = if (fuel) "baseline+fuel" else "baseline+sensor"
     private val inner = BaselinePilot()
+
+    private fun safe(o: Observation, steer: Int): Boolean {
+        val p = o.path(steer)?.predicted ?: return true
+        return p.clear && !(fuel && p.fuel?.runsDry == true && o.fuelSomewhere)
+    }
 
     override fun decide(observation: Observation): PilotDecision {
         val d = inner.decide(observation)
-        val mine = observation.path(d.action.steer)?.predicted ?: return d
-        if (mine.clear) return d
+        if (safe(observation, d.action.steer)) return d
         val legal = observation.legal.actions
-        val clear = legal.map { it.steer }.distinct().filter { observation.path(it)?.predicted?.clear == true }
+        val clear = legal.map { it.steer }.distinct().filter { safe(observation, it) }
         val steer = clear.minByOrNull { abs(it - d.action.steer) } ?: return d
         return d.copy(action = closestLegal(Action.of(steer, d.action.fire), legal.filter { it.steer == steer }))
     }
+}
+
+/** A pilot whose ways are narrowed by [ModelPilot.gates] with [gate]: the recorder asks the same. */
+interface GatedPilot {
+    val gate: FuelGate
+}
+
+/** Measurement variants: `m:<words>:<question>:<gate>`, e.g. `m:f1:q1:dry`. */
+object Variant {
+    val QUESTIONS = mapOf(
+        "q0" to "Which way is safest?",
+        "q1" to "Which way is safest? Running out of fuel is a crash.",
+        "q2" to "Which way is safest? No fuel is a crash.",
+        "q3" to "Which way is safe from a crash or running out of fuel?",
+    )
+
+    val WORDS: Map<String, (Observation, Int) -> String> = mapOf(
+        "main" to WordsMain::describe,
+        "f1" to WordsFuel::fuelIn,
+        "f2" to WordsFuel::allReach,
+        "f3" to WordsFuel::noNegative,
+        "f4" to WordsFuel::dryOnly,
+        "f5" to WordsFuel::relative,
+        "f6" to PathText::describe,
+        "f7" to { o, st -> WordsFuel.legacyTail(o, st, wanted = 101) },
+    )
+
+    fun gate(g: String): FuelGate = when (g) {
+        "thirst" -> FuelGate.THIRST
+        "dry" -> FuelGate.DRY
+        "both" -> FuelGate.BOTH
+        "none" -> FuelGate.NONE
+        else -> error("gate $g")
+    }
+
+    fun model(name: String, backend: Backend): Pilot {
+        val (_, w, q, g) = name.split(':')
+        val pilot = ModelPilot(backend, question = QUESTIONS.getValue(q), fuelGate = gate(g))
+        pilot.words = WORDS.getValue(w)
+        return object : Pilot by pilot, GatedPilot {
+            override val name: String = name
+            override val gate: FuelGate = pilot.fuelGate
+        }
+    }
+}
+
+/** 2a5f67b's words, verbatim: collisions, and the fuel words from before the projection. */
+object WordsMain {
+    fun describe(o: Observation, steer: Int): String {
+        val p = o.path(steer) ?: return PathText.SAFE
+        val parts = mutableListOf<String>()
+        val pr = p.predicted
+        if (pr != null) {
+            val crash = PathText.collision(pr)
+            if (crash != null) {
+                parts += crash
+            } else {
+                parts += PathText.SAFE
+                pr.leaving?.let { parts += "$it moving away" }
+            }
+        }
+        if (o.fuelPercent < PathText.FUEL_WANTED) {
+            val onPath = p.depotRows
+            if (onPath != null) {
+                parts += "fuel ${PathText.near(onPath)}"
+            } else {
+                o.depot?.let { d ->
+                    val side = when {
+                        d.across < -1.0 -> -1
+                        d.across > 1.0 -> 1
+                        else -> 0
+                    }
+                    if (side == steer) parts += "fuel that way"
+                }
+            }
+        }
+        return if (parts.isEmpty()) PathText.SAFE else parts.joinToString(", ")
+    }
+}
+
+/** Fuel wordings tried on the dev seeds beside [PathText.describe] (docs/BUILD.md, 2026-09-26). */
+object WordsFuel {
+    const val NO_FUEL: String = "no fuel this way"
+
+    /** True when [steer] heads for the depot [fuel] reaches. */
+    fun toward(fuel: FuelOutlook, steer: Int): Boolean = fuel.depotAcross?.let { FuelOutlook.heads(steer, it) } ?: false
+
+    /** f1: "fuel in 2 s" on the way heading for the depot it reaches, "no fuel this way" where none is reached. */
+    fun fuelIn(o: Observation, steer: Int): String {
+        val parts = head(o, steer)
+        val fuel = o.path(steer)?.predicted?.fuel
+        if (fuel != null) {
+            val t = fuel.refuelTicks
+            if (t == null) parts += NO_FUEL else if (toward(fuel, steer)) parts += "fuel in ${PathText.seconds(t)}"
+        }
+        return parts.joinToString(", ")
+    }
+
+    private fun head(o: Observation, steer: Int): MutableList<String> {
+        val pr = o.path(steer)?.predicted ?: return mutableListOf(PathText.SAFE)
+        val fuel = pr.fuel
+        val crash = PathText.collision(pr)
+        return when {
+            crash != null -> mutableListOf(crash)
+            fuel != null && fuel.runsDry && o.fuelSomewhere -> mutableListOf("crash: out of fuel in ${PathText.seconds(fuel.dryTicks!!)}")
+            else -> mutableListOf(PathText.SAFE).also { l -> pr.leaving?.let { l += "$it moving away" } }
+        }
+    }
+
+    /** Every way that reaches fuel says when. */
+    fun allReach(o: Observation, steer: Int): String {
+        val parts = head(o, steer)
+        val fuel = o.path(steer)?.predicted?.fuel
+        if (fuel != null) parts += fuel.refuelTicks?.let { "fuel in ${PathText.seconds(it)}" } ?: NO_FUEL
+        return parts.joinToString(", ")
+    }
+
+    /** Only the way toward fuel says so; no "no fuel this way". */
+    fun noNegative(o: Observation, steer: Int): String {
+        val parts = head(o, steer)
+        val fuel = o.path(steer)?.predicted?.fuel
+        if (fuel?.refuelTicks != null && toward(fuel, steer)) parts += "fuel in ${PathText.seconds(fuel.refuelTicks)}"
+        return parts.joinToString(", ")
+    }
+
+    /** As [PathText.describe], but "no fuel this way" only when another way reaches fuel. */
+    fun relative(o: Observation, steer: Int): String {
+        val parts = head(o, steer)
+        val fuel = o.path(steer)?.predicted?.fuel
+        if (fuel != null) {
+            val t = fuel.refuelTicks
+            when {
+                t != null && toward(fuel, steer) -> parts += "fuel in ${PathText.seconds(t)}"
+                t == null && o.fuelSomewhere -> parts += NO_FUEL
+            }
+        }
+        return parts.joinToString(", ")
+    }
+
+    /** Collisions, running dry, and 2a5f67b's fuel words ("fuel close", "fuel that way") below [wanted] percent. */
+    fun legacyTail(o: Observation, steer: Int, wanted: Int): String {
+        val parts = head(o, steer)
+        val p = o.path(steer)
+        if (p != null && o.fuelPercent < wanted) {
+            val onPath = p.depotRows
+            if (onPath != null) {
+                parts += "fuel ${PathText.near(onPath)}"
+            } else {
+                o.depot?.let { d ->
+                    val side = when {
+                        d.across < -1.0 -> -1
+                        d.across > 1.0 -> 1
+                        else -> 0
+                    }
+                    if (side == steer) parts += "fuel that way"
+                }
+            }
+        }
+        return parts.joinToString(", ")
+    }
+
+    /** Collisions and running dry only; no other fuel words. */
+    fun dryOnly(o: Observation, steer: Int): String = head(o, steer).joinToString(", ")
 }
 
 /** The 792c86e words, verbatim: what lies along each way, without motion. */
@@ -429,12 +779,12 @@ object Words792 {
  * when straight is offered, otherwise a seeded coin between the ways left. It answers "how much of
  * the flying is the gates and the safety net?", so the model's share is not overstated.
  */
-class GatesOnlyPilot : Pilot {
+class GatesOnlyPilot(override val gate: FuelGate = FuelGate.SHIPPED) : Pilot, GatedPilot {
     override val name: String = "gates"
     private val coin = kotlin.random.Random(7)
 
     override fun decide(observation: Observation): PilotDecision {
-        val offered = ModelPilot.gates(observation, observation.legal.actions)
+        val offered = ModelPilot.gates(observation, observation.legal.actions, gate)
         if (offered.size == 1) return PilotDecision(offered.single(), DecisionSource.MECHANICAL, observedTick = observation.tick)
         val pick = offered.firstOrNull { it.steer == 0 } ?: offered[coin.nextInt(offered.size)]
         return PilotDecision(pick, DecisionSource.MODEL, offered.associateWith { if (it == pick) 1.0 else 0.0 }, observedTick = observation.tick)

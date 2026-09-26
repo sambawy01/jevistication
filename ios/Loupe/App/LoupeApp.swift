@@ -17,6 +17,14 @@ struct LoupeApp: App {
         if ProcessInfo.processInfo.arguments.contains("-LoupeResetModelConsent") {
             UserDefaults.standard.removeObject(forKey: ModelConsent.key)
         }
+        // -LoupeResetOnboarding: a fresh install's onboarding and default-on switches (the relaunch UI test's
+        // first launch only; every later launch goes without it, so what the test set must survive).
+        if ProcessInfo.processInfo.arguments.contains("-LoupeResetOnboarding") {
+            OnboardingRecord().reset()
+            UserDefaults.standard.removeObject(forKey: SortService.enabledKey)
+            ProtectionGroup.defaults.removeObject(forKey: ProtectionGroup.Keys.notifySuspicious)
+            try? FileManager.default.removeItem(at: LedgerService.defaultHome().appendingPathComponent("sources/enabled.json"))
+        }
         #endif
         // Dark neon everywhere (owner decision 2026-09-24): bars, tabs, controls.
         NeonChrome.install()
@@ -65,6 +73,8 @@ struct LaunchOptions {
     /// -LoupeModelState ready|missing: `ModelReadiness` reads as this instead of the files, so UI tests
     /// drive Get Laya and the locked states without the 400 MB model (-LoupeNoModel implies missing).
     var modelState: ModelReadiness.State?
+    /// -LoupeModelState installed: readiness follows a stand-in installed model through its real path (no override).
+    var modelInstalledStandIn = false
     var gameSeed: Int64 = 1      // -LoupeSeed n
     var judgmentDemo: String?    // -LoupeJudgmentDemo <template id>: add it, open its results, run
     var openLibrary = false      // -LoupeLibrary: open Judgments on the Library
@@ -75,6 +85,8 @@ struct LaunchOptions {
     var fakeAssistant = false    // -LoupeFakeAssistant (DEBUG): a configured writing assistant whose provider is an in-app fake (no network)
     var privacyPhotoDemo = false // -LoupePrivacyPhotoDemo (DEBUG, with -LoupeFixtures): a rendered test-card photo as an OCR'd item
     var reviewDemo = false       // -LoupeReviewDemo (DEBUG, with -LoupeFixtures): a duplicate pair in the (throwaway) inbox, Files on
+    /// -LoupePermissions granted|denied (DEBUG): onboarding's permissions step answers without iOS prompts.
+    var fakePermissions: PhonePermission?
 
     static let current: LaunchOptions = {
         var o = LaunchOptions()
@@ -90,7 +102,10 @@ struct LaunchOptions {
         o.skipOnboarding = args.contains("-LoupeSkipOnboarding")
         if let i = args.firstIndex(of: "-LoupeGame"), i + 1 < args.count { o.game = GameMode(rawValue: args[i + 1]) }
         o.noModel = args.contains("-LoupeNoModel")
-        if let i = args.firstIndex(of: "-LoupeModelState"), i + 1 < args.count { o.modelState = ModelReadiness.State(launchValue: args[i + 1]) }
+        if let i = args.firstIndex(of: "-LoupeModelState"), i + 1 < args.count {
+            o.modelState = ModelReadiness.State(launchValue: args[i + 1])
+            o.modelInstalledStandIn = args[i + 1] == "installed"
+        }
         if o.noModel { o.modelState = .missing }
         if let i = args.firstIndex(of: "-LoupeSeed"), i + 1 < args.count, let n = Int64(args[i + 1]) { o.gameSeed = n }
         if let i = args.firstIndex(of: "-LoupeJudgmentDemo"), i + 1 < args.count { o.judgmentDemo = args[i + 1] }
@@ -102,6 +117,9 @@ struct LaunchOptions {
         o.fakeAssistant = args.contains("-LoupeFakeAssistant")
         o.inboxDemo = args.contains("-LoupeInboxDemo") && o.fixtureMode
         if let i = args.firstIndex(of: "-LoupeOpen"), i + 1 < args.count { o.openScreen = args[i + 1] }
+        if let i = args.firstIndex(of: "-LoupePermissions"), i + 1 < args.count {
+            o.fakePermissions = args[i + 1] == "denied" ? .denied : .granted
+        }
         #endif
         return o
     }()

@@ -296,10 +296,11 @@ threshold, a baseline autopilot and a headless model-vs-baseline run. *Accept* (
 model decides at ≥10 Hz with bars visible **on a phone**, offline, and the game reports honestly
 whether it beats the baseline. The desktop half is met (10 decisions/s; since 2026-09-25 one
 three-way "which way is safest?" question over motion-aware collision predictions, ~25 ms P50 on an M4
-CPU); the phone half is not measured, and untuned it does not beat the baseline (502 vs 543 rows over 20
-seeds), though it now flies a way predicted to crash, when a safe one is on offer, 5.6% of the time (was
-52%). Since 2026-09-25 the demo shows off the speed and privacy of live on-device decisions, not a race
-against the rules — see the progress log.
+CPU); the phone half is not measured, and untuned it does not beat the baseline (532 vs 543 rows over 20
+seeds, since 2026-09-26's fuel projection; 502 before), though it flies a way predicted to crash, when a
+safe one is on offer, about 6% of the time (was 52%), and running out of fuel now counts as a crash (fuel
+deaths 12 → 10 of 20). Since 2026-09-25 the demo shows off the speed and privacy of live on-device
+decisions, not a race against the rules — see the progress log.
 
 ---
 
@@ -1642,6 +1643,207 @@ their acceptance criteria are met; entries here record increments toward them.
   `ResultsDashboardUITests` (a donut segment filters the list, its chip clears it, correcting an item moves the
   header and Undo restores it; swipe to correct; screenshots with `TEST_RUNNER_LOUPE_SHOTS`). Not done: which words
   decided (the gates do not expose their matches and the model gives none); thumbnails for fixture items (glyphs).
+- **2026-09-26 — iPhone: settings survive a relaunch; on-device features on by default; one permissions step in
+  onboarding (owner report: "When the app is closed and reopened, all the changes I made are restored to the
+  onboarding setup").** *Root cause, with evidence.* The owner's phone (build ff87ac7, pulled read-only with
+  `devicectl`) had every change saved: `onboarding.seen = true`, `sources/enabled.json` =
+  `{sample: false, photos: false, files, contacts, calendar, mail: true}`, the online-check switches in both the
+  app's and the App Group's plist, and the model's files (`laya-multilingual-choice.int8.onnx` 366 MB,
+  `tokenizer.json`) in Application Support. Nothing reset them. What came back was the screen: `ModelReadiness`
+  subscribed to `LayaModel.$status` through `.receive(on: RunLoop.main)`, so the replayed `.ready` arrived one
+  run-loop turn after init; `RootView` takes its launch decision from `ModelReadiness.shared.isReady` in a `@State`
+  initialiser, read `.missing`, and opened **Get the Loupe Decision Model** (the start of onboarding) on every
+  launch, even with the model installed. Reproduced on the simulator with the pinned files linked in and
+  `onboarding.seen` set: every launch opened Get the model with "The decision model is on this iPhone and ready".
+  Ruled out: no `-Loupe…` argument in the scheme or in `device-build.sh`; the bundle-ID move left no stale suite (the
+  app reads `com.loupe-ai.ios` and `group.com.loupe-ai.ios`, both populated); the App Group mirror of the online
+  switches is written from the app's own values, never defaults over them; nothing is kept in Caches or tmp.
+  *Fix:* a status published on the main thread is applied at once (off-main still hops), so readiness is right
+  before init returns. *Hardening found on the way:* `phone-state.json`, `bookmarks.json` and `mail-account.json`
+  use complete file protection and are unreadable while the phone is locked (the pull failed with EPERM on the
+  locked phone); `PhoneStateStore.set` no longer rewrites an unreadable file from nothing, and Files and Mail scans
+  wait for protected data, so a locked background launch (background sorting is now on) cannot store an empty
+  scan over the real one. *Found by the full suite once Files was on by default:* a phone-source scan bumped
+  `revision` while it still read as scanning, and Now re-runs the watchers, the privacy check and mail triage only
+  when nothing scans, so the Files scan that now starts at every launch swallowed the sample scan's signal and none
+  of them ran; `scanPhone` signals once more after it clears its flag. *Onboarding* (`ios/Loupe/Onboarding/`): `LaunchFlow` — Get the model (while missing, per
+  the 2026-09-25 rule), then one **permissions step** ("Loupe works on this iPhone with your photos, files, calendar
+  and contacts. Nothing leaves the phone."; Allow access walks iOS's prompts for Photos, Calendar full access,
+  Contacts and notifications in sequence with a one-line reason each and marks what was granted; denied gets a
+  gentle "Allow in Settings", here and on the source's card; a source the user turned off is not asked; Files needs
+  no prompt; Mail is offered through Sources; Skip for now), then **protection** (the Safari card and the clipboard
+  agent's `ClipboardSetupCard`), then the game intro (no longer carrying the Safari offer). Each step is recorded
+  when left either way and never returns; a launch cut short resumes at the step it stopped on. *Defaults* (owner
+  decision: every on-device feature on; anything that sends even a domain stays off; "never set" is told apart from
+  "set off", so a switch the user turned off stays off):
+
+  | Switch | Old default | New default |
+  |---|---|---|
+  | Sources → Photos | off | **on** (iOS permission asked in onboarding or by Allow access) |
+  | Sources → Files | off | **on** (no prompt; folders are picked in Sources) |
+  | Sources → Calendar | off | **on** (full access, asked in onboarding) |
+  | Sources → Contacts | off | **on** (asked in onboarding) |
+  | Sources → Mail | off | off: needs a sign-in and is online; offered in onboarding and Sources |
+  | Sources → Sample data, Inbox | on | on (unchanged) |
+  | Me → Sort while charging (background sorting) | off | **on** (still charging-only; heat, Low Power Mode and model-use gates unchanged) |
+  | Guard → Protection → Also notify me about suspicious sites | off | **on** (dangerous sites already always notified once notifications are allowed) |
+  | Clipboard → Check what I copy | on | on (the clipboard agent's default) |
+  | Model settings: use the decision model per feature, calibration, rules first, baseline switch, read content, OCR | on | on (unchanged) |
+  | Watchers, privacy check, mail triage rules | no switch | run whenever their sources are on (unchanged) |
+  | Online checks: domain facts, known-phishing lists, OpenPhish, PhishTank, DNS facts, domain blocklists, Safe Browsing | off | off (unchanged; Phishing.Database and the three blocklists are sub-switches under masters that stay off) |
+  | Web questions' per-source switches (the web helper) | off | off (unchanged; the "Online helper" master reads on but nothing is sent while every source is off) |
+  | Writing assistant | off | off (unchanged; online) |
+
+  *Tests:* `SettingsPersistenceTests` (15: the launch flow in order, a relaunch after onboarding opens the tabs, the
+  installed model at launch does not reopen onboarding, skipped steps stay done and a cut-short launch resumes, the
+  on-device sources on and Mail offered, a switch turned off stays off across a new service over the same home, the
+  owner's own `enabled.json` read back as set, unreadable phone state left alone, suspicious notifications, online
+  checks off, the permissions walk in order with denied marked, already-answered and switched-off not asked, the
+  notification status mapping); `ModelReadinessTests` + 2 (an installed model is ready before the first run-loop
+  turn; a status from a background thread still arrives); `SortTests` (on by default, an explicit off survives a
+  relaunch); `PersistenceUITests` (2: a fresh install walks the permissions step, protection and the intro, Contacts
+  and Sort while charging are turned off, the app is terminated and relaunched: straight to the tabs, both still
+  off, Calendar still on; a skipped permissions step never returns). The unit and UI relaunch tests were run
+  against the old `receive(on:)` line and fail there. DEBUG: `-LoupeModelState installed` (readiness over a
+  stand-in installed model through the real path), `-LoupeResetOnboarding`, `-LoupePermissions granted|denied`.
+  Updated for the new defaults: `SourcesUITests`, `SortUITests`, `SpottedTests`, `SafariExtensionTests`, the
+  onboarding helpers in `GetLayaUITests` and `RenameShotsUITests`. *Suite* (simulator, iPhone 17 Pro Max): 431 unit tests,
+  0 failures (1 skipped); the new and touched UI classes green. In the one full pass, 7 UI tests failed: the
+  Guard, privacy Show where and Review failures were the scan-signal bug above, and after its fix all three Guard
+  tests pass. `ResultsDashboardUITests` (undo) and the Sources Photos scan were not re-checked after the fix, and
+  `LiveRunUITests.testAPrivacyCheckShowsItsLiveRunWithCountersMoving` failed in the second pass: a test-timing
+  assumption, not an app race. On a fresh install the first privacy check runs over 0 items while the sample is
+  still scanning, and the card's "0 findings" satisfied the test's wait. The check over the sample now starts once
+  the launch's Files scan ends, and here it was in flight when the test tapped Re-run, which the app queues by design
+  (`rerun`, so new items are never missed). "liverun.stage" also matched Now's hidden live run first. The test now
+  waits for a finished check over real items and matches the stage by label; LiveRunUITests (3),
+  PersistenceUITests (2) and GuardUITests (5) all pass.
+
+- **2026-09-26 — iPhone: clipboard checks, "Check what I copied", a Check copied widget and the Loupe keyboard
+  (owner request: "where is the smart copy-paste monitoring feature?"; design approved with a keyboard).**
+  Guard → Protection → Clipboard, on by default (owner decision: every on-device feature is on).
+  - *Which pasteboard calls ask to paste* (measured, simulator iOS 26.3, `ClipboardUITests.testWhichPasteboardCallsAskToPaste`,
+    content copied by another app): `changeCount`, `hasStrings`/`hasURLs`, `detectPatterns(for:)` (iOS 14 string patterns) and
+    `detectedPatterns(for:)` (iOS 15+ key paths: probableWebURL, probableWebSearch, number, links, phoneNumbers, emailAddresses,
+    moneyAmounts) show **no prompt**; `detectedValues(for:)` and `string` **prompt** ("“Loupe” would like to paste from …",
+    shown by SpringBoard; the reading thread waits until it is answered). The SDK headers say nothing either way; this is the
+    evidence. A keyboard with Full Access is asked too (measured: the keyboard's `UIPasteboard.string` prompted and blocked it).
+  - *The chip* (`Loupe/Clipboard/ClipboardMonitor.swift`, `ClipboardOverlay.swift`): on becoming active and on Guard, detect
+    only, once per `changeCount` (kept in the App Group, so a relaunch does not re-offer); links and email addresses get
+    "Check the link you copied?" in a pass-through window above any screen (no RootView change); phone numbers, numbers and
+    amounts are not offered. Check → read (prompt unless Paste from Other Apps → Allow) → Check a link's verdict (address →
+    domain; online parts only as switched on, domain only) → banner, Spotted (new origin `clipboard`), recent checks (no query).
+    The Paste: Allow hint once under the first result and always in `ClipboardSetupCard`, with Loupe's Settings page.
+  - *Check what I copied* (`CheckClipboardIntent` + `LoupeAppShortcuts`): Siri / Shortcuts / Action Button, one spoken
+    sentence, Spotted when flagged, `requestToContinueInForeground` when a background run gets no clipboard. *Widget*
+    (`LoupeWidgets`, `com.loupe-ai.ios.widgets`): "Check copied" (iOS 17 interactive button, `CheckCopiedIntent`, opens Loupe;
+    if iOS runs it in the widget process it leaves a time-only request the app honours on activation), last level + time only.
+  - *Loupe keyboard* (`LoupeKeyboard`, `com.loupe-ai.ios.keyboard`, RequestsOpenAccess): UIKit (one touch surface, rollover
+    typing, popups, hold-for-alternates, repeating delete), English + Arabic + numbers/symbols, language key and the globe;
+    the strip detects without reading, reads on tap off the main thread, `KeyboardCheck` on-device only. No network code:
+    the helper client moved out of `OnlineShared.swift` into `DomainFactsClient.swift`; the keyboard compiles six listed
+    Shared/Protection files; `ios/scripts/check-no-network.sh` (a post-build phase) fails if the linked keyboard imports any
+    network symbol or links CFNetwork/Network/WebKit (LoupeKit's autolinked libresolv stays as a load command with zero
+    symbols imported; the check enforces zero). Positive control: the same script fails on LoupeSafari (URLSession).
+  - *Memory* (keyboard `phys_footprint`, Debug build, simulator iOS 26.3, logged by the keyboard): typing, before any check, 30.5–47.3 MB (fresh
+    process, first appear); the first check adds 11.6–12.3 MB (LoupeKit's formula, PSL and brand tables start up):
+    **peak 58.9 MB after the first verdict**, then 57.7–61.0 MB as iOS re-creates the keyboard in the same process
+    (no growth across checks). That is under the ~66–70 MB keyboards usually get on recent iPhones but close. Debug +
+    simulator numbers (the debug dylib, no optimisation); measure on the phone: the keyboard saves its peak in the App
+    Group and the Clipboard card shows it (DEBUG). If it is too tight on a device, the next step is a keyboard-only
+    LoupeKit slice (site formula only) rather than a second formula.
+  - *Also*: Check a link's recent checks and Spotted rows now show a name in international letters as written
+    (`xn--pypal-4ve.com`), never as "pаypal.com".
+  - *Tests*: `ClipboardTests` (18: patterns → chip, changeCount dedupe incl. relaunch and reboot, off, check → Spotted
+    `clipboard` + recent without query, refused/not-a-link/empty, online part = Check a link's, targets, words, the intent's
+    answers with a fake and the system clipboard, keyboard verdict on-device with every online switch on, keyboard + mapped
+    list, keyboard sources free of network APIs, layouts, setup status, new origins), `ClipboardUITests` (3: the probe,
+    chip → Allow Paste → Dangerous banner → Details → card → Spotted → Set up → no re-offer → new copy, a number not offered),
+    opt-in `KeyboardUITests` (Settings like the card says, then the strip's verdict, Arabic, info).
+  - *Device build*: `xcodebuild -scheme Loupe -destination generic/platform=iOS build CODE_SIGNING_ALLOWED=NO` succeeds; all four
+    extensions arm64. *Owner, on the phone*: register `com.loupe-ai.ios.keyboard` and `com.loupe-ai.ios.widgets` with the App
+    Group; Paste from Other Apps → Allow; Keyboards → Loupe + Allow Full Access; the widget; ios/README.md step 10.
+- **2026-09-26 — Riverflight: running out of fuel is a crash too — a fuel projection per way, and a gate
+  (owner: "about 90% of its games end because the plane runs out of fuel … make it understand that it
+  should constantly look for fuel, and that running out of fuel counts as a crash too").** *Projection*
+  (`:game` `Prediction.kt`, `FuelOutlook`, shared Kotlin, deterministic): per way, the collision plan
+  (hold the way's move one held decision, gun as set, then straight on) is flown in a copy of the real
+  world (`World.fuelProbe()`: river, plane, tank at the level's real burn rate and scroll speed, depots,
+  bullets in the air; enemies and bridges left to the collision prediction), except that the way that
+  heads for a depot (its side, or straight when it is within a column) keeps steering to it, and every way
+  goes round land. Each depot on the map is tried, nearest first; the first refuel tick is the answer. A
+  way's own shot at the depot counts (it no longer reaches it). *Horizon:* not the collisions' 1.5 s — a
+  depot can be at the top of the view, ~4 s away at level 1 — so a depot's flight runs until the plane
+  refuels, dies, passes it, or 6 s (the whole view at every level). *Running dry:* when no depot on the
+  map is reached, the way runs dry if the tank empties before the fuel it can count on — the third depot
+  after the last one on the map at the typical spacing (the next, with two to spare: in these runs a third
+  of the depots flown past were neither reached nor shot, mostly across an island or behind a boat). At
+  level 1 that reads a way as running dry below ~60%, the old gate's figure, now per way. Counting on only
+  the next depot (worst-case spacing) or on two warned too late on the dev seeds (below). Cost per
+  decision request: `Observation.of` 45–170 µs on the JVM, 2.1 ms in the iOS-simulator Kotlin/Native
+  test binary (was 1.3 ms in the same run). *Words* (`PathText.describe`): a way that runs dry while
+  another reaches fuel reads "crash: out of fuel in 12 s" (a collision, sooner, is said first); fuel
+  phrases as before ("fuel close", "fuel that way" under 90%). Question unchanged ("Which way is safest?").
+  *Gate* (rules only remove): `ModelPilot.dryGate` removes the ways that run dry when another way reaches
+  fuel; shipped with the old thirst gate before it (`FuelGate.BOTH`). *Counters:* the run's "collisions
+  avoided" is now "crashes avoided" (`DecisionStats.crashChoices` / `crashesAvoided`; a predicted crash is
+  a collision, or running dry while another way reaches fuel); results card and speed panel say so.
+
+  *Picked on dev seeds 101–112* (12 × 90 s; rows mean). What the model does **not** read, found on the way:
+  fuel as a time ("fuel in 2 s") or "no fuel this way" — with both ways "safe", a controlled probe (12 scenes
+  × 3 tanks × both orders, the pilot's own word-bias correction) put the fuel way ahead only about half the
+  time, whatever the question; in flight, "fuel in 2 s" words flew 425–485 rows against the old phrases'
+  575 with the same gate. Adding "Running out of fuel is a crash." to the question put the word "crash" in
+  the question, and the model then flew ways predicted to crash 19–22% of the time (was ~4%). Words alone,
+  with no fuel gate, flew ways marked "crash: out of fuel in N s" (73 times over 12 runs) and made 451 rows
+  — a crash many seconds away does not read like "crash: land in 0.5 s". Rows by variant: main 576;
+  thirst + dry gates, two gaps 595 (never worse than main on a seed, better on 4); dry gate alone 577;
+  **both gates, three gaps 608** (4 fuel deaths, was 7; never worse than main on a seed, better on 4; kept);
+  dry gate alone, three gaps 585; gates, no model 519 (0 fuel deaths); baseline 521. A second, larger dev
+  set (seeds 113–136, 24 × 90 s) checked both against dry-only before any test seed was read for it: both
+  551 (fuel deaths 13), dry-only 463, main 566 (fuel deaths 17), baseline 505.
+
+  *Test seeds 1–20* (progressive, 90 s, 4-tick charged latency, same safety net):
+
+  | seeds 1–20 | main (2a5f67b) | words only | gate only | **shipped: both** | dry gate replaces 60% | gates, no model | baseline | baseline + collision sensor | baseline + fuel sensor |
+  |---|---|---|---|---|---|---|---|---|---|
+  | rows, mean (median) | 502.3 (576.4) | 499.3 (543.8) | 534.3 (626.1) | **532.2** (626.1) | 531.3 (722.6) | 401.3 (400.3) | 542.7 (584.7) | 537.1 (568.8) | 587.7 (671.6) |
+  | alive at 90 s | 2/20 | 3/20 | 3/20 | 3/20 | 10/20 | 6/20 | 6/20 | 4/20 | 9/20 |
+  | deaths: fuel / bank / enemy | 12 / 4 / 2 | 11 / 4 / 2 | 11 / 4 / 2 | **10 / 5 / 2** | 5 / 4 / 1 | 4 / 5 / 5 | 10 / 3 / 1 | 14 / 0 / 2 | 6 / 3 / 2 |
+  | refuel ticks | 2,291 | 2,335 | 2,516 | 2,518 | 2,424 | 2,013 | 2,398 | 2,041 | 2,705 |
+  | depots shot | 14 | 17 | 23 | 23 | 9 | 11 | 24 | 17 | 19 |
+  | depots flown past, missed | 68 of 175 | 65 of 175 | 63 of 187 | 61 of 186 | 71 of 185 | 50 of 137 | 58 of 188 | 77 of 186 | 68 of 207 |
+  | flew a predicted crash (collision or fuel) when a safe way existed | 6.1% (26 dry) | 5.7% | 6.0% | 6.0% (0 dry) | 5.0% | 33.0% | 40.1% | 0% | 0% |
+  | safety-net ticks per 100 rows | 19.7 | 20.3 | 19.1 | 19.1 | 18.2 | 17.3 | 29.4 | 21.3 | 21.5 |
+
+  "Main" reproduces 2a5f67b's 502.3 exactly; "words only" is the new words with the old gate; "gate only"
+  the old words with both gates; "gates, no model" is the shipped gates holding course (the old gates: 418.0).
+  Latency, M4 CPU, one decision at a time (8 seeds × 45 s; load average ~18 from other work on the
+  machine): shipped **P50 24.1 / P95 36.2 ms**, main 21.9 / 31.6 ms in the same run — inside the cadence to
+  level 5 (50 ms), not the 33 ms of level 6 and up, as before.
+
+  *Honest reading.* Running out of fuel now counts as a crash, and fewer runs end dry: 12 → 10 fuel deaths
+  on the test seeds, 36 → 27 over all 56 seeds measured, with more refuelling (2,291 → 2,518 ticks). The
+  distance gain is small and inside the noise: +30 rows on the test seeds (ahead of main on 6, behind on 2,
+  12 the same), +32 and −15 on the two dev sets. Almost all of it is the **gate**, not the words: the model
+  does not act on fuel words — it reads "safe" against "crash", and a fuel crash seconds away does not weigh
+  like a collision; with the words alone it did worse. It **still does not beat the rule-based pilot on
+  distance** (532 vs 543; ahead on 9 seeds, behind on 10), and the rule-based pilot given the same fuel
+  projection flies further again (588). The dry gate alone (no 60% rule) kept 10 of 20 runs alive with 5
+  fuel deaths on the test seeds but lost on both dev sets, so it is not shipped. What remains is geometry the
+  words cannot fix — depots across an island, boats beside them — and early bank deaths on seeds 2, 11 and 12
+  that every model variant shares. A fine-tune is still the real fix. Tests: `FuelOutlookTest` (reach, and the
+  refuel tick equals stepping the world with the same plan; only the way heading for a depot to one side
+  reaches it; a close depot missed by the other way, which runs dry when low; the way's own shot destroys the
+  depot; several depots, the first reachable reported; fuel exactly at the margin — a hair more reaches, a
+  hair less runs dry on the tick the simulation does; round an island to a depot beyond it; world untouched;
+  every outlook in three real flights equals stepping the world), `CrashCountersTest` (running dry while
+  another way reaches fuel counts), `PathTextTest` (running dry reads as a crash; not when no way reaches
+  fuel; new golden), `PredictionTest` (golden over every field, Doubles as raw bits; identical on the JVM
+  and the iOS simulator), `PilotMeasurementTest` (`main`, `after`, `m:<words>:<question>:<gate>`,
+  `gates:<gate>`, `baseline+fuel`; `-Ploupe.game.gap` for the dev choice; a decision trace and the wording
+  probe). Gate: `./gradlew check` green (1,480 tests; game 109 JVM, 90 iOS-simulator Kotlin, the goldens
+  identical on both); LoupeKit rebuilt; iOS simulator 431 unit (2 skipped) + 56 UI (5 skipped), 0 failures.
 
 ## Where the build stands
 

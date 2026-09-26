@@ -25,6 +25,15 @@ final class ModelReadiness: ObservableObject {
     }
 
     static let shared: ModelReadiness = {
+        #if DEBUG
+        // -LoupeModelState installed: the real readiness path (no override) over a stand-in model whose status
+        // publisher replays `.ready` as LayaModel's does when the files are there. The relaunch UI test uses it,
+        // so a launch that misreads an installed model as missing fails the test.
+        if LaunchOptions.current.modelInstalledStandIn {
+            return ModelReadiness(status: CurrentValueSubject<LayaModel.Status, Never>(.ready).eraseToAnyPublisher(),
+                                  installed: { true }, refresh: {}, hostConfigured: true)
+        }
+        #endif
         let laya = LayaModel.shared
         return ModelReadiness(status: laya.$status.eraseToAnyPublisher(),
                               installed: { laya.isInstalled },
@@ -62,9 +71,20 @@ final class ModelReadiness: ObservableObject {
         self.override = override
         self.lastStatus = .notInstalled
         self.state = override ?? .missing
-        status.receive(on: RunLoop.main).sink { [weak self] s in self?.statusChanged(s) }.store(in: &bag)
-        // A publisher that replays its current value (like @Published) has set the state by now;
-        // derive once more so a source that does not replay is still right at launch.
+        // A status published on the main thread is applied at once, so a publisher that replays its
+        // current value (LayaModel's @Published) has set the state before init returns. This was the
+        // relaunch bug (2026-09-26): with `.receive(on: RunLoop.main)` the replay arrived on a later
+        // run-loop turn, so right after init the state read `.missing` even with the model installed,
+        // RootView took that as its launch decision, and Get the Loupe Decision Model (the start of
+        // onboarding) came back on every launch. Anything published off the main thread still hops.
+        status.sink { [weak self] s in
+            if Thread.isMainThread {
+                MainActor.assumeIsolated { self?.statusChanged(s) }
+            } else {
+                DispatchQueue.main.async { self?.statusChanged(s) }
+            }
+        }.store(in: &bag)
+        // Derive once more so a source that does not replay is still right at launch.
         recompute()
         guard observesApp else { return }
         NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)

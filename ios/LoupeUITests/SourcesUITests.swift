@@ -4,8 +4,8 @@ final class SourcesUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     /// Sources lists the sample, labelled as sample data, with its item count, and every phone source
-    /// (epic #7 child 7) as a real row with its own switch — all off, so nothing has asked for a
-    /// permission. Mail is labelled Online.
+    /// (epic #7 child 7) as a real row with its own switch: the on-device ones on by default (owner decision
+    /// 2026-09-26), Mail off until a mailbox is added. Mail is labelled Online.
     func testSourcesListsEveryRowAndSampleStillWorks() {
         let app = XCUIApplication()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "sources", "-LoupeSkipOnboarding"]
@@ -20,7 +20,8 @@ final class SourcesUITests: XCTestCase {
             let toggle = app.switches["sources.phone.\(id).toggle"]
             if !toggle.exists { app.swipeUp() }
             XCTAssertTrue(toggle.waitForExistence(timeout: 5), "no row for \(id)")
-            XCTAssertEqual(toggle.value as? String, "0", "\(id) must be off until the user turns it on")
+            XCTAssertEqual(toggle.value as? String, id == "mail" ? "0" : "1",
+                           id == "mail" ? "Mail waits for a sign-in" : "\(id) is on by default")
         }
         XCTAssertTrue(app.descendants(matching: .any)["sources.phone.mail.online"].exists, "Mail is labelled Online")
     }
@@ -53,9 +54,11 @@ final class SourcesUITests: XCTestCase {
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "sources", "-LoupeSkipOnboarding", "-LoupePhotosDemo"]
         app.launch()
         XCTAssertTrue(app.staticTexts["sources.sample.count"].waitForExistence(timeout: 30))
-        let toggle = app.switches["sources.phone.photos.toggle"]
-        for _ in 0..<3 where !toggle.isHittable { app.swipeUp() }
-        toggle.tap()
+        // Photos is on by default; iOS has not asked yet, so the card offers Allow access, which asks and reads.
+        let allow = app.buttons["sources.phone.photos.allow"]
+        for _ in 0..<3 where !(allow.exists && allow.isHittable) { app.swipeUp() }
+        XCTAssertEqual(app.switches["sources.phone.photos.toggle"].value as? String, "1")
+        allow.tap()
 
         let display = app.descendants(matching: .any)["sources.scan.photos"]
         XCTAssertTrue(display.waitForExistence(timeout: 15), "the live display replaces the spinner")

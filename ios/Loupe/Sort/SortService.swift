@@ -101,6 +101,7 @@ final class SortService: ObservableObject {
     private var resumeTrigger: SortTrigger?
 
     static let enabledKey = "sort.whileCharging"
+    static let enabledByDefault = true
     static let lastKey = "sort.last"
 
     init(ledger: LedgerService, judgments: @escaping () -> [UserJudgment], items: @escaping () -> [SourceItem],
@@ -114,7 +115,9 @@ final class SortService: ObservableObject {
         self.conditions = conditions
         self.defaults = defaults
         self.lane = lane
-        enabled = defaults.bool(forKey: Self.enabledKey) // off unless the owner turned it on
+        // On unless the user turned it off (owner decision 2026-09-26: every on-device feature is on by default).
+        // Still only while charging, and paused by heat, Low Power Mode and the other gates below.
+        enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? Self.enabledByDefault
         if let data = defaults.data(forKey: Self.lastKey) { last = try? JSONDecoder().decode(SortRecord.self, from: data) }
         lane.onIdle { [weak self] in
             Task { @MainActor [weak self] in await self?.resumeIfPreempted() }

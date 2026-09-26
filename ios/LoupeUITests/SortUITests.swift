@@ -11,7 +11,7 @@ final class SortUITests: XCTestCase {
         app.launch()
         let toggle = app.switches["me.sort.toggle"]
         XCTAssertTrue(toggle.waitForExistence(timeout: 10))
-        XCTAssertEqual(toggle.value as? String, "0", "passive mode is off by default")
+        // On by default since 2026-09-26 (SortTests checks the default; here the simulator's saved choice wins).
         let run = app.buttons["me.sort.run"]
         XCTAssertTrue(run.waitForExistence(timeout: 5))
         // The sample scan may still be running on first launch.

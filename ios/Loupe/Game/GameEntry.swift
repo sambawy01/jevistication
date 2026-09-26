@@ -13,8 +13,8 @@ final class GameLauncher: ObservableObject {
     func open(_ mode: GameMode) { self.mode = mode }
 }
 
-/// First launch: what Loupe is, the game as the demo — the model working where you can see it — and the offer to
-/// turn on Safari protection (skippable).
+/// First launch, over the tabs: what Loupe is and the game as the demo — the model working where you can see it.
+/// Safari protection has its own onboarding step before this (`ProtectStepView`).
 struct OnboardingView: View {
     var onWatch: () -> Void
     var onSkip: () -> Void
@@ -34,8 +34,6 @@ struct OnboardingView: View {
                 Text("Watch Loupe fly a river: the decision model decides every move live, on this iPhone, many times a second, with its answers on screen. Nothing leaves the phone.")
                     .font(.subheadline).foregroundStyle(Palette.overlayInk.opacity(0.85))
             }
-            // Browsing protection (2026-09-26): offered once, here at the end of onboarding; "Not now" skips it.
-            SafariOnboardingOffer()
             Spacer()
             Button(action: onWatch) {
                 Label("Watch Loupe fly", systemImage: "eye").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 6)

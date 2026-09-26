@@ -141,12 +141,16 @@ final class SpottedTests: XCTestCase {
         XCTAssertEqual(center.posted.count, 3)
     }
 
+    /// Suspicious sites notify by default (owner decision 2026-09-26: on-device features on); a user who turned
+    /// the switch off is never notified about them.
     func testSuspiciousOnlyWithTheSwitch() async {
         let center = FakeNotificationCenter()
         let d = UserDefaults(suiteName: "sn-\(UUID())")!
         let n = notifier(center, d)
+        XCTAssertTrue(ProtectionGroup.notifySuspicious(d), "never set: on")
+        d.set(false, forKey: ProtectionGroup.Keys.notifySuspicious)
         let off = await n.notifyIfNeeded(domain: "s.example", host: "s.example", level: .suspicious, brand: nil, reason: nil, userContinued: false)
-        XCTAssertFalse(off)
+        XCTAssertFalse(off, "turned off by the user: stays off")
         d.set(true, forKey: ProtectionGroup.Keys.notifySuspicious)
         let on = await n.notifyIfNeeded(domain: "s.example", host: "s.example", level: .suspicious, brand: nil, reason: nil, userContinued: false)
         XCTAssertTrue(on)

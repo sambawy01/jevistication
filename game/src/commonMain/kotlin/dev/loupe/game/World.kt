@@ -174,6 +174,19 @@ class World private constructor(
         depotsList += depot
     }
 
+    /**
+     * A copy for the fuel projection ([FuelOutlook]): the river, the plane, its fuel, the depots and
+     * the bullets in the air, without enemies or bridges — whether a way can reach fuel is a question
+     * about banks, islands, depots and the tank; what is in the way is the collision prediction's.
+     */
+    internal fun fuelProbe(): World = copy().also {
+        it.enemiesList.clear()
+        it.bridgesList.clear()
+    }
+
+    /** The river row the next spawned row will be: nothing beyond it is on the map yet. */
+    internal val firstUnspawnedRow: Int get() = spawnedThrough + 1
+
     internal fun clearEntities(keepBridges: Boolean = false) {
         enemiesList.clear()
         depotsList.clear()

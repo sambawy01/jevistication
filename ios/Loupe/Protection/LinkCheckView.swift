@@ -132,7 +132,8 @@ struct LinkCheckView: View {
                         HStack(spacing: 10) {
                             NeonIcon(name: v.level.symbol, color: v.level.color, size: 16)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(v.unicodeHost).font(Typeface.mono(13)).foregroundStyle(Palette.ink).lineLimit(1)
+                                // A name in international letters shows as written (punycode): "pаypal.com" must not read as paypal.com.
+                                Text(v.unicodeHost == v.host ? v.unicodeHost : v.host).font(Typeface.mono(13)).foregroundStyle(Palette.ink).lineLimit(1)
                                 Text("\(v.level.title) · \(v.origin.title) · \(v.checkedAt.formatted(date: .abbreviated, time: .shortened))")
                                     .font(.caption).foregroundStyle(Palette.inkSoft).lineLimit(1)
                             }

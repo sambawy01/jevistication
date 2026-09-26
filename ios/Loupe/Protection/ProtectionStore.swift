@@ -36,6 +36,9 @@ final class ProtectionStore: ObservableObject {
         self.now = now
         reload()
         if observe {
+            // Clipboard checks (2026-09-26): the app's one store starts the clipboard chip, which watches
+            // for the app becoming active (LoupeApp creates this store at launch).
+            Task { @MainActor in ClipboardMonitor.shared.start() }
             NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)
                 .sink { [weak self] _ in self?.reload() }
                 .store(in: &observers)
@@ -77,7 +80,7 @@ final class ProtectionStore: ObservableObject {
 
     /// Notify about suspicious sites too (dangerous ones always, once notifications are allowed).
     var notifySuspicious: Bool {
-        get { defaults.bool(forKey: ProtectionGroup.Keys.notifySuspicious) }
+        get { ProtectionGroup.notifySuspicious(defaults) }
         set { defaults.set(newValue, forKey: ProtectionGroup.Keys.notifySuspicious); objectWillChange.send() }
     }
 }

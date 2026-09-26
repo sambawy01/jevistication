@@ -1,5 +1,6 @@
 import Foundation
 import LoupeKit
+import UIKit
 
 /// One phone source's row in Sources.
 struct PhoneSourceState: Equatable {
@@ -123,8 +124,9 @@ extension SourcesService {
     }
     #endif
 
+    /// The source's switch: what the user set, else its default (on for the on-device sources, off for Mail).
     func isPhoneEnabled(_ s: PhoneSource) -> Bool {
-        library?.isEnabled(sourceId: s.rawValue, default: false) ?? false
+        library?.isEnabled(sourceId: s.rawValue, default: s.defaultOn) ?? false
     }
 
     func state(_ s: PhoneSource) -> PhoneSourceState { phone[s] ?? PhoneSourceState() }
@@ -182,7 +184,7 @@ extension SourcesService {
         }
     }
 
-    /// The switch. Turning a source on is the only place its iOS permission is asked for; off
+    /// The switch. Turning a source on asks for its iOS permission if iOS has not asked yet; off
     /// removes its items from every judgment and watcher, and (for Mail) stops all requests.
     func setPhoneEnabled(_ s: PhoneSource, _ on: Bool) async {
         guard let library else { return }
@@ -205,6 +207,30 @@ extension SourcesService {
         await scanPhone(s)
     }
 
+    /// "Allow access" on a card that is on but iOS has not asked yet: asks, then reads the source if allowed.
+    func requestAccess(_ s: PhoneSource) async {
+        if permission(s) == .notAsked {
+            switch s {
+            case .photos: _ = await deps.photos.requestAuthorization()
+            case .calendar: _ = await deps.events.requestAccess()
+            case .contacts: _ = await deps.contacts.requestAccess()
+            case .files, .mail: break
+            }
+        }
+        phone[s, default: .init()].permission = permission(s)
+        if isPhoneEnabled(s), permission(s).canRead { await scanPhone(s) }
+    }
+
+    /// After onboarding's permissions step: re-reads each permission, then reads every on-device source that is
+    /// on, now readable and never read (the first scan the switch would have started).
+    func permissionsChanged() {
+        loadPhoneStates()
+        for s in [PhoneSource.photos, .calendar, .contacts] where isPhoneEnabled(s) && permission(s).canRead
+            && s.cacheIds.allSatisfy({ library?.cached(sourceId: $0) == nil }) {
+            Task { await scanPhone(s) }
+        }
+    }
+
     /// Re-scans the sources that are cheap to re-read whenever the app opens: picked files (they
     /// may have changed) and the "Send to Loupe" inbox.
     func refreshOnOpen() {
@@ -215,6 +241,9 @@ extension SourcesService {
     /// Scans one phone source now. Refuses when it is off (Mail: no request is made).
     func scanPhone(_ s: PhoneSource) async {
         guard isPhoneEnabled(s), !state(s).scanning, let library else { return }
+        // Files' bookmarks and Mail's account are kept with complete file protection: while the phone is locked
+        // (a background launch) they read as empty, and a scan then would store an empty result over the real one.
+        if s == .files || s == .mail, !UIApplication.shared.isProtectedDataAvailable { return }
         let perm = permission(s)
         phone[s, default: .init()].permission = perm
         guard perm.canRead else {
@@ -223,7 +252,13 @@ extension SourcesService {
         }
         phone[s, default: .init()].scanning = true
         phone[s, default: .init()].problem = nil
-        defer { phone[s, default: .init()].scanning = false }
+        defer {
+            phone[s, default: .init()].scanning = false
+            // Once more with the scan over: `store` bumped `revision` while this source still read as scanning, and
+            // Now re-runs the watchers only when nothing scans. Without this, a scan that starts at launch (Files,
+            // on by default) swallowed the sample scan's signal and the watchers never ran.
+            revision += 1
+        }
         // The live run (the Activity dock, docs/LIVE-RUN-VIEW.md) and the live display in the source's card.
         let run = SourceScanRun(source: s.rawValue, stage: s == .mail ? "act.stage.connecting" : "act.stage.walking")
         let account = s == .mail ? deps.mailAccounts.load() : nil

@@ -431,7 +431,7 @@ struct SpeedPanel: View {
                 metric("P50", h.latencyP50.map { String(format: "%.0f ms", $0) } ?? "—", label: "Latency P50 on this iPhone")
                 metric("P95", h.latencyP95.map { String(format: "%.0f ms", $0) } ?? "—", label: "Latency P95 on this iPhone")
                 metric("ON TIME", h.onTimePercent.map { String(format: "%.0f%%", $0) } ?? "—", label: "Decisions on time", id: "game.speed.ontime")
-                metric("AVOIDED", "\(h.collisionsAvoided)/\(h.collisionChoices)", label: "Predicted collisions avoided, of decisions where one was on offer", id: "game.speed.avoided")
+                metric("AVOIDED", "\(h.crashesAvoided)/\(h.crashChoices)", label: "Predicted crashes avoided, collisions or running out of fuel, of decisions where one was on offer", id: "game.speed.avoided")
             }
             if laya {
                 Sparkline(values: h.sparkline).frame(height: 40).accessibilityHidden(true)
@@ -589,20 +589,20 @@ struct ResultsCard: View {
                         .accessibilityIdentifier("game.results.max")
                 }
                 HStack(spacing: 14) {
-                    small("COLLISIONS AVOIDED", "\(r.collisionsAvoided) of \(r.collisionChoices)")
+                    small("CRASHES AVOIDED", "\(r.crashesAvoided) of \(r.crashChoices)")
                         .accessibilityIdentifier("game.results.avoided")
                     small("SAFETY NET", "\(r.takeovers)×")
                         .accessibilityIdentifier("game.results.takeovers")
                     small("OUT", "0 bytes")
                 }
-                Text("Collisions avoided: decisions where one way was predicted to crash and another was safe, and the model flew a safe one.")
+                Text("Crashes avoided: decisions where one way was predicted to crash (into something, or out of fuel) and another was safe, and the model flew a safe one.")
                     .font(.caption2).foregroundStyle(Palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Distance on the same river: the decision model \(r.layaRows) rows (level \(r.layaLevel)), the rule-based pilot \(r.baselineRows) rows\(r.baselineAlive ? ", still flying" : "") (level \(r.baselineLevel)).")
                     .font(.footnote).foregroundStyle(Palette.overlayInk.opacity(0.85))
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("game.results.distance")
-                Text("Same safety net for both. Over 20 test rivers the rule-based pilot went further on average (543 rows to 502).")
+                Text("Same safety net for both. Over 20 test rivers the rule-based pilot went further on average (543 rows to 532).")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
                 Button("Next river", action: onNext).buttonStyle(.neonPrimary).frame(maxWidth: .infinity)

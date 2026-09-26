@@ -1,8 +1,11 @@
 import Foundation
 import LoupeKit
 
-/// The phone's own sources (epic #7 child 7). Each is off until the user turns it on in Sources;
-/// turning it on is the only thing that asks iOS for its permission. Each yields `SourceItem`s into
+/// The phone's own sources (epic #7 child 7). The on-device ones (Photos, Files, Calendar, Contacts) are on by
+/// default (owner decision 2026-09-26); iOS's own permission is asked once in onboarding's permissions step (or by
+/// "Allow access" on the source's card). Mail needs a sign-in, so it stays off until the user adds a mailbox. A
+/// switch the user turned off stays off (`SourceLibrary` keeps "never set" apart from "set off"). Each yields
+/// `SourceItem`s into
 /// the same cache (`SourceLibrary`) the sample uses, so Judgments, the watchers and the sort read
 /// them with no change.
 enum PhoneSource: String, CaseIterable, Identifiable {
@@ -55,9 +58,14 @@ enum PhoneSource: String, CaseIterable, Identifiable {
 
     /// Mail is the one source that uses the network (PRODUCT.md §4a).
     var isOnline: Bool { self == .mail }
+
+    /// On until the user turns it off (owner decision 2026-09-26: every on-device feature is on by default).
+    /// Mail is offered, not forced: it needs a sign-in and it is online.
+    var defaultOn: Bool { !isOnline }
 }
 
-/// Where iOS stands on a source's permission. `notAsked` is the state before the user turns it on.
+/// Where iOS stands on a source's permission. `notAsked`: iOS has not asked yet (onboarding's permissions step,
+/// or "Allow access" on the source's card, asks).
 enum PhonePermission: Equatable {
     case notAsked
     case granted
@@ -128,19 +136,23 @@ final class PhoneStateStore {
 
     func state(_ source: String) -> [String: String] {
         lock.lock(); defer { lock.unlock() }
-        return readAll()[source] ?? [:]
+        return readAll()?[source] ?? [:]
     }
 
     func set(_ source: String, _ value: [String: String]) {
         lock.lock(); defer { lock.unlock() }
-        var all = readAll()
+        // A file that is there but cannot be read (complete protection while the phone is locked) is left alone:
+        // rewriting it from nothing would drop every other source's state.
+        guard var all = readAll() else { return }
         all[source] = value.isEmpty ? nil : value
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         if let data = try? JSONEncoder().encode(all) { try? data.write(to: url, options: [.atomic, .completeFileProtection]) }
     }
 
-    private func readAll() -> [String: [String: String]] {
-        guard let data = try? Data(contentsOf: url) else { return [:] }
+    /// Every source's state; empty when there is no file yet, nil when the file is there but unreadable.
+    private func readAll() -> [String: [String: String]]? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
+        guard let data = try? Data(contentsOf: url) else { return nil }
         return (try? JSONDecoder().decode([String: [String: String]].self, from: data)) ?? [:]
     }
 }

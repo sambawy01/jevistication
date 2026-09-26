@@ -170,23 +170,31 @@ choice among up to ~40 options where the model's own card advises staying under 
 
 It is the product in miniature. Each decision (10 a second, more as the river speeds up) runs
 **mechanical first**: exact look-ahead removes every move that would crash before the model sees the
-question, and when one move is left the model is not asked. Two more rules only *remove*: low on
-fuel with a depot in reach, only the ways toward it are offered; and the gun is set by rule (fire when
+question, and when one move is left the model is not asked. Three more rules only *remove*: low on
+fuel with a depot in reach, only the ways toward it are offered; a way predicted to run dry, while
+another reaches fuel, goes; and the gun is set by rule (fire when
 a target is in line and no fuel depot is, otherwise not), so each way is offered once. The model then
 answers one small question, **"Which way is safest?"**, over at most three ways — left, straight,
 right — each described by a motion-aware collision prediction: the way is flown 1.5 s ahead in a copy
 of the game, with the boats and helicopters really moving ("crash: heli crossing in, 0.5 s", "safe,
-boat moving away", "safe, fuel that way"). A **safety
+boat moving away", "safe, fuel that way", "crash: out of fuel in 12 s"). A **safety
 override** replaces a held move that has become fatal, and the screen flashes when it does. Below a
 **threshold slider**, the decision is handed to the player ("your turn"). A **dumb baseline**
 autopilot flies the same seeds, and the results show both distances. The bars show the model's share with
 its measured left/right word bias divided out — not calibrated, and labelled so.
 
-*Honest status (measured 2026-09-25, `BUILD.md`):* the model reads the prediction — where a safe
-way is on offer it flies into a predicted crash 5.6% of the time (the rule-based pilot 40%) — but
-untuned it **still does not beat the rule-based pilot on distance**: 502 against 543 rows on average
-over 20 seeds, ahead on 7 of them. The gates and the safety net do much of the flying (the same gates
-holding course, with no model at all, reach 418). Fine-tuning is still the planned fix. On a desktop
+Running out of fuel counts as a crash too: each way also carries a fuel projection, flown the same way
+in a copy of the game — does it reach a depot before the tank is empty? A way that runs dry while another
+reaches fuel reads "crash: out of fuel in 12 s", and a rule removes it (rules only remove; the model
+still picks among the ways left).
+
+*Honest status (measured 2026-09-26, `BUILD.md`):* the model reads the prediction — where a safe
+way is on offer it flies into a predicted crash about 6% of the time (the rule-based pilot 40%) — and
+fewer runs end out of fuel (10 of 20, was 12), but untuned it **still does not beat the rule-based pilot
+on distance**: 532 against 543 rows on average over 20 seeds, ahead on 9 of them. The fuel gain comes
+from the rule, not the words: the model does not act on fuel words. The gates and the safety net do much
+of the flying (the same gates holding course, with no model at all, reach 401). Fine-tuning is still the
+planned fix. On a desktop
 CPU it decides in ~25 ms (P50); on a phone that is **unmeasured** (risk 13) until the watch run's own
 numbers are read on a device. It runs on macOS as a Compose Desktop app and on the iPhone.
 

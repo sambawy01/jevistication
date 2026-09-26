@@ -174,8 +174,16 @@ final class SortServiceTests: XCTestCase {
                            defaults: defaults, lane: lane)
     }
 
-    func testOffByDefault() {
-        XCTAssertFalse(service().enabled)
+    /// On by default (owner decision 2026-09-26), still gated by charging, heat and Low Power Mode; a user who
+    /// turned it off finds it off after a relaunch (a new service over the same defaults).
+    func testOnByDefaultAndAnExplicitOffSurvivesARelaunch() {
+        XCTAssertNil(defaults.object(forKey: SortService.enabledKey), "never set")
+        let first = service()
+        XCTAssertTrue(first.enabled, "never set: on")
+        first.enabled = false
+        XCTAssertFalse(service().enabled, "set off: stays off after a relaunch")
+        service().enabled = true
+        XCTAssertTrue(service().enabled)
     }
 
     func testRunsThenSkipsWhatIsAlreadySorted() async {

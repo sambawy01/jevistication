@@ -63,6 +63,11 @@ struct PhoneSourceRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if st.permission == .denied { settingsButton }
             }
+            if st.enabled && st.permission == .notAsked && live == nil {
+                // On by default (2026-09-26) but iOS has not asked yet (onboarding's permissions step was skipped).
+                CardAction(title: "Allow access", symbol: "checkmark.shield", hue: hue) { Task { await sources.requestAccess(source) } }
+                    .accessibilityIdentifier("sources.phone.\(source.id).allow")
+            }
             if source == .photos && st.permission == .limited && live == nil {
                 CardAction(title: "Choose more photos", symbol: "photo.badge.plus", hue: hue) { PhotoKitLibrary.presentLimitedPicker() }
             }
@@ -80,6 +85,7 @@ struct PhoneSourceRow: View {
     private var connectionLine: String {
         guard st.enabled else { return st.itemCount > 0 ? "Off · \(st.itemCount.formatted()) items kept aside" : "Not connected" }
         var parts = ["Connected"]
+        if st.permission == .notAsked { parts = ["On · waiting for your OK"] }
         if st.permission != .notNeeded && st.permission != .notAsked { parts.append(st.permission.label) }
         if source == .mail, sources.mailAccount == nil { parts = ["No mailbox yet"] }
         return parts.joined(separator: " · ")
@@ -98,7 +104,7 @@ struct PhoneSourceRow: View {
                             countLine: "\(st.itemCount) \(st.itemCount == 1 ? "item" : "items")" + extras,
                             countId: "sources.phone.\(source.id).count", detail: st.detail, coverage: coverage,
                             lastScan: st.lastScan, on: st.enabled)
-            if st.enabled {
+            if st.enabled && st.permission != .notAsked {   // not asked yet: "Allow access" below does the first read
                 CardAction(title: "Scan again", symbol: "arrow.clockwise", hue: hue) { Task { await sources.scanPhone(source) } }
                     .accessibilityIdentifier("sources.phone.\(source.id).rescan")
             }
@@ -120,7 +126,7 @@ struct PhoneSourceRow: View {
     }
 
     private var settingsButton: some View {
-        CardAction(title: "Open Settings", symbol: "gear", hue: Palette.warnText) {
+        CardAction(title: "Allow in Settings", symbol: "gear", hue: Palette.warnText) {
             if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
         }
     }

@@ -30,12 +30,18 @@ enum ProtectionLevel: String, Codable, CaseIterable {
 /// Where a verdict came from.
 enum ProtectionOrigin: String, Codable {
     case safari, shared, manual
+    /// Clipboard checks (2026-09-26): the in-app chip, "Check what I copied" (Siri, Shortcuts, the widget).
+    case clipboard
+    /// The Loupe keyboard's strip (on the device only).
+    case keyboard
 
     var title: String {
         switch self {
         case .safari: return "Safari"
         case .shared: return "Shared link"
         case .manual: return "Check a link"
+        case .clipboard: return "Clipboard"
+        case .keyboard: return "Loupe keyboard"
         }
     }
 }

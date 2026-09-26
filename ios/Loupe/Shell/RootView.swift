@@ -50,44 +50,88 @@ struct RootView: View {
     @ObservedObject private var protection = ProtectionStore.shared
     @StateObject private var launcher = GameLauncher()
     @ObservedObject private var sources = SourcesService.shared
-    @AppStorage("onboarding.seen") private var onboardingSeen = false
     @State private var showOnboarding = false
     @State private var watchAfterOnboarding = false
-    /// Get Laya, before the tabs: shown at launch while the model is not ready (every launch until
-    /// it is installed); "Later" or "Start using Loupe" leaves it for this launch.
-    @State private var showGetLaya = RootView.getLayaAtLaunch(ready: ModelReadiness.shared.isReady, launch: .current)
+    /// What shows before the tabs (`LaunchFlow`): Get the Loupe Decision Model while the model is not ready
+    /// (every launch until it is installed), then the permissions and protection steps once each. Decided from
+    /// the model's state at launch, which `ModelReadiness` has right when it is created (the relaunch bug of
+    /// 2026-09-26 was this reading "missing" for a model that was installed).
+    @State private var step = LaunchFlow.first(ready: ModelReadiness.shared.isReady, launch: .current, record: OnboardingRecord())
     @State private var started = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// The Get Laya step shows at launch when the model is not ready, unless a test skips
     /// onboarding or the launch opens the game directly.
     static func getLayaAtLaunch(ready: Bool, launch: LaunchOptions) -> Bool {
-        !ready && !launch.skipOnboarding && launch.game == nil
+        LaunchFlow.first(ready: ready, launch: launch, record: OnboardingRecord()) == .getModel
     }
 
     var body: some View {
         Group {
-            if showGetLaya {
-                GetLayaView(context: .onboarding) {
-                    showGetLaya = false
-                    // Then the one-time intro (the game as the demo), once the tabs are up.
-                    if !onboardingSeen && !LaunchOptions.current.skipOnboarding { showOnboarding = true }
+            switch step {
+            case .getModel:
+                GetLayaView(context: .onboarding) { leave(.getModel) }
+                    .transition(.opacity)
+            case .permissions:
+                PermissionsStepView(model: PermissionsStepModel(asker: Self.permissionAsker(sources),
+                                                                sourceOff: { [sources] s in !sources.isPhoneEnabled(s) },
+                                                                onAnswered: { [sources] in sources.permissionsChanged() })) {
+                    leave(.permissions)
                 }
                 .transition(.opacity)
-            } else {
+            case .protect:
+                ProtectStepView { leave(.protect) }
+                    .transition(.opacity)
+            case .tabs:
                 tabs
             }
         }
-        .animation(Motion.reduced(reduceMotion) ? nil : .easeOut(duration: 0.25), value: showGetLaya)
+        .animation(Motion.reduced(reduceMotion) ? nil : .easeOut(duration: 0.25), value: step)
         .onAppear(perform: start)
+        .sheet(isPresented: $showOnboarding, onDismiss: {
+            // Open the game only once the sheet is gone: two presentations cannot overlap.
+            if watchAfterOnboarding { watchAfterOnboarding = false; launcher.open(.watch) }
+        }) {
+            OnboardingView(onWatch: {
+                OnboardingRecord().introSeen = true
+                watchAfterOnboarding = true
+                showOnboarding = false
+            }, onSkip: {
+                OnboardingRecord().introSeen = true
+                showOnboarding = false
+            })
+        }
         // "Open in Loupe" from the share sheet or Files: a preset pack goes to the Judgments preview
-        // (packs need no model, so this leaves Get Laya for the tabs).
+        // (packs need no model, so this leaves the onboarding steps for the tabs; the undone ones come back
+        // on the next launch).
         .onOpenURL { url in
             guard url.isFileURL else { return }
-            showGetLaya = false
+            step = .tabs
             router.open(.judgments, judgments: .mine)
             PacksService.shared.open(url)
         }
+    }
+
+    /// Leaves an onboarding step: records it as done (Get the model is not recorded: it comes back until the
+    /// model is here), moves on, and once at the tabs shows the one-time intro.
+    private func leave(_ current: LaunchStep) {
+        let record = OnboardingRecord()
+        switch current {
+        case .permissions: record.permissionsDone = true
+        case .protect: record.protectDone = true
+        case .getModel, .tabs: break
+        }
+        step = LaunchFlow.after(current, record: record)
+        // The intro is a sheet on the tabs: it is presented once they are on screen (see `tabs`' onAppear),
+        // since a sheet asked for in the same update that creates its host is dropped.
+    }
+
+    /// iOS's prompts, or in DEBUG with `-LoupePermissions granted|denied` a stand-in that answers without them.
+    static func permissionAsker(_ sources: SourcesService) -> PermissionAsking {
+        #if DEBUG
+        if let answer = LaunchOptions.current.fakePermissions { return FakePermissionAsker(answer: answer) }
+        #endif
+        return SystemPermissionAsker(deps: sources.deps)
     }
 
     private func start() {
@@ -100,11 +144,7 @@ struct RootView: View {
         #endif
         let launch = LaunchOptions.current
         launcher.seed = launch.gameSeed
-        if let game = launch.game {
-            launcher.open(game)
-        } else if !showGetLaya && !onboardingSeen && !launch.skipOnboarding {
-            showOnboarding = true
-        }
+        if let game = launch.game { launcher.open(game) }
     }
 
     private var tabs: some View {
@@ -133,23 +173,18 @@ struct RootView: View {
         }
         // Jobs running off-screen, and the model-load banner (the live run views are in place on each screen).
         .overlay(alignment: .bottom) { ActivityDock() }
+        .task {
+            // Arriving at the tabs from the onboarding steps: the one-time intro follows, once the step's fade
+            // has finished (a sheet asked for mid-transition, or in the update that creates its host, is dropped).
+            guard LaunchOptions.current.game == nil,
+                  LaunchFlow.showsIntro(launch: .current, record: OnboardingRecord()) else { return }
+            try? await Task.sleep(nanoseconds: 450_000_000)
+            if !showOnboarding { showOnboarding = true }
+        }
         .environmentObject(launcher)
         .environmentObject(router)
         .fullScreenCover(item: $launcher.mode) { mode in
             GameView(mode: mode, seed: launcher.seed)
-        }
-        .sheet(isPresented: $showOnboarding, onDismiss: {
-            // Open the game only once the sheet is gone: two presentations cannot overlap.
-            if watchAfterOnboarding { watchAfterOnboarding = false; launcher.open(.watch) }
-        }) {
-            OnboardingView(onWatch: {
-                onboardingSeen = true
-                watchAfterOnboarding = true
-                showOnboarding = false
-            }, onSkip: {
-                onboardingSeen = true
-                showOnboarding = false
-            })
         }
     }
 }

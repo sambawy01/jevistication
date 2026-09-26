@@ -150,7 +150,7 @@ class GameSession(
         currentLegal = legal
         current = decision
         stats.record(decision, clock())
-        pendingObservation?.let { o -> if (decision.source != DecisionSource.FAILURE) stats.recordCollisionChoice(o, decision.action) }
+        pendingObservation?.let { o -> if (decision.source != DecisionSource.FAILURE) stats.recordCrashChoice(o, decision.action) }
         pendingObservation = null
         val top = decision.topProbability
         handedOff = decision.source == DecisionSource.MODEL && top != null && top < threshold
