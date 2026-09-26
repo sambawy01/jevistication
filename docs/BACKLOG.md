@@ -444,3 +444,56 @@ changes, except where marked as a plan refinement.
      model tolerates quantisation. Ours: `int8` 384 MB (the 22 `mlp.Wo` kept FP32) and `int8-partial`
      357 MB; BUILD.md risk 13 records that the full ~58 MB saving was tried and rejected because it
      changed answers. Worth re-testing their recipe against golden 34/34 and criteria 8/8.
+
+### Station lab results (2026-09-26)
+
+Measured by Loupe Station (`laya-studio` commit `c843da2`; full reports in that repo's `docs/lab/`).
+"english" and "multilingual" are the two upstream checkpoints; mobile runs **multilingual**. Every
+item below is a **recommendation; the owner hasn't approved code changes.**
+
+10. **Self-vouching does not flip the app's verdict** (answers item 8). 26 phishing and 40 legitimate
+    emails × 10 inserted sentences (English, MSA, Egyptian Arabic) at the start, middle or end: the
+    app-level phishing verdict (formula + model) flipped **0 of 1,140** times. The model's own
+    P(phishing) flipped 6.1% (english) and 1.2% (multilingual); the worst case was the MSA "verified
+    by bank security" sentence on english, 15.4%. On average the injection *raised* P(phishing), by
+    +0.03 to +0.20. A keyword rule caught 25/26 vouching sentences with 5/115 false alarms, better than
+    a model `Noul` detector (20/26, 11/115). *Recommendation:* add a keyword self-vouching signal as
+    phishing evidence for unknown senders; skip the second masked pass.
+11. **Template lint** (wellposed, item 9, over our 55 questions): **0 errors**. Seven two-option
+    templates have a "no" option that is not a plain opposite: `phishing` ("an ordinary message"),
+    `impostor-sender`, `claims-brand`, `is-junk`, `unsubscribe-candidate`, `refetchable-download`,
+    `superseded-version` (`templates/.../TemplateLibrary.kt`). *Recommendation:* rephrase them as
+    plain opposites. A new wording restarts that judgment's calibration, which is why the receipt
+    wording was kept (BUILD.md, receipt evidence gate, 2026-09-25); weigh each change against that.
+12. **Calibration of the multilingual graph** (confirms items 1 and 9 on per-type calibration). It
+    ships T = 1.0 for every type.
+
+    | Type | Accuracy | ECE | Fitted T | Notes |
+    |---|---|---|---|---|
+    | `Noul` | 69.8% | 0.195 | 7.20 (Arabic 5.2, Franco-Arabic 18.4) | 59.2% of wrong answers at ≥ 0.9, 27.8% at ≥ 0.99 |
+    | `Choice` | 54.8% | 0.279 | 3.07 | Arabic `Choice` 49.1%, ECE 0.33 |
+    | `Score` | 50.6% | 0.135 | 1.21 | |
+
+    After fitting T (2-fold): ECE 0.095 for `Noul`, 0.087 for `Choice`. **19.8% of multilingual's
+    wrong answers sit at ≥ 0.99** (english: 1.2%); that is the baseline a fine-tune must never raise.
+    For mobile: MODEL-SETTINGS.md records that no calibration is fitted on the iPhone yet
+    (`use_calibration` is the identity), so shipped confidences are uncalibrated. *Recommendation:*
+    per-type, then per-language, temperatures as the first step. Note that the fitted `Noul` values
+    (7.2, 18.4) fall outside the [0.25, 5] bound proposed in item 5 for fine-tuned heads; that bound
+    needs revisiting before it is applied to the base graph.
+13. **Absence phrasing fails** (confirms item 9). "Is X missing?" scored 8/60 (english), 23/60
+    (multilingual) and 1/24 (Arabic), against 56/60, 47/60 and 18/24 for "Does it contain X?", with
+    opposite verdicts on 50 of 60 identical texts. *Recommendation:* ban absence phrasing in
+    templates with a lint rule.
+14. **Option order and count** (answers items 2 and 3). Order changed the top answer in 13.4%
+    (english) and 19.4% (multilingual) of cases, with no systematic first-position bias, so permuting
+    and averaging helps. With 11 or more options, answers at ≥ 0.99 go from 20% to 67% (driven by
+    english's shipped `choice:11+` temperature of 0.10). An "other" option catches 56–60% of
+    out-of-set inputs; without one, 33–44% are forced into an answer at ≥ 0.9 (reinforces BL-8).
+    *Recommendation:* at most 10 options; lower `Template.kt`'s cap from 12 to 10.
+15. **Game baseline histogram** (multilingual, `Choice`): 54.8% accuracy, 34% of wrong answers at
+    ≥ 0.9, 8.5% at ≥ 0.99. *Recommendation:* report the same histogram before and after training;
+    recorded in `GAME-FINETUNE-PLAN.md` G7.
+16. **Needs-reply is the most often confidently wrong family** (16 of 34 wrong answers at ≥ 0.9).
+    *Recommendation:* make it rule-first (the `needs-reply` template, `TemplateLibrary.kt`; the
+    mechanical-first rule in PRODUCT.md §3).
