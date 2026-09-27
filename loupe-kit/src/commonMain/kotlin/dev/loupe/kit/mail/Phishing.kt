@@ -80,6 +80,9 @@ object Phishing {
     const val LAYA_STRONG = 20
     const val LAYA_WEAK = 10
     const val MAX_LINKS = 60
+    /** Distinct hosts judged per message, and links judged in all (fix loop 11). */
+    const val MAX_LINK_HOSTS = 300
+    const val MAX_JUDGED_LINKS = 1000
     const val MAX_TRUSTED = 500
 
     /** The shared Loupe phishing formula's version: one number for the email and page profiles (Station's two FORMULA_VERSIONs). */
@@ -621,7 +624,7 @@ object Phishing {
      * mailing service's click tracker, a well-known brand's domain or a private address.
      */
     fun linkTargets(text: String, links: List<Pair<String, String>>, senderReg: String?, config: SiteConfig): List<String> {
-        val hrefs = links.take(MAX_LINKS).map { it.first } + urls(text).map { if (it.lowercase().startsWith("http")) it else "http://$it" }
+        val hrefs = judgedLinks(links).map { it.first } + urls(text).map { if (it.lowercase().startsWith("http")) it else "http://$it" }
         val out = mutableListOf<String>()
         for (raw in hrefs) {
             val href = Hosts.linkUrl(raw)
@@ -828,9 +831,34 @@ object Phishing {
         return ascii in PublicSuffix.DEFAULT
     }
 
+    /**
+     * The links judged for one message (fix loop 11): verified links (an anchor, a form or a frame the
+     * tree-aware reading places) before unverified ones, exact duplicates and an unverified link whose
+     * host is already judged dropped, and only then the cap: [MAX_LINK_HOSTS] distinct hosts and
+     * [MAX_JUDGED_LINKS] links. Seventy anchors in a comment, an MSO block or a hidden <div> cannot push
+     * the real link out.
+     */
+    fun judgedLinks(links: List<Pair<String, String>>): List<Pair<String, String>> {
+        val out = ArrayList<Pair<String, String>>()
+        val seen = HashSet<Pair<String, String>>()
+        val perHost = HashMap<String, Int>()
+        for (verified in listOf(true, false)) for (p in links) {
+            if ((p.second != HtmlAnchors.UNVERIFIED) != verified || !seen.add(p)) continue
+            val key = ParsedUrl.parse(Hosts.linkUrl(p.first))?.host?.ifEmpty { null } ?: ("\u0000" + p.first.take(80))
+            val c = perHost[key]
+            if (c == null) {
+                if (perHost.size >= MAX_LINK_HOSTS) continue
+            } else if (!verified) continue
+            if (out.size >= MAX_JUDGED_LINKS) break
+            perHost[key] = (c ?: 0) + 1
+            out += p
+        }
+        return out
+    }
+
     /** (code, params) for the links of one message: anchors from the HTML plus URLs in the text. */
     fun linkSignals(text: String, links: List<Pair<String, String>>, senderReg: String?, config: SiteConfig): List<Pair<String, Map<String, String>>> {
-        val pairs = links.take(MAX_LINKS).toMutableList()
+        val pairs = judgedLinks(links).toMutableList()
         val seen = pairs.map { it.first }.toMutableSet()
         val (textUrls, stitches) = textLinks(text)
         for (url in textUrls) {
@@ -865,7 +893,7 @@ object Phishing {
             if (got.add(code)) out += code to params.filter { it.second != null }.associate { it.first to it.second!! }
         }
 
-        for ((hrefRaw, shownText) in pairs.take(MAX_LINKS)) {
+        for ((hrefRaw, shownText) in pairs) {
             unverified = shownText == HtmlAnchors.UNVERIFIED
             val visible = if (unverified) "" else shownText
             // as a browser reads the href: C0 controls and spaces stripped, tabs and newlines dropped

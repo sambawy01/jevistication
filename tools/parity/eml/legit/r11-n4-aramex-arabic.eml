@@ -1,0 +1,17 @@
+From: أرامكس <no-reply@aramex.com>
+To: someone@example.org
+Subject: شحنتك في الطريق
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@aramex.com; spf=pass smtp.mailfrom=aramex.com; dmarc=pass (p=REJECT) header.from=aramex.com
+Content-Type: text/html; charset=utf-8
+
+<html dir="rtl" lang="ar"><head><meta charset="utf-8"><style>body{font-family:Tahoma}</style></head><body dir="rtl">
+<table dir="rtl" width="600" align="center"><tr><td style="text-align:right">
+<img src="https://www.aramex.com/content/images/logo.png" alt="أرامكس">
+<h2>مرحباً أحمد،</h2><p>شحنتك رقم <b>45123987601</b> في الطريق إليك وستصل خلال يوم عمل واحد.</p>
+<p>تتبع شحنتك: <a href="https://www.aramex.com/eg/ar/track/results?ShipmentNumber=45123987601">اضغط هنا</a></p>
+<p>أو زر الرابط: https://www.aramex.com/eg/ar/track/shipments</p>
+<p>لتغيير موعد التسليم: <a href="https://aramex.page.link/reschedule?id=45123987601">إعادة الجدولة</a></p>
+<p style="font-size:11px;color:#888">هذه رسالة آلية، يرجى عدم الرد. &copy; أرامكس ٢٠٢٦</p>
+</td></tr></table></body></html>

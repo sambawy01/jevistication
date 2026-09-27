@@ -2,6 +2,7 @@ package dev.loupe.kit.parity
 
 import dev.loupe.engine.DateFacts
 import dev.loupe.engine.JudgmentLint
+import dev.loupe.kit.mail.HtmlAnchors
 import dev.loupe.kit.mail.MailMessage
 import dev.loupe.kit.mail.Phishing
 import dev.loupe.kit.privacy.PiiCollector
@@ -87,6 +88,13 @@ class PortableRegexPerformanceTest {
         linear("html candidate comments", { "<!-- <a href=\"https://e.com/\">t</a> ".repeat(800 * it) }) { MailMessage.anchors(it) }
         linear("html table parts", { "<table><tr><td><svg></tbody><td><caption></td>".repeat(600 * it) }) { MailMessage.anchors(it) }
         linear("html select end tags", { "<h2><select><math></h2></h1><option>".repeat(600 * it) }) { MailMessage.anchors(it) }
+        // fix loop 11: forms, buttons, SVG animations, frames and nested srcdoc (bounded depth), the
+        // visible text through the tree, and the judged-link cap over many hosts
+        linear("html forms and buttons", { "<form action=\"https://f.example/\"><button>go</button><input type=submit value=x></form>".repeat(500 * it) }) { MailMessage.anchors(it) }
+        linear("html svg animate", { "<svg><a><animate attributeName=href values=\"https://a.example/;https://b.example/\"/>t</a></svg>".repeat(500 * it) }) { MailMessage.anchors(it) }
+        linear("html nested srcdoc", { "<iframe srcdoc=\"<iframe srcdoc='&lt;a href=https://e.example/&gt;x&lt;/a&gt;'></iframe>\"></iframe>".repeat(300 * it) }) { MailMessage.anchors(it) }
+        linear("html visible text", { "<b>https://pay</b><!-- x --><wbr><span>pa1.example/x</span><p>".repeat(800 * it) }) { HtmlAnchors.visibleText(it) }
+        linear("judged links many hosts", { (0 until 400 * it).joinToString("") { k -> "<a href=\"https://h$k.example/\">t</a>" } }) { MailMessage.anchors(it) }
         linear("institutional sender", { "security ".repeat(1_500 * it) }) { WatcherRun.claimedBrand(it, "billing@x.com") }
         // a Visa-shaped number (Luhn-valid) about every 1,000 characters, with card and order words
         val block = "x".repeat(930) + " order ref visa card 4111 1111 1111 1111 exp 12/29 "

@@ -14,12 +14,14 @@ import kotlin.test.assertTrue
  */
 class CommentRegressionTest {
     @Test
-    fun `the comment-in-raw-text regression set loses no link in the union or the tree-aware reading`() {
+    fun `the comment-in-raw-text regression set loses no link in the union and each reading alone`() {
         val text = assertNotNull(PlatformFiles.readText(COMMENT_REGRESSION), COMMENT_REGRESSION)
         val result = AnchorParityFuzz.run(text)
         println("comment regression: ${result.cases} documents, ${result.missing.size} missing, ${result.treeMissing.size} missed by the tree-aware reading")
         assertTrue(result.cases >= 400, "only ${result.cases} cases")
         assertTrue(result.missing.isEmpty(), result.missing.take(40).joinToString("\n"))
         assertTrue(result.treeMissing.isEmpty(), result.treeMissing.take(40).joinToString("\n"))
+        // the no-skip reading alone too (fix loop 11): one that trusted a `<!--` again fails here
+        assertTrue(result.candidateMissing.isEmpty(), result.candidateMissing.take(40).joinToString("\n"))
     }
 }

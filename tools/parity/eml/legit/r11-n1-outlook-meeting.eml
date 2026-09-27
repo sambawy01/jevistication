@@ -1,0 +1,30 @@
+From: Dana Ruiz <dana.ruiz@contoso.com>
+To: someone@example.org
+Subject: Q4 planning notes
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@contoso.com; spf=pass smtp.mailfrom=contoso.com; dmarc=pass (p=REJECT) header.from=contoso.com
+Content-Type: multipart/alternative; boundary="bb77"
+
+--bb77
+Content-Type: text/plain; charset=utf-8
+
+Hi team,
+Notes are on SharePoint: Q4.docx <https://contoso.sharepoint.com/sites/Planning/Shared%20Documents/Q4.docx?web=1>
+Teams link: https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0
+Dana Ruiz | Contoso
+
+--bb77
+Content-Type: text/html; charset=utf-8
+
+<html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns:m="http://schemas.microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta http-equiv=Content-Type content="text/html; charset=utf-8"><meta name=Generator content="Microsoft Word 15 (filtered medium)">
+<!--[if !mso]><style>v\:* {behavior:url(#default#VML);} o\:* {behavior:url(#default#VML);}</style><![endif]-->
+<style><!-- @font-face {font-family:"Cambria Math";} p.MsoNormal {margin:0cm;font-size:11.0pt;font-family:"Calibri",sans-serif;} a:link {color:#0563C1;} --></style>
+<!--[if gte mso 9]><xml><o:shapedefaults v:ext="edit" spidmax="1026" /></xml><![endif]--></head>
+<body lang=EN-US link="#0563C1" vlink="#954F72" style='word-wrap:break-word'><div class=WordSection1>
+<p class=MsoNormal>Hi team,<o:p></o:p></p><p class=MsoNormal>Notes are on SharePoint: <a href="https://contoso.sharepoint.com/sites/Planning/Shared%20Documents/Q4.docx?web=1">Q4.docx</a><o:p></o:p></p>
+<p class=MsoNormal>Teams link: https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc%40thread.v2/0<o:p></o:p></p>
+<p class=MsoNormal><b>Dana Ruiz</b> | Contoso | <a href="mailto:dana.ruiz@contoso.com">dana.ruiz@contoso.com</a> | www.contoso.com<o:p></o:p></p>
+<p class=MsoNormal><img width=120 height=40 id="Picture_x0020_1" src="cid:image001.png@01DA0000.00000000" alt="Contoso"><o:p></o:p></p></div></body></html>
+--bb77--

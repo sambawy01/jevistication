@@ -14,11 +14,14 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Whole .eml files through MailMessage.fromItem (fix loop 10, tools/parity/eml/index.json): round 10's
- * 46 legitimate mails (MSO conditional comments, JSON-LD, textarea and xmp samples, <base>, SVG, AMP,
- * brand CDNs, Arabic and CJK), round 9's 10 newsletters, and round 10's attack mails. A legitimate
- * mail never scores above its reviewed score (itself never above origin/main's, 699761a); an attack
- * never below origin/main's. The pattern fallback reads only text/plain parts and the visible text of
+ * Whole .eml files through MailMessage.fromItem (fix loops 10–11, tools/parity/eml/index.json): round
+ * 10's 46 legitimate mails (MSO conditional comments, JSON-LD, textarea and xmp samples, <base>, SVG,
+ * AMP, brand CDNs, Arabic and CJK), round 9's 10 and round 11's 5 newsletters, 7 newsletters with
+ * YouTube/Vimeo/Maps/Spotify embeds, forms and split text; round 10's and round 11's attack mails
+ * (forms, submit buttons, SVG <animate>/<set>, iframe srcdoc, frames, embeds, objects, hidden text,
+ * link-cap floods). A legitimate mail never scores above its reviewed score (itself never above
+ * origin/main's, 699761a); an attack never below its reviewed score (itself never below origin/main's,
+ * but for noted rows where Chrome's document has no link). The pattern fallback reads only text/plain parts and the visible text of
  * HTML: a bare-URL pattern over the markup (a hidden MSO link, a comment, an image CDN) would raise a
  * legitimate score here.
  */
@@ -58,11 +61,12 @@ class EmlCeilingTest {
             } else {
                 attack++
                 val min = o["min"]!!.asInt
+                if (min < o["origin_main"]!!.asInt && o["note"] == null) bad += "$file: floor $min below origin/main"
                 if (s < min) bad += "$file: $s < $min $why"
             }
         }
         println("eml ceilings: $legit legitimate, $attack attack, ${bad.size} out of bounds")
-        assertTrue(legit >= 56 && attack >= 15, "legit=$legit attack=$attack")
+        assertTrue(legit >= 68 && attack >= 231, "legit=$legit attack=$attack")
         assertTrue(bad.isEmpty(), bad.joinToString("\n"))
     }
 }

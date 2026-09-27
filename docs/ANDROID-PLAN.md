@@ -515,6 +515,16 @@ LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
 - **Criteria against 699761a:** legitimate none higher; r10's 46 emls, r9's 10 and r8's 5 none higher;
   attack emls equal; the same 18 browser-correct attack rows.
 
+**Fix loop 11 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix11/`.
+- **Reader-openable targets verified:** forms, submit buttons/inputs, SVG animate/set, frames, embeds,
+  objects, iframe srcdoc and data:text/html (recursive), event-handler URLs.
+- **Floods:** verified links first, dedupe, then a cap of 300 hosts / 1,000 links.
+- **Visible text** on the tree (SVG/MathML style breakouts, split URLs joined).
+- **Round 11:** atk 165 and atk2 39 none lower than 699761a except a48 (Chrome's document has no link);
+  flood 12 all flagged (83/48); legit 61 + 7 embed newsletters none higher. Fuzz 2,000, cmx and round 9
+  71,429: 0 missing (union, tree-aware and no-skip alone).
+- **Plants:** (i)–(vi) each fail tests (see evidence `plants-summary.txt`).
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).

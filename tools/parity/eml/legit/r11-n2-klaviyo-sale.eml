@@ -1,0 +1,18 @@
+From: Allbirds <hello@email.allbirds.com>
+To: someone@example.org
+Subject: Last call: 20% off
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@email.allbirds.com; spf=pass smtp.mailfrom=email.allbirds.com; dmarc=pass (p=REJECT) header.from=email.allbirds.com
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width"><style>@media (max-width:480px){.kl-row{display:block!important}} .preheader{display:none!important}</style></head>
+<body style="background:#f4f4f4">
+<div class="preheader" style="display:none;font-size:1px;color:#f4f4f4;max-height:0;overflow:hidden">Ends tonight &#847; &zwnj; &nbsp; &#847; &zwnj; &nbsp;</div>
+<table role="presentation" width="100%"><tr><td align="center">
+<a href="https://ctrk.klclick.com/l/01HABCD_efgh?_kx=abc123.XyZ" target="_blank"><img src="https://d3k81ch9hvuctc.cloudfront.net/company/Xy12/images/hero.jpeg" alt="Shop the sale" width="600"></a>
+<h1 style="font-family:Helvetica">Last call</h1><p>20% off everything, ends midnight.</p>
+<table><tr><td style="background:#212121;border-radius:4px"><a href="https://ctrk.klclick.com/l/01HABCD_ijkl?_kx=abc123.XyZ" style="color:#fff;padding:12px 24px;display:inline-block">SHOP NOW</a></td></tr></table>
+<p style="font-size:11px;color:#999">No longer want these? <a href="https://manage.kmail-lists.com/subscriptions/unsubscribe?a=Xy12&amp;c=01HABC&amp;k=abc">Unsubscribe</a> | <a href="https://manage.kmail-lists.com/subscriptions/web-view?a=Xy12&amp;c=01HABC">View in browser</a><br>Allbirds, Inc. 730 Montgomery St, San Francisco, CA 94111</p>
+<img src="https://trk.klclick.com/open?_kx=abc123.XyZ" width="1" height="1" alt="">
+</td></tr></table></body></html>

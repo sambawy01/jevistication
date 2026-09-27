@@ -1,0 +1,28 @@
+From: Chase <no.reply.alerts@chase.com>
+To: someone@example.org
+Subject: Your statement is ready
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@chase.com; spf=pass smtp.mailfrom=chase.com; dmarc=pass (p=REJECT) header.from=chase.com
+Content-Type: multipart/alternative; boundary="bb77"
+
+--bb77
+Content-Type: text/plain; charset=utf-8
+
+Your credit card statement for the account ending in 1234 is now available.
+See your statement: https://secure.chase.com/web/auth/nav?navKey=requestStatements
+
+--bb77
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>.hide{display:none}</style></head><body>
+<table width="100%" cellpadding="0" cellspacing="0" style="font-family:Arial"><tr><td>
+<img src="https://www.chase.com/content/dam/chaseonline/en/alerts/ondemand/eventdriven/mol/images/chaseNew.gif" alt="Chase" width="104" height="28">
+</td></tr><tr><td><p>Your credit card statement for the account ending in 1234 is now available.</p>
+<p>Statement balance: $1,234.56 &nbsp; Minimum payment due: $35.00 &nbsp; Due date: 10/21/2026</p>
+<p><a href="https://secure.chase.com/web/auth/nav?navKey=requestStatements" style="color:#005EB8">See your statement</a></p>
+<p style="font-size:11px">To make sure you get our emails, add no.reply.alerts@chase.com to your address book. Do not reply to this message. Visit chase.com/privacy for our privacy notice.<br>
+<a href="https://www.chase.com/digital/resources/privacy-security">Privacy</a> | <a href="https://www.chase.com/digital/resources/security">Security</a></p>
+<p class="hide">https://secure.chase.com/web/auth/dashboard</p>
+</td></tr></table></body></html>
+--bb77--

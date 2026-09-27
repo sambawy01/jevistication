@@ -1,0 +1,11 @@
+From: Cairo Books <news@cairobooks.com>
+To: someone@example.org
+Subject: New arrivals and a quick survey
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@cairobooks.com; spf=pass smtp.mailfrom=cairobooks.com; dmarc=pass (p=REJECT) header.from=cairobooks.com
+Content-Type: text/html; charset=utf-8
+
+<!doctype html><html><body>
+<form action="https://www.cairobooks.com/search" method="get"><input name="q" placeholder="Search the shop"><button type="submit">Search</button></form><p>New this week: three novels.</p><form action="https://docs.google.com/forms/d/e/1FAIpQLSf-abc/formResponse" method="post"><p>How did we do? <input type="radio" name="r" value="5"> Great <input type="radio" name="r" value="3"> OK</p><input type="submit" value="Send feedback"></form><p><a href="https://www.cairobooks.com/unsubscribe">Unsubscribe</a></p>
+</body></html>

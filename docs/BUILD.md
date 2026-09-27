@@ -2147,6 +2147,17 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
     `EmlCeilingTest` (`tools/parity/eml`: 56 legitimate mails at or below origin/main, 15 attacks at or
     above it), the anchor fuzz's comment-in-raw-text family (3,500 documents). Round 9's 71,429 and round
     10's 71,429 documents: 0 missing, union and tree-aware alone.
+- **Fix loop 11: what else a reader opens, and floods.**
+  - Verified links from the tree-aware reading: form `action`, submit button/input targets (label as
+    text), SVG `<animate>`/`<set>` hrefs, iframe/frame/embed `src`, object `data`, `on…` handler URLs,
+    and `srcdoc`/data:text/html documents read recursively (depth 3). The no-skip reading finds the same
+    tags (unverified).
+  - `Phishing.judgedLinks`: verified before unverified, dedupe, then 300 hosts / 1,000 links (the old
+    60-link cap let 70 anchors in a comment push the real one out).
+  - `visibleText` runs on the tree: SVG/MathML style is not raw text, breakouts show text, split URLs join.
+  - Tests: `HtmlAnchorsReadersTest`, `TagSoupFuzzTest` (round 11's 2,000 documents), `EmlCeilingTest`
+    (68 legitimate incl. YouTube/Vimeo/Maps/Spotify/form newsletters, 231 attack floors),
+    CommentRegressionTest also holds the no-skip reading alone.
 - **URLs are split as browsers split them** (fix loop 3; hosts checked against Chrome 153,
   r3/chrome1.out): C0 controls and spaces at both ends are stripped; for http, https, ws, wss, ftp and
   file the host follows the scheme however many `/` or `\` come first, so a mail link

@@ -1,0 +1,11 @@
+From: Studio Gouna <hello@studiogouna.com>
+To: someone@example.org
+Subject: Our showreel is out
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@studiogouna.com; spf=pass smtp.mailfrom=studiogouna.com; dmarc=pass (p=REJECT) header.from=studiogouna.com
+Content-Type: text/html; charset=utf-8
+
+<!doctype html><html><body>
+<p>Watch our 2026 reel:</p><iframe src="https://player.vimeo.com/video/76979871?h=8272103f6e" width="640" height="360" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe><p><a href="https://vimeo.com/76979871">Open on Vimeo</a></p><p><a href="https://www.studiogouna.com/unsubscribe">Unsubscribe</a></p>
+</body></html>

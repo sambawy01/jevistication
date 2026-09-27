@@ -1,0 +1,9 @@
+From: Account Team <notice@mailer-notify.com>
+To: someone@example.org
+Subject: Action needed
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@mailer-notify.com; spf=pass smtp.mailfrom=mailer-notify.com; dmarc=pass header.from=mailer-notify.com
+Content-Type: text/html; charset=utf-8
+
+<math><mtext><a href="https://paypa1-secure.xyz/login">Sign in to PayPal</a></mtext></math>

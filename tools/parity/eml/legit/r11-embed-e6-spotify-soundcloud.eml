@@ -1,0 +1,11 @@
+From: Radio Nile <hello@radionile.fm>
+To: someone@example.org
+Subject: This week on the show
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@radionile.fm; spf=pass smtp.mailfrom=radionile.fm; dmarc=pass (p=REJECT) header.from=radionile.fm
+Content-Type: text/html; charset=utf-8
+
+<!doctype html><html><body>
+<iframe style="border-radius:12px" src="https://open.spotify.com/embed/episode/7makk4oTQel546B0PZlDM5?utm_source=generator" width="100%" height="152" frameBorder="0" allowfullscreen="" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy"></iframe><iframe width="100%" height="166" scrolling="no" frameborder="no" allow="autoplay" src="https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/293&color=%23ff5500"></iframe><p><a href="https://radionile.fm/episodes/42">Listen on our site</a> · <a href="https://radionile.fm/unsubscribe">Unsubscribe</a></p>
+</body></html>

@@ -1,0 +1,11 @@
+From: Nile Shoes <news@nileshoes.com>
+To: someone@example.org
+Subject: Your order has shipped
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@nileshoes.com; spf=pass smtp.mailfrom=nileshoes.com; dmarc=pass (p=REJECT) header.from=nileshoes.com
+Content-Type: text/html; charset=utf-8
+
+<!doctype html><html><body>
+<p>Track it at <b>www.nileshoes.com</b>/track or reply to this mail.</p><p>Visit <span>nileshoes.com</span><span>/sale</span> for 20% off.</p><p>Call us: <a href="tel:+201005550100">+20 100 555 0100</a></p><p>Web: https://www.nile<wbr>shoes.com/help</p><p><a href="https://www.nileshoes.com/unsubscribe">Unsubscribe</a></p>
+</body></html>

@@ -97,7 +97,16 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
    against a `<base href>` only it finds, is judged with no link text and raises only risk-weight codes
    (25 or more: a look-alike host, not a TLD note). With the raw mail at hand, the pattern fallback reads
    only text/plain parts and the visible text of HTML parts (as a client linkifies it), never the markup:
-   a URL in a hidden MSO block, a comment or an image CDN is not a pattern link. `<area href>` and
+   a URL in a hidden MSO block, a comment or an image CDN is not a pattern link. Since fix loop 11 the
+   tree-aware reading also judges, as verified links, what else a reader can open: a form's `action`
+   (with no text) and each submit button's or submit/image input's target (`formaction`, else its form's
+   action; its label is the link text), an SVG `<animate>`/`<set>` that sets `href`/`xlink:href` (`to`,
+   `from`, `values`), `<iframe>`/`<frame>`/`<embed>` `src` and `<object data>` (no text), URLs in an
+   `on…` event handler (no text), and the documents framed by `srcdoc` or a data:text/html URL (read in
+   turn, three deep, with their own link text). The visible text follows the tree (an SVG/MathML
+   `<style>` is not raw text; a breakout shows its text) and inline tags, comments and `<wbr>` do not
+   split a URL. The links judged are ordered verified first, deduplicated (an unverified link whose host is
+   already judged is dropped) and only then capped: 300 distinct hosts, 1,000 links. `<area href>` and
    `<meta http-equiv=refresh>` are links; a link's text joins across
    comments and leaves out an SVG `<title>`/`<desc>`'s own text; every HTML character reference in the attribute decoded (numeric and the
    full WHATWG named table), `href` only as a whole attribute name (`xlink:href` for an `<a>` inside

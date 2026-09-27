@@ -3,6 +3,9 @@ package dev.loupe.kit.mail
 import dev.loupe.engine.PortableText
 import dev.loupe.kit.site.Hosts
 import dev.loupe.kit.site.ParsedUrl
+import dev.loupe.sources.common.Links
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * The links of an HTML mail as a browser reads them (fix loops 5–7). One forward pass tokenises every
@@ -86,11 +89,22 @@ internal object HtmlAnchors {
     private class Tag(val name: String, val end: Boolean, val attrs: Map<String, String>, val start: Int, val after: Int, val selfClosing: Boolean)
     private class Link(val raw: String, val text: StringBuilder, val fixedText: String?, val start: Int)
 
-    fun anchors(html: String, max: Int): List<Pair<String, String>> {
+    /** How deep an `<iframe srcdoc>` (or a data:text/html frame) inside another is read (fix loop 11). */
+    private const val NESTED_DEPTH = 3
+
+    /**
+     * Every link reading of [html], in document order, at most [max] (then the links of the documents
+     * framed in it: `srcdoc`, data:text/html). Callers pass them through [Phishing.judgedLinks], which
+     * puts verified links first and caps on distinct hosts (fix loop 11).
+     */
+    fun anchors(html: String, max: Int): List<Pair<String, String>> = anchorsAt(html, max, 0)
+
+    private fun anchorsAt(html: String, max: Int, depth: Int): List<Pair<String, String>> {
         // (a) the tree-aware reading: namespaces, raw text, link text and the document's <base>
         val links = mutableListOf<Link>()
         val bases = mutableListOf<Pair<String, Boolean>>() // (href, outside SVG/MathML), in document order
-        scan(html, true, links, bases)
+        val nested = mutableListOf<Pair<String, String>>()
+        scan(html, true, links, bases, nested, depth, max)
         // (b) the no-skip reading (fix loop 9): the same tokeniser, but no raw text, RCDATA, plaintext or
         // foreign-content state skips anything, so every <a href>, <area href>, SVG link and meta refresh
         // that is a start tag anywhere outside a real comment is judged. A missed link would need the
@@ -107,7 +121,7 @@ internal object HtmlAnchors {
         val unverifiedBases = flatBases.map { it.first }.filter { b -> bases.none { it.first == b } }
             .map { Hosts.cleanHref(it) }.toSet()
         for (b in unverifiedBases) bases += b to false
-        return resolveAll(links, bases, max, unverifiedBases)
+        return resolveAll(links, bases, max, unverifiedBases) + nested
     }
 
     /**
@@ -117,7 +131,19 @@ internal object HtmlAnchors {
     internal fun treeAnchors(html: String, max: Int): List<Pair<String, String>> {
         val links = mutableListOf<Link>()
         val bases = mutableListOf<Pair<String, Boolean>>()
-        scan(html, true, links, bases)
+        val nested = mutableListOf<Pair<String, String>>()
+        scan(html, true, links, bases, nested, 0, max)
+        return resolveAll(links, bases, max) + nested
+    }
+
+    /**
+     * The no-skip reading alone (b), for tests (fix loop 11): it must cover every link by itself, so a
+     * reading (b) that trusted comments again fails the comment regression set even where (a) is right.
+     */
+    internal fun candidateAnchors(html: String, max: Int): List<Pair<String, String>> {
+        val links = mutableListOf<Link>()
+        val bases = mutableListOf<Pair<String, Boolean>>()
+        scanCandidates(html, links, bases)
         return resolveAll(links, bases, max)
     }
 
@@ -144,16 +170,35 @@ internal object HtmlAnchors {
                         refreshUrl(decodeAttribute(a["content"] ?: ""))?.let { links += Link(it, StringBuilder(), "", lt) }
                     }
                     "base" -> a["href"]?.let { bases += decodeAttribute(it) to false }
+                    // the other things a reader can open (fix loop 11), unverified here like any (b) link
+                    "form", "isindex" -> a["action"]?.let { links += Link(it, StringBuilder(), "", lt) }
+                    "button", "input" -> a["formaction"]?.let { links += Link(it, StringBuilder(), "", lt) }
+                    "iframe", "frame", "embed" -> a["src"]?.let { links += Link(it, StringBuilder(), "", lt) }
+                    "object" -> a["data"]?.let { links += Link(it, StringBuilder(), "", lt) }
+                    "animate", "set" -> if (a["attributename"]?.let { decodeAttribute(it).trim().lowercase() }.let { it == "href" || it == "xlink:href" }) {
+                        for (v in animatedUrls(a)) links += Link(v, StringBuilder(), "", lt)
+                    }
                 }
             }
             lt = html.indexOf('<', lt + 1)
         }
     }
 
-    private fun scan(html: String, tree: Boolean, links: MutableList<Link>, bases: MutableList<Pair<String, Boolean>>) {
+    private fun scan(
+        html: String,
+        tree: Boolean,
+        links: MutableList<Link>,
+        bases: MutableList<Pair<String, Boolean>>,
+        nested: MutableList<Pair<String, String>>? = null,
+        depth: Int = 0,
+        max: Int = 0,
+        vis: StringBuilder? = null,
+    ) {
         val stack = ArrayList<El>()
         val count = HashMap<String, Int>()
         var open: Link? = null
+        var openEnd = "a" // the end tag that closes [open]: </a>, or </button> for a submit button
+        var formAction: String? = null // the open <form>'s action (a submit button inside goes there)
         fun push(e: El) {
             if (stack.size >= STACK_MAX) return
             stack += e
@@ -278,12 +323,17 @@ internal object HtmlAnchors {
                 }
             }
         }
-        fun text(from: Int, to: Int) {
-            if (!tree) return
-            val l = open ?: return
+        fun text(from: Int, to: Int, shown: Boolean = true) {
+            if (!tree || to <= from) return
             // text right inside a foreign title/desc/style/script is not shown (HTML inside one is)
             val cur = stack.lastOrNull()
-            if ((cur != null && cur.ns != HTML && cur.name in HIDDEN_FOREIGN) || to <= from || l.text.length >= TEXT_MAX) return
+            val hiddenForeign = cur != null && cur.ns != HTML && cur.name in HIDDEN_FOREIGN
+            // the visible text (fix loop 11): what the tree puts on screen, so an SVG/MathML <style> is not
+            // raw text and a breakout <p> inside one shows its text; template content and textarea/xmp
+            // code samples are not linkified
+            if (vis != null && shown && !hiddenForeign && (count["template"] ?: 0) <= 0) vis.append(html, from, to)
+            val l = open ?: return
+            if (hiddenForeign || l.text.length >= TEXT_MAX) return
             l.text.append(html, from, minOf(to, from + TEXT_MAX - l.text.length))
         }
 
@@ -314,11 +364,15 @@ internal object HtmlAnchors {
             if (tag.after < 0) break // cut off by the end of the document: dropped, and nothing follows
             i = tag.after
             val name = tag.name
+            // a block, line break or replaced element separates words on screen; an inline tag, a comment
+            // or <wbr> does not (`https://pay<b></b>pa1-secure.xyz` is one URL on screen)
+            if (vis != null && ((name in SPECIAL_HTML && name != "wbr") || name == "svg" || name == "math")) vis.append('\n')
             if (tag.end) {
                 if (!tree) continue
                 if (!inHtml() && (name == "p" || name == "br")) leaveForeign()
-                if (name == "a") open = null
+                if (name == "a" || (open != null && name == openEnd)) { open = null; openEnd = "a" }
                 close(name)
+                if (name == "form" && (count["form"] ?: 0) <= 0) formAction = null
                 continue
             }
             // where the start tag goes: HTML (no foreign element open, an integration point's child, or a
@@ -346,10 +400,56 @@ internal object HtmlAnchors {
                     refreshUrl(decodeAttribute(tag.attrs["content"] ?: ""))?.let { links += Link(it, StringBuilder(), "", tag.start) }
                 name == "area" -> tag.attrs["href"]?.let { links += Link(it, StringBuilder(), decodeText(tag.attrs["alt"] ?: ""), tag.start) }
                 name == "a" -> {
-                    if (ns == HTML) open = null // an <a> closes the one still open (the adoption agency)
+                    if (ns == HTML) { open = null; openEnd = "a" } // an <a> closes the one still open (the adoption agency)
                     val raw = tag.attrs["href"] ?: if (ns == SVG || !tree) tag.attrs["xlink:href"] else null
-                    if (raw != null) { val l = Link(raw, StringBuilder(), null, tag.start); links += l; open = l }
+                    if (raw != null) { val l = Link(raw, StringBuilder(), null, tag.start); links += l; open = l; openEnd = "a" }
                 }
+                // Other things a reader can open (fix loop 11): a form's action, a submit button's or
+                // input's (formaction, or its form's action; its label is the link text), an SVG
+                // <animate>/<set> that sets an href, a frame, an embed or an object, and the documents
+                // framed by srcdoc or a data:text/html URL, read in turn
+                name == "form" && ns == HTML -> {
+                    formAction = tag.attrs["action"]
+                    formAction?.let { links += Link(it, StringBuilder(), "", tag.start) }
+                }
+                name == "isindex" -> tag.attrs["action"]?.let { links += Link(it, StringBuilder(), "", tag.start) }
+                name == "button" && ns == HTML -> {
+                    val type = tag.attrs["type"]?.let { decodeAttribute(it).trim().lowercase() } ?: "submit"
+                    val target = tag.attrs["formaction"] ?: if (type == "submit") formAction else null
+                    if (target != null) { val l = Link(target, StringBuilder(), null, tag.start); links += l; open = l; openEnd = "button" }
+                }
+                name == "input" && ns == HTML -> {
+                    val type = tag.attrs["type"]?.let { decodeAttribute(it).trim().lowercase() } ?: "text"
+                    if (type == "submit" || type == "image") {
+                        (tag.attrs["formaction"] ?: formAction)?.let {
+                            links += Link(it, StringBuilder(), decodeText(tag.attrs["value"] ?: tag.attrs["alt"] ?: ""), tag.start)
+                        }
+                    }
+                }
+                name == "animate" || name == "set" -> {
+                    val target = tag.attrs["attributename"]?.let { decodeAttribute(it).trim().lowercase() }
+                    if (target == "href" || target == "xlink:href") {
+                        val inLink = c != null && c.ns == SVG && c.name == "a"
+                        for (v in animatedUrls(tag.attrs)) {
+                            val l = Link(v, StringBuilder(), if (inLink) null else "", tag.start)
+                            links += l
+                            if (inLink && open == null) { open = l; openEnd = "a" }
+                        }
+                    }
+                }
+                name == "iframe" || name == "frame" || name == "embed" || name == "object" -> {
+                    val src = tag.attrs[if (name == "object") "data" else "src"]
+                    if (src != null) {
+                        links += Link(src, StringBuilder(), "", tag.start)
+                        dataHtml(src)?.let { if (nested != null && depth < NESTED_DEPTH) nested += anchorsAt(it, max, depth + 1) }
+                    }
+                    if (name == "iframe" && nested != null && depth < NESTED_DEPTH) tag.attrs["srcdoc"]?.let { nested += anchorsAt(decodeAttribute(it), max, depth + 1) }
+                }
+            }
+            // a URL in an event handler (onclick="location='…'"): a mail client runs no script, but the
+            // markup pattern of origin/main judged it, so it is judged with no link text
+            if (tree) for ((k, v) in tag.attrs) if (k.length > 2 && k.startsWith("on")) {
+                for (u in Links.find(decodeAttribute(v))) links += Link(u, StringBuilder(), "", tag.start)
             }
             if (!tree) continue
             if (ns == HTML) {
@@ -364,7 +464,7 @@ internal object HtmlAnchors {
                     name == "plaintext" -> { text(i, n); i = n }
                     name in RAW_TEXT -> {
                         val end = rawTextEnd(html, tag.after, name)
-                        if (name == "textarea" || name == "xmp") text(tag.after, end)
+                        if (name == "textarea" || name == "xmp") text(tag.after, end, shown = false)
                         i = end
                     }
                 }
@@ -410,6 +510,7 @@ internal object HtmlAnchors {
     }
 
     /** Attributes whose URL loads or describes something (an image, a font, a namespace): nobody follows it. */
+    private val FRAMED = setOf("iframe", "frame", "embed")
     private val NON_NAV_ATTRS = setOf("src", "srcset", "background", "poster", "lowsrc", "dynsrc", "longdesc", "cite", "codebase", "classid", "profile", "archive", "itemtype", "itemprop")
 
     /**
@@ -436,7 +537,9 @@ internal object HtmlAnchors {
             if (tag == null || tag.after < 0) { i = lt + 1; continue }
             i = tag.after
             for ((k, v) in tag.attrs) {
-                if (k == "xmlns" || k.startsWith("xmlns:") || k in NON_NAV_ATTRS || (tag.name == "link" && k == "href")) {
+                // a frame's, an embed's or an object's URL is opened (fix loop 11): judged as a link, not skipped
+                val opened = (k == "src" && tag.name in FRAMED) || (k == "data" && tag.name == "object")
+                if (!opened && (k == "xmlns" || k.startsWith("xmlns:") || k in NON_NAV_ATTRS || (tag.name == "link" && k == "href"))) {
                     val d = decodeAttribute(v).trim()
                     if (k == "srcset") d.split(',').forEach { out += it.trim().substringBefore(' ') } else out += d
                 }
@@ -445,30 +548,18 @@ internal object HtmlAnchors {
         return out
     }
 
-    private val INVISIBLE = setOf("script", "style", "textarea", "title", "iframe", "noembed", "noframes", "xmp", "template")
-
     /**
-     * The text of [html] a mail client shows and would linkify (fix loop 10): text outside comments,
-     * tags and the elements whose content is code or not shown (script, style, textarea, title, iframe,
-     * noembed, noframes, xmp, template), character references decoded. The mail's pattern links come
-     * from this, not from the raw markup (JSON-LD, CSS url(), data-src, embed code, VML).
+     * The text of [html] a mail client shows and would linkify (fix loops 10–11): the text the tree-aware
+     * reading puts on screen, character references decoded. Script, style, title, iframe, noembed,
+     * noframes content (raw text in HTML), textarea and xmp code samples, template content, comments and
+     * an SVG/MathML title/desc/style/script's own text are left out; inside SVG/MathML a <style> is not
+     * raw text and a breakout tag shows what follows (`<math><style><p>URL`). Block, line-break and
+     * replaced elements separate words; inline tags, comments and <wbr> do not, so a URL split by them
+     * reads as one, as on screen. The mail's pattern links come from this, never from the raw markup.
      */
     fun visibleText(html: String): String {
         val out = StringBuilder()
-        var i = 0
-        val n = html.length
-        while (i < n) {
-            val lt = html.indexOf('<', i)
-            if (lt < 0) { out.append(html, i, n); break }
-            out.append(html, i, lt).append(' ')
-            if (html.startsWith("<!--", lt)) { i = commentEnd(html, lt + 4); continue }
-            if (lt + 1 < n && (html[lt + 1] == '!' || html[lt + 1] == '?')) { i = html.indexOf('>', lt + 2).let { if (it < 0) n else it + 1 }; continue }
-            val tag = readTag(html, lt)
-            if (tag == null) { out.append('<'); i = lt + 1; continue }
-            if (tag.after < 0) break
-            i = tag.after
-            if (!tag.end && tag.name in INVISIBLE) i = rawTextEnd(html, tag.after, tag.name)
-        }
+        scan(html, true, mutableListOf(), mutableListOf(), null, NESTED_DEPTH, 0, out)
         return decodeText(out.toString())
     }
 
@@ -476,6 +567,39 @@ internal object HtmlAnchors {
     private fun hostOf(href: String): String? = ParsedUrl.parse(Hosts.linkUrl(href))?.host?.ifEmpty { null }
 
     private fun absoluteWeb(u: String): Boolean = Hosts.isWebUrl(u) && Hosts.splitUrl(u).authority?.isNotEmpty() == true
+
+    /** The URLs an SVG <animate>/<set> gives an href: `to`, `from`, and each of `values` (fix loop 11). */
+    private fun animatedUrls(a: Map<String, String>): List<String> =
+        (listOfNotNull(a["to"], a["from"]) + (a["values"]?.let { decodeAttribute(it).split(';') } ?: emptyList()))
+            .map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+    /**
+     * The HTML a data: URL frames (text/html, XHTML or SVG; base64 or percent-encoded), read like a
+     * srcdoc (fix loop 11), or null.
+     */
+    @OptIn(ExperimentalEncodingApi::class)
+    internal fun dataHtml(raw: String): String? {
+        val v = Hosts.stripC0(decodeAttribute(raw)).filter { it != '\t' && it != '\n' && it != '\r' }
+        if (!v.regionMatches(0, "data:", 0, 5, ignoreCase = true)) return null
+        val comma = v.indexOf(',')
+        if (comma < 0) return null
+        val meta = v.substring(5, comma).lowercase().replace(" ", "")
+        if (!(meta.startsWith("text/html") || meta.startsWith("application/xhtml") || meta.startsWith("image/svg"))) return null
+        val body = v.substring(comma + 1)
+        val bytes = if (meta.endsWith(";base64")) {
+            try { Base64.Default.decode(body.filter { !it.isWhitespace() && it != '%' }) } catch (e: IllegalArgumentException) { return null }
+        } else {
+            val out = ArrayList<Byte>(body.length)
+            var k = 0
+            while (k < body.length) {
+                val ch = body[k]
+                val hex = if (ch == '%' && k + 2 < body.length) body.substring(k + 1, k + 3).toIntOrNull(16) else null
+                if (hex != null) { out += hex.toByte(); k += 3 } else { ch.toString().encodeToByteArray().forEach { out += it }; k++ }
+            }
+            out.toByteArray()
+        }
+        return bytes.decodeToString()
+    }
 
     /** The URL of a meta refresh's content (`0; url='https://…'`), or null. */
     internal fun refreshUrl(content: String): String? {

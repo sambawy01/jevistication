@@ -1,0 +1,11 @@
+From: Red Sea Runners <events@redsearunners.org>
+To: someone@example.org
+Subject: Race day: the route
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@redsearunners.org; spf=pass smtp.mailfrom=redsearunners.org; dmarc=pass (p=REJECT) header.from=redsearunners.org
+Content-Type: text/html; charset=utf-8
+
+<!doctype html><html><body>
+<h2>Saturday 5K</h2><p>Start at the marina. Map:</p><iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3533.9!2d33.67!3d27.39!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1" width="600" height="450" style="border:0" allowfullscreen loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe><p>Or open <a href="https://maps.app.goo.gl/AbC123xyz">the route in Google Maps</a>.</p><p><a href="https://www.redsearunners.org/unsubscribe">Unsubscribe</a></p>
+</body></html>

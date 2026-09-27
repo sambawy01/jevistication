@@ -18,8 +18,10 @@ object AnchorParityFuzz {
      * [missing]: documents where Loupe's links (the union) lose a host Chrome's document has.
      * [treeMissing]: the same for the tree-aware reading alone (fix loop 9): it decides link text and
      * <base>, so it is held to Chrome too, although the union already guarantees coverage.
+     * [candidateMissing]: the same for the no-skip reading alone (fix loop 11): the union's guarantee
+     * rests on it, so it must cover Chrome's links by itself.
      */
-    class Result(val cases: Int, val missing: List<String>, val overFound: Int, val treeMissing: List<String>)
+    class Result(val cases: Int, val missing: List<String>, val overFound: Int, val treeMissing: List<String>, val candidateMissing: List<String>)
 
     private fun norm(h: String?): String = (h ?: "").lowercase().trimEnd('.')
 
@@ -29,6 +31,7 @@ object AnchorParityFuzz {
         val cases = root["cases"]!!.asArr.items
         val missing = mutableListOf<String>()
         val treeMissing = mutableListOf<String>()
+        val candidateMissing = mutableListOf<String>()
         var over = 0
         for (c in cases) {
             val o = c.asObj
@@ -41,7 +44,10 @@ object AnchorParityFuzz {
             val tree = HtmlAnchors.treeAnchors(html, 60).map { norm(ParsedUrl.parse(Hosts.linkUrl(it.first))?.host) }.filter { it.isNotEmpty() }.toSet()
             val treeLost = chrome - tree
             if (treeLost.isNotEmpty()) treeMissing += "${o["id"]!!.asString} $html: Chrome opens $treeLost, the tree-aware reading finds $tree"
+            val flat = HtmlAnchors.candidateAnchors(html, 5000).map { norm(ParsedUrl.parse(Hosts.linkUrl(it.first))?.host) }.filter { it.isNotEmpty() }.toSet()
+            val flatLost = chrome - flat
+            if (flatLost.isNotEmpty()) candidateMissing += "${o["id"]!!.asString} $html: Chrome opens $flatLost, the no-skip reading finds $flat"
         }
-        return Result(cases.size, missing, over, treeMissing)
+        return Result(cases.size, missing, over, treeMissing, candidateMissing)
     }
 }

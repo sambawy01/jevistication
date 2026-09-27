@@ -1,0 +1,20 @@
+From: The Verge <newsletter@theverge.com>
+To: someone@example.org
+Subject: Installer: this week's picks
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@theverge.com; spf=pass smtp.mailfrom=theverge.com; dmarc=pass (p=REJECT) header.from=theverge.com
+Content-Type: text/html; charset=utf-8
+
+<!doctype html><html><body style="margin:0">
+<table width="100%"><tr><td>
+<h1>Installer No. 101</h1><p>The best stuff this week. Read online: https://www.theverge.com/installer-newsletter</p>
+<p><a href="https://link.theverge.com/click/3456.789/aHR0cHM6Ly93d3cudGhldmVyZ2UuY29t/abc">Read the full issue</a></p>
+<p>
+<a href="https://twitter.com/verge" aria-label="X"><svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><title>X (Twitter)</title><path d="M18 2h3l-7 8 8 12h-6l-5-7-6 7H2l8-9L2 2h6l4 6z"/></svg></a>
+<a href="https://www.instagram.com/verge/" aria-label="Instagram"><svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#ig" xmlns:xlink="http://www.w3.org/1999/xlink"/><circle cx="12" cy="12" r="4"/></svg></a>
+<svg width="20" height="20"><a href="https://www.youtube.com/@verge"><rect width="20" height="14" rx="3"/><title>YouTube</title></a></svg>
+<a href="https://www.threads.net/@verge"><svg width="20" height="20"><style>.c{fill:#000}</style><circle class="c" cx="10" cy="10" r="9"/></svg></a>
+</p>
+<p style="font-size:11px">Vox Media, 1201 Connecticut Ave NW, Washington, DC 20036. <a href="https://link.theverge.com/manage/abc/unsubscribe">Unsubscribe</a></p>
+</td></tr></table></body></html>

@@ -47,10 +47,13 @@ data class MailMessage(
         // `\bhref` is "after a non-word character" consumed, not a lookbehind (O(position) on
         // Kotlin/Native); `<a` is followed by a non-word character, so the two read alike.
         /**
-         * (href, visible text) pairs from HTML, at most [Phishing.MAX_LINKS], read as a browser reads
+         * (href, visible text) pairs from HTML ([Phishing.judgedLinks]: verified first, capped on hosts), read as a browser reads
          * them ([HtmlAnchors]: whole attribute names, quoted values, character references decoded).
          */
-        fun anchors(html: String): List<Pair<String, String>> = HtmlAnchors.anchors(html, Phishing.MAX_LINKS)
+        fun anchors(html: String): List<Pair<String, String>> = Phishing.judgedLinks(HtmlAnchors.anchors(html, RAW_READINGS))
+
+        /** Link readings taken from one HTML part before [Phishing.judgedLinks] orders and caps them. */
+        private const val RAW_READINGS = 5000
 
         /**
          * A mail item as a message. With [raw] (the `.eml` source, when the phone can read it) the
@@ -75,7 +78,7 @@ data class MailMessage(
                 auth = entity.header("authentication-results")?.trim()?.take(2000) ?: ""
                 labels = (entity.header("x-keywords") ?: entity.header("keywords") ?: "").split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
                 val parts = htmlParts(entity)
-                anchors = parts.flatMap { anchors(it) }.distinct().take(Phishing.MAX_LINKS)
+                anchors = Phishing.judgedLinks(parts.flatMap { anchors(it) })
                 nonNavigable = parts.flatMapTo(HashSet()) { HtmlAnchors.nonNavigableUrls(it) }
                 val plain = plainParts(entity)
                 if (parts.isNotEmpty() || plain.isNotEmpty()) {
@@ -91,7 +94,7 @@ data class MailMessage(
             // the visible text shows it
             val extra = patternLinks.filter { l -> ParsedUrl.parse(Hosts.linkUrl(l))?.host?.ifEmpty { null }.let { it == null || it !in covered } }
                 .filter { l -> l.trim() !in nonNavigable || l.trim() in item.text }
-            val links = (anchors + extra.map { it to "" }).distinct().take(Phishing.MAX_LINKS)
+            val links = Phishing.judgedLinks(anchors + extra.map { it to "" })
             return MailMessage(
                 id = item.id, sender = from, subject = facts?.subject ?: "", dateIso = item.dateIso, body = body,
                 text = item.text, replyTo = replyTo, authResults = auth, links = links,

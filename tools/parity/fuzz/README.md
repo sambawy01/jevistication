@@ -60,6 +60,11 @@ an END-TAG: 3,500 in all. `comment_regression.py` pins round 10's comment-in-raw
 lost the link, and a deterministic sample of 300, with Chrome's hosts (`CommentRegressionTest`: union and
 tree-aware reading, 0 missing).
 
+Since fix loop 11, `tagsoup-pinned.json` holds round 11's 2,000 tag-soup documents (`tagsoup_gen.py`,
+seeds 1–8 × 250) with the hosts of the links Chrome renders; `TagSoupFuzzTest` holds the union, the
+tree-aware reading and the no-skip reading alone to them. `CommentRegressionTest` also holds the no-skip
+reading alone.
+
 `anchor_oracle.py` parses each document with Chrome's DOMParser (`text/html`) and pins, in
 `anchor-pinned.json`, the web hosts of the links a reader can follow in the document Chrome builds:
 - HTML `<a>` and `<area>`;
