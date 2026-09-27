@@ -135,6 +135,7 @@ object Phishing {
         "link_unicode_drift" to (30 to "A link's website name uses characters that older and newer software read differently ({domain})."),
         "link_text_mismatch" to (40 to "A link shows {shown} but really goes to {domain}."),
         "link_brand_text" to (30 to "A link asks you to sign in or verify with {brand}, but goes to {domain}."),
+        "link_stitched" to (30 to "The text runs the address of {brand} straight into another one ({domain}), so the link shown is not the one that opens."),
         "link_unreadable" to (30 to "A link's address does not read as a normal web address; where it leads cannot be told for sure."),
         "link_data" to (40 to "A link opens a data: address, which has no real website behind it."),
         "link_userinfo" to (30 to "A link hides its real website behind text and an @ sign ({domain})."),
@@ -634,36 +635,127 @@ object Phishing {
         return out.take(MAX_LINKS)
     }
 
-    internal fun urls(text: String): List<String> =
-        URL_RE.findAll(text).map { textUrlEnd(it.value).trimEnd('.', ',', ';', ':', '!', '?', '\'', '"') }
-            .filter { u -> u.substring(u.indexOf("://").let { if (it < 0) 4 else it + 3 }.coerceAtMost(u.length)).isNotEmpty() }
-            .take(MAX_LINKS).toList()
+    internal fun urls(text: String): List<String> = textLinks(text).first
+
+    /** [urls], and the (cut URL, URL right after the cut) pairs a stop joined in the text. */
+    internal fun textLinks(text: String): Pair<List<String>, List<Pair<String, String>>> {
+        val out = mutableListOf<String>()
+        val stitches = mutableListOf<Pair<String, String>>()
+        for (m in URL_RE.findAll(text)) {
+            textUrls(m.value, out, 0, stitches)
+            if (out.size >= MAX_LINKS) break
+        }
+        fun clean(u: String) = u.trimEnd('.', ',', ';', ':', '!', '?', '\'', '"')
+        val urls = out.map(::clean)
+            .filter { u -> u.substring(u.indexOf("://").let { if (it < 0) 0 else it + 3 }.coerceAtMost(u.length)).isNotEmpty() }
+            .distinct().take(MAX_LINKS)
+        return urls to stitches.map { clean(it.first) to clean(it.second) }
+    }
+
+    /** A bare host at the start of what follows a cut (`，evil.com/login`): labels, a dot, a TLD. */
+    private val BARE_HOST_RE = Regex("""^[A-Za-z0-9][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}(?:[:/?#][^${Rx.SPACE}<>"'()\[\]{}]*)?""")
 
     /**
-     * Where a URL written in running text ends (fix loop 4). URL_RE takes everything up to a space,
-     * but CJK and Arabic text runs straight on after an address: `访问www.example.com，了解更多`,
-     * `网址：https://www.example.com；电话`, `（https://www.example.com）。`. The URL ends at the first
-     * [textStop]: ideographic and full-width punctuation (U+3000–303F, U+FF01–FF0F, U+FF1A–FF20,
-     * U+FF3B–FF40, U+FF5B–FF65; full-width letters and digits are not punctuation), Arabic ، ؛ ؟,
-     * `|`, and in the host WHATWG's forbidden `^`.
-     *
-     * The ideographic, full-width and halfwidth full stops (`。．｡`) are dots in a host (UTS #46), but
-     * in text usually end a sentence: one is kept as a dot only inside the host and when the host
-     * after it ends with a top-level domain on the Public Suffix List (`日本語。jp`,
-     * `ｐａｙｐａｌ．ｃｏｍ`), so `详见www.example.com。谢谢` ends at `.com` while the stand-in-dot signals
-     * still see a host written with one. In hrefs and addresses (not text) they are always dots.
+     * The URL(s) one URL_RE match stands for in running text (fix loops 4–5): the address up to where
+     * the sentence goes on ([textUrlEnd]); the host after an `@` that a cut left out, when it is the
+     * same domain (linkifiers link it: `https://www.paypal.com|login@paypal.com`); and every address a
+     * later piece of the token still holds, after any stop (`https://paypal.com，evil.com/login`,
+     * `…/a|b｜evil.tk`: linkifiers link `evil.com/login` and `evil.tk` too).
      */
-    internal fun textUrlEnd(url: String): String {
+    private fun textUrls(token: String, out: MutableList<String>, depth: Int, stitches: MutableList<Pair<String, String>>) {
+        val (url, cut, after) = textUrlEnd(token)
+        if (url.isNotEmpty()) out += url
+        if (after != null) out += after
+        if (cut < 0 || depth >= 4) return
+        // the next address in the token, recorded with the one it was stitched to
+        fun follow(next: String) {
+            val before = out.size
+            textUrls(next, out, depth + 1, stitches)
+            if (out.size > before && url.isNotEmpty()) stitches += url to out[before]
+        }
+        var k = cut
+        while (k < token.length && out.size < MAX_LINKS) {
+            // the next piece: after this stop (and any stops that follow it)
+            while (k < token.length && (textStop(token[k]) || token[k] == '^')) k++
+            if (k >= token.length) return
+            val piece = token.substring(k)
+            val again = URL_RE.find(piece)
+            if (again != null && again.range.first == 0) { follow(again.value); return }
+            BARE_HOST_RE.find(piece)?.let { bare ->
+                val tld = bare.value.substringBefore('/').substringBefore('?').substringBefore('#').substringBefore(':').substringAfterLast('.')
+                if (Hosts.toAsciiLabel(tld)?.let { it in PublicSuffix.DEFAULT } == true) { follow(bare.value); return }
+            }
+            if (again != null) { textUrls(again.value, out, depth + 1, stitches); return }
+            // no address at the start of this piece: on to the next stop
+            while (k < token.length && !textStop(token[k])) k++
+        }
+    }
+
+    /**
+     * Where a URL written in running text ends, and where it was cut (-1 when it was not). URL_RE
+     * takes everything up to a space, but CJK and Arabic text runs straight on after an address:
+     * `访问www.example.com，了解更多`, `网址：https://www.example.com；电话`. The URL ends at the first
+     * [textStop] (ideographic and full-width punctuation U+3000–303F, U+FF01–FF0F, U+FF1A–FF20,
+     * U+FF3B–FF40, U+FF5B–FF65; Arabic ، ؛ ؟; `|`) or, in the host, `^`.
+     *
+     * - The ideographic, full-width and halfwidth full stops (`。．｡`) are dots in a host (UTS #46); in
+     *   text they usually end a sentence. One is kept as a dot when the labels after it end with a
+     *   top-level domain on the Public Suffix List (`日本語。jp`, `www.paypal.com．evil．xyz`), or, for
+     *   `．` and `｡`, when an ASCII letter or digit follows (no sentence goes on so).
+     * - A cut before an `@` of the authority does not hide the host a browser opens: when the host
+     *   after the last `@` (or a full-width `＠`, which NSDataDetector links through) is another
+     *   registrable domain than the one before the cut, the URL keeps its userinfo
+     *   (`https://www.paypal.com|login@paypa1-secure.xyz/login` is paypa1-secure.xyz), fix loop 5.
+     *   `访问 https://www.example.com，邮箱：info@example.com` names one domain and is cut.
+     */
+    internal fun textUrlEnd(url: String): Triple<String, Int, String?> {
         val schemeEnd = url.indexOf("://").let { if (it < 0) 0 else it + 3 }
-        var hostEnd = url.length
-        for (i in schemeEnd until url.length) if (url[i] == '/' || url[i] == '?' || url[i] == '#') { hostEnd = i; break }
-        for (i in schemeEnd until url.length) {
+        var authEnd = url.length
+        for (i in schemeEnd until url.length) if (url[i] == '/' || url[i] == '?' || url[i] == '#' || url[i] == '\\') { authEnd = i; break }
+        // the authority's last @ (or ＠)
+        var at = -1
+        for (i in schemeEnd until authEnd) if (url[i] == '@' || url[i] == '\uFF20') at = i
+        var after: String? = null
+        if (at >= 0) {
+            val preCut = firstStop(url, schemeEnd, at, at)
+            if (preCut >= 0 || url[at] == '\uFF20') {
+                val pre = url.substring(schemeEnd, if (preCut >= 0) preCut else at).substringBefore(':')
+                val (postEnd, postCut) = scanEnd(url, at + 1, authEnd)
+                val post = url.substring(at + 1, minOf(postEnd, authEnd)).substringBefore(':')
+                val preReg = if (HOSTISH.matches(pre)) Hosts.registrableDomain(pre) ?: pre else null
+                val postReg = Hosts.toAsciiDomain(post)?.let { Hosts.registrableDomain(it) ?: it }
+                if (preReg != null && postReg != null && post.isNotEmpty()) {
+                    if (postReg != preReg) {
+                        // the browser opens the host after the @; the text before it is userinfo
+                        return Triple(url.substring(0, at) + "@" + url.substring(at + 1, postEnd), postCut, null)
+                    }
+                    // the same domain: judged too, as linkifiers link it, without the userinfo
+                    after = (if (schemeEnd > 0) url.substring(0, schemeEnd) else "http://") + url.substring(at + 1, postEnd)
+                }
+            }
+        }
+        val (end, cut) = scanEnd(url, schemeEnd, authEnd)
+        return Triple(url.substring(0, end), cut, after)
+    }
+
+    /** A host as written before a cut: labels of letters, digits and hyphens with a dot. */
+    private val HOSTISH = Regex("""^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$""")
+
+    /** (end, cut) of the URL scanning from [from]; [hostEnd] ends the host part. */
+    private fun scanEnd(url: String, from: Int, hostEnd: Int): Pair<Int, Int> {
+        val stop = firstStop(url, from, url.length, hostEnd)
+        return if (stop < 0) url.length to -1 else stop to stop
+    }
+
+    /** The first stop in [from, until), with host rules before [hostEnd]; -1 for none. */
+    private fun firstStop(url: String, from: Int, until: Int, hostEnd: Int): Int {
+        for (i in from until until) {
             val c = url[i]
             val inHost = i < hostEnd
             if (inHost && c in TEXT_DOTS && dotInHost(url, i, hostEnd)) continue
-            if (textStop(c) || (inHost && c == '^')) return url.substring(0, i)
+            if (textStop(c) || (inHost && c == '^')) return i
         }
-        return url
+        return -1
     }
 
     private const val TEXT_DOTS = "\u3002\uFF0E\uFF61"
@@ -675,14 +767,15 @@ object Phishing {
     }
 
     /**
-     * Whether the stand-in dot at [i] separates labels: the run after it (up to the port, the end of
-     * the host or the next stop, which is the next stand-in dot, checked in its turn) ends with a
-     * top-level domain on the Public Suffix List.
+     * Whether the stand-in dot at [i] separates labels: the host after it (through further stand-in
+     * dots, up to the port, the end of the host or another stop) ends with a top-level domain on the
+     * Public Suffix List; or it is `．`/`｡` with an ASCII letter or digit after it.
      */
     private fun dotInHost(url: String, i: Int, hostEnd: Int): Boolean {
+        if (url[i] != '\u3002' && i + 1 < hostEnd && url[i + 1].let { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' }) return true
         var j = i + 1
-        while (j < hostEnd && url[j] != ':' && !textStop(url[j])) j++
-        val tld = url.substring(i + 1, j).substringAfterLast('.')
+        while (j < hostEnd && url[j] != ':' && url[j] != '@' && url[j] != '\uFF20' && (url[j] in TEXT_DOTS || !textStop(url[j]))) j++
+        val tld = url.substring(i + 1, j).split('.', '\u3002', '\uFF0E', '\uFF61').last()
         if (tld.isEmpty()) return false
         val ascii = Hosts.toAsciiLabel(tld) ?: return false
         return ascii in PublicSuffix.DEFAULT
@@ -692,7 +785,8 @@ object Phishing {
     fun linkSignals(text: String, links: List<Pair<String, String>>, senderReg: String?, config: SiteConfig): List<Pair<String, Map<String, String>>> {
         val pairs = links.take(MAX_LINKS).toMutableList()
         val seen = pairs.map { it.first }.toMutableSet()
-        for (url in urls(text)) {
+        val (textUrls, stitches) = textLinks(text)
+        for (url in textUrls) {
             // `www.example.com` stays as written (linkUrl reads it as http://): a bare host is
             // never an explicit-scheme URL for link_unreadable
             val full = if (url.lowercase().startsWith("http")) url else "http://$url"
@@ -702,6 +796,20 @@ object Phishing {
         }
         val out = mutableListOf<Pair<String, Map<String, String>>>()
         val got = mutableSetOf<String>()
+        // A known or brand address run straight into another domain by a stop (`https://paypal.com，evil.com/login`,
+        // `www.paypal.com｜evil.tk`): the text reads as one address, linkifiers open two (fix loop 5;
+        // origin/main read it as one host with the brand in front: brand_in_subdomain 30)
+        for ((a, b) in stitches) {
+            val ua = ParsedUrl.parse(Hosts.linkUrl(a)) ?: continue
+            val ub = ParsedUrl.parse(Hosts.linkUrl(b)) ?: continue
+            val ra = ua.registrable ?: ua.host
+            val rb = ub.registrable ?: ub.host
+            if (ra.isEmpty() || rb.isEmpty() || ra == rb || config.known(ub.registrable, ub.suffix)) continue
+            val brand = config.brands.firstOrNull { config.owns(it, ua.registrable, ua.suffix) }
+            if (brand != null || config.known(ua.registrable, ua.suffix)) {
+                if (got.add("link_stitched")) out += "link_stitched" to mapOf("brand" to (brand?.name ?: ra), "domain" to rb)
+            }
+        }
         fun add(code: String, vararg params: Pair<String, String?>) {
             if (got.add(code)) out += code to params.filter { it.second != null }.associate { it.first to it.second!! }
         }
@@ -729,7 +837,7 @@ object Phishing {
             if (Hosts.unreadableUrl(href)) {
                 add("link_unreadable")
                 shownKnownDomain(parsed?.host ?: href)
-                continue
+                // the host as written is still judged below (brand words, TLD), as the site check does
             }
             val u = parsed ?: continue
             val host = u.host

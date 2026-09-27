@@ -74,7 +74,19 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
    A URL in running text ends at the first ideographic or full-width punctuation mark (U+3000–303F,
    U+FF01–FF0F, U+FF1A–FF20, U+FF3B–FF40, U+FF5B–FF65), Arabic `، ؛ ؟`, `|`, or `^` in its host; a
    `。．｡` in the host is a dot only when the label after it ends with a top-level domain on the Public
-   Suffix List (`日本語。jp`), else it ends the sentence (`详见www.example.com。谢谢`) (*fix loop 4*).
+   Suffix List (`日本語。jp`, through further stand-in dots: `www.paypal.com．evil．xyz`) or, for `．`/`｡`,
+   an ASCII letter or digit follows; else it ends the sentence (`详见www.example.com。谢谢`) (*fix loop 4*).
+   A cut before the authority's last `@` (or a full-width `＠`) does not hide the host after it: when that
+   host is another registrable domain, the URL keeps its userinfo (`https://www.paypal.com|login@paypa1-secure.xyz`
+   is paypa1-secure.xyz); when it is the same, it is judged too. After any cut, every later piece of the
+   token that starts with a URL or a host with a listed TLD is judged (`https://paypal.com，evil.com/login`),
+   and a known or brand URL run straight into another domain is `link_stitched` (30) (*fix loop 5*).
+   Hrefs are read as the browser reads them (*fix loop 5*): every HTML character reference in the
+   attribute decoded (numeric and the full WHATWG named table), `href` only as a whole attribute name;
+   C0 controls, spaces and no-break spaces trimmed and tabs and newlines removed **before** the scheme
+   is read (`ht\ntps://x` is https://x); two leading `/` or `\` in any mix are scheme-relative
+   (`\\x`, `/\x`, `///x` are host x); one leading `/` or `\` before a host name with a listed TLD is
+   judged as that host (stricter than a browser, as origin/main read scheme-less hrefs).
 2. The host is lowercased, one trailing dot removed, and **converted to IDNA ASCII** when it contains
    non-ASCII (NFKC + lowercase + Punycode, IDNA 2003 without STD3). `https://pаypal.com` and
    `https://xn--pypal-4ve.com` are the same input.
@@ -151,7 +163,7 @@ order; each code counts once.
 |---|---|---|
 | `data_url` | 40 | scheme `data:` or `blob:` (then no host checks) |
 | `userinfo_in_url` | 30 | `user@` before the host, or a `\` before an `@` in the authority (`https://evil.com\@paypal.com` opens evil.com but reads as paypal.com) |
-| `unreadable_url` | 30 | a URL with an explicit web scheme (http, https, ws, wss, ftp) whose host is not empty, not only dots, and holds a forbidden host code point after percent-decoding (`https://paypal.com%40evil.com`, `%00`, `%09`, `%20`, DEL, `^`, `\|`) or a bracket that does not pair or does not hold an IPv6 address. Never for a relative or scheme-less href (`/`, `?utm=1`, a template tag such as `*\|UNSUB\|*`, one behind a no-break space) nor an empty or dots-only host (`https://`, `https://./`, `https://%2e/`), which open nothing (`Hosts.unreadableUrl`, *fix loops 3–4; Station to port*) |
+| `unreadable_url` | 30 | a URL with an explicit web scheme (http, https, ws, wss, ftp; or a scheme-relative href) or a `file:` URL with credentials or a port whose host is not empty, not only dots, and holds a forbidden host code point after percent-decoding (`https://paypal.com%40evil.com`, `%00`, `%09`, `%20`, DEL, `^`, `\|`) or a bracket that does not pair or does not hold an IPv6 address, or a port that is not 0–65535 in digits. Never for a relative or scheme-less href (`/`, `?utm=1`, a template tag such as `*\|UNSUB\|*`, one behind a no-break space) nor an empty or dots-only host (`https://`, `https://./`, `https://%2e/`), which open nothing (`Hosts.unreadableUrl`, *fix loops 3–4; Station to port*) |
 | `url_shortener` | 10 | host or registrable domain on the shorteners list |
 | `long_url` | 5 | whole URL > 200 characters |
 | `encoded_url` | 5 | > 12 `%XX` in path + query |
@@ -366,7 +378,7 @@ receiving server (`spoofed_known_sender` 60, `auth_dmarc_fail` 45, `auth_spf_dki
 (`link_homograph_brand` 60, `link_lookalike_brand` 45, `link_brand_domain_in_subdomain` 45,
 `link_brand_in_subdomain` 30, `link_brand_in_domain_bait` 35, `link_mixed_script` 35, `link_unicode_drift` 30,
 `link_disguised` 45 (both also on links to known domains, trackers and the sender's own),
-`link_unreadable` 30 (a link no browser opens, `unreadable_url`; `link_text_mismatch` still applies when its text names a known domain, as it does for a relative href whose text names one),
+`link_unreadable` 30 (a link no browser opens, `unreadable_url`; its host as written is still judged, as the site check does; `link_text_mismatch` still applies when its text names a known domain, as it does for a relative href whose text names one),
 `link_text_mismatch` 40, `link_brand_text` 30, `link_data` 40, `link_userinfo` 30, `link_ip` 25,
 `link_suspicious_tld` 8, `link_shortener` 5); contacts (rule 6, below); online (§5); self-vouching
 (v1.3, below) `self_vouching` 15; the decision model's text reading (calibrated `is_phishing` ≥ 0.8 / ≥ 0.5)

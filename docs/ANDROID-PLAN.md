@@ -389,6 +389,27 @@ Round-3 set: 308 rows, none lower. Gates: `clean check` green, 3,038 tests (3,03
 problems; performance linear. Release APK 1,970,131 bytes (unchanged); LoupeKit arm64 30,313,336
 bytes (+63 KB).
 
+**Fix loop 5 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix5/`. Links are read as
+browsers and linkifiers read them, checked by a **differential host-parity fuzz** (`tools/parity/fuzz/`,
+`HostParityFuzzTest` in commonTest): 3,600 generated hrefs and text lines, pinned with Chrome 153's
+hosts (a web client's https base and Apple Mail's x-msg base) and linkify-it 5.0.0's and
+NSDataDetector's links. The fuzz found 1,483 cases at 9e777be where Loupe judged another host and said
+safe; there are 0 now, on the JVM, Android and the iOS simulator. 58 more are "over-judged": the browser
+opens no host, but Loupe judges the one written in the href (scheme-less, behind a no-break space).
+Hrefs: HTML character references decoded (full WHATWG table, `tools/html/gen_entities.py`), `<a>`
+tokenised whole (no `data-href`, quoted `>`, unclosed anchors), tabs and newlines out of the scheme
+first, scheme-relative `\\` `/\` `\/` `///`, invalid ports and `file:` credentials unreadable, a trailing
+`。．｡` disguised, the host of an unreadable link still judged. Text: userinfo behind a stop and `＠`,
+pieces after a cut, stand-in dots through several labels, and `link_stitched` (30) for a brand address
+run into another domain. Criteria: 459 attack rows (rounds 3 and 5) none lower than origin/main, 192
+legitimate rows (rounds 4 and 5) none higher except the eight +10 deviation notes; AttackRowsTest and
+LegitimateMailTest pin them. Gates: `clean check` green, 3,046 tests (3,038), 0 failed; no-SDK 1,576
+(1,572); corpus 791 cases (518), 0 differ on API 29, API 35, the iOS simulator and the JVM (one API 29
+run segfaulted in app_process after printing "0 differ"; three reruns exited 0); planted faults in
+corpus.json and pinned.json both fail on iOS; ICU 129 compiled, 0 rejected; API check 690 classes,
+0 problems; performance linear (new row: unclosed anchors). Release APK 1,970,131 bytes (unchanged);
+LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).

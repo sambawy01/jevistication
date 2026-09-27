@@ -62,6 +62,8 @@ class PortableRegexPerformanceTest {
         linear("baseline \\b pattern", { "abcde ".repeat(2_000 * it) }) { Baseline.Pattern("\\bcopy\\b", "yes", "no", "copy").answer(it) }
         linear("transaction gate", { "lorem ipsum ".repeat(1_000 * it) }) { TransactionEvidence.assess(it) }
         linear("mail anchors", { "<a class=x title=y href=\"https://e.com\">t</a> ".repeat(250 * it) }) { MailMessage.anchors(it) }
+        // anchors without an href that never close: every one is read, none counts toward the cap
+        linear("mail anchors unclosed", { "<a class=x title=\"y>z\">t ".repeat(4_000 * it) }) { MailMessage.anchors(it) }
         linear("institutional sender", { "security ".repeat(1_500 * it) }) { WatcherRun.claimedBrand(it, "billing@x.com") }
         // a Visa-shaped number (Luhn-valid) about every 1,000 characters, with card and order words
         val block = "x".repeat(930) + " order ref visa card 4111 1111 1111 1111 exp 12/29 "

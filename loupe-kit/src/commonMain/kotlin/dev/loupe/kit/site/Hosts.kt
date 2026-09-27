@@ -2,6 +2,7 @@ package dev.loupe.kit.site
 
 import dev.loupe.engine.OriginFacts
 import dev.loupe.engine.PortableText
+import dev.loupe.engine.PublicSuffix
 import dev.loupe.engine.Uts46
 
 /*
@@ -177,8 +178,13 @@ object Hosts {
     /** The URL schemes WHATWG calls special: they always have an authority, and `\\` is `/` in them. */
     private val SPECIAL = setOf("http", "https", "ws", "wss", "ftp", "file")
 
-    /** [url] without the leading and trailing C0 controls and spaces WHATWG strips (not only `trim()`'s). */
-    internal fun stripC0(url: String): String = url.trim { it.code <= 0x20 }
+    /**
+     * [url] without the leading and trailing C0 controls and spaces WHATWG strips, and without the
+     * no-break and other Unicode spaces of [PortableText.SPACE_CHARS] around it (fix loop 5): a browser
+     * reads ` https://x` behind a no-break space as relative, but no real link is written so, some mail
+     * clients trim it, and origin/main read the URL behind it; Loupe judges that URL (stricter).
+     */
+    internal fun stripC0(url: String): String = url.trim { it.code <= 0x20 || PortableText.isSpace(it) }
 
     /** A URL's parts as a browser splits them. [backslashAt]: a `\\` before an `@` in the authority. */
     internal class Split(val scheme: String, val authority: String?, val rest: String, val backslashAt: Boolean)
@@ -248,14 +254,27 @@ object Hosts {
      * bare host (`www.example.com/x`). `www.example.com:8080/x` is a bare host, not a scheme.
      */
     fun linkUrl(href: String): String {
-        val t = stripC0(href)
+        // as a browser reads an href: C0 controls and spaces stripped, tabs and newlines dropped
+        // anywhere (`ht\ntps://x` is https://x) BEFORE the scheme is looked for (fix loop 5)
+        val t = cleanHref(href)
         val colon = t.indexOf(':')
         val scheme = if (colon > 0 && SCHEME.matches(t.substring(0, colon))) t.substring(0, colon).lowercase() else null
         if (scheme != null && (scheme in SPECIAL || t.startsWith("$scheme://", ignoreCase = true))) return t
-        // A relative href (`/x`, `./x`, `?utm=1`, `//host/x`), a template tag (`*|UNSUB|*`,
-        // `%%unsubscribe%%`, `{{url}}`) or one behind a no-break space is relative to the message:
-        // a browser opens no host of its own, so it stays as written (no host). Only what starts like
-        // a host name (a letter or digit: `www.example.com/x`, `例え.jp`) is read as http://.
+        // protocol-relative: two leading `/` or `\` in any mix (`//x`, `\\x`, `/\x`, `\/x`, `///x`) take
+        // the host that follows, over the mail's https base (Chrome resolves them so)
+        if (protocolRelative(t)) return "https:$t"
+        // one leading `/` or `\` before a host name with a listed top-level domain (`\paypa1-secure.xyz/x`,
+        // `/www.example.com/x`): a path to a browser, but written to be read as that host; judged as it
+        // (stricter than the browser, as origin/main read every scheme-less href)
+        if (t.length > 1 && (t[0] == '/' || t[0] == '\\')) {
+            val seg = t.substring(1).takeWhile { it != '/' && it != '\\' && it != '?' && it != '#' }
+            val tld = seg.substringBefore(':').substringAfterLast('.', "")
+            if (HOSTISH.matches(seg.substringBefore(':')) && tld.isNotEmpty() && toAsciiLabel(tld)?.let { it in PublicSuffix.DEFAULT } == true) return "http://" + t.substring(1)
+        }
+        // A relative href (`/x`, `./x`, `?utm=1`), a template tag (`*|UNSUB|*`, `%%unsubscribe%%`,
+        // `{{url}}`) or one behind a no-break space is relative to the message: a browser opens no
+        // host of its own, so it stays as written (no host). Only what starts like a host name (a
+        // letter or digit: `www.example.com/x`, `例え.jp`) is read as http://.
         val first = when {
             t.isEmpty() -> -1
             t[0].isHighSurrogate() && t.length > 1 && t[1].isLowSurrogate() -> 0x10000 + ((t[0].code - 0xD800) shl 10) + (t[1].code - 0xDC00)
@@ -263,6 +282,13 @@ object Hosts {
         }
         return if (first >= 0 && PortableText.isLetterOrNumber(first)) "http://$t" else t
     }
+
+    /** [href] without the leading and trailing C0 controls and spaces, and without tabs and newlines. */
+    internal fun cleanHref(href: String): String = stripC0(href).filter { it != '\t' && it != '\r' && it != '\n' }
+
+    /** Two leading slashes or backslashes, in any mix: a scheme-relative reference. */
+    internal fun protocolRelative(t: String): Boolean =
+        t.length >= 2 && (t[0] == '/' || t[0] == '\\') && (t[1] == '/' || t[1] == '\\')
 
     /** True when [url]'s scheme is http or https (after stripping, in any case). */
     fun isWebUrl(url: String): Boolean = splitUrl(url).scheme.let { it == "http" || it == "https" }
@@ -287,23 +313,34 @@ object Hosts {
      * `https://%2e/`): those open nothing, and scoring them would flag ordinary mail (fix loop 4).
      */
     fun unreadableUrl(url: String): Boolean {
-        val split = splitUrl(url)
-        if (split.scheme !in WEB_SCHEMES) return false
+        // a scheme-relative href is read over the mail's https base, as linkUrl reads it
+        val u = cleanHref(url).let { if (protocolRelative(it)) "https:$it" else url }
+        val split = splitUrl(u)
+        if (split.scheme !in WEB_SCHEMES && split.scheme != "file") return false
         // the scheme is written out (a browser drops tabs and newlines anywhere in a URL)
-        val t = stripC0(url).filter { it != '\t' && it != '\r' && it != '\n' }
+        val t = stripC0(u).filter { it != '\t' && it != '\r' && it != '\n' }
         if (!t.startsWith(split.scheme, ignoreCase = true)) return false
         val authority = split.authority ?: return false
+        // a file URL has neither credentials nor a port (Chrome refuses `file://a@b/`, `file://b:1/`)
+        if (split.scheme == "file") return authority.isNotEmpty() && ('@' in authority || ':' in authority)
         val hostPort = authority.substringAfterLast('@')
         // `[...]` holds an IPv6 address or nothing a browser opens (`https://[evil.com]/`)
-        if (hostPort.startsWith("[")) return ']' !in hostPort || !IPV6_CHARS.matches(hostPort.substring(1).substringBefore(']'))
+        if (hostPort.startsWith("[")) {
+            if (']' !in hostPort || !IPV6_CHARS.matches(hostPort.substring(1).substringBefore(']'))) return true
+            return !validPort(hostPort.substringAfter(']').removePrefix(":"))
+        }
         val raw = hostPort.substringBefore(':')
         if ('[' in raw || ']' in raw) return true
         val host = SiteSignals.percentDecode(raw)
         if (host.all { it == '.' || it == '\u3002' || it == '\uFF0E' || it == '\uFF61' }) return false
-        return host.any(::forbiddenInHost)
+        return host.any(::forbiddenInHost) || !validPort(hostPort.substringAfter(':', ""))
     }
 
     private val IPV6_CHARS = Regex("^[0-9A-Fa-f:.]+$")
+    private val HOSTISH = Regex("^[A-Za-z0-9-]+(?:\\.[A-Za-z0-9-]+)+$")
+
+    /** A WHATWG port: empty, or ASCII digits up to 65535 (`:x`, `:99999` make the URL fail). */
+    private fun validPort(p: String): Boolean = p.isEmpty() || (p.all { it in '0'..'9' } && p.trimStart('0').length <= 5 && (p.trimStart('0').ifEmpty { "0" }.toInt() <= 65535))
 
     private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.\\-]*$")
 }

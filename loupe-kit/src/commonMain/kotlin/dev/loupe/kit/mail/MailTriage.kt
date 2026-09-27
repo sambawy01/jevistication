@@ -45,17 +45,11 @@ data class MailMessage(
         // ASCII whitespace (the JDK's \s and IGNORE_CASE on this pattern), the same on every engine.
         // `\bhref` is "after a non-word character" consumed, not a lookbehind (O(position) on
         // Kotlin/Native); `<a` is followed by a non-word character, so the two read alike.
-        private val ANCHOR = Regex(
-            """<[aA]${Rx.WB_END}(?:[^>]*?[^A-Za-z0-9_>])?[hH][rR][eE][fF]${Rx.ASCII_SP}*=${Rx.ASCII_SP}*(?:"([^"]*)"|'([^']*)'|([^${Rx.ASCII_SPACE}>]+))[^>]*>(.*?)</[aA]${Rx.ASCII_SP}*>""",
-            RegexOption.DOT_MATCHES_ALL,
-        )
-
-        /** (href, visible text) pairs from HTML, at most [Phishing.MAX_LINKS]. */
-        fun anchors(html: String): List<Pair<String, String>> =
-            ANCHOR.findAll(html).take(Phishing.MAX_LINKS).map { m ->
-                val href = (m.groupValues[1].ifEmpty { m.groupValues[2] }.ifEmpty { m.groupValues[3] }).replace("&amp;", "&").trim()
-                href to PortableText.collapseSpaces(HtmlText.toText(m.groupValues[4]))
-            }.filter { it.first.isNotEmpty() }.toList()
+        /**
+         * (href, visible text) pairs from HTML, at most [Phishing.MAX_LINKS], read as a browser reads
+         * them ([HtmlAnchors]: whole attribute names, quoted values, character references decoded).
+         */
+        fun anchors(html: String): List<Pair<String, String>> = HtmlAnchors.anchors(html, Phishing.MAX_LINKS)
 
         /**
          * A mail item as a message. With [raw] (the `.eml` source, when the phone can read it) the

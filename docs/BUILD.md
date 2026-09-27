@@ -2057,6 +2057,18 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
   `网址：https://www.example.com；电话` and `（https://www.example.com）。` read example.com and are safe
   (they scored up to 80 danger at e5a0714 and 35 on origin/main, from `link_mixed_script` on the
   punctuation); `|`-separated footers (`Visit https://example.com|Unsubscribe`) end at `|`.
+- **Links are read as browsers and linkifiers read them, checked by a differential fuzz** (fix loop 5,
+  `tools/parity/fuzz/`, `HostParityFuzzTest`). There are 3,600 pinned hrefs and text lines with Chrome 153's hosts
+  (against a web client's https base and Apple Mail's x-msg base) and linkify-it's and NSDataDetector's links.
+  - Before: 1,483 cases where Loupe judged another host and said safe. After: 0.
+  - Hrefs: every HTML character reference is decoded (`&#104;ttps:`, `&Tab;`, `&#92;&#92;`); `href` must be a
+    whole attribute name; tabs and newlines inside the scheme are removed first (`ht\ntps://`);
+    `\\x`, `/\x`, `\/x` and `///x` are host x; invalid ports and `file:` credentials are unreadable.
+  - Text: userinfo behind a stop (`https://www.paypal.com|login@paypa1-secure.xyz`, `＠`) is judged as the
+    browser reads it; the pieces after a cut are judged (`https://paypal.com，evil.com/login`); a brand
+    address stitched to another domain is `link_stitched` (30).
+  - Mail judges the host of an unreadable link too; a host ending in `。．｡` is `disguised_host`; a
+    no-break space around an href is trimmed, as origin/main did.
 - **URLs are split as browsers split them** (fix loop 3; hosts checked against Chrome 153,
   r3/chrome1.out): C0 controls and spaces at both ends are stripped; for http, https, ws, wss, ftp and
   file the host follows the scheme however many `/` or `\` come first, so a mail link

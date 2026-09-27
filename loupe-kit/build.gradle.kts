@@ -38,6 +38,8 @@ val phishingDbFixtures = project.file("src/commonTest/fixtures/phishingdb")
 // :android-app's debug build so the same cases also run on an emulator or phone.
 val parityCorpus = rootProject.file("tools/parity/corpus.json")
 val parityEvaluator = rootProject.file("tools/parity/kotlin")
+// The differential host-parity fuzz: hrefs and text lines with Chrome's and the linkifiers' hosts.
+val hostParityFuzz = rootProject.file("tools/parity/fuzz/pinned.json")
 // shared_hosts.json: copied verbatim from Loupe Station (laya_studio/online/shared_hosts.json, commit
 // 4cb9026). It is the one source of the list: generateSharedHosts turns it into commonMain Kotlin.
 val sharedHostsJson = project.file("data/shared_hosts.json")
@@ -101,6 +103,7 @@ val generateTestPaths by tasks.registering {
     inputs.property("sharedHostsJson", sharedHostsJson.absolutePath)
     inputs.property("modelPriorDir", modelPriorDir.absolutePath)
     inputs.property("parityCorpus", parityCorpus.absolutePath)
+    inputs.property("hostParityFuzz", hostParityFuzz.absolutePath)
     val scratch = layout.buildDirectory.dir("tmp/kit-tests").get().asFile.absolutePath
     inputs.property("scratch", scratch)
     outputs.dir(outDir)
@@ -119,6 +122,7 @@ val generateTestPaths by tasks.registering {
                 "internal const val SHARED_HOSTS_JSON: String = \"" + sharedHostsJson.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val MODEL_PRIOR_DIR: String = \"" + modelPriorDir.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val PARITY_CORPUS: String = \"" + parityCorpus.absolutePath.replace("\\", "/") + "\"\n" +
+                "internal const val HOST_PARITY_FUZZ: String = \"" + hostParityFuzz.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val TEST_TMP: String = \"" + scratch.replace("\\", "/") + "\"\n",
         )
     }
@@ -129,6 +133,7 @@ val generateTestPaths by tasks.registering {
 // iOS simulator instead of leaving them UP-TO-DATE.
 tasks.withType<AbstractTestTask>().configureEach {
     inputs.file(parityCorpus).withPropertyName("parityCorpus").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(hostParityFuzz).withPropertyName("hostParityFuzz").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(phishingVectors).withPropertyName("phishingVectors").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(phishingVectorsV12).withPropertyName("phishingVectorsV12").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(examplePack).withPropertyName("examplePack").withPathSensitivity(PathSensitivity.RELATIVE)

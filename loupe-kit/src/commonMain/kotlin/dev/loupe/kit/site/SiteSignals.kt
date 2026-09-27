@@ -235,7 +235,10 @@ object SiteSignals {
             .flatMap { PortableText.disguisedCodePoints(Hosts.decodeLabel(it)) }
         val percent = '%' in Hosts.rawHost(u.raw) && !Hosts.unreadableUrl(u.raw) &&
             (config.known(u.registrable, u.suffix) || config.brands.any { config.owns(it, u.registrable, u.suffix) })
-        return (written + if (percent) listOf('%'.code) else emptyList()).distinct()
+        // a host ending in an ideographic, full-width or halfwidth full stop (`https://paypal.com。/`):
+        // it reaches the name before it, but no real link ends its host so (fix loop 5)
+        val trailing = percentDecode(Hosts.rawHost(u.raw)).lastOrNull()?.takeIf { it == '\u3002' || it == '\uFF0E' || it == '\uFF61' }?.code
+        return (written + (if (percent) listOf('%'.code) else emptyList()) + listOfNotNull(trailing)).distinct()
     }
 
     /** [s] without nonspacing and enclosing marks (Mn, Me), read from the pinned Unicode data. */

@@ -5,6 +5,7 @@ import dev.loupe.engine.OriginFacts
 import dev.loupe.engine.PortableRegex
 import dev.loupe.engine.PortableText
 import dev.loupe.engine.TermChangeDetector
+import dev.loupe.kit.mail.MailMessage
 import dev.loupe.kit.mail.Phishing
 import dev.loupe.kit.site.Brands
 import dev.loupe.kit.site.PageFacts
@@ -86,7 +87,8 @@ object ParityCorpus {
 
     /** `links`: [[href, visible text], ...] (a message's anchors). */
     private fun links(args: JsonValue.Obj?): List<Pair<String, String>> =
-        args?.get("links")?.asArr?.items?.map { it.asArr.items.let { p -> p[0].asString to p[1].asString } } ?: emptyList()
+        (args?.get("links")?.asArr?.items?.map { it.asArr.items.let { p -> p[0].asString to p[1].asString } } ?: emptyList()) +
+            (args?.get("html")?.asString?.let { MailMessage.anchors(it) } ?: emptyList())
 
     private fun hex(cp: Int): String = "U+" + cp.toString(16).uppercase().padStart(4, '0')
 
@@ -149,6 +151,7 @@ object ParityCorpus {
                 trusted = args?.get("trusted")?.asArr?.items?.map { it.asString } ?: emptyList(),
                 links = links(args),
             ).let { v -> "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.map { it.code }.sorted())}}" }
+            "mail.anchors" -> MailMessage.anchors(s).joinToString(",", "[", "]") { (h, t) -> "[" + quote(h) + "," + quote(t) + "]" }
             "mail.link_targets" -> list(Phishing.linkTargets(args?.get("body")?.asString ?: "", links(args), s.ifEmpty { null }, Phishing.DEFAULT_CONFIG))
             "link.check" -> SiteCheck.checkUrl(s).verdict.let { v ->
                 "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.filter { it.weight > 0 }.map { it.code }.sorted())}}"
