@@ -243,6 +243,23 @@ it"*.
   relay can see session metadata (when a session starts, how long it lasts, its update rhythm, and
   device tokens), even though it cannot read content.
 
+**Accounts (paid features only)** *(owner decision, 2026-09-27; planned, not built).* The free tier
+has **no account**: it stays account-free and on-device, and a free user never sees a sign-in
+prompt. Early-user grandfathering also stays on-device and account-free. A Loupe account exists
+only for the paid tier, and sign-in appears only when you start the paid assistant or BOND.
+
+- **Sign-in:** Sign in with Google, plus Sign in with Apple on iOS (App Store guideline 4.8
+  requires Apple's option whenever a third-party login is offered). Scopes are `openid`, `email`
+  and `profile` only: non-sensitive, and separate from the Gmail scopes.
+- **What the account is for:** tying a purchase (the Apple or Play receipt) to a person across
+  devices; the key-issuing service (short-lived, spend-capped provider keys, issued after a receipt
+  check); restoring a subscription on a new device; and BOND parents managing children from
+  several devices.
+- **What the server holds:** the account id, email, name (if given), subscription status and
+  balances. **Never** mail, files, judgments or locations. The promises above are unchanged: an
+  account is billing identity, not a copy of your data.
+- **Obligation:** the privacy policy gets an "Accounts (paid features)" section when this ships.
+
 ---
 
 ## 4a. Online helper rules

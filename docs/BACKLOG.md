@@ -369,6 +369,14 @@ it, set screen-time limits, and see the child's battery (below). Full plan in
       and with each location or alert event, plus a low-battery alert (for example, at 15% or
       below). `BatteryManager`; no extra wake-ups; end-to-end encrypted like the rest.
 
+7. **DECIDED: parents sign in (paid) for multi-device management** (owner, 2026-09-27). BOND is
+   paid, so the parent has a Loupe account (PRODUCT.md §4, *Accounts (paid features only)*): Sign
+   in with Google, plus Sign in with Apple on iOS; scopes `openid`, `email`, `profile` only. The
+   account ties the purchase to the parent and lets them manage their children from several
+   devices. The server holds only the account id, email, name (if given), subscription status and
+   balances: never alerts, locations or anything else a child's phone sends, which stays end-to-end
+   encrypted through the relay.
+
 **UNDER CONSIDERATION (not decided):** a child SOS button; a teen scam / sextortion pack reusing the
 scam engine; "what to say" guides per alert, in Arabic and English; a weekly calm summary; a family
 plan.
