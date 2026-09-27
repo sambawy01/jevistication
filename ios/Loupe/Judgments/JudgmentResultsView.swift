@@ -328,9 +328,11 @@ struct JudgmentResultsView: View {
                     Button { Task { await service.startSweep(j.id) } } label: { Label("Run on new items", systemImage: "play.fill") }
                         .buttonStyle(.neonPrimary)
                         .accessibilityIdentifier("results.run")
-                    Button("Re-run all") { Task { await service.startSweep(j.id, rerunAll: true) } }
+                    Button(action: { Task { await service.startSweep(j.id, rerunAll: true) } }) {
+                            // The bordered capsule's own padding makes up the rest of the 44 pt.
+                            Text("Re-run all").frame(minHeight: 30).contentShape(Rectangle())
+                        }
                         .buttonStyle(.bordered)
-                        .frame(minHeight: 44)
                 }
                 .disabled(service.running || items.isEmpty)
                 Text(items.isEmpty ? "No items yet: turn on a source."
@@ -353,8 +355,9 @@ struct JudgmentResultsView: View {
                     .font(.headline)
                 Spacer()
                 if s.running {
-                    Button("Cancel", role: .cancel) { service.cancelSweep() }
-                        .frame(minHeight: 44)
+                    Button(role: .cancel, action: { service.cancelSweep() }) {
+                            Text("Cancel").frame(minHeight: 44).contentShape(Rectangle())
+                        }
                         .accessibilityIdentifier("results.cancel")
                 }
             }

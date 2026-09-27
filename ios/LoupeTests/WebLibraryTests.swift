@@ -41,6 +41,28 @@ final class WebLibraryTests: XCTestCase {
         }
     }
 
+    // MARK: Kept across launches
+
+    /// Scenario test 2026-09-27: a custom question typed in (and the question chosen) was gone after the app was closed.
+    func testTheChosenAndCustomQuestionsSurviveANewModel() {
+        let defaults = store()
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("web-\(UUID().uuidString)")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let first = WebLibraryModel(helper: FixtureSearchHelper(), fixtureMode: true, defaults: defaults, ledger: LedgerService(home: dir))
+        first.choice[.weather] = .custom
+        first.customText[.weather] = "Is this day warm enough to swim"
+        first.customType[.weather] = .yesNo
+        let variant = WebCatalog.variants(.currency)[1].id
+        first.choice[.currency] = .variant(variant)
+
+        let again = WebLibraryModel(helper: FixtureSearchHelper(), fixtureMode: true, defaults: defaults, ledger: LedgerService(home: dir))
+        XCTAssertEqual(again.choiceFor(.weather), .custom)
+        XCTAssertEqual(again.customText[.weather], "Is this day warm enough to swim")
+        XCTAssertEqual(again.typeFor(.weather), .yesNo)
+        XCTAssertEqual(again.choiceFor(.currency), .variant(variant))
+        XCTAssertEqual(again.choiceFor(.trains), WebCatalog.variants(.trains).first.map { .variant($0.id) }, "untouched: the default")
+    }
+
     // MARK: Templates and variants
 
     func testEverySectorHasFourToSixVariantsInEnglishAndArabic() {

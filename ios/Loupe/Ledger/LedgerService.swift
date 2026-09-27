@@ -167,6 +167,14 @@ final class LedgerService: ObservableObject, @unchecked Sendable {
         let env = ProcessInfo.processInfo
         let throwaway = env.environment["XCTestConfigurationFilePath"] != nil || LaunchOptions.current.fixtureMode
         if throwaway {
+            #if DEBUG
+            // -LoupeScenarioHome <name> (with -LoupeFixtures; the scenario UI tests): one fixture home that outlives
+            // the process, shared by every store as Application Support/Loupe is on a phone, so a relaunch finds
+            // what the last run wrote. -LoupeScenarioReset empties it at launch (LoupeApp.init).
+            if let name = LaunchOptions.current.scenarioHome {
+                return ScenarioHome.url(name)
+            }
+            #endif
             return FileManager.default.temporaryDirectory.appendingPathComponent("LoupeLedger-\(UUID().uuidString)", isDirectory: true)
         }
         let support = (try? FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
@@ -175,3 +183,29 @@ final class LedgerService: ObservableObject, @unchecked Sendable {
         return support.appendingPathComponent("Loupe", isDirectory: true)
     }
 }
+
+#if DEBUG
+/// The scenario UI tests' persistent fixture home (`-LoupeFixtures -LoupeScenarioHome <name>`), and what
+/// `-LoupeScenarioReset` clears so each scenario starts from a known state. DEBUG only.
+enum ScenarioHome {
+    static func url(_ name: String) -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent("LoupeScenario-\(name)", isDirectory: true)
+    }
+
+    /// The Web questions' per-source switches and saved questions under fixtures (`WebModel.make`).
+    static func webSuite(_ name: String) -> String { "com.loupe-ai.ios.fixture.web.scenario.\(name)" }
+
+    /// Empties the home, the fixture Web settings and the protection logs (Spotted, recent checks), and puts the online
+    /// checks' switches back to their shipped defaults (they live in the app's settings, not the home). Runs before
+    /// any store opens.
+    static func reset(_ name: String) {
+        let fm = FileManager.default
+        try? fm.removeItem(at: url(name))
+        UserDefaults.standard.removePersistentDomain(forName: webSuite(name))
+        try? fm.removeItem(at: ProtectionGroup.root(fm).appendingPathComponent("protection", isDirectory: true))
+        for d in [UserDefaults.standard, ProtectionGroup.defaults] {
+            for key in d.dictionaryRepresentation().keys where key.hasPrefix("online.phishing.") { d.removeObject(forKey: key) }
+        }
+    }
+}
+#endif

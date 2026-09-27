@@ -28,7 +28,15 @@ extension LayaModel: JudgmentModelProvider {
 final class JudgmentsService: ObservableObject {
     static let shared = JudgmentsService(ledger: LedgerService.shared,
                                          items: { SourcesService.shared.judgeableItems() },
-                                         model: LayaModel.shared)
+                                         model: JudgmentsService.defaultModel())
+
+    /// The decision model, or in DEBUG under `-LoupeStandInModel` the sort demo's stand-in scorer.
+    static func defaultModel() -> JudgmentModelProvider {
+        #if DEBUG
+        if LaunchOptions.current.standInModel { return SortDemoModel() }
+        #endif
+        return LayaModel.shared
+    }
 
     enum ModelGate: Equatable {
         case unknown

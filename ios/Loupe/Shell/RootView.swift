@@ -141,8 +141,15 @@ struct RootView: View {
     private func restartAfterErase() {
         showOnboarding = false
         router.open(.now)
-        step = LaunchFlow.first(ready: ModelReadiness.shared.isReady, launch: .current, record: OnboardingRecord())
         sources.start()
+        // The Delete sheet is still up (on Me, inside the tabs) when the erase finishes: let it go before the tabs are
+        // swapped for the onboarding steps. Torn down while presenting, it left UIKit's presentation stale, so the
+        // one-time game intro could not present after the steps and came up at the next launch instead (scenario
+        // test 2026-09-27).
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 700_000_000)
+            step = LaunchFlow.first(ready: ModelReadiness.shared.isReady, launch: .current, record: OnboardingRecord())
+        }
     }
 
     private func start() {

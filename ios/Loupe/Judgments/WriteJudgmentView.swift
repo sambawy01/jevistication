@@ -69,6 +69,7 @@ struct WriteJudgmentView: View {
                             .lineLimit(3...8)
                     default:
                         TextField("Options, one per line", text: $m.optionsText, prompt: Text("energy\nwater\nnone of these"), axis: .vertical)
+                            .accessibilityIdentifier("write.options")
                             .lineLimit(3...8)
                     }
                 } header: { Text("Answers") } footer: {

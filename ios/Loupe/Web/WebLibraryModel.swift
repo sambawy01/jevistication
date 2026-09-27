@@ -36,9 +36,12 @@ final class WebLibraryModel: ObservableObject {
     enum Choice: Equatable, Hashable { case variant(String), custom }
 
     @Published var inputs = WebInputs()
-    @Published var choice: [WebSector: Choice] = [:]
-    @Published var customText: [WebSector: String] = [:]
-    @Published var customType: [WebSector: AnswerType] = [:]
+    // The chosen question, the custom question and its answer type are kept per source across launches (scenario
+    // test 2026-09-27: a custom question typed in was gone after closing the app). Saved in the same defaults as the
+    // source switches.
+    @Published var choice: [WebSector: Choice] = [:] { didSet { saveQuestions() } }
+    @Published var customText: [WebSector: String] = [:] { didSet { saveQuestions() } }
+    @Published var customType: [WebSector: AnswerType] = [:] { didSet { saveQuestions() } }
     @Published private(set) var phase: [WebSector: Phase] = [:]
     @Published private(set) var runs: [WebSector: WebRun] = [:]
     @Published var showRules: [WebSector: Bool] = [:]
@@ -64,9 +67,46 @@ final class WebLibraryModel: ObservableObject {
         for s in WebSector.allCases where s != .flights {
             enabled[s] = defaults.object(forKey: Self.key(s)) as? Bool ?? false
         }
+        loadQuestions()
     }
 
     static func key(_ s: WebSector) -> String { "web.source.\(s.rawValue)" }
+
+    // MARK: The chosen and custom questions, kept across launches
+
+    private static func choiceKey(_ s: WebSector) -> String { "web.question.choice.\(s.rawValue)" }
+    private static func customTextKey(_ s: WebSector) -> String { "web.question.custom.\(s.rawValue)" }
+    private static func customTypeKey(_ s: WebSector) -> String { "web.question.customType.\(s.rawValue)" }
+    private var loading = false
+
+    private func loadQuestions() {
+        loading = true
+        defer { loading = false }
+        for s in WebSector.allCases where s != .flights {
+            if let c = defaults.string(forKey: Self.choiceKey(s)) {
+                if c == "custom" { choice[s] = .custom }
+                else if c.hasPrefix("variant:") {
+                    let id = String(c.dropFirst("variant:".count))
+                    if WebCatalog.variant(id) != nil { choice[s] = .variant(id) }
+                }
+            }
+            if let t = defaults.string(forKey: Self.customTextKey(s)) { customText[s] = t }
+            if let raw = defaults.string(forKey: Self.customTypeKey(s)), let t = AnswerType(rawValue: raw) { customType[s] = t }
+        }
+    }
+
+    private func saveQuestions() {
+        guard !loading else { return }
+        for s in WebSector.allCases where s != .flights {
+            switch choice[s] {
+            case .custom: defaults.set("custom", forKey: Self.choiceKey(s))
+            case .variant(let id): defaults.set("variant:\(id)", forKey: Self.choiceKey(s))
+            case nil: defaults.removeObject(forKey: Self.choiceKey(s))
+            }
+            if let t = customText[s] { defaults.set(t, forKey: Self.customTextKey(s)) } else { defaults.removeObject(forKey: Self.customTextKey(s)) }
+            if let t = customType[s] { defaults.set(t.rawValue, forKey: Self.customTypeKey(s)) } else { defaults.removeObject(forKey: Self.customTypeKey(s)) }
+        }
+    }
 
     // MARK: Per-source switch (off by default: no request is made while off)
 

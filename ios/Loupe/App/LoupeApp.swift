@@ -8,6 +8,10 @@ struct LoupeApp: App {
 
     init() {
         #if DEBUG
+        // -LoupeScenarioReset (with -LoupeScenarioHome): a scenario's first launch starts from an empty fixture home.
+        if let name = LaunchOptions.current.scenarioHome, ProcessInfo.processInfo.arguments.contains("-LoupeScenarioReset") {
+            ScenarioHome.reset(name)
+        }
         // -LoupeResetMascot: forget the mascot choice (UI tests start from the default robot).
         if ProcessInfo.processInfo.arguments.contains("-LoupeResetMascot") {
             UserDefaults.standard.removeObject(forKey: MascotKind.storageKey)
@@ -87,6 +91,11 @@ struct LaunchOptions {
     var reviewDemo = false       // -LoupeReviewDemo (DEBUG, with -LoupeFixtures): a duplicate pair in the (throwaway) inbox, Files on
     /// -LoupePermissions granted|denied (DEBUG): onboarding's permissions step answers without iOS prompts.
     var fakePermissions: PhonePermission?
+    /// -LoupeStandInModel (DEBUG, with -LoupeFixtures): judgment runs and Run now score with the sort demo's
+    /// deterministic stand-in (no model files), so a judgment written in a UI test can run.
+    var standInModel = false
+    /// -LoupeScenarioHome <name> (DEBUG, with -LoupeFixtures): a fixture home that survives a relaunch (`ScenarioHome`).
+    var scenarioHome: String?
 
     static let current: LaunchOptions = {
         var o = LaunchOptions()
@@ -117,6 +126,8 @@ struct LaunchOptions {
         o.fakeAssistant = args.contains("-LoupeFakeAssistant")
         o.inboxDemo = args.contains("-LoupeInboxDemo") && o.fixtureMode
         if let i = args.firstIndex(of: "-LoupeOpen"), i + 1 < args.count { o.openScreen = args[i + 1] }
+        o.standInModel = args.contains("-LoupeStandInModel") && o.fixtureMode
+        if o.fixtureMode, let i = args.firstIndex(of: "-LoupeScenarioHome"), i + 1 < args.count { o.scenarioHome = args[i + 1] }
         if let i = args.firstIndex(of: "-LoupePermissions"), i + 1 < args.count {
             o.fakePermissions = args[i + 1] == "denied" ? .denied : .granted
         }

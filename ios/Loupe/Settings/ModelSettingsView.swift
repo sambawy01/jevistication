@@ -103,7 +103,10 @@ struct SettingRowView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if !row.isDefault {
-                Button(MS.t("reset")) { model.reset(row.key) }
+                // A 44 pt target (the caption-sized word alone was 16 pt; scenario audit 2026-09-27).
+                Button { model.reset(row.key) } label: {
+                    Text(MS.t("reset")).frame(minWidth: 44, minHeight: 44, alignment: .leading).contentShape(Rectangle())
+                }
                     .font(.caption.weight(.semibold))
                     .buttonStyle(.borderless)
                     .accessibilityLabel(MS.t("resetAria", ["name": row.title]))

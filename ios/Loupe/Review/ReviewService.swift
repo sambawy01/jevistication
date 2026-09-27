@@ -86,6 +86,26 @@ final class ReviewService: ObservableObject {
         proposals += ReviewProducers.shared.mail(rows: mail().rows)
         proposals += ReviewProducers.shared.watchers(findings: watchers().findings)
         submit(proposals)
+        withdrawAnsweredElsewhere()
+    }
+
+    /// A proposal the person has already answered on its own screen (Mark safe / Confirm phishing in Mail triage;
+    /// Confirm / Dismiss / Not relevant on a watcher finding) is no longer theirs to approve: it leaves the queue as
+    /// rejected, with the reason. (Scenario test 2026-09-27: after Mark safe in Mail triage, Review still offered
+    /// "Confirm phishing" for the same email.)
+    private func withdrawAnsweredElsewhere() {
+        let mailAnswered = Set(mail().rows.filter { $0.personVerdict != nil }.map { "mail:\($0.itemId)" })
+        let watcherAnswered = Set(watchers().findings.filter { $0.verdict != nil }.map { "watcher:\($0.key)" })
+        guard !mailAnswered.isEmpty || !watcherAnswered.isEmpty else { return }
+        var changed = false
+        for item in items where item.status == ReviewStatus.shared.PENDING {
+            let note: String
+            if mailAnswered.contains(item.sourceKey) { note = "You answered this email in Mail triage." }
+            else if watcherAnswered.contains(item.sourceKey) { note = "You answered this finding where it was shown." }
+            else { continue }
+            if queue.reject(id: item.id, actor: Self.actor, note: note, at: now()) is ReviewResult.Done { changed = true }
+        }
+        if changed { refresh() }
     }
 
     /// Queues pack questions to be added one by one (Judgments → pack preview → Review one by one).

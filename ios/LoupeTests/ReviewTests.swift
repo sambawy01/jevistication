@@ -124,6 +124,24 @@ final class ReviewTests: XCTestCase {
         XCTAssertFalse(ledger.correctionIndex().contains { $0.key.itemId == item.proposal["item_id"] })
     }
 
+    /// Scenario test 2026-09-27: Mark safe in Mail triage left "Confirm phishing" for the same email waiting in Review.
+    func testAnAnswerGivenInMailTriageWithdrawsTheProposal() async throws {
+        review.collect()
+        let item = try XCTUnwrap(open(ReviewRegistry.shared.MAIL).first)
+        let row = try XCTUnwrap(mail.rows.first { $0.itemId == item.proposal["item_id"] })
+        mail.markSafe(row)
+        ledger.flush()
+        await mail.run()
+        XCTAssertNotNil(mail.rows.first { $0.itemId == row.itemId }?.personVerdict, "the answer is on the row")
+        review.collect()
+        let after = try XCTUnwrap(review.items.first { $0.id == item.id })
+        XCTAssertEqual(after.status, ReviewStatus.shared.REJECTED, "no longer waiting for approval")
+        XCTAssertEqual(after.decisionNote, "You answered this email in Mail triage.")
+        XCTAssertTrue(open(ReviewRegistry.shared.MAIL).isEmpty)
+        // Other proposals are untouched.
+        XCTAssertEqual(open(ReviewRegistry.shared.PRIVACY).count, 1)
+    }
+
     func testRejectNeedsAReasonAndIsNotProposedAgain() throws {
         review.collect()
         let item = try XCTUnwrap(open(ReviewRegistry.shared.MAIL).first)

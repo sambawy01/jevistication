@@ -97,7 +97,9 @@ final class WebModel: ObservableObject {
                 forced = FixtureSearchHelper.Forced(rawValue: args[i + 1])
                 if i + 2 < args.count, let s = WebSector(rawValue: args[i + 2]) { only = [s] }
             }
-            let store = UserDefaults(suiteName: "com.loupe-ai.ios.fixture.web.\(UUID().uuidString)") ?? .standard
+            // -LoupeScenarioHome: a suite that survives a relaunch (the scenario UI tests).
+            let suite = launch.scenarioHome.map(ScenarioHome.webSuite) ?? "com.loupe-ai.ios.fixture.web.\(UUID().uuidString)"
+            let store = UserDefaults(suiteName: suite) ?? .standard
             if args.contains("-LoupeWebSourcesOn") { for s in WebSector.allCases { store.set(true, forKey: WebLibraryModel.key(s)) } }
             let lib = WebLibraryModel(helper: FixtureSearchHelper(forced: forced, sources: only), fixtureMode: true, defaults: store)
             let m = WebModel(helper: FixtureFlightsHelper(), keys: MemoryKeyStore("duffel_test_fixture_only_key"),

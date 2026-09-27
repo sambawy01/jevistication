@@ -78,9 +78,10 @@ struct ResultsFilterBar: View {
                             .accessibilityIdentifier("results.chip.\(chip.id)")
                         }
                         if chips.count > 1 {
-                            Button("Clear all") { model.clearFilters() }
+                            Button(action: { model.clearFilters() }) {
+                                    Text("Clear all").frame(minHeight: 44).contentShape(Rectangle())
+                                }
                                 .font(.footnote.weight(.semibold)).foregroundStyle(Palette.cyan)
-                                .frame(minHeight: 44)
                                 .accessibilityIdentifier("results.clearFilters")
                         }
                     }
@@ -330,12 +331,15 @@ struct ResultsUndoBar: View {
             Text(text).font(.footnote.weight(.medium)).foregroundStyle(Palette.ink).lineLimit(2)
                 .accessibilityIdentifier("results.lastChange")
             Spacer(minLength: 4)
-            Button("Undo", action: undo)
+            Button(action: undo) {
+                    Text("Undo").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                }
                 .font(.subheadline.weight(.bold)).foregroundStyle(Palette.cyan)
-                .frame(minWidth: 44, minHeight: 44)
                 .accessibilityIdentifier("results.undo")
-            Button(action: dismiss) { Image(systemName: "xmark").foregroundStyle(Palette.inkSoft) }
-                .frame(minWidth: 44, minHeight: 44)
+            Button(action: dismiss) {
+                Image(systemName: "xmark").foregroundStyle(Palette.inkSoft)
+                    .frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+            }
                 .accessibilityLabel("Dismiss")
         }
         .padding(.horizontal, 14)

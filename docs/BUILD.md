@@ -2009,6 +2009,69 @@ their acceptance criteria are met; entries here record increments toward them.
   confirm button on the larger screen, `SortUITests` to Run now), fixed and re-run green; ReviewPacksUITests passed
   3 of 3 iterations. Not done: the audit's other P2 notes (the Sorted card as a button, onboarding safe-area
   padding, a Stop for a source scan, Station-only model settings folded away, more App Intents).
+- **2026-09-27 — iPhone: Gmail rate limits are "slow down", paced, retried and resumed (owner's device report).**
+  After a fresh Gmail sign-in the first scan failed with HTTP 403 "Quota exceeded for quota metric 'Total Query
+  Cost' and limit 'Units per minute per user'…", and Mail said "Google refused read access… Sign in again and allow
+  Read your email" — wrong advice. Cause: `GmailProducer.scan` fetched up to 200 `messages.get?format=raw`
+  back to back, `GmailClient.get` threw on the first non-2xx, and every retry deleted the cache folder and fetched
+  everything again. Google's quota page (last updated 2026-09-10) now says 6,000 units per user per minute per
+  project and 20 units per `messages.get` — 300 gets a minute, shared with Loupe Station on the Mac. Fix
+  (`ios/Loupe/Sources/Mail/Gmail.swift`): `GmailClient.Failure.kind` tells a rate limit (429; a 403 with
+  `errors[].reason` rateLimitExceeded / userRateLimitExceeded / quotaExceeded / dailyLimitExceeded; `status`
+  RESOURCE_EXHAUSTED or ErrorInfo RATE_LIMIT_EXCEEDED; a "Quota exceeded" / "Rate Limit Exceeded" 403 message) from
+  a permission 403, which keeps its text. Rate limits and 5xx are retried: 6 attempts, min(32 s, 2ⁿ s + ≤ 1 s
+  jitter), `Retry-After` honoured (≤ 64 s, else no wait), task cancellation stops the wait; 401, permission 403 and
+  404 are not retried (404 on history still starts a fresh pass; on a message it skips that message). Every
+  request is paced 0.4 s apart (2.5/s = 3,000 units/min, half the per-user budget). Passes resume: no folder
+  deletion, cached `.eml`s are skipped, the historyId is saved only after the whole pass; a pass still rate-limited
+  after retries stores what it fetched, saves its ids and historyId (`gmailPassIds`, `gmailPassHistoryId`,
+  `gmailPassFresh`, `gmailPassMore`) and throws `GmailProducer.Interrupted`; the next scan continues it without
+  listing. A completed first pass deletes cached messages outside its window. `SourcesService+Phone.swift` stores
+  the partial result, shows "Gmail asked Loupe to slow down. Loupe fetched N of M messages and will continue in a
+  minute." and schedules one automatic scan after 60 s (`GmailRetry`, not chained; cancelled by a successful scan
+  or Remove mailbox); the live display says "Fetching mail: n of m" while the paced fetch runs. Tests: `GmailTests` (+15: classification, 429 then success, 403 userRateLimitExceeded
+  retried, permission 403 not retried, 401/404 not retried, Retry-After honoured, Retry-After too long, attempt limit,
+  limiter spacing on a fake clock, cancellation, interrupted first pass resumes without re-fetching, interrupted
+  history pass keeps the old historyId, the automatic retry runs once, a rate-limited listing, pruning and
+  progress). Gate: GmailTests 21 + PhoneSourcesTests 27 green; the full iOS suite on an iPhone 17 Pro Max simulator
+  ran once: 464 unit tests green (2 skipped), 77 UI tests with 5 skipped and 1 failure outside Mail (the in-progress
+  `SourcesScenarios.testEverySourceTurnsOffAndOnAndTheSetSurvivesARelaunch`, "files did not turn off"). Not done:
+  incremental (history) passes still add to the cache without pruning until the next first pass, as before.
+- **2026-09-27 — iPhone pre-deployment scenario suite: every journey, every button, every change across a relaunch
+  (owner request).** `ios/LoupeUITests/Scenarios/`, one file per area; each journey ends with the app terminated and
+  launched again (same arguments minus the reset flags) and checks what survived: first run (Get the model → Later,
+  permissions → Skip, Protect → Continue, intro → Not now; the steps do not return; Get the model does while the
+  model is missing, by design), Sources (every switch off and on, the set survives, the live scan settles, Scan
+  again), Judgments (absence lint, the 10-option cap, run, donut filter, swipe / detail / bulk corrections and Undo,
+  threshold, reword with the restart warning, delete), the Unsure queue, Packs, Web questions, Guard (quick actions,
+  Run now, subscription verdicts and Undo, Expiring soon), Protection (the clipboard chip once per copy across
+  launches, Check a link, Recent checks, Spotted and its badge, clearing), Me (calibration off by default → on →
+  relaunch → off, sorting, online checks, assistant, About), mail triage / privacy check / Review, the game (FIRE,
+  Watch's speed panel, auto-fire), Delete all my Loupe data keeping the model. `ScenarioSupport.audit` checks every
+  visited screen (about 40): the needed actions exist, are hittable and ≥ 44 pt (the navigation bar's own items
+  excepted), and no label says "Laya" (the Licences credit to the upstream model excepted). DEBUG hooks:
+  `-LoupeScenarioHome <name>` / `-LoupeScenarioReset` (a fixture home that survives a relaunch, and its reset) and
+  `-LoupeStandInModel` (judgment runs score with the sort demo's stand-in). **Production bugs found and fixed:** Web
+  questions forgot a custom question and the chosen question on relaunch (now saved per source;
+  `WebLibraryTests.testTheChosenAndCustomQuestionsSurviveANewModel`); Review kept "Confirm phishing" waiting for an
+  email already marked safe in Mail triage, and the same for answered watcher findings (withdrawn with the reason;
+  `ReviewTests.testAnAnswerGivenInMailTriageWithdrawsTheProposal`); after Delete all my Loupe data the game intro
+  was skipped and came up at the next launch (RootView lets the Delete sheet go before starting onboarding;
+  asserted in `DeleteDataScenarios`); about 20 buttons under 44 pt, mostly a frame outside the Button so only the
+  words were tappable (Skip for now 22, Recent checks Clear 16, Guard Undo 17, model settings Reset 16, queue Undo
+  20 and Skip 36, mail triage's row actions 16, privacy row actions 28, Review Reject / Undo 30, Now's Play 36, the
+  chip's Not now 32 wide, every `.neonPrimary` button 42; also GetLaya Pause / Cancel / Check again and the results
+  screen's Re-run all / Cancel / Clear all / Undo), with `tapTarget()`, `TallLabelStyle` and `FitRow` in Theme.
+  Not changed (polish): Open / Share / Headers under an item stay 26 pt (enlarging them broke the Review rows);
+  Write your own's lint findings sit under the keyboard; Undo in Review is final. The device smoke subset is the
+  scheme **`LoupeDeviceSmoke`** (`DeviceSmokeScenarios`: no fixtures, no reset flags, no erase; not run on a
+  device yet); the manual device checks are `docs/PREDEPLOY-CHECKLIST.md`. The "files did not turn off" failure
+  in the Gmail entry's run was the test's: its tap landed while a card above the switch changed height as its
+  scan settled, and on a fresh simulator the Contacts sheet came up after its 3 s wait. Nothing in the app writes
+  a source's switch except the switch and its saved value; the helper now waits for the switch to stop moving,
+  answers the sheet for up to 8 s, retries a missed tap, and asserts the switch stays put for 3 s. Gate: the full
+  iOS suite on an iPhone 17 Pro Max simulator: 541 tests (464 unit, 77 UI), 537 passed, 4 skipped, 0 failures;
+  `./gradlew check` green (1,590 tests, 0 failures; no Kotlin changed).
 
 ## Where the build stands
 

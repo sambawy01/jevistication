@@ -240,8 +240,11 @@ struct PermissionsStepView: View {
             .buttonStyle(.neonPrimary)
             .disabled(model.asking != nil)
             .accessibilityIdentifier("permissions.allow")
-            Button("Skip for now", action: onDone)
-                .frame(maxWidth: .infinity, minHeight: 44)
+            // The frame sits in the label so the whole 44 pt row is the hit area (a frame outside the Button left
+            // only the text tappable: 22 pt, scenario audit 2026-09-27).
+            Button(action: onDone) {
+                Text("Skip for now").frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+            }
                 .foregroundStyle(Palette.inkSoft)
                 .disabled(model.asking != nil)
                 .accessibilityIdentifier("permissions.skip")

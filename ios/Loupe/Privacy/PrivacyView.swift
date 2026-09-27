@@ -101,10 +101,10 @@ struct PrivacyView: View {
             Text(notice).font(.caption).foregroundStyle(Palette.inkSoft)
             Spacer()
             if privacy.pendingUndo != nil {
-                Button("Undo") { Task { await privacy.undoFile() } }.font(.caption.weight(.semibold))
+                Button { Task { await privacy.undoFile() } } label: { Text("Undo").tapTarget() }.font(.caption.weight(.semibold))
                     .accessibilityIdentifier("privacy.undoFile")
             } else if privacy.lastSafe != nil {
-                Button("Undo") { privacy.undoSafe() }.font(.caption.weight(.semibold))
+                Button { privacy.undoSafe() } label: { Text("Undo").tapTarget() }.font(.caption.weight(.semibold))
                     .accessibilityIdentifier("privacy.undo")
             }
         }
@@ -154,7 +154,7 @@ struct PrivacyView: View {
     @ViewBuilder private func actions(_ f: PrivacyFinding) -> some View {
         let access = privacy.access(f)
         let target = privacy.access(for: privacy.target(f))
-        HStack(spacing: 8) {
+        FitRow(spacing: 8) {
             Button { openItem = privacy.item(f.itemId) } label: { Label("Text", systemImage: "doc.text") }
                 .accessibilityLabel("What Loupe read")
             Button { privacy.markSafe(f) } label: { Label("Mark safe", systemImage: "checkmark.shield") }
@@ -169,7 +169,9 @@ struct PrivacyView: View {
                 EmptyView()
             }
         }
-        .buttonStyle(.bordered).controlSize(.small).font(.caption.weight(.semibold))
+        // Regular bordered capsules with a 30 pt label: 44 pt targets (small ones were 28; scenario audit 2026-09-27).
+        .labelStyle(TallLabelStyle())
+        .buttonStyle(.bordered).font(.caption.weight(.semibold))
         if f.duplicates == nil, let item = ItemIndex.item(f.itemId) {
             // Owner rule 2026-09-24: open the item itself, share it, and "Show where" (masked, re-derived).
             ItemActions(item: item, finding: f)

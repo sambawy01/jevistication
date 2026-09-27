@@ -121,7 +121,10 @@ struct LinkCheckView: View {
                 HStack {
                     Caption(text: "Recent checks")
                     Spacer()
-                    Button("Clear") { confirmClear = true }
+                    // A 44 pt target around the small word (it was 16 pt; scenario audit 2026-09-27).
+                    Button { confirmClear = true } label: {
+                        Text("Clear").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                    }
                         .font(.caption.weight(.semibold))
                         .accessibilityIdentifier("protect.recent.clear")
                 }

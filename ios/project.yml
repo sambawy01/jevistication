@@ -323,3 +323,16 @@ schemes:
     test:
       targets: [LoupeTests, LoupeUITests]
       gatherCoverageData: false
+  # The device smoke subset (2026-09-27): only the non-destructive scenario journeys (DeviceSmokeScenarios: no
+  # fixtures, no reset flags, no Delete all my Loupe data), safe on the owner's own iPhone. Ask the owner first.
+  #   xcodebuild test -project Loupe.xcodeproj -scheme LoupeDeviceSmoke -destination 'platform=iOS,id=<UDID>'
+  LoupeDeviceSmoke:
+    build:
+      targets:
+        Loupe: all
+        LoupeUITests: [test]
+    test:
+      targets:
+        - name: LoupeUITests
+          selectedTests: [DeviceSmokeScenarios]
+      gatherCoverageData: false

@@ -45,7 +45,7 @@ struct ReviewView: View {
                             .accessibilityIdentifier("review.notice")
                         Spacer()
                         if let last = review.lastApplied {
-                            Button("Undo") { act { await review.undo(last) } }
+                            Button { act { await review.undo(last) } } label: { Text("Undo").frame(minHeight: 30) }
                                 .font(.caption.weight(.semibold)).buttonStyle(.bordered)
                                 .accessibilityIdentifier("review.undoLast")
                         }
@@ -171,12 +171,12 @@ private struct ReviewRow: View {
             HStack {
                 if item.status == ReviewStatus.shared.PENDING {
                     Button(verb, action: approve).buttonStyle(.neonPrimary).accessibilityIdentifier("review.approve")
-                    Button("Reject", role: .destructive, action: reject).buttonStyle(.bordered).accessibilityIdentifier("review.reject")
+                    Button(role: .destructive, action: reject) { Text("Reject").frame(minHeight: 30) }.buttonStyle(.bordered).accessibilityIdentifier("review.reject")
                 } else if item.status == ReviewStatus.shared.FAILED {
                     Button("Retry", action: retry).buttonStyle(.neonPrimary).accessibilityIdentifier("review.retry")
-                    Button("Reject", role: .destructive, action: reject).buttonStyle(.bordered).accessibilityIdentifier("review.reject")
+                    Button(role: .destructive, action: reject) { Text("Reject").frame(minHeight: 30) }.buttonStyle(.bordered).accessibilityIdentifier("review.reject")
                 } else if item.status == ReviewStatus.shared.APPLIED && item.reversible {
-                    Button("Undo", action: undo).buttonStyle(.bordered).accessibilityIdentifier("review.undo")
+                    Button(action: undo) { Text("Undo").frame(minHeight: 30) }.buttonStyle(.bordered).accessibilityIdentifier("review.undo")
                 }
             }
             .disabled(working)

@@ -303,7 +303,8 @@ struct PlayCard: View {
                 .buttonStyle(.neonPrimary)
                 .accessibilityIdentifier("now.play.watch")
                 Button { onPlay(.human) } label: {
-                    Label("Play", systemImage: "gamecontroller").frame(maxWidth: .infinity)
+                    // 30 pt label + the bordered capsule's padding = a 44 pt target beside Watch (it was 36).
+                    Label("Play", systemImage: "gamecontroller").frame(maxWidth: .infinity, minHeight: 30)
                 }
                 .buttonStyle(.bordered)
                 .accessibilityIdentifier("now.play.human")

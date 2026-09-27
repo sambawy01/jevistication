@@ -53,7 +53,7 @@ struct MailTriageView: View {
                         Text(notice).font(.caption).foregroundStyle(Palette.inkSoft)
                         Spacer()
                         if mail.lastVerdict != nil {
-                            Button("Undo") { mail.undo() }.font(.caption.weight(.semibold))
+                            Button { mail.undo() } label: { Text("Undo").tapTarget() }.font(.caption.weight(.semibold))
                                 .accessibilityIdentifier("mail.undo")
                         }
                     }
@@ -154,18 +154,18 @@ struct MailTriageView: View {
                 .background(r.phishing ? Palette.dangerSoft : Palette.track, in: RoundedRectangle(cornerRadius: 10))
             }
             HStack(spacing: 16) {
-                Button("Open") { openItem = mail.item(r.itemId) }
+                Button { openItem = mail.item(r.itemId) } label: { Text("Open").tapTarget() }
                     .accessibilityIdentifier("mail.open")
                 if r.phishing {
-                    Button("Mark safe") { mail.markSafe(r) }
+                    Button { mail.markSafe(r) } label: { Text("Mark safe").tapTarget() }
                         .accessibilityIdentifier("mail.markSafe")
                 } else {
-                    Button("Confirm phishing") { mail.confirmPhishing(r) }
+                    Button { mail.confirmPhishing(r) } label: { Text("Confirm phishing").tapTarget() }
                         .foregroundStyle(Palette.dangerText)
                         .accessibilityIdentifier("mail.confirmPhishing")
                     // Only with an assistant configured; never offered for suspected phishing.
                     if assist.isReady {
-                        Button("Draft a reply") { replyTo = mail.item(r.itemId) }
+                        Button { replyTo = mail.item(r.itemId) } label: { Text("Draft a reply").tapTarget() }
                             .accessibilityIdentifier("mail.draftReply")
                     }
                 }

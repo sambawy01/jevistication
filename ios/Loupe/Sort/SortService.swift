@@ -300,7 +300,7 @@ final class CoordinatorBridge: NSObject, CoordinatorObserver, @unchecked Sendabl
 extension SortService {
     static func defaultModel() -> JudgmentModelProvider {
         #if DEBUG
-        if LaunchOptions.current.sortDemo { return SortDemoModel() }
+        if LaunchOptions.current.sortDemo || LaunchOptions.current.standInModel { return SortDemoModel() }
         #endif
         return LayaModel.shared
     }

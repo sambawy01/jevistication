@@ -323,6 +323,8 @@ struct NeonPrimaryButtonStyle: ButtonStyle {
             .font(.body.weight(.semibold))
             .foregroundStyle(Palette.onAccent)
             .padding(.horizontal, 16).padding(.vertical, 10)
+            // Never under the 44 pt tap target (a one-line label came out at 42; scenario audit 2026-09-27).
+            .frame(minHeight: 44)
             .background(
                 LinearGradient(colors: [Palette.cyan, Palette.blue], startPoint: .leading, endPoint: .trailing)
                     .opacity(enabled ? 1 : 0.4),
@@ -425,5 +427,38 @@ struct Donut: View {
         }
         .onAppear { if reduceMotion { progress = 1 } else { withAnimation(Effects.sweep) { progress = 1 } } }
         .accessibilityHidden(true)
+    }
+}
+
+// MARK: - Tap targets
+
+extension View {
+    /// A text button's label at least 44 × 44 pt, all of it tappable. Put it on the label, inside the Button: a frame
+    /// outside a plain or borderless Button leaves only the words tappable (scenario audit 2026-09-27).
+    func tapTarget() -> some View {
+        frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+    }
+}
+
+/// A Label 30 pt tall at least: in a regular bordered button, that makes the 44 pt target.
+struct TallLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Label(configuration).frame(minHeight: 30)
+    }
+}
+
+/// Action buttons in one row when they fit, else one under another (never truncated): the 44 pt buttons under an
+/// item no longer all fit on one line of a phone.
+struct FitRow<Content: View>: View {
+    var spacing: CGFloat = 8
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            // Both at their natural size: squeezed by a narrow proposal (inside an HStack), a label would wrap
+            // letter by letter into a tall, empty-looking capsule.
+            HStack(spacing: spacing) { content() }.fixedSize()
+            VStack(alignment: .leading, spacing: spacing) { content() }.fixedSize()
+        }
     }
 }

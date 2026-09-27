@@ -167,9 +167,11 @@ struct GuardView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 8)
                 if watchers.lastSetAside != nil || watchers.lastSetAsideRow != nil {
-                    Button("Undo") { watchers.undoSetAside() }
+                    // The frame is the label's: outside the Button it left only the word tappable (17 pt).
+                    Button { watchers.undoSetAside() } label: {
+                        Text("Undo").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                    }
                         .font(.footnote.weight(.semibold))
-                        .frame(minWidth: 44, minHeight: 44)
                         .accessibilityIdentifier("guard.undo")
                 }
             }

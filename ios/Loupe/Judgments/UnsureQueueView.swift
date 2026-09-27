@@ -37,7 +37,8 @@ struct UnsureQueueView: View {
                         .requiresLaya("queue", what: "Answering the Unsure queue")
                 } else if !all.isEmpty {
                     empty("You skipped everything waiting", "Skipped items come back next time you open the queue.") {
-                        Button("Show skipped again") { skipped.removeAll() }.buttonStyle(.bordered)
+                        Button { skipped.removeAll() } label: { Text("Show skipped again").frame(minHeight: 32) }
+                            .buttonStyle(.bordered).controlSize(.large)
                     }
                 } else {
                     empty("Nothing waiting",
@@ -48,7 +49,10 @@ struct UnsureQueueView: View {
                 HStack {
                     Button {
                         service.undoLastAnswer()
-                    } label: { Label("Undo last answer", systemImage: "arrow.uturn.backward") }
+                    } label: {
+                        Label("Undo last answer", systemImage: "arrow.uturn.backward")
+                            .frame(minHeight: 44).contentShape(Rectangle())
+                    }
                         .disabled(!service.canUndo)
                         .accessibilityIdentifier("queue.undo")
                     Spacer()
@@ -107,9 +111,10 @@ struct UnsureQueueView: View {
                 .accessibilityIdentifier("queue.option.\(i)")
                 .accessibilityLabel("Answer: \(e.judgment.shown(label))")
             }
-            Button("Skip") { skipped.insert(id(e)) }
+            // The 44 pt is the label's, so the bordered capsule itself is the target (the frame outside left it at 36).
+            Button { skipped.insert(id(e)) } label: { Text("Skip").frame(minWidth: 44, minHeight: 32) }
                 .buttonStyle(.bordered)
-                .frame(minHeight: 44)
+                .controlSize(.large)
                 .accessibilityIdentifier("queue.skip")
         }
         .frame(maxWidth: .infinity, alignment: .leading)

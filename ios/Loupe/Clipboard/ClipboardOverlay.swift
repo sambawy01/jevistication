@@ -145,7 +145,7 @@ struct ClipboardChip: View {
             .accessibilityIdentifier("clip.chip.check")
             Button(action: dismiss) {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.inkSoft)
-                    .frame(width: 32, height: 44)
+                    .frame(width: 44, height: 44).contentShape(Rectangle())
             }
             .accessibilityLabel("Not now")
             .accessibilityIdentifier("clip.chip.dismiss")
