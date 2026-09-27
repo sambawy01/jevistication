@@ -1,0 +1,16 @@
+From: Southridge Video <news@southridgevideo.com>
+To: someone@example.org
+Subject: Premieres this week
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@southridgevideo.com; spf=pass smtp.mailfrom=southridgevideo.com; dmarc=pass (p=REJECT) header.from=southridgevideo.com
+Content-Type: text/html; charset=utf-8
+
+<!doctype html><html><head><title></title><!--[if !mso]><!--><meta http-equiv="X-UA-Compatible" content="IE=edge"><!--<![endif]-->
+<!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:AllowPNG/></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+<!--[if lte mso 11]><style type="text/css">.mj-outlook-group-fix{width:100%!important}</style><![endif]-->
+<!--[if !mso]><!--><link href="https://fonts.googleapis.com/css?family=Ubuntu" rel="stylesheet" type="text/css"><style>@import url(https://fonts.googleapis.com/css?family=Ubuntu);</style><!--<![endif]-->
+</head><body><div><p>Premieres this week.</p>
+<a href="https://www.southridgevideo.com/premieres">See premieres</a>
+<!--[if mso | IE]><table><tr><td><![endif]--><a href="https://t.co/southridge">X</a> <a href="https://www.facebook.com/southridge">FB</a><!--[if mso | IE]></td></tr></table><![endif]-->
+</div></body></html>

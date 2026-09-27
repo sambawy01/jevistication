@@ -1,0 +1,18 @@
+From: Zoom <no-reply@zoom.us>
+To: someone@example.org
+Subject: Webinar confirmation
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@zoom.us; spf=pass smtp.mailfrom=zoom.us; dmarc=pass (p=REJECT) header.from=zoom.us
+Content-Type: multipart/alternative; boundary="b0undary42"
+
+--b0undary42
+Content-Type: text/plain; charset=utf-8
+
+Join: https://us02web.zoom.us/w/81234?tk=abc
+--b0undary42
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Thank you for registering.</p><a href="https://us02web.zoom.us/w/81234?tk=abc">Join webinar</a>
+<p>Add to calendar: <a href="https://us02web.zoom.us/webinar/tZ/ics?icsToken=abc">iCal</a></p></body></html>
+--b0undary42--

@@ -1,0 +1,22 @@
+From: 楽天トラベル <info@travel.rakuten.co.jp>
+To: someone@example.org
+Subject: 【秋の特集】紅葉の宿
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@travel.rakuten.co.jp; spf=pass smtp.mailfrom=travel.rakuten.co.jp; dmarc=pass (p=REJECT) header.from=travel.rakuten.co.jp
+Content-Type: multipart/alternative; boundary="b0undary42"
+
+--b0undary42
+Content-Type: text/plain; charset=utf-8
+
+紅葉の宿: https://travel.rakuten.co.jp/special/autumn/?l-id=mail
+--b0undary42
+Content-Type: text/html; charset=utf-8
+
+<html lang="ja"><head><meta charset="utf-8"><title>秋の特集 <お得></title>
+<style>a{color:#bf0000} .btn{background:url(https://image.space.rakuten.co.jp/btn.png) no-repeat}</style></head><body>
+<p>いつも楽天トラベルをご利用いただきありがとうございます。</p>
+<p><a href="https://travel.rakuten.co.jp/special/autumn/?l-id=mail">紅葉の宿を見る</a></p>
+<p><a href="https://travel.rakuten.co.jp/mail/stop/">配信停止</a></p>
+<img src="https://r.rakuten.co.jp/open?id=1" width="1" height="1"></body></html>
+--b0undary42--

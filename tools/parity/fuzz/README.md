@@ -53,6 +53,13 @@ script…). `end_regression.py` pins round 9's end-tag regression set (`end-pinn
 hand-written case, every document 77bb9c5 missed, and a deterministic sample of 300; `EndTagRegressionTest`
 holds both the union and the tree-aware reading to Chrome on it (`AnchorParityFuzzTest` too, on the fuzz).
 
+Since fix loop 10, 500 more documents (a third generator) put a comment opener (`<!--`, `<![CDATA[`)
+inside raw text (style, textarea, title, xmp, script, noembed, iframe) after an OPEN, a foreign wrapper and
+an END-TAG: 3,500 in all. `comment_regression.py` pins round 10's comment-in-raw-text set
+(`comment-pinned.json`): the 124 documents the tree-aware reading misread while a comment-skipping reading
+lost the link, and a deterministic sample of 300, with Chrome's hosts (`CommentRegressionTest`: union and
+tree-aware reading, 0 missing).
+
 `anchor_oracle.py` parses each document with Chrome's DOMParser (`text/html`) and pins, in
 `anchor-pinned.json`, the web hosts of the links a reader can follow in the document Chrome builds:
 - HTML `<a>` and `<area>`;

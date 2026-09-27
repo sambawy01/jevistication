@@ -45,6 +45,10 @@ FOREIGN = ["<svg>", "<math>", "<svg><foreignObject>", "<svg><foreignObject><svg>
            "<svg><desc>", "<svg><g>", "<math><mtext><svg>"]
 RAWHIDE = ["<style>", "<textarea>", "<plaintext>", "<title>", "<xmp>", "<script>", "<noembed>", "<noframes>", "<iframe>", "<noscript>", ""]
 N_AXIS = 1000
+# Fix loop 10 (round 10): a comment opener inside raw text, after a foreign wrapper and an end tag:
+# <OPEN><svg…></END><style|textarea><!--</style|/textarea><p><a href=E>. Chrome keeps the `<!--` as text
+# when the raw text is HTML; a reading that took it for a comment lost the link.
+N_COMMENT = 500
 
 def main():
     r = random.Random(SEED)
@@ -71,6 +75,16 @@ def main():
             continue
         seen.add(html)
         out.append({"id": "axis-%04d" % (len(out) - n0), "html": html})
+    r3 = random.Random(SEED + 10)
+    n1 = len(out)
+    while len(out) < n1 + N_COMMENT:
+        hider = r3.choice(["style", "textarea", "title", "xmp", "script", "noembed", "iframe"])
+        html = (r3.choice(OPEN) + r3.choice(FOREIGN) + r3.choice(ENDT) + "<" + hider + ">" + r3.choice(["<!--", "<!-- ", "<!--<a href='https://good.example/'>", "<![CDATA["]) +
+                r3.choice(["</" + hider + ">", ""]) + r3.choice(["<p>", ""]) + r3.choice(EVIL) + r3.choice(["", " -->", "</" + hider + ">"]))
+        if html in seen:
+            continue
+        seen.add(html)
+        out.append({"id": "comment-%04d" % (len(out) - n1), "html": html})
     for o in out:
         print(json.dumps(o, ensure_ascii=False))
 

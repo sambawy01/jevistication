@@ -1,0 +1,26 @@
+From: Jane Doe <jane.doe@adatum.com>
+To: someone@example.org
+Subject: RE: Q3 numbers
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@adatum.com; spf=pass smtp.mailfrom=adatum.com; dmarc=pass (p=REJECT) header.from=adatum.com
+Content-Type: multipart/alternative; boundary="b0undary42"
+
+--b0undary42
+Content-Type: text/plain; charset=utf-8
+
+Hi team,
+The deck is on SharePoint <https://adatum.sharepoint.com/sites/finance/Shared%20Documents/Q3.pptx>.
+--b0undary42
+Content-Type: text/html; charset=utf-8
+
+<html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns:m="http://schemas.microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40">
+<!-- saved from url=(0022)http://internet.e-mail -->
+<head><meta name=Generator content="Microsoft Word 15 (filtered medium)"><!--[if !mso]><style>v\:* {behavior:url(#default#VML);} o\:* {behavior:url(#default#VML);}</style><![endif]-->
+<style><!-- /* Font Definitions */ @font-face {font-family:"Cambria Math";} p.MsoNormal {margin:0cm;} a:link, span.MsoHyperlink {color:#0563C1;} --></style>
+<!--[if gte mso 9]><xml><o:shapedefaults v:ext="edit" spidmax="1026" /></xml><![endif]--></head>
+<body lang=EN-US link="#0563C1" vlink="#954F72"><div class=WordSection1><p class=MsoNormal>Hi team,<o:p></o:p></p>
+<p class=MsoNormal>The deck is on <a href="https://adatum.sharepoint.com/sites/finance/Shared%20Documents/Q3.pptx">SharePoint</a>.<o:p></o:p></p>
+<p class=MsoNormal><o:p>&nbsp;</o:p></p><div style='border:none;border-top:solid #E1E1E1 1.0pt'><p class=MsoNormal><b>From:</b> Bob</p></div>
+<p class=MsoNormal>See <a href="https://teams.microsoft.com/l/meetup-join/19%3ameeting_abc">Join Teams meeting</a><o:p></o:p></p></div></body></html>
+--b0undary42--

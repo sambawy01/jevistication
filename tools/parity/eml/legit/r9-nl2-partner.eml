@@ -1,0 +1,9 @@
+From: Acme <hello@acme.io>
+Subject: Partner update
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>Read our news: <a href="https://acme.io/blog">the blog</a>.</p>
+<p>In partnership with our friends at https://partner-co.com and https://sendgrid.net tracking.</p>
+<p>Manage preferences at https://email.acme.io/prefs</p>
+</body></html>

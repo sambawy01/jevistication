@@ -857,11 +857,17 @@ object Phishing {
                 if (got.add("link_stitched")) out += "link_stitched" to mapOf("brand" to (brand?.name ?: ra), "domain" to rb)
             }
         }
+        // a link only the no-skip reading found (HtmlAnchors.UNVERIFIED text: it may be code a client
+        // shows as text) raises risk-level signals only, never a note such as a TLD or a shortener
+        var unverified = false
         fun add(code: String, vararg params: Pair<String, String?>) {
+            if (unverified && (WEIGHTS[code]?.first ?: 0) < RISK_MIN) return
             if (got.add(code)) out += code to params.filter { it.second != null }.associate { it.first to it.second!! }
         }
 
-        for ((hrefRaw, visible) in pairs.take(MAX_LINKS)) {
+        for ((hrefRaw, shownText) in pairs.take(MAX_LINKS)) {
+            unverified = shownText == HtmlAnchors.UNVERIFIED
+            val visible = if (unverified) "" else shownText
             // as a browser reads the href: C0 controls and spaces stripped, tabs and newlines dropped
             val href = Hosts.stripC0(hrefRaw)
             val low = href.filter { it != '\t' && it != '\r' && it != '\n' }.lowercase()

@@ -1,0 +1,19 @@
+From: Tailspin Shop <orders@tailspintoys.com>
+To: someone@example.org
+Subject: Your order has shipped
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@tailspintoys.com; spf=pass smtp.mailfrom=tailspintoys.com; dmarc=pass (p=REJECT) header.from=tailspintoys.com
+Content-Type: text/html; charset=utf-8
+
+<html><head>
+<script type="application/ld+json">
+{"@context":"http://schema.org","@type":"ParcelDelivery","deliveryAddress":{"@type":"PostalAddress","streetAddress":"1 Main St"},
+ "trackingUrl":"https://www.aramex.com/track/results?ShipmentNumber=1234","trackingNumber":"1234",
+ "partOfOrder":{"@type":"Order","orderNumber":"TT-99","merchant":{"@type":"Organization","name":"Tailspin","sameAs":["https://linktr.ee/tailspintoys","https://www.instagram.com/tailspintoys"]},
+ "potentialAction":{"@type":"ViewAction","url":"https://www.tailspintoys.com/orders/TT-99","name":"View order"}},
+ "publisher":{"@type":"Organization","name":"Tailspin","url":"https://www.tailspintoys.com","logo":"https://cdn.tailspintoys.com/logo.png"}}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"EmailMessage","description":"Order shipped","potentialAction":{"@type":"ViewAction","url":"https://www.tailspintoys.com/orders/TT-99","target":"https://www.tailspintoys.com/orders/TT-99","name":"Track"}}</script>
+</head><body><p>Your order TT-99 has shipped.</p><p><a href="https://www.tailspintoys.com/orders/TT-99">View your order</a></p>
+<p><a href="https://www.tailspintoys.com/help">Help center</a></p></body></html>

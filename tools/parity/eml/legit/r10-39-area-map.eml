@@ -1,0 +1,11 @@
+From: Adventure Works <news@adventure-works.com>
+To: someone@example.org
+Subject: Trail season
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@adventure-works.com; spf=pass smtp.mailfrom=adventure-works.com; dmarc=pass (p=REJECT) header.from=adventure-works.com
+Content-Type: text/html; charset=utf-8
+
+<html><body><img src="https://cdn.adventure-works.com/map.png" usemap="#m">
+<map name="m"><area shape="rect" coords="0,0,100,100" href="https://www.adventure-works.com/trails/1" alt="Trail 1"><area shape="rect" coords="100,0,200,100" href="https://www.adventure-works.com/trails/2" alt="Trail 2"></map>
+<a href="https://www.adventure-works.com/trails">All trails</a></body></html>

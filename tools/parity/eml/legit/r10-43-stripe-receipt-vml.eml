@@ -1,0 +1,21 @@
+From: Tailspin Toys <receipts+acct_1abc@stripe.com>
+To: someone@example.org
+Subject: Your receipt from Tailspin Toys #1234-5678
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@stripe.com; spf=pass smtp.mailfrom=stripe.com; dmarc=pass (p=REJECT) header.from=stripe.com
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="viewport" content="width=device-width">
+<!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<!--[if mso]><style>table,td{border-collapse:collapse;mso-table-lspace:0pt}</style><![endif]-->
+</head><body>
+<table width="600"><tr><td style="background-color:#f6f9fc">
+<!--[if gte mso 9]><v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;height:156px"><v:fill type="frame" src="https://stripe-images.stripecdn.com/notifications/hosted/20180110/Header/Left.png" color="#f6f9fc"/><v:textbox inset="0,0,0,0"><![endif]-->
+<p>Receipt from Tailspin Toys</p><p>Amount paid $20.00</p>
+<!--[if gte mso 9]></v:textbox></v:rect><![endif]-->
+<img src="https://stripe-images.stripecdn.com/notifications/hosted/20180110/Header/Left.png" alt="">
+<p>Questions? Contact us at <a href="mailto:support@tailspintoys.com">support@tailspintoys.com</a> or visit <a href="https://support.stripe.com/">Stripe support</a>.</p>
+<p><a href="https://pay.stripe.com/receipts/payment/CAcaFwoV">View receipt</a></p></td></tr></table></body></html>

@@ -1,0 +1,10 @@
+From: Old Forum <digest@oldforum.org>
+To: someone@example.org
+Subject: Forum digest
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@oldforum.org; spf=pass smtp.mailfrom=oldforum.org; dmarc=pass (p=REJECT) header.from=oldforum.org
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>New posts this week.</p><a href="https://oldforum.org/t/1">Thread 1</a>
+<plaintext>Posted via https://oldforum.org -- reply at <a href="https://oldforum.org/reply/1">reply</a></body></html>

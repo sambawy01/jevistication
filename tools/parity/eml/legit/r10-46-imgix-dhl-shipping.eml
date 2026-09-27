@@ -1,0 +1,18 @@
+From: Contoso Shop <orders@contososhop.com>
+To: someone@example.org
+Subject: Your parcel ships with DHL
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@contososhop.com; spf=pass smtp.mailfrom=contososhop.com; dmarc=pass (p=REJECT) header.from=contososhop.com
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="viewport" content="width=device-width">
+<!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<!--[if mso]><style>table,td{border-collapse:collapse;mso-table-lspace:0pt}</style><![endif]-->
+</head><body>
+<!--[if gte mso 9]><v:image src="https://dhl.imgix.net/logos/dhl-express.png" style="width:120px;height:40px"/><![endif]-->
+<!--[if !mso]><!--><img src="https://dhl.imgix.net/logos/dhl-express.png" alt="DHL"><!--<![endif]-->
+<p>Your parcel ships with DHL Express.</p><a href="https://www.dhl.com/eg-en/home/tracking.html?tracking-id=123">Track parcel</a>
+<a href="https://www.contososhop.com/orders/1">Your order</a></body></html>

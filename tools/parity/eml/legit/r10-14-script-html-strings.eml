@@ -1,0 +1,12 @@
+From: Proseware <digest@proseware.com>
+To: someone@example.org
+Subject: Your digest
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@proseware.com; spf=pass smtp.mailfrom=proseware.com; dmarc=pass (p=REJECT) header.from=proseware.com
+Content-Type: text/html; charset=utf-8
+
+<html><head>
+<script>var tpl='<a href="javascript:void(0)" onclick="toggle()">Show more</a>'; function toggle(){document.getElementById('m').innerHTML='<a href="https://www.proseware.com/more">More</a>';}</script>
+<script type="text/x-template" id="card"><div class="card"><a href="https://www.proseware.com/{{slug}}">{{title}}</a></div></script>
+</head><body><div id="m"></div><p>Your digest for this week.</p><p><a href="https://www.proseware.com/digest/42">Read the digest</a></p></body></html>

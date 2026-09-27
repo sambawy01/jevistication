@@ -1,0 +1,11 @@
+From: Contoso Weekly <weekly@contoso.com>
+Subject: Contoso Weekly #42
+Content-Type: text/html; charset=utf-8
+
+<html><body><div class="container"><h1>Contoso Weekly</h1>
+<p>This week: our new app release. <a href="https://contoso.com/blog/release-42">Read the post</a></p>
+<div class="social"><a href="https://twitter.com/contoso"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M0 0h16v16H0z"/></div></svg></a>
+<a href="https://www.linkedin.com/company/contoso"><svg width="16" height="16"><title>LinkedIn</title><g><rect width="16" height="16"/></span></g></svg></a>
+<a href="https://contoso.com/rss"><svg><use xlink:href="#rss"></use></p></svg>RSS</a></div>
+<table><tr><td><p>Unclosed para<td>Next cell</table>
+<p>Manage <a href="https://contoso.com/email-settings">email settings</a>.</p></div></body></html>

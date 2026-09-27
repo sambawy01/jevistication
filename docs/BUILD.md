@@ -2133,6 +2133,20 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
     - a `<noscript>` before the body is the head's.
   - `fromItem` drops pattern links nobody follows: DTDs, xmlns URIs, and src/srcset/background/`<link href>`
     values, unless the visible text shows them.
+- **Fix loop 10: nothing skipped, fallback on visible text only.**
+  - The no-skip reading trusts no comment: every `<a>`/`<area>`/SVG `<a>`/meta refresh/`<base>` start tag
+    anywhere is a candidate (each read to at most 2,048 characters). Links it alone finds, and readings
+    against a `<base>` it alone finds, carry no link text and raise only codes of weight 25 or more.
+  - The tree-aware reading: `</table>`, `</tbody>`, `</tr>`, `</td>`, `</th>`, `</caption>` use table scope
+    from a cell or caption; a row or cell start tag closes the cell/row/body it cannot go in and implies a
+    missing `<tbody>`/`<tr>`; `</template>` needs no scope; `</hN>` closes any open heading; an open
+    `<select>` bounds other end tags (Chrome-checked).
+  - `fromItem`: for an HTML body only its anchors are judged; the pattern fallback reads text/plain parts
+    and the visible text of HTML.
+  - Tests: `CommentRegressionTest` (`comment-pinned.json`, 424 documents with round 10's 124 misses),
+    `EmlCeilingTest` (`tools/parity/eml`: 56 legitimate mails at or below origin/main, 15 attacks at or
+    above it), the anchor fuzz's comment-in-raw-text family (3,500 documents). Round 9's 71,429 and round
+    10's 71,429 documents: 0 missing, union and tree-aware alone.
 - **URLs are split as browsers split them** (fix loop 3; hosts checked against Chrome 153,
   r3/chrome1.out): C0 controls and spaces at both ends are stripped; for http, https, ws, wss, ftp and
   file the host follows the scheme however many `/` or `\` come first, so a mail link

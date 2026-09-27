@@ -1,0 +1,16 @@
+From: CIB <alerts@cibeg.com>
+To: someone@example.org
+Subject: Transaction alert
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@cibeg.com; spf=pass smtp.mailfrom=cibeg.com; dmarc=pass (p=REJECT) header.from=cibeg.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>@media (max-width:600px){.w{width:100%}}</style></head><body>
+<span style="display:none;font-size:0">EGP 250.00 card purchase</span>
+<table class="w" width="600" style="background:url(https://www.cibeg.com/-/media/project/cib/email/bg.png)"><tr><td>
+<img src="https://www.cibeg.com/-/media/project/cib/logo.png" alt="CIB">
+<p>Dear customer, a purchase of EGP 250.00 was made with your card ending 1234 at CARREFOUR MAADI.</p>
+<p>If you did not make this transaction, call 19666.</p>
+<p><a href="https://www.cibeg.com/en/personal/security">Security tips</a> | <a href="https://www.cibeg.com/en/contact-us">Contact us</a></p>
+</td></tr></table></body></html>

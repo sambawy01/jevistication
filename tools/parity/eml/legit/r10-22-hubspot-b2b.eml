@@ -1,0 +1,13 @@
+From: Relecloud <marketing@relecloud.com>
+To: someone@example.org
+Subject: Webinar: cloud costs
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@relecloud.com; spf=pass smtp.mailfrom=relecloud.com; dmarc=pass (p=REJECT) header.from=relecloud.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>#hs_cos_wrapper a{color:#00a4bd}</style>
+<!--[if mso]><style>.hse-column{width:600px}</style><![endif]--></head><body>
+<div id="hs_cos_wrapper"><p>Join our webinar.</p><a href="https://d2v8tf04.na1.hubspotlinks.com/Ctc/L2+113/abc">Register</a>
+<img src="https://f.hubspotusercontent10.net/hubfs/123/webinar.png" alt="">
+<p><a href="https://hs-123.s.hubspotemail.net/hs/manage-preferences/unsubscribe?d=abc">Unsubscribe</a></p></div></body></html>

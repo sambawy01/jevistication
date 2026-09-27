@@ -1,0 +1,13 @@
+From: Woodgrove Bank <news@woodgrovebank.com>
+To: someone@example.org
+Subject: Your statement is ready
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@woodgrovebank.com; spf=pass smtp.mailfrom=woodgrovebank.com; dmarc=pass (p=REJECT) header.from=woodgrovebank.com
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>Your monthly statement is ready.</p><a href="https://www.woodgrovebank.com/statements">View statement</a>
+<svg width="24" height="24"><a xlink:href="https://twitter.com/woodgrove"><title>Twitter</title><rect width="24" height="24"/></a><use xlink:href="#icon"/></svg>
+<svg><style>a{fill:red}</style><image href="https://cdn.woodgrovebank.com/icon.svg"/></svg>
+<p><a href="https://www.linkedin.com/company/woodgrove">LinkedIn</a></p></body></html>

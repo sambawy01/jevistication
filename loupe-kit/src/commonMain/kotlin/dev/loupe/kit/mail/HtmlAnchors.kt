@@ -26,6 +26,13 @@ import dev.loupe.kit.site.ParsedUrl
  * tokenizer passes inside it (comments join what they split; script, style and title text is not shown).
  */
 internal object HtmlAnchors {
+    /**
+     * The link text of a link only the no-skip reading found (fix loop 10): a word joiner, which shows
+     * as nothing. Such a link may be markup a client shows as text (embed code in a <textarea>), so the
+     * mail check lets it raise risk-level signals only.
+     */
+    const val UNVERIFIED = "\u2060"
+
     /** Visible text kept per link. */
     private const val TEXT_MAX = 4000
 
@@ -56,6 +63,14 @@ internal object HtmlAnchors {
     /** What the tree builder keeps in the head: before anything else, the body has not started. */
     private val HEAD_OK = setOf("html", "head", "meta", "link", "style", "script", "title", "base", "basefont", "bgsound", "noframes", "noscript", "template")
 
+    private val TABLE_CLOSERS = setOf("table", "tbody", "tfoot", "thead", "tr")
+    /** End tags the tree builder checks in table scope from a cell or caption: only html, table and template bound them. */
+    private val CELL_CLOSERS = setOf("td", "th", "caption")
+    /** The elements that set a table insertion mode (the nearest one decides where a row or cell goes). */
+    private val TABLE_CONTEXT = setOf("table", "tbody", "thead", "tfoot", "tr", "td", "th", "caption", "template")
+    private val TABLE_BODIES = setOf("tbody", "thead", "tfoot")
+    private val HEADINGS = setOf("h1", "h2", "h3", "h4", "h5", "h6")
+
     /** Table parts: the tree builder ignores them outside a table. */
     private val TABLE_PARTS = setOf("td", "th", "tr", "tbody", "thead", "tfoot", "caption", "col", "colgroup")
 
@@ -83,12 +98,16 @@ internal object HtmlAnchors {
         // (b) finds is judged with empty text: it can raise host signals, never a text mismatch.
         val flat = mutableListOf<Link>()
         val flatBases = mutableListOf<Pair<String, Boolean>>()
-        scan(html, false, flat, flatBases)
+        scanCandidates(html, flat, flatBases)
         val seenStarts = links.mapTo(HashSet()) { it.start }
-        for (l in flat) if (l.start !in seenStarts) links += Link(l.raw, StringBuilder(), "", l.start)
+        for (l in flat) if (l.start !in seenStarts) links += Link(l.raw, StringBuilder(), UNVERIFIED, l.start)
         links.sortBy { it.start }
-        for (b in flatBases) if (bases.none { it.first == b.first }) bases += b.first to false
-        return resolveAll(links, bases, max)
+        // a <base> only (b) finds (inside a textarea, a comment, raw text) never governs a verified reading:
+        // links resolved against it are judged with no link text, like (b)-only links (fix loop 10)
+        val unverifiedBases = flatBases.map { it.first }.filter { b -> bases.none { it.first == b } }
+            .map { Hosts.cleanHref(it) }.toSet()
+        for (b in unverifiedBases) bases += b to false
+        return resolveAll(links, bases, max, unverifiedBases)
     }
 
     /**
@@ -100,6 +119,35 @@ internal object HtmlAnchors {
         val bases = mutableListOf<Pair<String, Boolean>>()
         scan(html, true, links, bases)
         return resolveAll(links, bases, max)
+    }
+
+    /** The longest tag reading (b) reads from one `<` (it looks at every `<`, so this keeps it linear). */
+    private const val CANDIDATE_TAG_MAX = 2048
+
+    /**
+     * Reading (b) (fix loops 9–10): every `<` of the raw markup is a candidate tag start, read on its own,
+     * whatever came before it. Nothing is skipped: not comments (whether `<!--` opens one depends on the
+     * tree), not raw text, not a quoted value an earlier candidate would swallow. Every <a href>, <area
+     * href>, SVG link, meta refresh and <base href> start tag anywhere is found; over-finding is the only
+     * error.
+     */
+    private fun scanCandidates(html: String, links: MutableList<Link>, bases: MutableList<Pair<String, Boolean>>) {
+        var lt = html.indexOf('<')
+        while (lt >= 0) {
+            val tag = readTag(html, lt, minOf(html.length, lt + CANDIDATE_TAG_MAX))
+            if (tag != null && !tag.end) {
+                val a = tag.attrs
+                when (tag.name) {
+                    "a" -> (a["href"] ?: a["xlink:href"])?.let { links += Link(it, StringBuilder(), "", lt) }
+                    "area" -> a["href"]?.let { links += Link(it, StringBuilder(), "", lt) }
+                    "meta" -> if (a["http-equiv"]?.trim()?.lowercase() == "refresh") {
+                        refreshUrl(decodeAttribute(a["content"] ?: ""))?.let { links += Link(it, StringBuilder(), "", lt) }
+                    }
+                    "base" -> a["href"]?.let { bases += decodeAttribute(it) to false }
+                }
+            }
+            lt = html.indexOf('<', lt + 1)
+        }
     }
 
     private fun scan(html: String, tree: Boolean, links: MutableList<Link>, bases: MutableList<Pair<String, Boolean>>) {
@@ -137,7 +185,7 @@ internal object HtmlAnchors {
         fun close(name: String) {
             // </body> and </html> only switch insertion mode; they never pop (fix loop 9)
             if (name == "body" || name == "html") return
-            if ((count[name] ?: 0) <= 0) return
+            if (name in HEADINGS) { if (HEADINGS.none { (count[it] ?: 0) > 0 }) return } else if ((count[name] ?: 0) <= 0) return
             var i = stack.size - 1
             if (stack.isNotEmpty() && stack[i].ns != HTML) {
                 while (i >= 0 && stack[i].ns != HTML) {
@@ -148,6 +196,31 @@ internal object HtmlAnchors {
             // the in-body walk starts at the current node, so an integration point above the HTML
             // element is a scope boundary (fix loop 9)
             i = stack.size - 1
+            // </table>, </tbody>, </tr>… inside a cell or caption close it first ("table scope": only
+            // html, table and template bound them); </hN> closes an open heading of any level (fix loop 10)
+            // </template> needs no scope: it closes the nearest template (fix loop 10)
+            if (name == "template") {
+                while (i >= 0) { if (stack[i].ns == HTML && stack[i].name == "template") { popTo(i); return }; i-- }
+                return
+            }
+            if (name in TABLE_CLOSERS || name in CELL_CLOSERS) {
+                while (i >= 0) {
+                    val e = stack[i]
+                    if (e.ns == HTML && e.name == name) { popTo(i); return }
+                    if (e.ns == HTML && (e.name == "html" || e.name == "table" || e.name == "template")) return
+                    i--
+                }
+                return
+            }
+            if (name in HEADINGS) {
+                while (i >= 0) {
+                    val e = stack[i]
+                    if (e.ns == HTML && e.name in HEADINGS) { popTo(i); return }
+                    if ((e.ns == HTML && (e.name in SCOPE_HTML || e.name == "select")) || foreignIp(e)) return
+                    i--
+                }
+                return
+            }
             val specialName = name in SPECIAL_HTML
             while (i >= 0) {
                 val e = stack[i]
@@ -159,9 +232,50 @@ internal object HtmlAnchors {
                     return
                 }
                 if ((e.ns == HTML && e.name in SCOPE_HTML) || foreignIp(e)) return
+                // an open <select> bounds it too: `<h2><select><math></h2>` is ignored, `<select><h2><math></h2>`
+                // is not (Chrome; round 9 r:552, round 10 r:3597; table end tags and </template> still close it)
+                if (e.ns == HTML && e.name == "select") return
                 if (name == "li" && e.ns == HTML && (e.name == "ul" || e.name == "ol")) return // list item scope
                 if (!specialName && e.ns == HTML && e.name in SPECIAL_HTML) return
                 i--
+            }
+        }
+        /**
+         * A row, cell or other table part start tag, as the table insertion modes place it (fix loop 10):
+         * it first closes an open cell, caption, row or body it cannot go in, and a missing <tbody> or
+         * <tr> is implied, so a later </tbody> or </tr> finds it (`<table><tr><td><svg></tbody>` leaves SVG).
+         */
+        fun tablePart(name: String) {
+            var guard = 0
+            while (guard++ < 8) {
+                var j = stack.size - 1
+                while (j >= 0 && !(stack[j].ns == HTML && stack[j].name in TABLE_CONTEXT)) j--
+                if (j < 0) return
+                val ctx = stack[j].name
+                when {
+                    ctx == "template" -> return
+                    ctx == "td" || ctx == "th" || ctx == "caption" -> { popTo(j); continue } // close the cell or caption
+                    ctx == "tr" -> {
+                        if (name == "td" || name == "th") { popTo(j + 1); return }
+                        popTo(j); continue // close the row
+                    }
+                    ctx in TABLE_BODIES -> {
+                        popTo(j + 1)
+                        when (name) {
+                            "tr" -> return
+                            "td", "th" -> { push(El("tr", HTML, false)); return }
+                            else -> { popTo(j); continue } // close the body
+                        }
+                    }
+                    else -> { // table
+                        popTo(j + 1)
+                        when (name) {
+                            "tr" -> push(El("tbody", HTML, false))
+                            "td", "th" -> { push(El("tbody", HTML, false)); push(El("tr", HTML, false)) }
+                        }
+                        return
+                    }
+                }
             }
         }
         fun text(from: Int, to: Int) {
@@ -244,6 +358,7 @@ internal object HtmlAnchors {
                 val headNoscript = name == "noscript" && !bodyStarted
                 if (name !in HEAD_OK) bodyStarted = true
                 val ignored = name == "html" || name == "head" || name == "body" || headNoscript || (name in TABLE_PARTS && (count["table"] ?: 0) <= 0)
+                if (!ignored && name in TABLE_PARTS) tablePart(name)
                 if (name !in VOID && !ignored) push(El(name, HTML, false))
                 when {
                     name == "plaintext" -> { text(i, n); i = n }
@@ -260,7 +375,12 @@ internal object HtmlAnchors {
 
     }
 
-    private fun resolveAll(links: List<Link>, bases: List<Pair<String, Boolean>>, max: Int): List<Pair<String, String>> {
+    private fun resolveAll(
+        links: List<Link>,
+        bases: List<Pair<String, Boolean>>,
+        max: Int,
+        unverifiedBases: Set<String> = emptySet(),
+    ): List<Pair<String, String>> {
         // resolve: the first <base href> outside SVG/MathML is the document's; the href as written and
         // every other absolute <base href> are judged too when they give another host (lean toward finding)
         val docBase = bases.firstOrNull { it.second }?.first?.let { Hosts.cleanHref(it) }
@@ -271,18 +391,19 @@ internal object HtmlAnchors {
             if (out.size >= max) break
             val href = decodeAttribute(l.raw)
             val shown = l.fixedText ?: PortableText.collapseSpaces(decodeText(l.text.toString()))
-            val readings = LinkedHashSet<String>()
-            readings += if (absDoc != null) Hosts.resolve(absDoc, href) else href
-            for (b in others) readings += Hosts.resolve(b, href)
-            readings += href
-            val first = readings.first()
-            if (Hosts.stripC0(first).isEmpty()) continue
-            out += first to shown
-            val seen = mutableSetOf(hostOf(first))
-            for (r in readings.drop(1)) {
+            // reading -> its text; the first text given for a reading wins
+            val readings = LinkedHashMap<String, String>()
+            readings.getOrPut(if (absDoc != null) Hosts.resolve(absDoc, href) else href) { shown }
+            for (b in others) readings.getOrPut(Hosts.resolve(b, href)) { if (b in unverifiedBases) UNVERIFIED else shown }
+            readings.getOrPut(href) { shown }
+            val first = readings.entries.first()
+            if (Hosts.stripC0(first.key).isEmpty()) continue
+            out += first.key to first.value
+            val seen = mutableSetOf(hostOf(first.key))
+            for ((r, t) in readings.entries.drop(1)) {
                 if (out.size >= max) break
                 val h = hostOf(r) ?: continue
-                if (seen.add(h)) out += r to shown
+                if (seen.add(h)) out += r to t
             }
         }
         return out
@@ -322,6 +443,33 @@ internal object HtmlAnchors {
             }
         }
         return out
+    }
+
+    private val INVISIBLE = setOf("script", "style", "textarea", "title", "iframe", "noembed", "noframes", "xmp", "template")
+
+    /**
+     * The text of [html] a mail client shows and would linkify (fix loop 10): text outside comments,
+     * tags and the elements whose content is code or not shown (script, style, textarea, title, iframe,
+     * noembed, noframes, xmp, template), character references decoded. The mail's pattern links come
+     * from this, not from the raw markup (JSON-LD, CSS url(), data-src, embed code, VML).
+     */
+    fun visibleText(html: String): String {
+        val out = StringBuilder()
+        var i = 0
+        val n = html.length
+        while (i < n) {
+            val lt = html.indexOf('<', i)
+            if (lt < 0) { out.append(html, i, n); break }
+            out.append(html, i, lt).append(' ')
+            if (html.startsWith("<!--", lt)) { i = commentEnd(html, lt + 4); continue }
+            if (lt + 1 < n && (html[lt + 1] == '!' || html[lt + 1] == '?')) { i = html.indexOf('>', lt + 2).let { if (it < 0) n else it + 1 }; continue }
+            val tag = readTag(html, lt)
+            if (tag == null) { out.append('<'); i = lt + 1; continue }
+            if (tag.after < 0) break
+            i = tag.after
+            if (!tag.end && tag.name in INVISIBLE) i = rawTextEnd(html, tag.after, tag.name)
+        }
+        return decodeText(out.toString())
     }
 
     /** The host the mail check judges for [href], or null for none. */
@@ -381,22 +529,22 @@ internal object HtmlAnchors {
     private fun letter(c: Char) = c in 'a'..'z' || c in 'A'..'Z'
 
     /** The start or end tag at [lt], or null when there is none; `after` is -1 when the document ends inside it. */
-    private fun readTag(s: String, lt: Int): Tag? {
-        val end = lt + 1 < s.length && s[lt + 1] == '/'
+    private fun readTag(s: String, lt: Int, limit: Int = s.length): Tag? {
+        val end = lt + 1 < limit && s[lt + 1] == '/'
         val ns = lt + (if (end) 2 else 1)
-        if (ns >= s.length || !letter(s[ns])) return null
+        if (ns >= limit || !letter(s[ns])) return null
         var j = ns
-        while (j < s.length && !space(s[j]) && s[j] != '/' && s[j] != '>') j++
+        while (j < limit && !space(s[j]) && s[j] != '/' && s[j] != '>') j++
         val name = s.substring(ns, j).lowercase()
-        val (attrs, after, selfClosing) = tagAttributes(s, j)
+        val (attrs, after, selfClosing) = tagAttributes(s, j, limit)
         return Tag(name, end, attrs, lt, after, selfClosing)
     }
 
     /** The tag's attributes from [pos] (after its name), first occurrence of each name, where the tag ends (-1: never), and `/>`. */
-    private fun tagAttributes(s: String, pos: Int): Triple<Map<String, String>, Int, Boolean> {
+    private fun tagAttributes(s: String, pos: Int, limit: Int = s.length): Triple<Map<String, String>, Int, Boolean> {
         val attrs = LinkedHashMap<String, String>()
         var j = pos
-        val n = s.length
+        val n = limit
         var slash: Boolean
         while (true) {
             slash = false
@@ -414,7 +562,7 @@ internal object HtmlAnchors {
                 while (j < n && space(s[j])) j++
                 if (j < n && (s[j] == '"' || s[j] == '\'')) {
                     val q = s[j]
-                    val e = s.indexOf(q, j + 1)
+                    val e = s.indexOf(q, j + 1).let { if (it >= n) -1 else it }
                     if (e < 0) return Triple(attrs, -1, false)
                     value = s.substring(j + 1, e)
                     j = e + 1

@@ -1,0 +1,14 @@
+From: Cairo Threads <hello@cairothreads.com>
+To: someone@example.org
+Subject: New drop 👕
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@cairothreads.com; spf=pass smtp.mailfrom=cairothreads.com; dmarc=pass (p=REJECT) header.from=cairothreads.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>@media (max-width:480px){.mob{display:block!important}}</style></head><body>
+<div style="display:none;max-height:0;overflow:hidden">The new drop is here&#847;&zwnj;&nbsp;</div>
+<a href="https://trk.klclick.com/ls/click?upn=u001.abc">New drop</a>
+<table><tr><td style="background:url(https://d3k81ch9hvuctc.cloudfront.net/company/XYZ/images/bg.jpg)">
+<a href="https://trk.klclick.com/ls/click?upn=u001.def"><img src="https://d3k81ch9hvuctc.cloudfront.net/company/XYZ/images/tee.jpg" alt="Tee"></a></td></tr></table>
+<p><a href="https://manage.kmail-lists.com/subscriptions/unsubscribe?a=XYZ">Unsubscribe</a></p></body></html>

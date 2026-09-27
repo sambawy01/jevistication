@@ -1,0 +1,20 @@
+From: Sam <sam.friend@gmail.com>
+To: someone@example.org
+Subject: Fwd: Your booking
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@gmail.com; spf=pass smtp.mailfrom=gmail.com; dmarc=pass (p=REJECT) header.from=gmail.com
+Content-Type: multipart/alternative; boundary="b0undary42"
+
+--b0undary42
+Content-Type: text/plain; charset=utf-8
+
+Fwd booking
+https://www.margiehotel.com/booking/1
+--b0undary42
+Content-Type: text/html; charset=utf-8
+
+<div dir="ltr"><br><div class="gmail_quote"><div dir="ltr" class="gmail_attr">---------- Forwarded message ---------<br>From: Hotel <res@margiehotel.com></div>
+<div><img src="https://ci3.googleusercontent.com/meips/ADKq_Nabc=s0-d-e1-ft#https://cdn.margiehotel.com/logo.png">
+<p>Booking confirmed.</p><a href="https://www.margiehotel.com/booking/1" target="_blank">Manage booking</a></div></div></div>
+--b0undary42--

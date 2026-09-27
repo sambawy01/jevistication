@@ -1,0 +1,17 @@
+From: البنك الأهلي المصري <alerts@nbe.com.eg>
+To: someone@example.org
+Subject: إشعار عملية
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@nbe.com.eg; spf=pass smtp.mailfrom=nbe.com.eg; dmarc=pass (p=REJECT) header.from=nbe.com.eg
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="viewport" content="width=device-width">
+<!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<!--[if mso]><style>table,td{border-collapse:collapse;mso-table-lspace:0pt}</style><![endif]-->
+</head><body dir="rtl">
+<!--[if mso]><table width="600"><tr><td><a href="https://www.nbe.com.eg/NBE/E/#/AR/Home">البنك الأهلي</a></td></tr></table><![endif]-->
+<table width="600"><tr><td><p>عميلنا العزيز، تم خصم مبلغ ٥٠٠ جنيه من حسابك.</p>
+<p>للاستفسار اتصل على ١٩٦٢٣</p><p><a href="https://www.nbe.com.eg/NBE/E/#/AR/Home">الموقع الرسمي</a></p></td></tr></table></body></html>

@@ -1,0 +1,10 @@
+From: HR <hr@adatum.com>
+To: someone@example.org
+Subject: HR newsletter
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@adatum.com; spf=pass smtp.mailfrom=adatum.com; dmarc=pass (p=REJECT) header.from=adatum.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>.logo{background:url(http://192.168.10.20/assets/logo.png)}</style></head><body>
+<div class="logo"></div><p>HR news.</p><a href="https://intranet.adatum.com/hr/news">Read</a></body></html>

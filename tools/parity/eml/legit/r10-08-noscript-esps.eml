@@ -1,0 +1,16 @@
+From: Litware <team@litware.io>
+To: someone@example.org
+Subject: Your weekly summary
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@litware.io; spf=pass smtp.mailfrom=litware.io; dmarc=pass (p=REJECT) header.from=litware.io
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>.hidden{display:none!important}</style></head><body>
+<noscript><img src="https://u123.ct.sendgrid.net/wf/open?upn=abc" width="1" height="1"><a href="https://u123.ct.sendgrid.net/ls/click?upn=zz">open</a></noscript>
+<div class="hidden" style="display:none">
+<a href="https://ad.braze.com/click?x=1">b</a><a href="https://trk.klclick1.com/ls/click?upn=1">k</a>
+<a href="https://d2v8tf04.na1.hubspotlinks.com/Ctc/abc">h</a><a href="https://1hsjxy.r.us-east-1.awstrack.me/L0/https:%2F%2Flitware.io/1/abc">a</a>
+<a href="https://email.amazonses.com/x">ses</a></div>
+<p>Hi, here is your weekly summary.</p><p><a href="https://u123.ct.sendgrid.net/ls/click?upn=main">Open dashboard</a></p>
+<p><a href="https://u123.ct.sendgrid.net/asm/unsubscribe/?user_id=1">Unsubscribe</a></p></body></html>

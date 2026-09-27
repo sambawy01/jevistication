@@ -1,0 +1,10 @@
+From: Tailwind Traders <news@tailwindtraders.com>
+To: someone@example.org
+Subject: Weekly picks
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@tailwindtraders.com; spf=pass smtp.mailfrom=tailwindtraders.com; dmarc=pass (p=REJECT) header.from=tailwindtraders.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><script>var cfg={api:"https://10.0.0.5/api",share:"https://bit.ly/tw-picks",cdn:"https://tw.click/cdn"};</script></head><body>
+<p>Weekly picks.</p><a href="https://www.tailwindtraders.com/picks">See picks</a></body></html>

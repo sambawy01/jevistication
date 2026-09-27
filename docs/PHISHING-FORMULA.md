@@ -91,8 +91,13 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
    content is read, and a relative href is also judged as written and against every other absolute
    `<base href>`. Since fix loop 9 the links judged are the union of that tree-aware reading and a no-skip
    reading of the same tokens (no raw text, RCDATA, plaintext or SVG/MathML state skips anything), so every
-   link start tag outside a real comment is judged: a wrong guess about the tree can only over-find. A link
-   only the no-skip reading finds is judged with no link text (host signals only). `<area href>` and
+   link start tag is judged: a wrong guess about the tree can only over-find. Since fix loop 10 the no-skip
+   reading skips nothing at all, comments included (whether `<!--` opens a comment depends on the tree:
+   inside an HTML `<style>` it is text). A link only the no-skip reading finds, and a reading resolved
+   against a `<base href>` only it finds, is judged with no link text and raises only risk-weight codes
+   (25 or more: a look-alike host, not a TLD note). With the raw mail at hand, the pattern fallback reads
+   only text/plain parts and the visible text of HTML parts (as a client linkifies it), never the markup:
+   a URL in a hidden MSO block, a comment or an image CDN is not a pattern link. `<area href>` and
    `<meta http-equiv=refresh>` are links; a link's text joins across
    comments and leaves out an SVG `<title>`/`<desc>`'s own text; every HTML character reference in the attribute decoded (numeric and the
    full WHATWG named table), `href` only as a whole attribute name (`xlink:href` for an `<a>` inside

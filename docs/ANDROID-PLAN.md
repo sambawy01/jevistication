@@ -501,6 +501,20 @@ LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
   - Attack: the same 18 browser-correct rows (Chrome has no link). Ten of them are now flagged 53 by the
     union (no link text, hence not 83).
 
+**Fix loop 10 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix10/`.
+- **Nothing skipped:** the no-skip reading takes comments as candidates too. Its links, and readings against
+  a `<base>` only it finds, have no link text and raise risk-weight codes only (r10 `18-base-in-textarea`
+  stays 0).
+- **Pattern fallback restricted:** an HTML body is judged by its anchors; bare URLs come only from
+  text/plain parts and the visible text of HTML. The brand-CDN and MSO over-finding of 1f2e4ba is gone.
+- **Tree-aware reading:** table scope for in-cell end tags, implied `<tbody>`/`<tr>`, `</template>`, h1–h6,
+  `<select>` as an end-tag boundary. Round 9's and round 10's 71,429 documents: 0 missing, tree-aware 0.
+- **Tests:** `CommentRegressionTest`, `EmlCeilingTest` (71 whole .eml files), comment family in the fuzz.
+- **Plants:** no union fails HtmlAnchorsUnionTest and the corpus; (b) trusting comments fails
+  HtmlAnchorsUnionTest and the corpus; a pattern over the raw markup fails EmlCeilingTest.
+- **Criteria against 699761a:** legitimate none higher; r10's 46 emls, r9's 10 and r8's 5 none higher;
+  attack emls equal; the same 18 browser-correct attack rows.
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).

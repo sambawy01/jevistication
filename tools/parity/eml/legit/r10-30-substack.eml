@@ -1,0 +1,12 @@
+From: The Nile Letter <nileletter@substack.com>
+To: someone@example.org
+Subject: Issue #42
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@substack.com; spf=pass smtp.mailfrom=substack.com; dmarc=pass (p=REJECT) header.from=substack.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>.button-wrapper a{color:#fff}</style></head><body>
+<a href="https://substack.com/redirect/abc?j=eyJ1Ijo">Read in app</a>
+<p>This week, three stories. <a href="https://www.reuters.com/world/africa/">Reuters</a>, <a href="https://bit.ly/nile42">a short link</a>.</p>
+<a href="https://nileletter.substack.com/action/disable_email?token=abc">Unsubscribe</a></body></html>

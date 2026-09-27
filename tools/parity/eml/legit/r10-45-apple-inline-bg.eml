@@ -1,0 +1,13 @@
+From: Apple <no_reply@email.apple.com>
+To: someone@example.org
+Subject: Your Apple ID was used to sign in
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@email.apple.com; spf=pass smtp.mailfrom=email.apple.com; dmarc=pass (p=REJECT) header.from=email.apple.com
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<table width="600"><tr><td style="background:url('https://appleid.cdn-apple.com/static/bin/cb123/dist/assets/header.png') no-repeat">
+<p>Dear customer, your Apple ID was used to sign in to iCloud on a new device.</p>
+<p>If you did not sign in, <a href="https://iforgot.apple.com/">reset your password</a>.</p>
+<p><a href="https://support.apple.com/HT204915">Apple Support</a></p></td></tr></table></body></html>

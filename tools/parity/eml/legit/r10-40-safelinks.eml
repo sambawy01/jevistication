@@ -1,0 +1,10 @@
+From: IT Support <it@adatum.com>
+To: someone@example.org
+Subject: Password expiry notice
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@adatum.com; spf=pass smtp.mailfrom=adatum.com; dmarc=pass (p=REJECT) header.from=adatum.com
+Content-Type: text/html; charset=utf-8
+
+<html><body><p>Your password expires in 7 days. Change it from the company portal.</p>
+<a href="https://nam02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fportal.adatum.com%2F&data=05%7C01&reserved=0" originalsrc="https://portal.adatum.com/">https://portal.adatum.com/</a></body></html>

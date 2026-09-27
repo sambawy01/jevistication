@@ -1,0 +1,8 @@
+From: متجر <news@sooq.example>
+Subject: عروض الاسبوع
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>تسوق الآن <a href="https://sooq.example/offers">من هنا</a></p>
+<p>لإلغاء الاشتراك زوروا mailchimp.com او https://sooq.us1.list-manage.com/unsub</p>
+</body></html>

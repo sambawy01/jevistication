@@ -1,0 +1,16 @@
+From: Blue Yonder Airlines <fly@blueyonderairlines.com>
+To: someone@example.org
+Subject: Check in now
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@blueyonderairlines.com; spf=pass smtp.mailfrom=blueyonderairlines.com; dmarc=pass (p=REJECT) header.from=blueyonderairlines.com
+Content-Type: text/html; charset=utf-8
+
+<html><head>
+<style type="text/css">
+/* Gmail app fix: <a href="https://www.blueyonderairlines.com"> links must stay blue */
+@media screen and (-webkit-min-device-pixel-ratio:0){ .webkit{display:block!important} }
+[owa] .col{width:50%!important} *[x-apple-data-detectors]{color:inherit!important}
+.hero{background-image:url("https://img.byair.xyz/hero.jpg")}
+</style></head><body><div class="hero"></div><p>Online check-in for flight BY123 is open.</p>
+<p><a href="https://www.blueyonderairlines.com/checkin?pnr=ABC123">Check in</a></p></body></html>

@@ -12,9 +12,9 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * MailMessage.fromItem's link list (fix loops 7–8): the message's anchors, plus every link the source
- * found by pattern (EmailFacts.links) whose host no anchor covers, so one harmless anchor cannot switch
- * the fallback off. Real newsletters with a Mailchimp/list-manage footer, partner and sendgrid hosts in
+ * MailMessage.fromItem's link list (fix loops 7–8): the message's anchors, plus every link found by
+ * pattern whose host no anchor covers, so one harmless anchor cannot switch the fallback off. Since fix
+ * loop 10 the pattern reads text/plain parts and the visible text of HTML only, never the markup. Real newsletters with a Mailchimp/list-manage footer, partner and sendgrid hosts in
  * text, a tracking link whose text names another domain, and Arabic and CJK footers stay safe
  * (round-8 and round-9 reviews, r9-work/eml: also Outlook/MSO, SVG icons, Arabic MSO, a misnested
  * shop mail and MathML); a phish that sits only in the text, behind one benign anchor,

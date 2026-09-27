@@ -1,0 +1,29 @@
+From: Alpine Ski House <news@alpineski.com>
+To: someone@example.org
+Subject: New season gear
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@alpineski.com; spf=pass smtp.mailfrom=alpineski.com; dmarc=pass (p=REJECT) header.from=alpineski.com
+Content-Type: multipart/alternative; boundary="b0undary42"
+
+--b0undary42
+Content-Type: text/plain; charset=utf-8
+
+Shop: https://www.alpineski.com/
+--b0undary42
+Content-Type: text/html; charset=utf-8
+
+<html><body><amp-img src="https://img.alpineski.com/hero.jpg" width="600" height="300"></amp-img>
+<template type="amp-mustache"><a href="{{url}}">{{name}}</a></template>
+<p><a href="https://www.alpineski.com/">Shop the new season</a></p></body></html>
+--b0undary42
+Content-Type: text/x-amp-html; charset=utf-8
+
+<!doctype html><html ⚡4email data-css-strict><head><meta charset="utf-8"><script async src="https://cdn.ampproject.org/v0.js"></script>
+<script async custom-element="amp-list" src="https://cdn.ampproject.org/v0/amp-list-0.1.js"></script>
+<script async custom-template="amp-mustache" src="https://cdn.ampproject.org/v0/amp-mustache-0.2.js"></script>
+<style amp4email-boilerplate>body{visibility:hidden}</style></head><body>
+<amp-img src="https://img.alpineski.com/hero.jpg" width="600" height="300" layout="responsive"></amp-img>
+<amp-list src="https://api.alpineski.com/amp/products?e=1" layout="fixed-height" height="200"><template type="amp-mustache"><a href="{{url}}">{{name}}</a> <a href="https://www.alpineski.com/p/{{id}}">Buy</a></template></amp-list>
+<a href="https://www.alpineski.com/">Shop</a></body></html>
+--b0undary42--

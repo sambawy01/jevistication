@@ -1,0 +1,11 @@
+From: ABC Studio <hello@abc.xyz>
+To: someone@example.org
+Subject: Studio update
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@abc.xyz; spf=pass smtp.mailfrom=abc.xyz; dmarc=pass (p=REJECT) header.from=abc.xyz
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<table><tr><td style="background-image:url(https://cdn.abc.xyz/bg.png);background-size:cover">
+<p>Studio update.</p><a href="https://abc.xyz/update">Read update</a></td></tr></table></body></html>

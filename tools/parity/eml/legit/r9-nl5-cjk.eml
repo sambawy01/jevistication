@@ -1,0 +1,8 @@
+From: 商店 <news@shop.example>
+Subject: 每周优惠
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>立即购物 <a href="https://shop.example/sale">点击这里</a></p>
+<p>通过 Mailchimp 发送。取消订阅请访问 mailchimp.com 或 https://shop.us2.list-manage.com/unsub</p>
+</body></html>

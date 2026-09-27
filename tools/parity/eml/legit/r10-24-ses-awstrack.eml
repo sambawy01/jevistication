@@ -1,0 +1,20 @@
+From: Wide World Importers <billing@wideworldimporters.com>
+To: someone@example.org
+Subject: Invoice INV-001
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@wideworldimporters.com; spf=pass smtp.mailfrom=wideworldimporters.com; dmarc=pass (p=REJECT) header.from=wideworldimporters.com
+Content-Type: multipart/alternative; boundary="b0undary42"
+
+--b0undary42
+Content-Type: text/plain; charset=utf-8
+
+Your invoice: https://www.wideworldimporters.com/invoices/INV-001
+--b0undary42
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>Your invoice is ready.</p><a href="https://1hsjxy.r.us-east-1.awstrack.me/L0/https:%2F%2Fwww.wideworldimporters.com%2Finvoices%2FINV-001/1/abc=">View invoice</a>
+<img alt="" src="https://1hsjxy.r.us-east-1.awstrack.me/I0/abc/def" style="display:none;width:1px;height:1px;">
+</body></html>
+--b0undary42--

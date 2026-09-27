@@ -1,0 +1,13 @@
+From: Talabat-like <no-reply@foodhub.app>
+To: someone@example.org
+Subject: Your order is on its way
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@foodhub.app; spf=pass smtp.mailfrom=foodhub.app; dmarc=pass (p=REJECT) header.from=foodhub.app
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<a href="https://ad.braze.com/click?d=1">Track order</a>
+<img src="https://braze-images.com/appboy/communication/assets/image_assets/images/abc.png">
+<a href="foodhub://orders/123">Open in app</a>
+<p><a href="https://www.foodhub.app/help">Help</a></p></body></html>

@@ -16,6 +16,7 @@ import dev.loupe.persistence.CorrectionKey
 import dev.loupe.persistence.CorrectionRecord
 import dev.loupe.sources.common.HtmlText
 import dev.loupe.sources.common.ItemKind
+import dev.loupe.sources.common.Links
 import dev.loupe.sources.common.MimeParser
 import dev.loupe.sources.common.SourceItem
 
@@ -64,6 +65,9 @@ data class MailMessage(
             var auth = ""
             var anchors: List<Pair<String, String>> = emptyList()
             var nonNavigable: Set<String> = emptySet()
+            // the mail's own links found by pattern: the source's list (as 699761a) unless the raw mail
+            // is there, where they come only from what a client shows (fix loop 10)
+            var patternLinks: List<String> = facts?.links ?: emptyList()
             var labels: List<String> = emptyList()
             if (raw != null) {
                 val entity = MimeParser.parseEntity(raw.encodeToByteArray())
@@ -73,13 +77,19 @@ data class MailMessage(
                 val parts = htmlParts(entity)
                 anchors = parts.flatMap { anchors(it) }.distinct().take(Phishing.MAX_LINKS)
                 nonNavigable = parts.flatMapTo(HashSet()) { HtmlAnchors.nonNavigableUrls(it) }
+                val plain = plainParts(entity)
+                if (parts.isNotEmpty() || plain.isNotEmpty()) {
+                    // HTML: every link-bearing tag is already read ((a) and (b)); only URLs in the visible
+                    // text are added, as a client linkifies them. Plain text: its URLs.
+                    patternLinks = Links.find(*(parts.map { HtmlAnchors.visibleText(it) } + plain).toTypedArray())
+                }
             }
             // the source's own link list (found by pattern in the raw mail) is judged too where no anchor
             // covers its host, so one harmless anchor cannot switch the fallback off (fix loop 7)
             val covered = anchors.mapNotNull { ParsedUrl.parse(Hosts.linkUrl(it.first))?.host?.ifEmpty { null } }.toSet()
             // ...but not a URL nobody follows (a DTD, a namespace URI, an image's src; fix loop 9), unless
             // the visible text shows it
-            val extra = (facts?.links ?: emptyList()).filter { l -> ParsedUrl.parse(Hosts.linkUrl(l))?.host?.ifEmpty { null }.let { it == null || it !in covered } }
+            val extra = patternLinks.filter { l -> ParsedUrl.parse(Hosts.linkUrl(l))?.host?.ifEmpty { null }.let { it == null || it !in covered } }
                 .filter { l -> l.trim() !in nonNavigable || l.trim() in item.text }
             val links = (anchors + extra.map { it to "" }).distinct().take(Phishing.MAX_LINKS)
             return MailMessage(
@@ -87,6 +97,12 @@ data class MailMessage(
                 text = item.text, replyTo = replyTo, authResults = auth, links = links,
                 provider = provider, labels = labels,
             )
+        }
+
+        private fun plainParts(entity: MimeParser.Entity, depth: Int = 0): List<String> {
+            val type = entity.header("content-type")?.substringBefore(';')?.trim()?.lowercase() ?: "text/plain"
+            if (type.startsWith("multipart/") && depth < 32) return MimeParser.parts(entity).flatMap { plainParts(it, depth + 1) }
+            return if (type == "text/plain" && entity.header("content-disposition")?.lowercase()?.contains("attachment") != true) listOf(MimeParser.text(entity)) else emptyList()
         }
 
         private fun htmlParts(entity: MimeParser.Entity, depth: Int = 0): List<String> {

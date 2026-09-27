@@ -44,6 +44,10 @@ val hostParityFuzz = rootProject.file("tools/parity/fuzz/pinned.json")
 val anchorParityFuzz = rootProject.file("tools/parity/fuzz/anchor-pinned.json")
 // Round 9's end-tag regression documents with Chrome's hosts.
 val endTagRegression = rootProject.file("tools/parity/fuzz/end-pinned.json")
+// Round 10's comment-in-raw-text documents with Chrome's hosts.
+val commentRegression = rootProject.file("tools/parity/fuzz/comment-pinned.json")
+// Legitimate .eml files with the score origin/main (699761a) gives each: a ceiling, never exceeded.
+val legitEmlDir = rootProject.file("tools/parity/eml")
 // shared_hosts.json: copied verbatim from Loupe Station (laya_studio/online/shared_hosts.json, commit
 // 4cb9026). It is the one source of the list: generateSharedHosts turns it into commonMain Kotlin.
 val sharedHostsJson = project.file("data/shared_hosts.json")
@@ -110,6 +114,8 @@ val generateTestPaths by tasks.registering {
     inputs.property("hostParityFuzz", hostParityFuzz.absolutePath)
     inputs.property("anchorParityFuzz", anchorParityFuzz.absolutePath)
     inputs.property("endTagRegression", endTagRegression.absolutePath)
+    inputs.property("commentRegression", commentRegression.absolutePath)
+    inputs.property("legitEmlDir", legitEmlDir.absolutePath)
     val scratch = layout.buildDirectory.dir("tmp/kit-tests").get().asFile.absolutePath
     inputs.property("scratch", scratch)
     outputs.dir(outDir)
@@ -131,6 +137,8 @@ val generateTestPaths by tasks.registering {
                 "internal const val HOST_PARITY_FUZZ: String = \"" + hostParityFuzz.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val ANCHOR_PARITY_FUZZ: String = \"" + anchorParityFuzz.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val END_TAG_REGRESSION: String = \"" + endTagRegression.absolutePath.replace("\\", "/") + "\"\n" +
+                "internal const val COMMENT_REGRESSION: String = \"" + commentRegression.absolutePath.replace("\\", "/") + "\"\n" +
+                "internal const val LEGIT_EML_DIR: String = \"" + legitEmlDir.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val TEST_TMP: String = \"" + scratch.replace("\\", "/") + "\"\n",
         )
     }
@@ -144,6 +152,8 @@ tasks.withType<AbstractTestTask>().configureEach {
     inputs.file(hostParityFuzz).withPropertyName("hostParityFuzz").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(anchorParityFuzz).withPropertyName("anchorParityFuzz").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(endTagRegression).withPropertyName("endTagRegression").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(commentRegression).withPropertyName("commentRegression").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(legitEmlDir).withPropertyName("legitEmlDir").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(phishingVectors).withPropertyName("phishingVectors").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(phishingVectorsV12).withPropertyName("phishingVectorsV12").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(examplePack).withPropertyName("examplePack").withPathSensitivity(PathSensitivity.RELATIVE)

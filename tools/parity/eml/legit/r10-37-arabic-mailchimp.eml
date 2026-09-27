@@ -1,0 +1,12 @@
+From: متجر القاهرة <shop@cairomarket.com>
+To: someone@example.org
+Subject: تخفيضات الخريف
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@cairomarket.com; spf=pass smtp.mailfrom=cairomarket.com; dmarc=pass (p=REJECT) header.from=cairomarket.com
+Content-Type: text/html; charset=utf-8
+
+<html dir="rtl"><head><style>@import url('https://fonts.googleapis.com/css2?family=Cairo');</style></head><body>
+<div style="display:none">تخفيضات&zwnj;&nbsp;&zwnj;&nbsp;</div>
+<a href="https://cairomarket.us21.list-manage.com/track/click?u=1&amp;id=2&amp;e=3">تسوق الآن</a>
+<p><a href="https://cairomarket.us21.list-manage.com/unsubscribe?u=1&amp;id=2">إلغاء الاشتراك</a> · <a href="https://us21.campaign-archive.com/?u=1&amp;id=2">عرض في المتصفح</a></p></body></html>

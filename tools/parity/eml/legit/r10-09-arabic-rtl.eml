@@ -1,0 +1,21 @@
+From: مطعم النيل <news@nilebistro.com.eg>
+To: someone@example.org
+Subject: عروض الأسبوع
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@nilebistro.com.eg; spf=pass smtp.mailfrom=nilebistro.com.eg; dmarc=pass (p=REJECT) header.from=nilebistro.com.eg
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="viewport" content="width=device-width">
+<!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<!--[if mso]><style>table,td{border-collapse:collapse;mso-table-lspace:0pt}</style><![endif]-->
+<title>عروض الأسبوع &lt;جديد&gt;</title>
+<style>@import url(https://fonts.googleapis.com/earlyaccess/droidarabickufi.css); body{direction:rtl;font-family:'Cairo',Tahoma}</style></head>
+<body dir="rtl"><table dir="rtl" width="600"><tr><td style="background-image:url('https://cdn.nilebistro.com.eg/hero-ar.jpg')">
+<!--[if gte mso 9]><v:image src="https://cdn.nilebistro.com.eg/hero-ar.jpg" style="width:600px;height:250px"/><![endif]-->
+<h1>عروض هذا الأسبوع</h1><p>اطلب الآن واحصل على خصم ٢٠٪ على جميع الأطباق.</p>
+<a href="https://nilebistro.com.eg/menu?utm_source=newsletter">اطلب الآن</a>
+<p><a href="https://www.facebook.com/nilebistro">فيسبوك</a> · <a href="https://www.instagram.com/nilebistro">إنستغرام</a> · <a href="https://wa.me/201000000000">واتساب</a></p>
+<p style="font-size:10px">لإلغاء الاشتراك <a href="https://nilebistro.com.eg/unsubscribe?e=1">اضغط هنا</a></p></td></tr></table></body></html>

@@ -79,6 +79,14 @@ class PortableRegexPerformanceTest {
         linear("html open attributes", { "<a x".repeat(5_000 * it) }) { MailMessage.anchors(it) }
         linear("html entity href", { "<a href=\"" + "&amp;&#x41;&notin;&copy".repeat(1_000 * it) + "\">x</a>" }) { MailMessage.anchors(it) }
         linear("mail anchors unclosed", { "<a class=x title=\"y>z\">t ".repeat(4_000 * it) }) { MailMessage.anchors(it) }
+        // the no-skip candidate scan (fix loop 10): every `<` is a candidate, each read to at most 2,048
+        // characters; unclosed quotes, tags inside tags, comments it no longer skips, and table parts,
+        // select and heading end tags the tree-aware reading places
+        linear("html candidate open quote", { "<a x=\"".repeat(4_000 * it) }) { MailMessage.anchors(it) }
+        linear("html candidate nested lt", { "<a<a".repeat(5_000 * it) }) { MailMessage.anchors(it) }
+        linear("html candidate comments", { "<!-- <a href=\"https://e.com/\">t</a> ".repeat(800 * it) }) { MailMessage.anchors(it) }
+        linear("html table parts", { "<table><tr><td><svg></tbody><td><caption></td>".repeat(600 * it) }) { MailMessage.anchors(it) }
+        linear("html select end tags", { "<h2><select><math></h2></h1><option>".repeat(600 * it) }) { MailMessage.anchors(it) }
         linear("institutional sender", { "security ".repeat(1_500 * it) }) { WatcherRun.claimedBrand(it, "billing@x.com") }
         // a Visa-shaped number (Luhn-valid) about every 1,000 characters, with card and order words
         val block = "x".repeat(930) + " order ref visa card 4111 1111 1111 1111 exp 12/29 "

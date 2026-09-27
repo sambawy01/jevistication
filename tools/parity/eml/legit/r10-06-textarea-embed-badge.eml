@@ -1,0 +1,16 @@
+From: Tripadvisor-like Reviews <badges@reviewhub-mail.com>
+To: someone@example.org
+Subject: Your 2026 Travellers' Choice badge
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@reviewhub-mail.com; spf=pass smtp.mailfrom=reviewhub-mail.com; dmarc=pass (p=REJECT) header.from=reviewhub-mail.com
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<p>Congratulations! Add this badge to your website by copying the code below.</p>
+<form action="https://www.reviewhub.com/badge/save" method="post">
+<textarea rows="6" cols="60" readonly><div id="rh-badge"><a target="_blank" href="https://www.reviewhub.com/Hotel_Review-g294201-d123-Reviews-Bistro.html"><img src="https://static.reviewhub.com/img2/badges/2026.png" alt="ReviewHub"/></a></div><script src="https://www.jscache.com/wejs?wtype=excellent&uniq=123"></script></textarea>
+<textarea name="note">Share with <a href="https://bit.ly/rh-share">bit.ly/rh-share</a></textarea>
+</form>
+<template id="row"><tr><td><a href="https://www.reviewhub.com/owners">Manage listing</a></td></tr></template>
+<p><a href="https://www.reviewhub.com/owners">Go to Management Center</a></p></body></html>

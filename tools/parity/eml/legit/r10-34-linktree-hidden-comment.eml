@@ -1,0 +1,18 @@
+From: Lamna Healthcare <news@lamnahealthcare.com>
+To: someone@example.org
+Subject: Health tips
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@lamnahealthcare.com; spf=pass smtp.mailfrom=lamnahealthcare.com; dmarc=pass (p=REJECT) header.from=lamnahealthcare.com
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="viewport" content="width=device-width">
+<!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<!--[if mso]><style>table,td{border-collapse:collapse;mso-table-lspace:0pt}</style><![endif]-->
+</head><body>
+<p>Tips for autumn.</p><a href="https://lamnahealthcare.us5.list-manage.com/track/click?u=1&id=2">Read more</a>
+<!--[if mso]><p><a href="https://linktr.ee/lamnahealth">All our links</a></p><![endif]-->
+<!-- footer links: https://linktr.ee/lamnahealth https://www.instagram.com/lamnahealth -->
+<a href="https://lamnahealthcare.us5.list-manage.com/unsubscribe?u=1">Unsubscribe</a></body></html>

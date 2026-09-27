@@ -1,0 +1,12 @@
+From: Fourth Coffee <hello@fourthcoffee.com>
+To: someone@example.org
+Subject: Watch our story
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@fourthcoffee.com; spf=pass smtp.mailfrom=fourthcoffee.com; dmarc=pass (p=REJECT) header.from=fourthcoffee.com
+Content-Type: text/html; charset=utf-8
+
+<html><body>
+<iframe src="https://www.youtube.com/embed/abc" width="560" height="315"><a href="https://youtu.be/abc">Watch on YouTube</a></iframe>
+<noembed><a href="https://vimeo.com/123">Watch on Vimeo</a></noembed>
+<p><a href="https://www.youtube.com/watch?v=abc">Watch our story</a></p></body></html>

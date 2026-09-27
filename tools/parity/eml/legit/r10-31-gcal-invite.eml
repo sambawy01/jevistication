@@ -1,0 +1,21 @@
+From: Google Calendar <calendar-notification@google.com>
+To: someone@example.org
+Subject: Invitation: Standup @ Mon
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@google.com; spf=pass smtp.mailfrom=google.com; dmarc=pass (p=REJECT) header.from=google.com
+Content-Type: multipart/alternative; boundary="b0undary42"
+
+--b0undary42
+Content-Type: text/html; charset=utf-8
+
+<html><head><script type="application/ld+json">{"@context":"http://schema.org","@type":"EventReservation","reservationFor":{"@type":"Event","name":"Standup","startDate":"2026-09-28T09:00:00Z","url":"https://calendar.google.com/calendar/event?eid=abc"}}</script></head><body>
+<a href="https://calendar.google.com/calendar/event?action=RESPOND&eid=abc&rst=1">Yes</a> <a href="https://meet.google.com/abc-defg-hij">Join with Google Meet</a>
+<a href="https://www.google.com/calendar/">Google Calendar</a></body></html>
+--b0undary42
+Content-Type: text/calendar; charset=utf-8
+
+BEGIN:VCALENDAR
+URL:https://calendar.google.com/calendar/event?eid=abc
+END:VCALENDAR
+--b0undary42--

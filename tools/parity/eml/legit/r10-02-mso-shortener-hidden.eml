@@ -1,0 +1,19 @@
+From: Contoso Weekly <weekly@contoso-news.com>
+To: someone@example.org
+Subject: This week at Contoso
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@contoso-news.com; spf=pass smtp.mailfrom=contoso-news.com; dmarc=pass (p=REJECT) header.from=contoso-news.com
+Content-Type: text/html; charset=utf-8
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
+<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"><meta name="viewport" content="width=device-width">
+<!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<!--[if mso]><style>table,td{border-collapse:collapse;mso-table-lspace:0pt}</style><![endif]-->
+</head><body>
+<table width="600"><tr><td><h2>This week</h2><p>Top story: our new office.</p>
+<!--[if mso]><table><tr><td><a href="https://bit.ly/3contoso">Read the story (Outlook)</a></td></tr></table><![endif]-->
+<!--[if mso]><v:roundrect href="https://lnkd.in/contoso-jobs" style="height:36px;width:180px" fillcolor="#0a66c2"><center>Jobs</center></v:roundrect><![endif]-->
+<!--[if !mso]><!--><a href="https://www.contoso-news.com/story/office">Read the story</a> <a href="https://www.linkedin.com/company/contoso/jobs">Jobs</a><!--<![endif]-->
+<p><a href="https://www.contoso-news.com/unsubscribe?u=1">Unsubscribe</a></p></td></tr></table></body></html>

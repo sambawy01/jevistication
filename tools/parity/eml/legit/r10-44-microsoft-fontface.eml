@@ -1,0 +1,13 @@
+From: Microsoft <microsoft@email.microsoft.com>
+To: someone@example.org
+Subject: What's new in Outlook
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@email.microsoft.com; spf=pass smtp.mailfrom=email.microsoft.com; dmarc=pass (p=REJECT) header.from=email.microsoft.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><style>
+@font-face{font-family:"Segoe UI Web";src:url(https://outlook-1.cdn.office.net/assets/fonts/segoeui-regular.woff2) format("woff2")}
+body{font-family:"Segoe UI Web",Segoe UI,Arial}</style></head><body>
+<p>What's new in Outlook this month.</p><a href="https://go.microsoft.com/fwlink/?LinkId=2211111">Learn more</a>
+<p><a href="https://account.microsoft.com/privacy">Privacy</a> <a href="https://go.microsoft.com/fwlink/?LinkId=521839">Unsubscribe</a></p></body></html>

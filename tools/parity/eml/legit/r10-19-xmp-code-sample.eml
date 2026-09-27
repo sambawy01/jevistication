@@ -1,0 +1,12 @@
+From: Northwind Dev <dev@northwindtraders.com>
+To: someone@example.org
+Subject: <Dev> tips
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@northwindtraders.com; spf=pass smtp.mailfrom=northwindtraders.com; dmarc=pass (p=REJECT) header.from=northwindtraders.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><title>Tips: <a href> usage</title></head><body>
+<p>This week: anchors.</p><xmp><a href="https://example.com/login">Login</a> <a href="https://bit.ly/demo">short</a></xmp>
+<pre><code>&lt;a href="https://example.com"&gt;</code></pre>
+<p><a href="https://dev.northwindtraders.com/tips/anchors">Read the tip</a></p></body></html>

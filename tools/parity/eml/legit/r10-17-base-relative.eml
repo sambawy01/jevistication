@@ -1,0 +1,10 @@
+From: Graphic Design Institute <news@graphicdesigninstitute.com>
+To: someone@example.org
+Subject: New courses
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@graphicdesigninstitute.com; spf=pass smtp.mailfrom=graphicdesigninstitute.com; dmarc=pass (p=REJECT) header.from=graphicdesigninstitute.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><base href="https://www.graphicdesigninstitute.com/"><title>New courses</title></head><body>
+<p><a href="courses/typography">Typography 101</a> <a href="/unsubscribe">Unsubscribe</a></p></body></html>

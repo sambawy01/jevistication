@@ -1,0 +1,12 @@
+From: Humongous Insurance <news@humongousinsurance.com>
+To: someone@example.org
+Subject: Your policy newsletter
+Date: Sat, 26 Sep 2026 10:00:00 +0000
+MIME-Version: 1.0
+Authentication-Results: mx.google.com; dkim=pass header.i=@humongousinsurance.com; spf=pass smtp.mailfrom=humongousinsurance.com; dmarc=pass (p=REJECT) header.from=humongousinsurance.com
+Content-Type: text/html; charset=utf-8
+
+<html><head><meta property="og:url" content="https://hi.link/policy-news"><meta property="og:image" content="https://cdn.humongousinsurance.com/og.png">
+<meta name="twitter:site" content="@humongous"><link rel="canonical" href="https://www.humongousinsurance.com/news/10"></head><body>
+<img data-src="https://img.humongous.click/lazy1.jpg" src="https://cdn.humongousinsurance.com/ph.gif">
+<p>News for policyholders.</p><a href="https://www.humongousinsurance.com/news/10">Read online</a></body></html>
