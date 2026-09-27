@@ -70,6 +70,48 @@ class PortableTextTest {
     }
 
     @Test
+    fun `no label of the bundled public suffix list drifts or is written with stand-ins`() {
+        val labels = bundledPublicSuffixList().lines()
+            .filter { it.isNotBlank() && !it.startsWith("//") }
+            .flatMap { it.trim().removePrefix("!").removePrefix("*.").split('.') }
+            .filter { l -> l.any { it.code > 127 } }
+            .toSet()
+        assertTrue(labels.size > 300, "only ${labels.size} labels")
+        for (label in labels) {
+            assertEquals(emptyList(), PortableText.unicode32Drift(label), label)
+            assertEquals(emptyList(), PortableText.disguisedCodePoints(label), label)
+        }
+    }
+
+    @Test
+    fun `scripts and symbols added after Unicode 3-2 that map to themselves are not drift`() {
+        val legit = listOf(
+            "မြန်မာ", // Burmese medials U+103A U+103C (Unicode 5.1)
+            "\u0D7A\u0D7B\u0D7C\u0D7D\u0D7E\u0D7F", // Malayalam chillu letters (5.1)
+            s(0x1F600), // emoji
+            "\u9FA6\u9FFF", // CJK unified ideographs added after 3.2
+            "\u0620\u063B\u063F\u0750\u08A0", // Arabic Supplement / Extended-A
+            "\u0237\u04CF\u0971\u0978", // Latin dotless j, Cyrillic palochka, Devanagari
+            "مصر", "القاهرة",
+        )
+        for (label in legit) assertEquals(emptyList(), PortableText.unicode32Drift(label), label)
+        // New capital letters do drift: 3.2 passes them through, 16.0 lower-cases them.
+        assertEquals(listOf(0x1C90), PortableText.unicode32Drift(s(0x1C90)))
+        assertEquals(listOf(0x243), PortableText.unicode32Drift("\u0243"))
+    }
+
+    @Test
+    fun `stand-in letters are reported real letters are not`() {
+        assertEquals(listOf(0xFF50, 0xFF41, 0xFF59, 0xFF4C), PortableText.disguisedCodePoints("ｐａｙｐａｌ"))
+        assertEquals(listOf(0x1F130), PortableText.disguisedCodePoints("p" + s(0x1F130) + "yp" + s(0x1F130) + "l"))
+        assertEquals(listOf(0x00AD), PortableText.disguisedCodePoints("pay\u00ADpal"))
+        assertEquals(emptyList(), PortableText.disguisedCodePoints("می\u200Cخواهم"))
+        for (label in listOf("bücher", "مصر", "例子", "пример", "मराठी", "ελληνικά")) {
+            assertEquals(emptyList(), PortableText.disguisedCodePoints(label), label)
+        }
+    }
+
+    @Test
     fun `normal forms`() {
         assertEquals("é", PortableText.nfc("é"))
         assertEquals("é", PortableText.nfd("é"))
@@ -172,7 +214,10 @@ class PortableTextTest {
         assertEquals("[${Rx.DIGITS}]", PortableRegex.translate("[\\d]"))
         assertEquals(Rx.SP + "+", PortableRegex.translate("\\s+"))
         assertEquals("(?<name>x)\\k<name>", PortableRegex.translate("(?<name>X)\\k<name>"))
-        assertEquals("\\x41\\u0042", PortableRegex.translate("\\x41\\u0042"))
+        // character escapes are decoded and put in match form, like literal characters (S-1)
+        assertEquals("ab", PortableRegex.translate("\\x41\\u0042"))
+        assertEquals("a\\.", PortableRegex.translate("\\0101\\x2E"))
+        assertEquals("[A-za-z]", PortableRegex.translate("[A-z]"))
         assertEquals("(?m:a)", PortableRegex.translate("(?mi:A)"))
         for (bad in listOf("\\p{L}", "\\P{Lu}", "[\\D]", "[\\b]", "\\X", "\\R")) {
             assertFailsWith<IllegalArgumentException>(bad) { PortableRegex.translate(bad) }

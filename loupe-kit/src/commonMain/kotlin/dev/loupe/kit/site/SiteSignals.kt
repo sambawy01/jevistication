@@ -130,6 +130,7 @@ object SiteSignals {
         // host
         "ip_host" to (25 to "The address is a bare IP number instead of a website name."),
         "mixed_script" to (35 to "The website name mixes letters from different alphabets, a trick to imitate another name."),
+        "disguised_host" to (30 to "The website name is written with stand-in letters (such as full-width or mathematical letters) for {host}; real links are not written this way."),
         "unicode_drift_host" to (30 to "The website name uses characters that older and newer software read differently, so the name you see may not be the website you reach."),
         "homograph_brand" to (60 to "The website name imitates {brand} with look-alike letters from another alphabet."),
         "lookalike_brand" to (45 to "The website name looks like {brand} but is not {brand}'s website."),
@@ -195,11 +196,22 @@ object SiteSignals {
 
     /**
      * The code points of [u]'s host, as typed and in its decoded `xn--` labels, that read
-     * differently under Unicode 3.2 and the pinned Unicode version ([PortableText.unicode32Drift]).
+     * differently under Unicode 3.2 and the pinned Unicode version ([PortableText.unicode32Drift]),
+     * other than the stand-ins [disguise] already reports (U+1F130 is both: it counts once).
      */
-    fun unicodeDrift(u: ParsedUrl): List<Int> =
-        (PortableText.unicode32Drift(u.typedHost) + u.labels.filter { it.startsWith("xn--") }
-            .flatMap { PortableText.unicode32Drift(Hosts.decodeLabel(it)) }).distinct()
+    fun unicodeDrift(u: ParsedUrl): List<Int> {
+        val stand = disguise(u).toSet()
+        return (PortableText.unicode32Drift(u.typedHost) + u.labels.filter { it.startsWith("xn--") }
+            .flatMap { PortableText.unicode32Drift(Hosts.decodeLabel(it)) }).distinct().filter { it !in stand }
+    }
+
+    /**
+     * The stand-in characters of [u]'s host, as typed and in its decoded `xn--` labels
+     * ([PortableText.disguisedCodePoints]).
+     */
+    fun disguise(u: ParsedUrl): List<Int> =
+        (PortableText.disguisedCodePoints(u.typedHost) + u.labels.filter { it.startsWith("xn--") }
+            .flatMap { PortableText.disguisedCodePoints(Hosts.decodeLabel(it)) }).distinct()
 
     /** [s] without nonspacing and enclosing marks (Mn, Me), read from the pinned Unicode data. */
     private fun withoutMarks(s: String): String {
@@ -272,10 +284,14 @@ object SiteSignals {
         if (host.isEmpty()) return out
         if (Hosts.isPrivateHost(host)) return out
         if (Hosts.isIp(host)) return listOf(SiteSignal("ip_host", mapOf("host" to host)))
-        if (config.known(reg, suffix)) return out
-        // Characters that Unicode 3.2 software (IDNA 2003) and current software map differently, or
-        // that did not exist in 3.2: one written name, two possible websites.
+        // Before the known-good check: how the name is WRITTEN says nothing good about where it goes.
+        // A name written with stand-in letters (full-width, mathematical, enclosed) maps to another
+        // name (`ｐａｙｐａｌ.com` is paypal.com): real links are not written that way, even to the real
+        // site. And characters that Unicode 3.2 software (IDNA 2003) and current software map
+        // differently make one written name two possible websites.
+        if (disguise(u).isNotEmpty()) out += SiteSignal("disguised_host", mapOf("host" to u.unicodeHost))
         if (unicodeDrift(u).isNotEmpty()) out += SiteSignal("unicode_drift_host", mapOf("host" to u.unicodeHost))
+        if (config.known(reg, suffix)) return out
         // IDN: punycode labels, mixed scripts, homographs of a brand
         val regLabel = if (reg != null && suffix != null) reg.dropLast(suffix.length + 1) else ""
         var homograph = false

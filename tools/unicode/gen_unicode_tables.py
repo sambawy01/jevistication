@@ -37,11 +37,12 @@ What the table holds (all run- or delta-coded, base 36, see the Kotlin reader Un
   CASEFOLD_NFKC  NFKC_CF where it differs otherwise from what the rule `NFKC(full case fold(NFKC(c)))`
                gives (none in 16.0). NFKC_CF is the IDNA mapping step (lower-casing, NFKC, dropping
                default ignorables) in one property
-  STABLE32     code points assigned in Unicode 3.2 whose IDNA mapping is the same under Unicode 3.2
-               nameprep (RFC 3491: table B.1 removed, table B.2 case map, NFKC on Unicode 3.2 data;
-               what java.net.IDN and older resolvers use) and under the engine's pinned mapping
-               (table B.1 removed, then NFKC_Casefold): a host label with a code point outside this
-               set reads differently on old and new software (the `unicode_drift_host` signal).
+  STABLE32     code points whose IDNA mapping is the same under Unicode 3.2 nameprep (RFC 3491:
+               table B.1 removed, table B.2 case map, NFKC on Unicode 3.2 data; what java.net.IDN
+               and older resolvers use; a code point unassigned in 3.2 passes through unchanged, as
+               with ALLOW_UNASSIGNED) and under the engine's pinned mapping (table B.1 removed, then
+               NFKC_Casefold): a host label with a code point outside this set reads differently on
+               old and new software (the `unicode_drift_host` signal).
                Validity rules (prohibited output, bidi) are not part of the comparison.
   FULLFOLD     CaseFolding.txt status C and F (full case folding), used only to derive CASEFOLD_NFKC
 """
@@ -58,8 +59,8 @@ UNICODE_VERSION = "16.0.0"
 # published ICU (apple-oss-distributions/ICU, ICU-76142.5.1.200) is ICU 76.1, Unicode 16.0, which
 # Safari/WebKit use through the OS. 16.0 is the newest version both browsers implement, and by the
 # normalization stability policy every 16.0 mapping is unchanged in 17.0, so a 16.0 answer is also
-# Chrome's for every character that exists in 16.0. Characters new in 17.0 are unassigned here, pass
-# through unmapped, and are flagged by STABLE32 (they are not in Unicode 3.2 either). Python 3.14's
+# Chrome's for every character that exists in 16.0. Characters new in 17.0 are unassigned here and
+# pass through unmapped, as they do in 3.2 nameprep, so they are not drift. Python 3.14's
 # unicodedata is also 16.0.0, which this script uses as an independent cross-check.
 # name -> (URL, SHA-256). The Unicode 3.2 files and RFC 3454 define nameprep, for STABLE32.
 UCD = f"https://www.unicode.org/Public/{UNICODE_VERSION}/ucd/"
@@ -478,16 +479,23 @@ def generate(texts: dict) -> str:
         if derived_nfkc_cf(d, c) != want:
             exceptions[c] = want
     lines = verify(d, exceptions, texts)
+    # A code point drifts when Unicode 3.2 nameprep (an unassigned one passes through unchanged, as
+    # IDNA 2003 with ALLOW_UNASSIGNED does) and the pinned mapping give different results. A new
+    # character that maps to itself (Burmese medials, emoji, new CJK) does not drift; one that maps
+    # to something else now (U+1F130 -> a, U+1E030 -> Cyrillic a) does.
     prep32 = Nameprep32(texts)
     stable = bytearray(MAX + 1)
-    drift_assigned = 0
+    drift_assigned = drift_new = 0
     for c in range(MAX + 1):
-        if not prep32.assigned(c):
+        if 0xD800 <= c <= 0xDFFF:
+            stable[c] = 1
             continue
         if prep32.map([c]) == idna_map(d, [c], exceptions):
             stable[c] = 1
-        else:
+        elif prep32.assigned(c):
             drift_assigned += 1
+        else:
+            drift_new += 1
     decomp = {c: ("k" if compat else "c", seq) for c, (compat, seq) in d.decomp.items()}
     fullfold = {c: ("f", seq) for c, seq in d.full_fold.items()}
     # Every NFKC_CF exception in 16.0 is a code point mapped to nothing (a default ignorable, e.g.
@@ -526,7 +534,8 @@ def generate(texts: dict) -> str:
         " * code point; NFC/NFD/NFKC/NFKD of every code point against Python's unicodedata " + unicodedata.unidata_version + ".",
         f" * {len(fold)} simple folds, {len(lower)} lowercase mappings, {len(d.decomp)} decompositions,",
         f" * {int(sum(ignorable))} default ignorables, {len(exc)} other NFKC_CF exceptions to the derived rule,",
-        f" * {drift_assigned} code points assigned in 3.2 whose IDNA mapping changed since.",
+        f" * drift: {drift_assigned} code points assigned in 3.2 whose IDNA mapping changed since, and",
+        f" * {drift_new} added later that the pinned mapping changes (3.2 passes them through unchanged).",
         " * Format: see tools/unicode/gen_unicode_tables.py and UnicodeData.kt.",
         " */",
         "internal object UnicodeDataTable {",

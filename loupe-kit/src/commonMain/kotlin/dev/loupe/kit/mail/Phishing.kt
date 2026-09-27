@@ -96,6 +96,7 @@ object Phishing {
         // sender domain (site protection's host checks, applied to the From domain)
         "sender_homograph_brand" to (60 to "The sender's domain imitates {brand} with look-alike letters ({domain})."),
         "sender_mixed_script" to (35 to "The sender's domain mixes letters from different alphabets ({domain})."),
+        "sender_disguised_domain" to (45 to "The sender's domain is written with stand-in letters (such as full-width or mathematical letters) for {domain}; real senders never write their address this way."),
         "sender_unicode_drift" to (30 to "The sender's domain uses characters that older and newer software read differently ({domain})."),
         "sender_lookalike_brand" to (45 to "The sender's domain {domain} looks like {brand} but is not {brand}'s."),
         "sender_brand_domain_in_subdomain" to (45 to "{brand}'s address is placed in front of an unrelated sender domain ({domain})."),
@@ -124,6 +125,7 @@ object Phishing {
         "link_brand_in_subdomain" to (30 to "A link puts the name {brand} in front of an unrelated website ({domain})."),
         "link_brand_in_domain_bait" to (35 to "A link goes to {domain}, which glues {brand} to words like \"login\" or \"secure\"."),
         "link_mixed_script" to (35 to "A link's website name mixes letters from different alphabets ({domain})."),
+        "link_disguised" to (30 to "A link's website name is written with stand-in letters for {domain}; real links are not written this way."),
         "link_unicode_drift" to (30 to "A link's website name uses characters that older and newer software read differently ({domain})."),
         "link_text_mismatch" to (40 to "A link shows {shown} but really goes to {domain}."),
         "link_brand_text" to (30 to "A link asks you to sign in or verify with {brand}, but goes to {domain}."),
@@ -155,6 +157,7 @@ object Phishing {
         "brand_in_subdomain" to "sender_brand_in_subdomain", "brand_in_domain_bait" to "sender_brand_in_domain_bait",
         "brand_other_tld" to "sender_brand_other_tld", "brand_in_domain" to "sender_brand_in_domain",
         "suspicious_tld" to "sender_suspicious_tld", "ip_host" to "sender_ip", "unicode_drift_host" to "sender_unicode_drift",
+        "disguised_host" to "sender_disguised_domain",
     )
     private val LINK_CODES = mapOf(
         "homograph_brand" to "link_homograph_brand", "lookalike_brand" to "link_lookalike_brand",
@@ -162,6 +165,7 @@ object Phishing {
         "brand_in_domain_bait" to "link_brand_in_domain_bait", "mixed_script" to "link_mixed_script",
         "ip_host" to "link_ip", "suspicious_tld" to "link_suspicious_tld", "data_url" to "link_data",
         "userinfo_in_url" to "link_userinfo", "url_shortener" to "link_shortener", "unicode_drift_host" to "link_unicode_drift",
+        "disguised_host" to "link_disguised",
     )
     private val SUBDOMAIN_CODES = setOf("brand_domain_in_subdomain", "brand_in_subdomain")
     private val IMPOSTOR = setOf("homograph_brand", "lookalike_brand", "brand_domain_in_subdomain", "brand_in_subdomain", "brand_in_domain_bait", "mixed_script")
@@ -371,7 +375,13 @@ object Phishing {
         val domain = domainOf(address)
         val (regRaw, suffix) = reg(domain)
         val reg: String? = regRaw ?: domain.ifEmpty { null }
-        val freemail = isFreemail(reg)
+        // The domain as written. When it is not ASCII it is not its IDNA form: `ｐａｙｐａｌ.com`,
+        // `𝗽𝗮𝘆𝗽𝗮𝗹.com` and `p🄰yp🄰l.com` all map to paypal.com, but no real sender writes an address
+        // that way, and the provider's DMARC result is for the literal domain. Such a sender is never
+        // known, trusted or free-mail, and does not own the brand it names.
+        val written = address.substringAfterLast('@', "").trim().trim('.', '>')
+        val notAscii = written.any { it.code >= 128 }
+        val freemail = !notAscii && isFreemail(reg)
         val auth = authResults(authHeader)
         val dmarcFail = auth["dmarc"] == "fail"
         val reasons = mutableListOf<PhishReason>()
@@ -383,9 +393,9 @@ object Phishing {
         }
 
         // trusted senders and well-known brand domains: never flagged unless the From address was forged
-        val hit = isTrusted(address, domain, trusted)
+        val hit = if (notAscii) null else isTrusted(address, domain, trusted)
         var knownBrand: Brand? = null
-        val knownDomain = reg != null && !freemail && config.known(reg, suffix)
+        val knownDomain = !notAscii && reg != null && !freemail && config.known(reg, suffix)
         if (knownDomain) knownBrand = config.brands.firstOrNull { config.owns(it, reg, suffix) }
         if (hit != null || knownBrand != null || knownDomain) {
             if (!dmarcFail) {
@@ -402,10 +412,9 @@ object Phishing {
         // the sender's domain
         val hostCodes = mutableListOf<String>()
         if (domain.isNotEmpty() && !freemail) {
-            // The domain as written, when it is not ASCII: its IDNA form can hide what
-            // `unicode_drift_host` looks for (ParsedUrl.typedHost).
-            val typed = address.substringAfterLast('@').trim().trim('.', '>').takeIf { d -> d.any { it.code >= 128 } }
-            for ((code, params) in hostCodes(typed ?: domain, config)) {
+            // The domain as written, when it is not ASCII: its IDNA form hides what `disguised_host`
+            // and `unicode_drift_host` look for (ParsedUrl.typedHost).
+            for ((code, params) in hostCodes(if (notAscii) written else domain, config)) {
                 val mapped = SENDER_CODES[code]
                 if (mapped != null && code != "many_subdomains") {
                     hostCodes += code
@@ -422,7 +431,7 @@ object Phishing {
             if (reg != null && shownReg != reg) add("display_address_mismatch", "sender", "shown" to shown, "domain" to reg)
         }
         val claim = brandClaim(display, config)
-        if (claim != null && reg != null && !config.owns(claim, reg, suffix)) {
+        if (claim != null && reg != null && (notAscii || !config.owns(claim, reg, suffix))) {
             if (freemail) {
                 add("display_brand_freemail", "sender", "brand" to claim.name, "domain" to reg)
             } else if ("brand_in_domain" in hostCodes && (hostCodes.toSet() intersect (IMPOSTOR + "brand_other_tld")).isEmpty()) {
@@ -604,6 +613,9 @@ object Phishing {
             val tracker = reg in LINK_TRACKERS || LINK_TRACKERS.any { host.endsWith(".$it") }
             val own = !senderReg.isNullOrEmpty() && reg == senderReg
             val known = config.known(u.registrable, u.suffix)
+            // How the link is WRITTEN, wherever it goes (a known site, the sender's own, a tracker).
+            if (SiteSignals.disguise(u).isNotEmpty()) add("link_disguised", "domain" to reg)
+            if (SiteSignals.unicodeDrift(u).isNotEmpty()) add("link_unicode_drift", "domain" to reg)
             if (!known && !tracker) {
                 if (!own) {
                     for (s in SiteSignals.urlSignals(u, config)) {

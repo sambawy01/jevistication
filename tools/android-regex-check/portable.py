@@ -61,110 +61,213 @@ def leading_wb(rx: dict, negated: bool) -> str:
     return f"(?:(?:^|[^{w}])(?=[{w}])|[{w}](?![{w}]))"
 
 
+META_OUTSIDE = "\\^$.|?*+()[]{}"
+META_INSIDE = "\\^-[]&"
+
+
+def _fail(what):
+    raise TranslateError(f"{what} is not supported in a baseline pattern")
+
+
+def _literal(ch: str) -> str:
+    return "\\" + ch if ch in META_OUTSIDE else ch
+
+
+def _member(ch: str) -> str:
+    return "\\" + ch if ch in META_INSIDE else ch
+
+
+def _char_escape(p: str, i: int):
+    """(character, length) of a character escape at p[i] (the backslash), else None."""
+    if i + 1 >= len(p):
+        return None
+    e = p[i + 1]
+
+    def hexval(t):
+        try:
+            v = int(t, 16)
+        except ValueError:
+            _fail(f"a bad escape \\{e}{t}")
+        if not 0 <= v <= 0x10FFFF:
+            _fail(f"a bad escape \\{e}{t}")
+        return v
+    if e == "u":
+        t = p[i + 2:i + 6]
+        if len(t) < 4:
+            _fail("a bad escape \\u")
+        return chr(hexval(t)), 6
+    if e == "x":
+        if i + 2 < len(p) and p[i + 2] == "{":
+            close = p.find("}", i + 2)
+            if close < 0:
+                _fail("a bad escape \\x{")
+            return chr(hexval(p[i + 3:close])), close - i + 1
+        t = p[i + 2:i + 4]
+        if len(t) < 2:
+            _fail("a bad escape \\x")
+        return chr(hexval(t)), 4
+    if e == "0":
+        j = i + 2
+        while j < len(p) and j < i + 5 and p[j] in "01234567":
+            j += 1
+        if j == i + 2:
+            _fail("a bad escape \\0")
+        return chr(int(p[i + 2:j], 8)), j - i
+    simple = {"t": "\t", "n": "\n", "r": "\r", "f": "\f", "a": "\x07", "e": "\x1b"}
+    if e in simple:
+        return simple[e], 2
+    if e.isalnum():
+        return None
+    return e, 2
+
+
+def _translate_class(p: str, start: int, out: list, rx: dict) -> int:
+    i = start + 1
+    out.append("[")
+    if i < len(p) and p[i] == "^":
+        out.append("^")
+        i += 1
+    first = True
+
+    def atom(at):
+        if p[at] == "\\" and at + 1 < len(p):
+            r = _char_escape(p, at)
+            return None if r is None else (r[0], at + r[1])
+        return p[at], at + 1
+    while i < len(p):
+        c = p[i]
+        if c == "]" and not first:
+            out.append("]")
+            return i + 1
+        first = False
+        if c == "[":
+            _fail("a class inside [...]")
+        if c == "&" and i + 1 < len(p) and p[i + 1] == "&":
+            _fail("&& inside [...]")
+        if c == "\\" and i + 1 < len(p) and _char_escape(p, i) is None:
+            e = p[i + 1]
+            if e == "d":
+                out.append(rx["Rx.DIGITS"])
+            elif e == "s":
+                out.append(rx["Rx.SPACE"])
+            elif e == "w":
+                out.append(rx["Rx.WORDS"])
+            elif e == "Q":
+                end = p.find("\\E", i + 2)
+                end = len(p) if end < 0 else end
+                for ch in p[i + 2:end]:
+                    out.append(_member(ch))
+                    f = _match_form(ch)
+                    if f != ch:
+                        out.append(_member(f))
+                i = end if end >= len(p) else end + 2
+                continue
+            else:
+                _fail(f"\\{e} inside [...]")
+            i += 2
+            continue
+        lo, after = atom(i)
+        if after < len(p) and p[after] == "-" and after + 1 < len(p) and p[after + 1] != "]":
+            hi_atom = atom(after + 1)
+            if hi_atom is None:
+                _fail("a class escape as a range end")
+            hi = hi_atom[0]
+            if ord(hi) < ord(lo):
+                _fail("a reversed range")
+            out.append(_member(lo) + "-" + _member(hi))
+            flo, fhi = _match_form(lo), _match_form(hi)
+            if (flo != lo or fhi != hi) and ord(flo) <= ord(fhi):
+                out.append(_member(flo) + "-" + _member(fhi))
+            i = hi_atom[1]
+            continue
+        out.append(_member(lo))
+        f = _match_form(lo)
+        if f != lo:
+            out.append(_member(f))
+        i = after
+    _fail("an unterminated [...]")
+
+
 def translate(pattern: str, rx: dict) -> str:
-    """PortableRegex.translate, line for line."""
+    """PortableRegex.translate, line for line (its fold is ASCII-only here: see the module doc)."""
+    p = pattern
     out = []
-    i = 0
-    depth = 0
-    n = len(pattern)
+    consumed_start = re.search(r"\)[*+?{]", p) is None
     group_leading = []
     leading = True
-
-    def fail(what):
-        raise TranslateError(f"{what} is not supported in a baseline pattern")
+    i = 0
+    n = len(p)
     while i < n:
-        c = pattern[i]
-        if c == "\\" and i + 1 < n:
-            e = pattern[i + 1]
-            in_class = depth > 0
+        c = p[i]
+        if c == "[":
+            leading = False
+            i = _translate_class(p, i, out, rx)
+        elif c == "\\" and i + 1 < n:
+            e = p[i + 1]
             was_leading = leading
-            if not in_class:
-                leading = False
+            leading = False
+            ch = _char_escape(p, i)
+            if ch is not None:
+                out.append(_literal(_match_form(ch[0])))
+                i += ch[1]
+                continue
             if e == "d":
-                out.append(rx["Rx.DIGITS"] if in_class else rx["Rx.DIGIT"])
+                out.append(rx["Rx.DIGIT"])
             elif e == "s":
-                out.append(rx["Rx.SPACE"] if in_class else rx["Rx.SP"])
+                out.append(rx["Rx.SP"])
             elif e == "w":
-                out.append(rx["Rx.WORDS"] if in_class else rx["Rx.W"])
-            elif e in "DSW":
-                if in_class:
-                    fail(f"\\{e} inside [...]")
-                out.append({"D": "[^" + rx["Rx.DIGITS"] + "]", "S": rx["Rx.NSP"], "W": "[^" + rx["Rx.WORDS"] + "]"}[e])
+                out.append(rx["Rx.W"])
+            elif e == "D":
+                out.append("[^" + rx["Rx.DIGITS"] + "]")
+            elif e == "S":
+                out.append(rx["Rx.NSP"])
+            elif e == "W":
+                out.append("[^" + rx["Rx.WORDS"] + "]")
             elif e in "bB":
-                if in_class:
-                    fail(f"\\{e} inside [...]")
-                if was_leading:
+                if was_leading and consumed_start:
                     out.append(leading_wb(rx, e == "B"))
                 else:
                     out.append(rx["Rx.WB"] if e == "b" else rx["Rx.NWB"])
             elif e in "pPXRhHvVN":
-                fail("\\" + e)
+                _fail("\\" + e)
             elif e == "Q":
-                end = pattern.find("\\E", i + 2)
+                end = p.find("\\E", i + 2)
                 end = n if end < 0 else end
-                out.append("\\Q" + _match_form(pattern[i + 2:end]) + "\\E")
+                out.append("\\Q" + _match_form(p[i + 2:end]) + "\\E")
                 i = end if end >= n else end + 2
                 continue
             elif e == "k":
-                close = pattern.find(">", i + 2)
+                close = p.find(">", i + 2)
                 if close < 0:
-                    fail("\\k without a name")
-                out.append(pattern[i:close + 1])
+                    _fail("\\k without a name")
+                out.append(p[i:close + 1])
                 i = close + 1
                 continue
-            elif e == "x":
-                if i + 2 < n and pattern[i + 2] == "{":
-                    j = pattern.find("}", i + 2)
-                    length = 2 if j < 0 else j - i + 1
-                else:
-                    length = 4
-                out.append(pattern[i:i + length])
-                i += length
-                continue
-            elif e == "u":
-                out.append(pattern[i:i + 6])
-                i += 6
-                continue
             elif e == "c":
-                out.append(pattern[i:i + 3])
+                out.append(p[i:i + 3])
                 i += 3
                 continue
             else:
                 out.append(c + e)
             i += 2
-        elif c == "[":
-            leading = False
-            depth += 1
-            out.append(c)
-            i += 1
-            if i < n and pattern[i] == "^":
-                out.append(pattern[i])
-                i += 1
-            if i < n and pattern[i] == "]":
-                out.append(pattern[i])
-                i += 1
-        elif c == "]" and depth > 0:
-            depth -= 1
-            out.append(c)
-            i += 1
-        elif c == "(" and depth == 0 and pattern.startswith("(?", i):
-            nxt = pattern[i + 2] if i + 2 < n else None
-            if nxt == "<" and i + 3 < n and pattern[i + 3].isalpha():
-                close = pattern.find(">", i)
+        elif c == "(" and p.startswith("(?", i):
+            nxt = p[i + 2] if i + 2 < n else None
+            if nxt == "<" and i + 3 < n and p[i + 3].isalpha():
+                close = p.find(">", i)
                 if close < 0:
-                    fail("an unterminated group name")
-                out.append(pattern[i:close + 1])
+                    _fail("an unterminated group name")
+                out.append(p[i:close + 1])
                 i = close + 1
                 group_leading.append(leading)
             elif nxt is not None and (nxt.isalpha() or nxt == "-"):
                 j = i + 2
-                while j < n and (pattern[j].isalpha() or pattern[j] == "-"):
+                while j < n and (p[j].isalpha() or p[j] == "-"):
                     j += 1
-                flags = "".join(f for f in pattern[i + 2:j] if f not in "iuU")
+                flags = "".join(f for f in p[i + 2:j] if f not in "iuU")
                 kept = flags.rstrip("-")
                 if kept == "-":
                     kept = ""
-                nx = pattern[j] if j < n else None
+                nx = p[j] if j < n else None
                 if nx == ")":
                     if kept:
                         out.append("(?" + kept + ")")
@@ -172,7 +275,7 @@ def translate(pattern: str, rx: dict) -> str:
                     out.append("(?" + kept + ":")
                     group_leading.append(leading)
                 else:
-                    fail("a malformed flag group")
+                    _fail("a malformed flag group")
                 i = j + 1
             else:
                 look = nxt in ("=", "!", "<")
@@ -181,26 +284,25 @@ def translate(pattern: str, rx: dict) -> str:
                 group_leading.append(leading and not look)
                 if look:
                     leading = False
-        elif c == "(" and depth == 0:
+        elif c == "(":
             out.append(c)
             i += 1
             group_leading.append(leading)
-        elif c == "|" and depth == 0:
+        elif c == "|":
             out.append(c)
             i += 1
             leading = group_leading[-1] if group_leading else True
-        elif c == ")" and depth == 0:
+        elif c == ")":
             out.append(c)
             i += 1
             if group_leading:
                 group_leading.pop()
             leading = False
-        elif depth == 0 and c in "^$":
+        elif c in "^$":
             out.append(c)
             i += 1
         else:
-            if depth == 0:
-                leading = False
-            out.append(_match_form(c))
+            leading = False
+            out.append(c if c in META_OUTSIDE else _literal(_match_form(c)))
             i += 1
     return "".join(out)

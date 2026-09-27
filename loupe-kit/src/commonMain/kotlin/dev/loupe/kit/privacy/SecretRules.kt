@@ -66,12 +66,14 @@ object SecretRules {
     // long run of letters can't make the engine backtrack (it was polynomial before).
     // Python: the same pattern with (?<![A-Za-z0-9_]) after (?i); guarded (see GuardedRegex). The (?i)
     // is spelled out as ASCII case classes (exactly the JDK's (?i), on every engine), so the groups
-    // keep the text's case; spaces are Rx.SP and digits [0-9] (the text is digit-folded first).
+    // keep the text's case; spaces around the `=` are Rx.SP, and the value ends at ASCII whitespace
+    // only (as the JDK's \s did), so a no-break space inside a secret does not cut it short and leave
+    // the rest unredacted.
     internal val ASSIGN = GuardedRegex(
         """((?:[A-Za-z0-9]++[_.\-]){0,4}?""" +
             """([pP][aA][sS][sS][wW][oO][rR][dD]|[pP][aA][sS][sS][wW][dD]|[pP][wW][dD]|[sS][eE][cC][rR][eE][tT]|[tT][oO][kK][eE][nN]|[aA][pP][iI][_\-]?[kK][eE][yY]|[aA][cC][cC][eE][sS][sS][_\-]?[kK][eE][yY]|[aA][uU][tT][hH][_\-]?[kK][eE][yY]|[cC][lL][iI][eE][nN][tT][_\-]?[sS][eE][cC][rR][eE][tT]|""" +
             """[pP][rR][iI][vV][aA][tT][eE][_\-]?[kK][eE][yY]|[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL])[sS]?(?:[_.\-]?(?:[kK][eE][yY]|[vV][aA][lL][uU][eE]|[hH][aA][sS][hH]|[sS][tT][rR]|[sS][tT][rR][iI][nN][gG]|[pP][lL][aA][iI][nN]|[bB]64|[bB][aA][sS][eE]64|[sS][eE][cC][rR][eE][tT]|[tT][oO][kK][eE][nN]|[iI][dD]|[0-9]+))*)""" +
-            """["']?${Rx.SP}*(?:=|:|=>)${Rx.SP}*["']?([^${Rx.SPACE}"'#,;]{4,200})""",
+            """["']?${Rx.SP}*(?:=|:|=>)${Rx.SP}*["']?([^${Rx.ASCII_SPACE}"'#,;]{4,200})""",
     ) { isAsciiAlnum(it) || it == '_' }
 
     /** Matched on [PortableText.fold]ed text (only the ranges are used). */

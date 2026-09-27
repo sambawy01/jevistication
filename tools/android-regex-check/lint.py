@@ -17,6 +17,14 @@ phone. This check keeps it that way:
     baseline), which Baseline.kt compiles through `PortableRegex.translate`; there `\\p{..}`, `\\X`, `\\R`,
     `\\h`, `\\v` and `\\N`, which translate refuses, still fail here.
 
+Not failed, but counted on every run and listed with --platform-data: calls whose answer comes from
+the platform's own Unicode data (`Char.isDigit / isLetter / isLetterOrDigit / isWhitespace /
+isUpperCase / isLowerCase`, `digitToInt`). They agree on every platform for characters assigned
+before the oldest platform's Unicode (Android API 29: Unicode 11) and may differ only for newer
+ones; `Char.isDigit` also accepts every script's digits, which is why number parsing uses
+`PortableText.isDigit`. Code that decides a mechanical answer on user text should use PortableText.
+(`String.lowercase()` is the root locale on every platform and differs only for new characters too.)
+
 Anything else must be listed in lint-allowlist.txt, one entry per line:
 
     <path relative to the repo root> | <text that occurs in the offending literal or line> | <why>
@@ -39,6 +47,7 @@ ALLOWLIST = pathlib.Path(__file__).resolve().parent / "lint-allowlist.txt"
 ESCAPE = re.compile(r"(?<!\\)(?:\\\\)*\\([dwsbDWSB]|[pP]\{)")
 INLINE_CASE = re.compile(r"\(\?[a-zA-Z-]*[iuU]")
 BASELINE_REFUSED = re.compile(r"(?<!\\)(?:\\\\)*\\([pPXRhHvVN])")
+PLATFORM_DATA = re.compile(r"(?<!PortableText)\.(isDigit|isLetter|isLetterOrDigit|isWhitespace|isUpperCase|isLowerCase|digitToInt|digitToIntOrNull)\(")
 FLAG_NAMES = re.compile(r"\b(IGNORE_CASE|UNICODE_CASE|CASE_INSENSITIVE|UNICODE_CHARACTER_CLASS)\b")
 
 
@@ -109,10 +118,12 @@ def load_allowlist():
     return entries, problems
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    list_platform = "--platform-data" in (sys.argv[1:] if argv is None else argv)
     entries, problems = load_allowlist()
     used = set()
     found = 0
+    platform = []
     for module in MODULES:
         for source_set in SOURCE_SETS:
             base = ROOT / module / "src" / source_set
@@ -121,6 +132,10 @@ def main() -> int:
             for path in sorted(base.rglob("*.kt")):
                 rel = str(path.relative_to(ROOT))
                 src = path.read_text(encoding="utf-8")
+                is_code, _ = extract.code_mask(src)
+                for m in PLATFORM_DATA.finditer(src):
+                    if is_code[m.start()]:
+                        platform.append(f"{rel}:{src.count(chr(10), 0, m.start()) + 1}: Char.{m.group(1)}")
                 for line, what, text in findings_in(rel, src):
                     allowed = [e for e in entries if e[1] == rel and e[2] in text]
                     if allowed:
@@ -134,6 +149,9 @@ def main() -> int:
             problems.append(f"lint-allowlist.txt:{n}: stale entry, nothing in {rel} matches {text!r}")
     for p in problems:
         print(p)
+    if list_platform:
+        print("\n".join(platform))
+    print(f"note: {len(platform)} call(s) read the platform's Unicode data (--platform-data lists them)", file=sys.stderr)
     total = found + len(problems)
     print(f"portable regex lint: {found} finding(s), {len(problems)} allowlist problem(s)", file=sys.stderr)
     return 1 if total else 0

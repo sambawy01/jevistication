@@ -146,7 +146,8 @@ order; each code counts once.
 | `ip_host` | 25 | host is an IP (dotted, decimal, hex, short forms, IPv6); private IPs never flagged. Stops the host checks |
 | `homograph_brand` | 60 | rule 2 (i), on any `xn--` label (brand checks on the registrable label are then skipped) |
 | `mixed_script` | 35 | rule 2 (ii) / rule 3 |
-| `unicode_drift_host` | 30 | not known; the host as typed, or a decoded `xn--` label, has a character that was unassigned in Unicode 3.2 or whose IDNA mapping differs between Unicode 3.2 nameprep (RFC 3491, IDNA 2003) and the pinned Unicode 16.0 mapping (B.1, then NFKC_Casefold): one written name can reach two websites on old and new software (`PortableText.unicode32Drift`, *added 2026-09-27, Android parity B2; Station to port*) |
+| `disguised_host` | 30 | checked **before** the known-good return, so also on a known domain: the host as written (or a decoded `xn--` label) has a stand-in character, i.e. a compatibility character (NFKD ≠ NFD: full-width, mathematical, enclosed, ligatures, superscripts) or a default ignorable IDNA removes (soft hyphen, variation selectors; ZWJ/ZWNJ excepted). `https://ｐａｙｐａｌ.com` reaches paypal.com but no real link is written that way: caution (`PortableText.disguisedCodePoints`, *added 2026-09-27; Station to port*) |
+| `unicode_drift_host` | 30 | checked before the known-good return too: the host as written (before lower-casing), or a decoded `xn--` label, has a character whose IDNA mapping differs between Unicode 3.2 nameprep (RFC 3491, IDNA 2003; a character unassigned in 3.2 passes through unchanged) and the pinned Unicode 16.0 mapping (B.1, then NFKC_Casefold), other than a `disguised_host` character (one character counts once). About 5,600 code points; new scripts and emoji that map to themselves are not drift. One written name can reach two websites on old and new software. Not an impostor code (`PortableText.unicode32Drift`, *added 2026-09-27; Station to port*) |
 | `lookalike_brand` | 45 | registrable label (decoded) skeleton equals a token's, or a near miss: tokens ≤ 4 letters never; 5–7 letters one insertion, deletion or adjacent swap; ≥ 8 letters OSA distance 1, ≥ 10 letters 2 (whole label or any hyphen/dot token) |
 | `brand_other_tld` | 20 | the registrable label **is** a token on a domain the brand does not own (`google.xyz`, `paypal.github.io`) |
 | `brand_in_domain_bait` | 40 | a token glued to other words, one of them a PHISHY_WORD (`paypal-secure-login.com`) |
@@ -163,9 +164,10 @@ order; each code counts once.
 | `brand_mismatch` | 15 | the same without such a field |
 | `shared_hosting` | 10 | rule 5, the twelve |
 | `shared_hosting_login` | 15 | rule 5, any shared host, with a password/card field |
-| `impostor_login` | 20 | added when a password/card field is on a page with an impostor code (`homograph_brand`, `lookalike_brand`, `brand_domain_in_subdomain`, `brand_in_subdomain`, `brand_in_domain_bait`, `brand_other_tld`, `mixed_script`, `userinfo_in_url`, `unicode_drift_host`) |
+| `impostor_login` | 20 | added when a password/card field is on a page with an impostor code (`homograph_brand`, `lookalike_brand`, `brand_domain_in_subdomain`, `brand_in_subdomain`, `brand_in_domain_bait`, `brand_other_tld`, `mixed_script`, `userinfo_in_url`) |
 
-The host checks return nothing for a **known** domain (and the page claim is ignored there).
+The host checks return nothing for a **known** domain (and the page claim is ignored there), except
+`disguised_host` and `unicode_drift_host`, which are about how the name is written, not whose it is.
 Laya's optional page answers (Station's `LAYA_POINTS`, `pressure_login` 10, caps 40 / 25) are
 unchanged and not part of the vectors: the phone runs no model on pages.
 
@@ -265,9 +267,9 @@ date is unreadable or in the future), the DNS facts (§5b), and `processor`:
   forms' action hosts; only on https and only when no disqualifying code is present.
 - **Disqualifying codes (`DISQUALIFY`)**: the impostor codes of §4 (`homograph_brand`, `lookalike_brand`,
   `brand_domain_in_subdomain`, `brand_in_subdomain`, `brand_in_domain_bait`, `brand_other_tld`,
-  `mixed_script`, `userinfo_in_url`, `unicode_drift_host`) and `brand_in_domain`, `brand_in_path`, `brand_mismatch`,
+  `mixed_script`, `userinfo_in_url`) and `brand_in_domain`, `brand_in_path`, `brand_mismatch`,
   `brand_mismatch_login`, `impostor_login`, `shared_hosting`, `shared_hosting_login`, `data_url`,
-  `ip_host`, `http_password`, `http_card`, `password_posts_elsewhere`, `password_posts_http`,
+  `ip_host`, `disguised_host`, `unicode_drift_host`, `http_password`, `http_card`, `password_posts_elsewhere`, `password_posts_http`,
   `online_cert_new`, `online_domain_new_week`, `online_domain_new_month`, every list / Safe Browsing
   code and both blocklist codes.
 - **disqualified** = a DISQUALIFY code, or not https, or no online-facts domain.
@@ -331,13 +333,16 @@ noticed (not counted)" with the why text.
 
 Sender domain → the host signals of §4 renamed `sender_*` (`homograph_brand` 60, `mixed_script` 35,
 `lookalike_brand` 45, `brand_domain_in_subdomain` 45, `brand_in_subdomain` 30, `brand_in_domain_bait`
-40, `brand_other_tld` 20, `brand_in_domain` 10, `suspicious_tld` 8, `ip` 25, `unicode_drift` 30 (read on
-the domain as written); none for free-mail);
+40, `brand_other_tld` 20, `brand_in_domain` 10, `suspicious_tld` 8, `ip` 25, `unicode_drift` 30,
+`disguised_domain` 45, both read on the domain as written; none for free-mail). A sender domain
+written with any non-ASCII character is never known, trusted or free-mail and never owns the brand
+its display name claims (`"PayPal" <service@ｐａｙｐａｌ.com>`: danger 85);
 display name (`display_brand_freemail` 50, `display_brand_mismatch` 40, `display_address_mismatch`
 40); reply-to (`reply_to_impostor` 40, `reply_to_freemail` 25, `reply_to_mismatch` 15); the
 receiving server (`spoofed_known_sender` 60, `auth_dmarc_fail` 45, `auth_spf_dkim_fail` 25); links
 (`link_homograph_brand` 60, `link_lookalike_brand` 45, `link_brand_domain_in_subdomain` 45,
 `link_brand_in_subdomain` 30, `link_brand_in_domain_bait` 35, `link_mixed_script` 35, `link_unicode_drift` 30,
+`link_disguised` 30 (both also on links to known domains, trackers and the sender's own),
 `link_text_mismatch` 40, `link_brand_text` 30, `link_data` 40, `link_userinfo` 30, `link_ip` 25,
 `link_suspicious_tld` 8, `link_shortener` 5); contacts (rule 6, below); online (§5); self-vouching
 (v1.3, below) `self_vouching` 15; the decision model's text reading (calibrated `is_phishing` ≥ 0.8 / ≥ 0.5)

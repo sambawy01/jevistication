@@ -2001,7 +2001,9 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
   `PortableRegex.translate`: a pattern using `\p{..}`, `\P{..}`, `\X`, `\R`, `\h`, `\v`, `\N`, or `\D`
   `\S` `\W` `\b` `\B` inside `[...]` is now **refused** (the judgment is skipped at load with the
   reason, as for any bad pattern; `Baseline.Pattern.problem` says why); `(?i)` is accepted and has no
-  further effect.
+  further effect. Character escapes (`\uXXXX`, `\xHH`, `\x{..}`, `\0ooo`) are read as the character
+  they write, so `\u0041BC` still finds `abc` and `\x{663}` finds `3`; a class keeps its members and
+  gains their folded form (`[A-z]` still takes `_`, `[٠-٩]` takes `0-9`).
 - **Word boundaries (iOS only)**: Kotlin/Native's `\b` was Unicode-aware (`caf\b` did not match in
   `café`, measured); every `\b` is now the JDK's ASCII boundary, so on the iPhone `paid` is found in
   `paidé` and `expir…` rules match next to accented letters as on the desktop.
@@ -2012,14 +2014,28 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
   mapping changed follow 16.0 (Georgian capitals lowercase, Cherokee, bidi and other default-ignorable
   controls are dropped where the JDK rejected the label). Host names are lower-cased with the pinned
   table (no final sigma: `ΟΔΟΣ.gr` → `οδοσ.gr`, it was `οδος.gr`).
-- **Site-check hosts**: a Unicode label that NFKC makes ASCII is sent as that ASCII
-  (`ｅｘａｍｐｌｅ.com` → `example.com`, as browsers do; it was `xn--example-.com`), so such a host is
-  now checked as the name it really is. The skeleton (look-alike) check reads NFKC/NFKD and marks
-  from the pinned data.
-- **New phishing signal** `unicode_drift_host` (30, a risk and impostor code; mail
-  `sender_unicode_drift` 30 on the domain as written, `link_unicode_drift` 30): a host with a
-  character unassigned in Unicode 3.2 or mapped differently by IDNA 2003 nameprep. A link like
-  `https://ex🄰mple.com` alone is now *caution*. docs/PHISHING-FORMULA.md §4, §6.2.
+- **Site-check hosts: one IDNA mapping.** `Hosts.toAsciiLabel` is now the engine's mapping
+  (`OriginFacts.asciiLabel`), so the site check and the registrable-domain lookup agree: `faß.de` is
+  read as `fass.de` (it was `xn--fa-hia.de`; current browsers keep `ß`, IDNA 2003, `java.net.IDN` and
+  Python's `idna` codec make `ss`), soft hyphen and other B.1 characters are removed (they were kept),
+  and a label the mapping makes ASCII is that ASCII (`ｅｘａｍｐｌｅ.com` → `example.com`; it was
+  `xn--example-.com`). The skeleton (look-alike) check reads NFKC/NFKD and marks from the pinned data.
+- **Mail senders written with anything but ASCII** (`"PayPal" <service@ｐａｙｐａｌ.com>`, `𝗽𝗮𝘆𝗽𝗮𝗹.com`,
+  `p🄰yp🄰l.com`) are never known, trusted or free-mail and never own the brand they name, whatever
+  domain the IDNA form is: a mail provider's DMARC result is for the literal domain.
+- **New phishing signals** (docs/PHISHING-FORMULA.md §4, §6.2):
+  - `disguised_host` (30, risk; mail `sender_disguised_domain` 45, `link_disguised` 30): a host written
+    with stand-in letters (compatibility characters: full-width, mathematical, enclosed, ligatures,
+    superscripts) or invisible characters IDNA removes (soft hyphen, variation selectors; not ZWJ/ZWNJ).
+    Checked before the known-good short-circuit, so `https://ｐａｙｐａｌ.com` (which reaches paypal.com)
+    is *caution*, and the spoofed senders above are *danger* 85 with the display name (caution 45 without).
+  - `unicode_drift_host` (30, risk, **not** an impostor code; mail `sender_unicode_drift` /
+    `link_unicode_drift` 30): a character that Unicode 3.2 nameprep (unassigned ones pass through
+    unchanged) and the pinned mapping map differently: about 5,600 code points (Georgian and Cherokee
+    case pairs, new capital letters, newly ignorable controls, U+1F130-style compatibility characters,
+    six CJK corrections). New scripts and symbols that map to themselves (Burmese, Malayalam chillu,
+    emoji, new CJK, Arabic Supplement/Extended) are not drift. A character that is both a stand-in and
+    drift counts once, as `disguised_host`.
 - **Letters and numbers** in template parameter checks, host validation, brand-name matching,
   keyword boundaries, mail label names and the privacy words come from the pinned Unicode 16.0
   categories instead of the platform's (differs only for characters newer than the platform's data).
@@ -2027,10 +2043,14 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
   is quadratic (measured: 45 s for DateFacts on 24,000 characters, a minute for the transaction gate
   on 12,000). The portable `\b` is therefore checked in code (`BoundedRegex`) or consumed
   (`PortableRegex.translate`), never a leading lookbehind; the transaction gate's own leading
-  lookbehinds went the same way. `PortableRegexPerformanceTest` bounds each on 50,000 characters.
+  lookbehinds went the same way, and the card-cue search reads a short window (it was 6.6 s on
+  48,000 characters with a card every 1,000). `PortableRegexPerformanceTest` checks each is linear.
+- **Regenerating the Unicode table** (`tools/unicode/gen_unicode_tables.py`) needs **Python 3.14**: its
+  `unicodedata` is 16.0.0, the independent cross-check the generator asserts. Everything else in
+  `tools/` runs on Python 3.9+.
 - **New public API** (additive, in LoupeKit's headers): `PortableText`, `Rx`, `PortableRegex`, `BoundedRegex`,
-  `OriginFacts.asciiLabel`, `ParsedUrl.typedHost` (a new last constructor parameter with a default),
-  `SiteSignals.unicodeDrift`. The engine's `idnaToAscii` is no longer an `expect`; iOS and Android no
+  `OriginFacts.asciiLabel`, `SiteSignals.unicodeDrift` / `disguise`, and `ParsedUrl.typedHost`, a read-only
+  property outside the constructor, so `ParsedUrl`'s 11-argument init and `doCopy` are unchanged for Swift. The engine's `idnaToAscii` is no longer an `expect`; iOS and Android no
   longer have NFKC actuals (`Unicode.ios.kt`, `Unicode.jvm.kt` removed).
 
 ## Where the build stands

@@ -25,7 +25,7 @@ object Hosts {
         val labels = host.split(".")
         if (labels.size !in 1..4 || labels.any { it.isEmpty() }) return false
         return labels.all { l ->
-            if (l.lowercase().startsWith("0x")) l.substring(2).let { it.isNotEmpty() && it.all { c -> c.isDigit() || c.lowercaseChar() in 'a'..'f' } }
+            if (l.lowercase().startsWith("0x")) l.substring(2).let { it.isNotEmpty() && it.all { c -> c in '0'..'9' || c in 'a'..'f' || c in 'A'..'F' } }
             else l.all { it in '0'..'9' }
         }
     }
@@ -121,7 +121,8 @@ object Hosts {
     }
 
     private fun isIpv6(h: String): Boolean =
-        ':' in h && h.count { it == ':' } >= 2 && h.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' || it == ':' || it == '.' }
+        // ASCII hex only: Char.isDigit() takes every script's digits (Arabic-Indic ones would pass).
+        ':' in h && h.count { it == ':' } >= 2 && h.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' || it == ':' || it == '.' }
 
     private fun inNet(v: Long, net: String, bits: Int): Boolean {
         val base = ipv4(net) ?: return false
@@ -140,16 +141,17 @@ object Hosts {
 
     // ------------------------------------------------------------------------ IDNA
     /**
-     * One label to its IDNA ASCII form (NFKC, lowercase, punycode); ASCII labels are only lowercased,
-     * and a label that NFKC makes ASCII (`ｅｘａｍｐｌｅ`, `ex🄰mple`) is that ASCII, as a browser sends it,
-     * not an `xn--` of it. NFKC and lowercase come from the pinned Unicode data, so every phone
-     * encodes a label alike.
+     * One label to its IDNA ASCII form: the engine's one mapping ([OriginFacts.asciiLabel]: RFC 3454
+     * B.1 removed, NFKC_Casefold from the pinned Unicode data, Punycode), the same the registrable
+     * domain lookup uses. ASCII labels are only lowercased; a label the mapping makes ASCII
+     * (`ｅｘａｍｐｌｅ`, `ex🄰mple`) is that ASCII, as a browser sends it. Like IDNA 2003 (and
+     * `java.net.IDN`, and Python's `idna` codec) it is transitional: `ß` is `ss` and `ς` is `σ`, where
+     * current browsers keep them (`faß.de` is `xn--fa-hia.de` in Chrome); the site check then reads
+     * `fass.de`. Null when the label cannot be encoded.
      */
     fun toAsciiLabel(label: String): String? {
         if (label.all { it.code < 128 }) return label.lowercase()
-        val mapped = PortableText.lowercase(nfkc(label))
-        if (mapped.all { it.code < 128 }) return mapped
-        return Punycode.encode(mapped)?.let { "xn--$it" }
+        return OriginFacts.asciiLabel(label)
     }
 
     /** An `xn--` label decoded to Unicode, or the label unchanged when it is not valid punycode. */
@@ -181,13 +183,18 @@ data class ParsedUrl(
     val registrable: String?,
     val subdomain: String,
     val raw: String,
-    /**
-     * The host as it was written, lowercased, before IDNA mapping ("" when the URL has none). The
-     * mapping can erase what [SiteSignals]' `unicode_drift_host` looks for (U+1E030 maps to a plain
-     * Cyrillic letter), so that check reads this form too.
-     */
-    val typedHost: String = "",
 ) {
+    /**
+     * The host as it was written, before IDNA mapping and before lower-casing (lower-casing new
+     * capitals with current data is itself one of the differences `unicode_drift_host` looks for);
+     * "" when the URL has none, or on a copy. The mapping erases what [SiteSignals]' `unicode_drift_host` and `disguised_host` look for
+     * (`ｐａｙｐａｌ` and `p🄰yp🄰l` map to `paypal`, U+1E030 to a plain Cyrillic letter), so those
+     * checks read this form too. Outside the constructor on purpose: the constructor and `copy` keep
+     * their eleven parameters for Swift, which does not see Kotlin's default arguments.
+     */
+    var typedHost: String = ""
+        internal set
+
     companion object {
         private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.\\-]*$")
 
@@ -216,8 +223,8 @@ data class ParsedUrl(
             val hostname = if (hostPort.startsWith("[")) hostPort.substring(1).substringBefore(']')
             else hostPort.substringBefore(':')
             // A host typed in Unicode (pаypal.com) is read in its IDNA ASCII form, as a browser sends it.
-            val typed = PortableText.lowercase(hostname).trimEnd('.')
-            val host = typed.let { h -> if (h.all { it.code < 128 }) h else Hosts.toAsciiDomain(h) ?: h }
+            val typed = hostname.trimEnd('.')
+            val host = PortableText.lowercase(typed).let { h -> if (h.all { it.code < 128 }) h else Hosts.toAsciiDomain(h) ?: h }
             val labels = if (host.isNotEmpty()) host.split(".") else emptyList()
             return ParsedUrl(
                 scheme = scheme,
@@ -231,8 +238,7 @@ data class ParsedUrl(
                 registrable = Hosts.registrableDomain(host),
                 subdomain = Hosts.subdomainPart(host),
                 raw = url,
-                typedHost = typed,
-            )
+            ).also { it.typedHost = typed }
         }
     }
 }

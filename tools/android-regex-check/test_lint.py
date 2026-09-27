@@ -41,7 +41,7 @@ class LintTest(unittest.TestCase):
         self.assertEqual(len(whats('val p = Pattern("x", """\\d""", "no", "q")')), 1)
 
     def test_the_repository_is_clean(self):
-        self.assertEqual(lint.main(), 0)
+        self.assertEqual(lint.main([]), 0)
 
 
 if __name__ == "__main__":

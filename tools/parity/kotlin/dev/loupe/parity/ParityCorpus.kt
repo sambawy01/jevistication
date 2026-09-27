@@ -5,6 +5,7 @@ import dev.loupe.engine.OriginFacts
 import dev.loupe.engine.PortableRegex
 import dev.loupe.engine.PortableText
 import dev.loupe.engine.TermChangeDetector
+import dev.loupe.kit.mail.Phishing
 import dev.loupe.kit.site.ParsedUrl
 import dev.loupe.kit.site.SiteCheck
 import dev.loupe.kit.site.SiteSignals
@@ -124,6 +125,11 @@ object ParityCorpus {
                 val u = ParsedUrl.parse(s)
                 if (u == null) "null" else list(SiteSignals.hostSignals(u, dev.loupe.kit.site.SiteConfig.DEFAULT).map { it.code })
             }
+            "unicode.disguised" -> list(PortableText.disguisedCodePoints(s).map(::hex))
+            "mail.check" -> Phishing.assess(
+                s, args?.get("body")?.asString ?: "",
+                trusted = args?.get("trusted")?.asArr?.items?.map { it.asString } ?: emptyList(),
+            ).let { v -> "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.map { it.code }.sorted())}}" }
             "link.check" -> SiteCheck.checkUrl(s).verdict.let { v ->
                 "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.filter { it.weight > 0 }.map { it.code }.sorted())}}"
             }

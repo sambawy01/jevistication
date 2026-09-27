@@ -191,9 +191,18 @@ both browsers implement: Chrome stable (155) ships ICU 78.2, Unicode 17.0; Apple
 ICU is 76.1, Unicode 16.0, and 16.0 mappings are unchanged in 17.0 by the stability policy. IDNA
 (the engine's registrable-domain lookup and the site check's host mapping), NFKC/NFKD, case folding
 and the letter/number/mark categories all read it; `java.net.IDN`, `java.text.Normalizer`, ICU and
-Foundation are no longer used for them. A new phishing signal, `unicode_drift_host` (30; mail
-`sender_unicode_drift` / `link_unicode_drift`), flags a host with a character that was unassigned in
-Unicode 3.2 or maps differently under IDNA 2003 nameprep (docs/PHISHING-FORMULA.md §4).
+Foundation are no longer used for them; the site check and the registrable-domain lookup share one
+mapping. Two phishing signals read how a host is written (docs/PHISHING-FORMULA.md §4, §6.2):
+`disguised_host` (stand-in letters such as `ｐａｙｐａｌ.com`, which maps to paypal.com; mail senders
+written with non-ASCII are never known or trusted) and `unicode_drift_host` (a character that IDNA 2003
+nameprep, passing unassigned characters through, and the pinned mapping map differently: about 5,600
+code points, not new scripts or emoji).
+
+*Platform Unicode data still read* (not regex, not a parity gap for characters older than Unicode 11):
+18 `Char.isLetter / isLetterOrDigit / isWhitespace / digitToIntOrNull` calls in shared code, listed by
+`python3 tools/android-regex-check/lint.py --platform-data` and counted on every run (text-presence
+heuristics, ZIP path checks, IBAN letters, DNS wire labels already ASCII-checked). Hosts' IP checks now
+take ASCII digits only.
 
 ## A0 record (2026-09-26)
 

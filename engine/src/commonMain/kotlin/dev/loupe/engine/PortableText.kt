@@ -334,12 +334,31 @@ object PortableText {
 
     // --------------------------------------------------------------------- Unicode 3.2 drift
     /**
-     * False when [codePoint] was unassigned in Unicode 3.2, or its IDNA mapping under Unicode 3.2
-     * nameprep (RFC 3491, what `java.net.IDN` and older resolvers use) differs from the pinned
-     * NFKC_Casefold. Such a character can make one host name read as two different names on old
-     * and new software.
+     * False when the IDNA mapping of [codePoint] under Unicode 3.2 nameprep (RFC 3491, what
+     * `java.net.IDN` and older resolvers use; a character unassigned in 3.2 passes through unchanged)
+     * differs from the pinned mapping (B.1, then NFKC_Casefold). Such a character can make one host
+     * name read as two different names on old and new software. About 5,600 code points: the 174 of
+     * 3.2 whose mapping changed (Georgian and Cherokee case pairs, newly ignorable controls, six CJK
+     * corrections) and later ones that map to something else (U+1F130 to `a`, U+1E030 to `а`, new
+     * capital letters). New characters that map to themselves (Burmese, emoji, CJK) are stable.
      */
     fun stableSinceUnicode32(codePoint: Int): Boolean = UnicodeData.stableSince32(codePoint)
+
+    /**
+     * The code points of [label] that stand in for other characters: compatibility variants (NFKC
+     * changes them: full-width `ｐ`, mathematical `𝗽`, enclosed `🄰`, ligatures, superscripts) and
+     * invisible default ignorables that IDNA removes (soft hyphen, variation selectors), except the
+     * zero-width joiner and non-joiner, which Persian and Indic names use. No real name is written
+     * with them: IDNA maps them away, so the written name hides the one it reaches. In order,
+     * without repeats.
+     */
+    fun disguisedCodePoints(label: String): List<Int> =
+        codePoints(label).filter { cp ->
+            cp >= 0x80 && cp != 0x200C && cp != 0x200D && (
+                !UnicodeData.decompose(intArrayOf(cp), compat = true).contentEquals(UnicodeData.decompose(intArrayOf(cp), compat = false)) ||
+                    UnicodeData.nfkcCasefoldChar(cp).isEmpty()
+                )
+        }.distinct()
 
     /** The code points of [label] that are not [stableSinceUnicode32], in order, without repeats. */
     fun unicode32Drift(label: String): List<Int> =
@@ -482,13 +501,21 @@ class BoundedRegex(
 
 /**
  * Makes a regex that came from outside the code (a user's baseline pattern in judgments.json) mean
- * the same on every engine, for `containsMatchIn` (a `\b` that starts the pattern consumes the
- * character before it, so match ranges are not the original's): `\d \s \w \b` and their negations
- * become the [Rx] classes, literal
- * letters and digits are put in [PortableText.matchForm] (the text is matched in that form too), and
- * case-insensitivity flags are dropped because the fold already did their work. Constructs whose
- * meaning is engine-defined and cannot be spelled out (`\p{..}`, `\X`, `\R`, `\h`, `\v`, a negated
- * class escape inside `[...]`) are refused with an [IllegalArgumentException] that names them.
+ * the same on every engine, for `containsMatchIn` against [PortableText.matchForm] of the text:
+ *
+ * - `\d \s \w \b` and their negations become the [Rx] classes;
+ * - literal characters, and characters written as escapes (`\uXXXX`, `\xHH`, `\x{H..}`, `\0ooo`),
+ *   are put in match form (case folded, Arabic-Indic and Persian digits as ASCII), as the text is;
+ *   inside `[...]` each character and range keeps its original and gains its match form, so
+ *   `[A-z]`, `[É]` and `[٠-٩]` still accept what they accepted, in the folded text;
+ * - case-insensitivity flags are dropped, the fold already did their work;
+ * - a `\b` that starts the pattern (nothing before it can match) consumes the character before the
+ *   word instead of a lookbehind, which Kotlin/Native evaluates in O(position); not when a group is
+ *   repeated (`(\bfoo ){2}`), where the lookbehind form is kept.
+ *
+ * Constructs whose meaning is engine-defined and cannot be spelled out (`\p{..}`, `\X`, `\R`, `\h`,
+ * `\v`, `\N`, a negated class escape or `\b` inside `[...]`) are refused with an
+ * [IllegalArgumentException] that names them.
  */
 object PortableRegex {
 
@@ -500,51 +527,108 @@ object PortableRegex {
     private const val LEADING_NWB: String =
         "(?:(?:^|[^${Rx.WORDS}])(?![${Rx.WORDS}])|[${Rx.WORDS}](?=[${Rx.WORDS}]))"
 
+    private const val META_OUTSIDE = "\\^$.|?*+()[]{}"
+    private const val META_INSIDE = "\\^-[]&"
+    private val QUANTIFIED_GROUP = Regex("""\)[*+?{]""")
+
+    private fun fail(what: String): Nothing =
+        throw IllegalArgumentException("$what is not supported in a baseline pattern (it matches differently on each phone)")
+
+    private fun cpString(cp: Int): String = StringBuilder().also { appendCodePoint(it, cp) }.toString()
+
+    /** [cp] as a literal outside a class: escaped when it is a metacharacter. */
+    private fun literal(cp: Int): String {
+        val s = cpString(cp)
+        return if (s.length == 1 && s[0] in META_OUTSIDE) "\\$s" else s
+    }
+
+    /** [cp] as a class member: escaped when it would mean something inside `[...]`. */
+    private fun member(cp: Int): String {
+        val s = cpString(cp)
+        return if (s.length == 1 && s[0] in META_INSIDE) "\\$s" else s
+    }
+
+    private fun folded(cp: Int): Int = PortableText.codePointAt(PortableText.matchForm(cpString(cp)), 0)
+
+    /**
+     * The character an escape at pattern[i] (the backslash) writes, and the escape's length, when
+     * it is a character escape (`\uXXXX`, `\xHH`, `\x{H..}`, `\0ooo`, `\t \n \r \f \a \e`, or an
+     * escaped non-letter); null for a class, an anchor or a back reference.
+     */
+    private fun charEscape(pattern: String, i: Int): Pair<Int, Int>? {
+        val e = pattern.getOrNull(i + 1) ?: return null
+        fun hex(s: String): Int = s.toIntOrNull(16)?.takeIf { it in 0..0x10FFFF } ?: fail("a bad escape \\$e$s")
+        return when (e) {
+            'u' -> hex(pattern.substring(i + 2, minOf(pattern.length, i + 6)).also { if (it.length < 4) fail("a bad escape \\u") }) to 6
+            'x' -> if (pattern.getOrNull(i + 2) == '{') {
+                val close = pattern.indexOf('}', i + 2)
+                if (close < 0) fail("a bad escape \\x{")
+                hex(pattern.substring(i + 3, close)) to close - i + 1
+            } else {
+                hex(pattern.substring(i + 2, minOf(pattern.length, i + 4)).also { if (it.length < 2) fail("a bad escape \\x") }) to 4
+            }
+            '0' -> {
+                var j = i + 2
+                while (j < pattern.length && j < i + 5 && pattern[j] in '0'..'7') j++
+                val digits = pattern.substring(i + 2, j)
+                if (digits.isEmpty()) fail("a bad escape \\0")
+                digits.toInt(8) to j - i
+            }
+            't' -> 0x09 to 2
+            'n' -> 0x0A to 2
+            'r' -> 0x0D to 2
+            'f' -> 0x0C to 2
+            'a' -> 0x07 to 2
+            'e' -> 0x1B to 2
+            else -> if (e.isLetterOrDigit()) null else e.code to 2
+        }
+    }
+
     fun translate(pattern: String): String {
         val out = StringBuilder(pattern.length + 16)
-        var i = 0
-        var classDepth = 0
+        // The consumed-start `\b` changes what a match covers, so it is only used when no group is
+        // repeated (a repeated group would need the separator each time round).
+        val consumedStart = !QUANTIFIED_GROUP.containsMatchIn(pattern)
         // Whether nothing can have been matched yet on this path: at the pattern's start, or right
-        // after `(` or `|` of groups that are themselves leading. A `\b` there becomes a consumed
-        // start (no lookbehind, which Kotlin/Native evaluates in O(position)); the translated pattern
-        // is only ever used to ask whether the text contains a match.
+        // after `(` or `|` of groups that are themselves leading.
         val groupLeading = ArrayList<Boolean>()
         var leading = true
-        fun fail(what: String): Nothing = throw IllegalArgumentException("$what is not supported in a baseline pattern (it matches differently on each phone)")
+        var i = 0
         while (i < pattern.length) {
             val c = pattern[i]
             when {
+                c == '[' -> {
+                    leading = false
+                    i = translateClass(pattern, i, out)
+                }
                 c == '\\' && i + 1 < pattern.length -> {
                     val e = pattern[i + 1]
-                    val inClass = classDepth > 0
                     val wasLeading = leading
-                    if (!inClass) leading = false
+                    leading = false
+                    val ch = charEscape(pattern, i)
+                    if (ch != null) {
+                        out.append(literal(folded(ch.first)))
+                        i += ch.second
+                        continue
+                    }
                     when (e) {
-                        'd' -> out.append(if (inClass) Rx.DIGITS else Rx.DIGIT)
-                        's' -> out.append(if (inClass) Rx.SPACE else Rx.SP)
-                        'w' -> out.append(if (inClass) Rx.WORDS else Rx.W)
-                        'D', 'S', 'W' -> {
-                            if (inClass) fail("\\$e inside [...]")
-                            out.append(
-                                when (e) {
-                                    'D' -> "[^${Rx.DIGITS}]"
-                                    'S' -> Rx.NSP
-                                    else -> "[^${Rx.WORDS}]"
-                                },
-                            )
-                        }
+                        'd' -> out.append(Rx.DIGIT)
+                        's' -> out.append(Rx.SP)
+                        'w' -> out.append(Rx.W)
+                        'D' -> out.append("[^${Rx.DIGITS}]")
+                        'S' -> out.append(Rx.NSP)
+                        'W' -> out.append("[^${Rx.WORDS}]")
                         'b', 'B' -> {
-                            if (inClass) fail("\\$e inside [...]")
+                            // after a consumed start the position is the original's again, so a
+                            // second `\b` there takes the lookaround form (leading stays false)
                             out.append(
                                 when {
-                                    wasLeading && e == 'b' -> LEADING_WB
-                                    wasLeading -> LEADING_NWB
+                                    wasLeading && consumedStart && e == 'b' -> LEADING_WB
+                                    wasLeading && consumedStart -> LEADING_NWB
                                     e == 'b' -> Rx.WB
                                     else -> Rx.NWB
                                 },
                             )
-                            i += 2
-                            continue
                         }
                         'p', 'P', 'X', 'R', 'h', 'H', 'v', 'V', 'N' -> fail("\\$e")
                         'Q' -> {
@@ -560,44 +644,19 @@ object PortableRegex {
                             i = close + 1
                             continue
                         }
-                        'x' -> {
-                            val len = if (pattern.getOrNull(i + 2) == '{') pattern.indexOf('}', i + 2).let { if (it < 0) 2 else it - i + 1 } else 4
-                            out.append(pattern, i, minOf(pattern.length, i + len))
-                            i += len
-                            continue
-                        }
-                        'u' -> {
-                            out.append(pattern, i, minOf(pattern.length, i + 6))
-                            i += 6
-                            continue
-                        }
                         'c' -> {
                             out.append(pattern, i, minOf(pattern.length, i + 3))
                             i += 3
                             continue
                         }
+                        // anchors (\A \z \Z \G) and back references (\1..\9) are kept; \b above
                         else -> out.append(c).append(e)
                     }
                     i += 2
                 }
-                c == '[' -> {
-                    leading = false
-                    classDepth++
-                    out.append(c)
-                    i++
-                    // A `]` or `^]` right after `[` is a literal in the JDK and ICU.
-                    if (pattern.getOrNull(i) == '^') out.append(pattern[i++])
-                    if (pattern.getOrNull(i) == ']') out.append(pattern[i++])
-                }
-                c == ']' && classDepth > 0 -> {
-                    classDepth--
-                    out.append(c)
-                    i++
-                }
-                c == '(' && classDepth == 0 && pattern.startsWith("(?", i) -> {
+                c == '(' && pattern.startsWith("(?", i) -> {
                     val next = pattern.getOrNull(i + 2)
-                    if (next == '<' && pattern.getOrNull(i + 3)?.let { it.isLetter() } == true) {
-                        // a named group: the name is kept as written
+                    if (next == '<' && pattern.getOrNull(i + 3)?.isLetter() == true) {
                         val close = pattern.indexOf('>', i)
                         if (close < 0) fail("an unterminated group name")
                         out.append(pattern, i, close + 1)
@@ -627,40 +686,109 @@ object PortableRegex {
                         if (look) leading = false
                     }
                 }
-                c == '(' && classDepth == 0 -> {
+                c == '(' -> {
                     out.append(c)
                     i++
                     groupLeading += leading
                 }
-                c == '|' && classDepth == 0 -> {
+                c == '|' -> {
                     out.append(c)
                     i++
                     leading = groupLeading.lastOrNull() ?: true
                 }
-                c == ')' && classDepth == 0 -> {
+                c == ')' -> {
                     out.append(c)
                     i++
                     if (groupLeading.isNotEmpty()) groupLeading.removeAt(groupLeading.size - 1)
                     leading = false
                 }
-                classDepth == 0 && (c == '^' || c == '$') -> {
+                c == '^' || c == '$' -> {
                     // anchors match nothing: a `\b` after `^` is still at the start
                     out.append(c)
                     i++
                 }
                 else -> {
-                    if (classDepth == 0) leading = false
-                    // literal text (and class members) in match form: lower case, ASCII digits
-                    if (c.isHighSurrogate() && i + 1 < pattern.length && pattern[i + 1].isLowSurrogate()) {
-                        out.append(PortableText.matchForm(pattern.substring(i, i + 2)))
-                        i += 2
-                    } else {
-                        out.append(PortableText.matchForm(c.toString()))
-                        i++
-                    }
+                    leading = false
+                    val cp = PortableText.codePointAt(pattern, i)
+                    val n = if (cp >= 0x10000) 2 else 1
+                    val f = folded(cp)
+                    // a metacharacter stays itself (fold never changes one), unescaped
+                    out.append(if (c in META_OUTSIDE) c.toString() else literal(f))
+                    i += n
                 }
             }
         }
         return out.toString()
+    }
+
+    /** Translates the class starting at pattern[start] (`[`) into [out]; returns the index after `]`. */
+    private fun translateClass(pattern: String, start: Int, out: StringBuilder): Int {
+        var i = start + 1
+        out.append('[')
+        if (pattern.getOrNull(i) == '^') {
+            out.append('^')
+            i++
+        }
+        var first = true
+        // One class atom at i: a character (code point, index after it), or null for a class escape.
+        fun atom(at: Int): Pair<Int, Int>? {
+            val c = pattern[at]
+            if (c == '\\' && at + 1 < pattern.length) {
+                return charEscape(pattern, at)?.let { (cp, len) -> cp to at + len }
+            }
+            val cp = PortableText.codePointAt(pattern, at)
+            return cp to at + if (cp >= 0x10000) 2 else 1
+        }
+        while (i < pattern.length) {
+            val c = pattern[i]
+            if (c == ']' && !first) {
+                out.append(']')
+                return i + 1
+            }
+            first = false
+            if (c == '[') fail("a class inside [...]")
+            if (c == '&' && pattern.getOrNull(i + 1) == '&') fail("&& inside [...]")
+            if (c == '\\' && i + 1 < pattern.length && charEscape(pattern, i) == null) {
+                when (val e = pattern[i + 1]) {
+                    'd' -> out.append(Rx.DIGITS)
+                    's' -> out.append(Rx.SPACE)
+                    'w' -> out.append(Rx.WORDS)
+                    'Q' -> {
+                        val end = pattern.indexOf("\\E", i + 2).let { if (it < 0) pattern.length else it }
+                        var j = i + 2
+                        while (j < end) {
+                            val cp = PortableText.codePointAt(pattern, j)
+                            out.append(member(cp))
+                            val f = folded(cp)
+                            if (f != cp) out.append(member(f))
+                            j += if (cp >= 0x10000) 2 else 1
+                        }
+                        i = if (end >= pattern.length) end else end + 2
+                        continue
+                    }
+                    else -> fail("\\$e inside [...]")
+                }
+                i += 2
+                continue
+            }
+            val (lo, afterLo) = atom(i)!!
+            // a range lo-hi (a `-` before `]` is a literal)
+            if (pattern.getOrNull(afterLo) == '-' && afterLo + 1 < pattern.length && pattern[afterLo + 1] != ']') {
+                val hiAtom = atom(afterLo + 1) ?: fail("a class escape as a range end")
+                val hi = hiAtom.first
+                if (hi < lo) fail("a reversed range")
+                out.append(member(lo)).append('-').append(member(hi))
+                val flo = folded(lo)
+                val fhi = folded(hi)
+                if ((flo != lo || fhi != hi) && flo <= fhi) out.append(member(flo)).append('-').append(member(fhi))
+                i = hiAtom.second
+                continue
+            }
+            out.append(member(lo))
+            val f = folded(lo)
+            if (f != lo) out.append(member(f))
+            i = afterLo
+        }
+        fail("an unterminated [...]")
     }
 }

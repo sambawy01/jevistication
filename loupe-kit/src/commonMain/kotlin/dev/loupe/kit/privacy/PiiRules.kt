@@ -1,5 +1,6 @@
 package dev.loupe.kit.privacy
 
+import dev.loupe.engine.BoundedRegex
 import dev.loupe.engine.ContentHash
 import dev.loupe.engine.PortableText
 import kotlinx.datetime.Clock
@@ -195,18 +196,46 @@ object PiiRules {
     )
     // CARD_CUE, OTHER_NUMBER_CUE, PASSPORT_KW and the payroll terms are matched on PortableText.fold
     // (same length, so the ranges hold in the original) instead of with (?i), whose case folding
-    // differs between regex engines.
-    private val CARD_CUE = Regex(
-        "(?<![A-Za-z])(?:card(?:holder| holder| no| number)?|visa|master ?card|amex|american express|discover|jcb|" +
+    // differs between regex engines. Station's one pattern per cue list, `(?<![A-Za-z])(?:latin)(?![A-Za-z])|
+    // arabic`, is two here: the Latin half's lookbehind is BoundedRegex's check (Kotlin/Native pays
+    // O(position) for a lookbehind), and only a short window before the digits is searched ([cueMatches]).
+    private val CARD_CUE = CueRegex(
+        "card(?:holder| holder| no| number)?|visa|master ?card|amex|american express|discover|jcb|" +
             "maestro|meeza|union ?pay|debit|credit|exp(?:iry|ires|iration)?|valid (?:thru|through|until|from)|good thru|" +
-            "cvv2?|cvc2?)(?![A-Za-z])|بطاقة|البطاقة|فيزا|ماستر ?كارد|ميزة|ائتمان|الائتمان|صالحة حتى|تنتهي",
+            "cvv2?|cvc2?",
+        "بطاقة|البطاقة|فيزا|ماستر ?كارد|ميزة|ائتمان|الائتمان|صالحة حتى|تنتهي",
     )
-    private val OTHER_NUMBER_CUE = Regex(
-        "(?<![A-Za-z])(?:order|tracking|track|awb|waybill|shipment|consignment|parcel|invoice|inv|ref|reference|" +
+    private val OTHER_NUMBER_CUE = CueRegex(
+        "order|tracking|track|awb|waybill|shipment|consignment|parcel|invoice|inv|ref|reference|" +
             "transaction|txn|imei|meid|serial|s/n|sn|barcode|sku|upc|ean|gtin|iccid|sim|tel|phone|mobile|mob|fax|" +
-            "whatsapp|policy|account|acct|customer|member|ticket|booking|pnr)(?![A-Za-z])|رقم الطلب|طلب|شحنة|بوليصة|فاتورة|" +
-            "هاتف|موبايل|تليفون|جوال|الرقم التسلسلي|حساب",
+            "whatsapp|policy|account|acct|customer|member|ticket|booking|pnr",
+        "رقم الطلب|طلب|شحنة|بوليصة|فاتورة|هاتف|موبايل|تليفون|جوال|الرقم التسلسلي|حساب",
     )
+
+    /** A cue list: Latin words bounded by non-letters, Arabic phrases as substrings. */
+    private class CueRegex(latin: String, arabic: String) {
+        val latin = BoundedRegex("(?:$latin)(?![A-Za-z])", notAfter = ::isAsciiLetter)
+        val arabic = BoundedRegex(arabic, bounded = false)
+    }
+
+    /** A cue found in t: [start, end) in t, and the folded text. */
+    private class Cue(val start: Int, val end: Int, val value: String)
+
+    /**
+     * The cues of [rx] that start in t[from, to) and end by [to], in order: what Station's
+     * `rx.finditer(t[:to], from)` gives, on the case-folded text. Only t[from - 1, to) is folded and
+     * searched, so the cost follows the window, not the position in the text.
+     */
+    private fun cueMatches(rx: CueRegex, t: String, from: Int, to: Int): List<Cue> {
+        val start = maxOf(0, from - 1)
+        if (start >= to) return emptyList()
+        val window = PortableText.fold(t.substring(start, to))
+        val at = from - start
+        val out = mutableListOf<Cue>()
+        for (m in rx.latin.findAll(window, at)) out += Cue(start + m.range.first, start + m.range.last + 1, m.value)
+        for (m in rx.arabic.findAll(window, at)) out += Cue(start + m.range.first, start + m.range.last + 1, m.value)
+        return out.sortedBy { it.start }
+    }
     const val CUE_BEFORE = 80
     const val CUE_AFTER = 60
     const val OTHER_BEFORE = 32
@@ -268,10 +297,10 @@ object PiiRules {
     /** The card word nearest to t[a:b] (within 80 characters before or 60 after), lower-cased. */
     private fun cardCue(t: String, a: Int, b: Int): String? {
         var best: Pair<Int, String>? = null
-        val head = PortableText.fold(t.substring(0, a))
-        for (m in CARD_CUE.findAll(head, maxOf(0, a - CUE_BEFORE))) best = (a - (m.range.last + 1)) to m.value
-        val tail = PortableText.fold(t.substring(0, minOf(t.length, b + CUE_AFTER)))
-        CARD_CUE.find(tail, b)?.let { m -> if (best == null || m.range.first - b < best!!.first) best = (m.range.first - b) to m.value }
+        for (m in cueMatches(CARD_CUE, t, maxOf(0, a - CUE_BEFORE), a)) best = (a - m.end) to m.value
+        cueMatches(CARD_CUE, t, b, minOf(t.length, b + CUE_AFTER)).firstOrNull()?.let { m ->
+            if (best == null || m.start - b < best!!.first) best = (m.start - b) to m.value
+        }
         return best?.second?.lowercase()
     }
 
@@ -290,11 +319,10 @@ object PiiRules {
         val grouping = grouping(raw)
         if (grouping == null && dateLike(digits)) return null
         val cue = cardCue(t, a, b)
-        val head = PortableText.fold(t.substring(0, a))
-        val other = OTHER_NUMBER_CUE.findAll(head, maxOf(0, a - OTHER_BEFORE)).lastOrNull()
+        val other = cueMatches(OTHER_NUMBER_CUE, t, maxOf(0, a - OTHER_BEFORE), a).lastOrNull()
         if (other != null) {
-            val nearCard = CARD_CUE.findAll(head, maxOf(0, a - OTHER_BEFORE)).lastOrNull()?.let { it.range.last + 1 }
-            if (nearCard == null || nearCard < other.range.last + 1) return null
+            val nearCard = cueMatches(CARD_CUE, t, maxOf(0, a - OTHER_BEFORE), a).lastOrNull()?.end
+            if (nearCard == null || nearCard < other.end) return null
         }
         if (ocr && grouping == null && cue == null) return null
         val brand = cardBrand(digits)
