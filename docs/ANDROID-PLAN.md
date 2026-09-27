@@ -436,7 +436,9 @@ LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
   were both kept whole. Phishing.kt merged cleanly with `self_vouching`, and the v1.3 vectors pass.
   - The branch's portable-regex lint then flagged origin/main's new `JudgmentAuthor.kt`, `PhishingOwnWords.kt` and
     `LangGroup.kt` (`\b`, `\s`, `\p{..}`, IGNORE_CASE). They are ported to `BoundedRegex`, `Rx`, folded text and
-    code checks from the pinned Unicode data; their tests and the v1.3 vectors pass.
+    code checks from the pinned Unicode data; their tests and the v1.3 vectors pass. No difference in scoring;
+    the question linter now treats Unicode spaces as spaces on every platform (fix loop 8 measured it:
+    docs/BUILD.md, "Parity B1/B2: changed answers").
 - **HTML tokeniser:** a namespace stack.
   - SVG/MathML end at breakout tags, `</p>`/`</br>` and an HTML ancestor's end tag; integration points hold HTML;
     `<base>` inside them is ignored.
@@ -460,6 +462,26 @@ LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
   - ICU 147 compiled, 0 rejected; API check 725 classes, 0 problems.
   - Performance linear; the text-URL rows now grow one token, not the token count.
 - **Sizes:** release APK 1,970,131 bytes; LoupeKit arm64 31,880,120 bytes (origin/main's new code included).
+
+**Fix loop 8 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix8/`.
+- **Question linter** (`JudgmentLint.absence`) across Unicode spaces, measured at 699761a on JVM, iOS and
+  Android ICU (API 29/35):
+  - Android read `\s` as every Unicode space, JVM and iOS as ASCII only. Now all three use the portable
+    class (NBSP, U+2007, U+2009, U+202F).
+  - Table in docs/BUILD.md; `JudgmentLintSpacesTest`; 90 corpus cases.
+- **`MailFallbackTest`:** the `fromItem` merge of anchors and uncovered pattern links.
+  - Five real newsletters (Mailchimp and list-manage footer, partner and sendgrid hosts in text, a
+    tracking link, Arabic and CJK footers) stay 0 safe.
+  - A phish found only by pattern behind one benign anchor is flagged.
+  - A planted revert of the merge fails it.
+- **The anchor fuzz** gains mglyph/malignmark and annotation-xml encoding variants.
+  - Its first run exposed one miss: an ignored `</annotation-xml>`, because MathML annotation-xml is a
+    "special" element.
+  - End tags now follow the tree builder: foreign elements above the first HTML one, then the in-body
+    rules, which stop at scope boundaries and special elements. `<area>` and a meta refresh are read in
+    any namespace.
+  - 2,000 documents, 0 missing. All 141 round-7 files still give every Chrome host.
+- **Criteria against 699761a** unchanged: 18 browser-correct rows, legitimate none higher.
 
 ## Needed from the owner
 

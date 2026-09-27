@@ -1981,6 +1981,32 @@ their acceptance criteria are met; entries here record increments toward them.
 docs/ANDROID-PLAN.md, "Known parity gaps" (closed). The cases are pinned in `tools/parity/corpus.json`.*
 Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Station must follow.
 
+- **Question linter, absence phrasing across Unicode spaces (fix loop 8).** The rule origin/main added in
+  699761a (`JudgmentLint.absence`) wrote `\s`, which the three platforms read differently.
+  - **Measured** at 699761a with its own patterns, on 90 questions: EN "no logo" and "not have", AR
+    "لا يوجد" and "من دون", Franco "men gheir" and "mesh mawgood", each joined by one separator. The table
+    counts how many of the 6 are flagged.
+  - **The rule now uses the portable space class** (`Rx.SP`), the parity B1 decision: ASCII white space
+    plus NBSP, U+2007, U+2009 and U+202F.
+
+  | Separator | 699761a JVM | 699761a iOS (Kotlin/Native) | 699761a Android ICU (API 29, 35) | now: JVM, iOS, Android |
+  |---|---|---|---|---|
+  | space, tab | 6 | 6 | 6 | 6 |
+  | NBSP, U+2007, U+2009, U+202F | 0 | 0 | 6 | 6 |
+  | U+1680, U+2000, U+2002, U+200A, U+2028, U+2029, U+205F, U+3000, U+0085 | 0 | 0 | 6 | 0 |
+
+  - **At 699761a the platforms disagreed.** JVM and iOS read `\s` as ASCII only; Android's ICU reads it
+    as every Unicode space. All 78 non-ASCII-separator questions got one answer on Android and the other
+    on JVM and iOS.
+  - **Now all three give the same answer.** On JVM and iOS the four no-break and narrow spaces now join
+    the words (24 questions newly flagged). On Android the other Unicode spaces no longer do (54 questions
+    no longer flagged).
+  - This is a behaviour change of the question linter only: no difference in scoring. The question linter
+    now treats Unicode spaces as spaces on every platform, the portable class's members.
+  - Pinned by `JudgmentLintSpacesTest` (engine: JVM, iOS, Android unit tests) and the corpus's 90
+    `judgment.absence` cases (0 differ on API 29, API 35, the iOS simulator and the JVM). Evidence:
+    `loupe-android-evidence/parity-fix8/absence-spaces-table.tsv`.
+
 - **Arabic-Indic (U+0660–0669) and Persian (U+06F0–06F9) digits are numbers** (owner's decision):
   `DateFacts.find` reads them in every pattern (`٢٠٢٧-٠٣-١٥`, `۱۵/۰۳/۲۰۲۷`; `DateMatch.text` stays as
   written), so the expiry radar, `Baseline.DateBefore` and the watchers see those dates;

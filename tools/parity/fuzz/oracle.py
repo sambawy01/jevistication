@@ -59,7 +59,7 @@ var r={a:[],u:{}};for(var i=0;i<%d;i++){var e=document.getElementById('h'+i);var
 var o=null;try{var u=new URL(v);o=u.hostname}catch(x){}
 r.a.push([H(v,%s),H(v,%s),e.href,o]);}
 var U=%s;for(var j=0;j<U.length;j++){try{r.u[U[j]]=new URL(U[j]).hostname}catch(x){r.u[U[j]]=null}}
-document.getElementById('o').textContent=JSON.stringify(r);""" % (len(hrefs), json.dumps(BASE), json.dumps(BASE2), json.dumps(to_canon).replace("</", "<\\/"))
+document.getElementById('o').textContent=JSON.stringify(r);""" % (len(hrefs), json.dumps(BASE), json.dumps(BASE2), json.dumps(to_canon).replace("<", "\\u003c"))
 page = os.path.join(work, "page.html")
 open(page, "w", encoding="utf-8").write('<!doctype html><html><head><meta charset="utf-8"><base href="%s"></head><body>%s<pre id="o"></pre><script>%s</script></body></html>' % (BASE, anchors, script))
 def dump_dom(page):

@@ -1,6 +1,7 @@
 package dev.loupe.parity
 
 import dev.loupe.engine.DateFacts
+import dev.loupe.engine.JudgmentLint
 import dev.loupe.engine.OriginFacts
 import dev.loupe.engine.PortableRegex
 import dev.loupe.engine.PortableText
@@ -152,6 +153,7 @@ object ParityCorpus {
                 trusted = args?.get("trusted")?.asArr?.items?.map { it.asString } ?: emptyList(),
                 links = links(args),
             ).let { v -> "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.map { it.code }.sorted())}}" }
+            "judgment.absence" -> JudgmentLint.absence(s).isNotEmpty().toString()
             "mail.hosts" -> list(MailMessage.anchors(s).mapNotNull { ParsedUrl.parse(Hosts.linkUrl(it.first))?.host?.ifEmpty { null } }.distinct().sorted())
             "mail.hrefs" -> list(MailMessage.anchors(s).map { it.first })
             "mail.anchors" -> MailMessage.anchors(s).joinToString(",", "[", "]") { (h, t) -> "[" + quote(h) + "," + quote(t) + "]" }

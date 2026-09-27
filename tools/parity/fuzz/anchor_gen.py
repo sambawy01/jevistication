@@ -12,9 +12,15 @@ N = int(sys.argv[1]) if len(sys.argv) > 1 else 2000
 
 WRAP = ["<svg>", "<math>", "<svg><foreignObject>", "<svg><desc>", "<svg><title>", "<math><mtext>", "<math><mi>", "<math><mo>",
         "<math><annotation-xml encoding='text/html'>", "<math><annotation-xml>", "<math><svg>", "<svg><math>", "<svg><g><g>",
-        "<div><svg><circle r=1>", "<table><tr><td><svg>", "<svg><a>", "<math><ms>"]
+        "<div><svg><circle r=1>", "<table><tr><td><svg>", "<svg><a>", "<math><ms>",
+        # fix loop 8: mglyph/malignmark stay MathML inside a text integration point; annotation-xml's encoding
+        "<math><mi><mglyph>", "<math><mtext><malignmark>", "<math><mo><mglyph><svg>", "<math><mn><malignmark><p>",
+        "<math><annotation-xml encoding='TEXT/HTML'>", "<math><annotation-xml encoding='application/xhtml+xml'>",
+        "<math><annotation-xml encoding=' text/html '>", "<math><annotation-xml encoding='image/svg+xml'>",
+        "<math><annotation-xml encoding='text/html'><svg>", "<math><annotation-xml><svg>", "<math><annotation-xml encoding=text&#47;html>"]
 BREAK = ["<p>", "<div>", "<br>", "<b>", "<span>", "<img src=x>", "<table>", "<font color=red>", "<font>", "</p>", "</br>", "</div>",
-         "</svg>", "</math>", "</foreignObject>", "</desc>", "</mtext>", "<ul><li>", "<h1>", "<pre>", "<i>", "<em>", "<body>", ""]
+         "</svg>", "</math>", "</foreignObject>", "</desc>", "</mtext>", "<ul><li>", "<h1>", "<pre>", "<i>", "<em>", "<body>", "",
+         "<mglyph>", "<malignmark>", "</annotation-xml>", "</mi>"]
 HIDE = ["<![CDATA[ ", "<![CDATA[ > ", "<template>", "<!-- ", "<!-- > ", "<script>", "<style>", "<textarea>", "<title>", "<xmp>",
         "<noscript>", "<iframe>", "<noembed>", "<noframes>", "<plaintext>", "<img alt='", "<div title=\"", "<!", "<?x ", "</ ", "<!-->",
         "<select>", "<object>", "<svg><style>", "<math><style>", "<svg><script>", ""]

@@ -42,7 +42,9 @@ Regenerate (macOS: Chrome, node with linkify-it, swift):
 
 `anchor_gen.py` generates 2,000 mail documents (fixed seed). Each mixes SVG and MathML, breakout tags,
 integration points, `<template>`, CDATA, comments, raw text, open quotes, malformed tags and `<base>`,
-then an attacker's link, sometimes after a harmless PayPal link.
+then an attacker's link, sometimes after a harmless PayPal link. Since fix loop 8 it also mixes
+mglyph/malignmark inside MathML text integration points and annotation-xml `encoding` variants (case,
+spaces, entities, image/svg+xml).
 
 `anchor_oracle.py` parses each document with Chrome's DOMParser (`text/html`) and pins, in
 `anchor-pinned.json`, the web hosts of the links a reader can follow in the document Chrome builds:
@@ -56,3 +58,6 @@ other bases. Planting the loop-6 bug back (CDATA honoured inside SVG/MathML, no 
 documents.
 
     python3 anchor_gen.py | python3 anchor_oracle.py > anchor-pinned.json
+
+Both oracles escape every `<` of the inputs in the page's script: a document's `<!--<script>` would
+otherwise put the page's own script into the double-escaped state and it would never run.

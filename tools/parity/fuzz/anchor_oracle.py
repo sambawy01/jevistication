@@ -15,6 +15,8 @@ CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacO
 cases = [json.loads(l) for l in sys.stdin if l.strip()]
 work = tempfile.mkdtemp(prefix="loupe-anchor-fuzz-")
 try:
+    # every "<" of the documents escaped in the script: a document's "<!--<script>" would otherwise put
+    # the page's own script into the double-escaped state and never run it
     js = r"""var D=%s;var X='http://www.w3.org/1999/xlink';var out=[];
 for(var i=0;i<D.length;i++){var d=new DOMParser().parseFromString(D[i],'text/html');var hosts={};
  var H='http://www.w3.org/1999/xhtml',S='http://www.w3.org/2000/svg';
@@ -26,7 +28,7 @@ for(var i=0;i<D.length;i++){var d=new DOMParser().parseFromString(D[i],'text/htm
   if(raw===null)return;var u;try{u=new URL(raw,d.baseURI)}catch(x){return}
   if(u.protocol=='http:'||u.protocol=='https:'){if(u.hostname)hosts[u.hostname]=1}});
  out.push(Object.keys(hosts).sort());}
-document.getElementById('o').textContent=JSON.stringify(out);""" % json.dumps([c["html"] for c in cases]).replace("</", "<\\/")
+document.getElementById('o').textContent=JSON.stringify(out);""" % json.dumps([c["html"] for c in cases]).replace("<", "\\u003c")
     page = os.path.join(work, "p.html")
     open(page, "w", encoding="utf-8").write('<!doctype html><meta charset="utf-8"><pre id="o"></pre><script>%s</script>' % js)
     proc = subprocess.Popen([CHROME, "--headless=new", "--disable-gpu", "--no-first-run", "--user-data-dir=" + os.path.join(work, "prof"),

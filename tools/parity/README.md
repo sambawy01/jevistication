@@ -78,6 +78,7 @@ other script's digits are. "Letter or number" is general category L, Nd, Nl or N
 | `link.host_signals` | the codes of the phishing formula's host checks (docs/PHISHING-FORMULA.md §4), in order |
 | `link.check` | `{level, codes}`: the site check's level and the codes that carry weight, sorted |
 | `mail.check` | `{level, codes}` of the mail phishing check for a From header (input), `args.body`, `args.replyTo`, `args.trusted`, `args.links` (`[[href, visible text], ...]`, the message's anchors), `args.html` (HTML whose anchors are added, read as `MailMessage.anchors` reads them); codes include the zero-weight `known_sender` / `trusted_sender` |
+| `judgment.absence` | whether the question linter flags absence phrasing (`JudgmentLint.absence`): `true` / `false` |
 | `mail.hosts` | the distinct hosts the mail check judges for the HTML input's links, sorted (every host Chrome's document links to, and the extra readings Loupe leans toward) |
 | `mail.hrefs` | the hrefs of the HTML input's links in order (resolved against its `<base href>`), as Chrome's DOMParser lists them |
 | `mail.anchors` | `[[href, visible text], ...]` of the HTML input as a browser reads its `<a>` tags: whole attribute names, quoted values, every HTML character reference decoded |

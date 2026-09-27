@@ -42,6 +42,19 @@ internal object HtmlAnchors {
         "sub", "sup", "table", "tt", "u", "ul", "var",
     )
     private val MATHML_TEXT_IP = setOf("mi", "mo", "mn", "ms", "mtext")
+
+    /** The HTML "special" elements (an end tag of another name stops at one; fix loop 8). */
+    private val SPECIAL_HTML = setOf(
+        "address", "applet", "area", "article", "aside", "base", "basefont", "bgsound", "blockquote", "body", "br", "button", "caption",
+        "center", "col", "colgroup", "dd", "details", "dir", "div", "dl", "dt", "embed", "fieldset", "figcaption", "figure", "footer",
+        "form", "frame", "frameset", "h1", "h2", "h3", "h4", "h5", "h6", "head", "header", "hgroup", "hr", "html", "iframe", "img", "input",
+        "keygen", "li", "link", "listing", "main", "marquee", "menu", "meta", "nav", "noembed", "noframes", "noscript", "object", "ol", "p",
+        "param", "plaintext", "pre", "script", "search", "section", "select", "source", "style", "summary", "table", "tbody", "td",
+        "template", "textarea", "tfoot", "th", "thead", "title", "tr", "track", "ul", "wbr", "xmp",
+    )
+
+    /** The elements that bound "has an element in scope" (the default scope). */
+    private val SCOPE_HTML = setOf("applet", "caption", "html", "table", "td", "th", "marquee", "object", "template")
     private val SVG_HTML_IP = setOf("foreignobject", "desc", "title")
 
     private const val HTML = 0
@@ -77,10 +90,32 @@ internal object HtmlAnchors {
                 pop()
             }
         }
-        /** Pop through the nearest open element named [name], if any (an end tag). */
+        fun popTo(index: Int) { while (stack.size > index) pop() }
+        fun foreignIp(e: El) = (e.ns == SVG && e.name in SVG_HTML_IP) || (e.ns == MATH && (e.name in MATHML_TEXT_IP || e.name == "annotation-xml"))
+        /**
+         * An end tag, as the tree builder takes it (fix loop 8): in SVG/MathML it closes the nearest
+         * foreign element of that name above the first HTML one; otherwise (the in-body rules) the
+         * nearest HTML element of that name, unless a scope boundary comes first, or, for an end tag
+         * that is not itself special, any special element (MathML annotation-xml is one): then it is
+         * ignored.
+         */
         fun close(name: String) {
             if ((count[name] ?: 0) <= 0) return
-            while (stack.isNotEmpty()) { val top = current()!!.name; pop(); if (top == name) return }
+            var i = stack.size - 1
+            if (stack.isNotEmpty() && stack[i].ns != HTML) {
+                while (i >= 0 && stack[i].ns != HTML) {
+                    if (stack[i].name == name) { popTo(i); return }
+                    i--
+                }
+            }
+            val specialName = name in SPECIAL_HTML
+            while (i >= 0) {
+                val e = stack[i]
+                if (e.ns == HTML && e.name == name) { popTo(i); return }
+                if ((e.ns == HTML && e.name in SCOPE_HTML) || foreignIp(e)) return
+                if (!specialName && e.ns == HTML && e.name in SPECIAL_HTML) return
+                i--
+            }
         }
         fun text(from: Int, to: Int) {
             val l = open ?: return
@@ -137,9 +172,11 @@ internal object HtmlAnchors {
             val selfClosing = tag.selfClosing && ns != HTML
             when {
                 name == "base" && tag.attrs.containsKey("href") -> bases += decodeAttribute(tag.attrs.getValue("href")) to (ns == HTML)
-                name == "meta" && ns == HTML && tag.attrs["http-equiv"]?.trim()?.lowercase() == "refresh" ->
+                // <area> and a meta refresh are read in any namespace (a doubt about the namespace
+                // must not lose one; in SVG/MathML a browser has no such link: over-finding)
+                name == "meta" && tag.attrs["http-equiv"]?.trim()?.lowercase() == "refresh" ->
                     refreshUrl(decodeAttribute(tag.attrs["content"] ?: ""))?.let { links += Link(it, StringBuilder(), "") }
-                name == "area" && ns == HTML -> tag.attrs["href"]?.let { links += Link(it, StringBuilder(), decodeText(tag.attrs["alt"] ?: "")) }
+                name == "area" -> tag.attrs["href"]?.let { links += Link(it, StringBuilder(), decodeText(tag.attrs["alt"] ?: "")) }
                 name == "a" -> {
                     if (ns == HTML) open = null // an <a> closes the one still open (the adoption agency)
                     val raw = tag.attrs["href"] ?: if (ns == SVG) tag.attrs["xlink:href"] else null
@@ -157,7 +194,7 @@ internal object HtmlAnchors {
                     }
                 }
             } else if (!selfClosing) {
-                push(El(name, ns, (ns == SVG && name in SVG_HTML_IP) || (ns == MATH && name == "annotation-xml" && tag.attrs["encoding"]?.trim()?.lowercase().let { it == "text/html" || it == "application/xhtml+xml" })))
+                push(El(name, ns, (ns == SVG && name in SVG_HTML_IP) || (ns == MATH && name == "annotation-xml" && tag.attrs["encoding"]?.let { decodeAttribute(it).lowercase() }.let { it == "text/html" || it == "application/xhtml+xml" })))
             }
         }
 
