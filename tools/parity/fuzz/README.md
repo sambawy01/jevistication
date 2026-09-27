@@ -46,13 +46,21 @@ then an attacker's link, sometimes after a harmless PayPal link. Since fix loop 
 mglyph/malignmark inside MathML text integration points and annotation-xml `encoding` variants (case,
 spaces, entities, image/svg+xml).
 
+Since fix loop 9, 1,000 more documents (a separate generator, so the first 2,000 are unchanged) cross an
+OPEN axis (html, body, head, li+ul/ol, form, td/th/tr, caption, colgroup, div, p, table, noscript…) and an
+END-TAG axis around an SVG/MathML wrapper, then a raw-text hider (style, textarea, plaintext, title, xmp,
+script…). `end_regression.py` pins round 9's end-tag regression set (`end-pinned.json`): every
+hand-written case, every document 77bb9c5 missed, and a deterministic sample of 300; `EndTagRegressionTest`
+holds both the union and the tree-aware reading to Chrome on it (`AnchorParityFuzzTest` too, on the fuzz).
+
 `anchor_oracle.py` parses each document with Chrome's DOMParser (`text/html`) and pins, in
 `anchor-pinned.json`, the web hosts of the links a reader can follow in the document Chrome builds:
 - HTML `<a>` and `<area>`;
 - SVG `<a>` (`href`, or `xlink:href`);
 - an HTML meta refresh;
 
-each resolved against the document's base. `AnchorParityFuzzTest` fails when Loupe does not judge one of
+each resolved against the document's base (a DOMParser document has scripting disabled, per the HTML
+spec, so `<noscript>` content is markup, as in a mail client, which runs no scripts). `AnchorParityFuzzTest` fails when Loupe does not judge one of
 those hosts. Finding more is counted, not failed: Loupe reads CDATA and template content and tries the
 other bases. Planting the loop-6 bug back (CDATA honoured inside SVG/MathML, no breakouts) fails 85
 documents.

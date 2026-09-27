@@ -15,8 +15,9 @@ class AnchorParityFuzzTest {
     fun `Loupe finds every link Chrome's document has`() {
         val text = assertNotNull(PlatformFiles.readText(ANCHOR_PARITY_FUZZ), ANCHOR_PARITY_FUZZ)
         val result = AnchorParityFuzz.run(text)
-        println("anchor-parity fuzz: ${result.cases} documents, ${result.missing.size} missing a link Chrome has, ${result.overFound} with more links than Chrome")
-        assertTrue(result.cases >= 2000, "only ${result.cases} cases")
+        println("anchor-parity fuzz: ${result.cases} documents, ${result.missing.size} missing a link Chrome has, ${result.overFound} with more links than Chrome, ${result.treeMissing.size} missed by the tree-aware reading alone")
+        assertTrue(result.cases >= 3000, "only ${result.cases} cases")
         assertTrue(result.missing.isEmpty(), "${result.missing.size} of ${result.cases} documents lose a link:\n" + result.missing.joinToString("\n"))
+        assertTrue(result.treeMissing.isEmpty(), "${result.treeMissing.size} of ${result.cases} documents: the tree-aware reading loses a link:\n" + result.treeMissing.take(40).joinToString("\n"))
     }
 }

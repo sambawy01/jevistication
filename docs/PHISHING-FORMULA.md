@@ -89,7 +89,11 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
    script/style/textarea/title/xmp/iframe/noembed/noframes/plaintext in HTML hide no anchor and make none
    up. Every doubt leans toward finding more links: `<![CDATA[` always ends at the first `>`, `<template>`
    content is read, and a relative href is also judged as written and against every other absolute
-   `<base href>`. `<area href>` and `<meta http-equiv=refresh>` are links; a link's text joins across
+   `<base href>`. Since fix loop 9 the links judged are the union of that tree-aware reading and a no-skip
+   reading of the same tokens (no raw text, RCDATA, plaintext or SVG/MathML state skips anything), so every
+   link start tag outside a real comment is judged: a wrong guess about the tree can only over-find. A link
+   only the no-skip reading finds is judged with no link text (host signals only). `<area href>` and
+   `<meta http-equiv=refresh>` are links; a link's text joins across
    comments and leaves out an SVG `<title>`/`<desc>`'s own text; every HTML character reference in the attribute decoded (numeric and the
    full WHATWG named table), `href` only as a whole attribute name (`xlink:href` for an `<a>` inside
    `<svg>`), a relative href resolved against the document's first `<base href>` outside SVG/MathML;

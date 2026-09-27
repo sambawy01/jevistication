@@ -34,6 +34,18 @@ EVIL = ['<a href="https://paypa1-secure.xyz/login">Sign in to PayPal</a>', '<a h
         '<a href=https://paypa1-secure.xyz/login>PayPal</a>']
 BENIGN = ['<a href="https://www.paypal.com/">PayPal</a>', ""]
 
+# Fix loop 9 (round 9): an OPEN axis and an END-TAG axis around the foreign wrapper, then a raw-text
+# hider: <OPEN><svg|math…></END><style|textarea|plaintext…><p><a href=E>. Chrome often stays in foreign
+# content (the end tag is ignored), where <style> is not raw text.
+OPEN = ["<html>", "<body>", "<head>", "<li><ul>", "<li><ol>", "<ul><li>", "<form>", "<td>", "<th>", "<tr>", "<caption>", "<colgroup>",
+        "<div>", "<p>", "<table>", "<noscript>", "<tbody>", "<button>", "<span>", "<b>", "<a href='https://good.example/'>", "<table><tr><td>", ""]
+ENDT = ["</html>", "</body>", "</head>", "</li>", "</ul>", "</form>", "</td>", "</th>", "</tr>", "</caption>", "</colgroup>", "</div>", "</p>",
+        "</table>", "</noscript>", "</tbody>", "</button>", "</span>", "</b>", "</a>", "</svg>", "</math>", "</br>", "</foreignObject>", "</mi>", ""]
+FOREIGN = ["<svg>", "<math>", "<svg><foreignObject>", "<svg><foreignObject><svg>", "<math><mi>", "<math><mi><svg>", "<math><annotation-xml encoding=text/html><svg>",
+           "<svg><desc>", "<svg><g>", "<math><mtext><svg>"]
+RAWHIDE = ["<style>", "<textarea>", "<plaintext>", "<title>", "<xmp>", "<script>", "<noembed>", "<noframes>", "<iframe>", "<noscript>", ""]
+N_AXIS = 1000
+
 def main():
     r = random.Random(SEED)
     seen, out = set(), []
@@ -49,6 +61,16 @@ def main():
             continue
         seen.add(html)
         out.append({"id": "doc-%04d" % len(out), "html": html})
+    # the axis documents: a separate generator, so the first N documents stay as they were
+    r2 = random.Random(SEED + 9)
+    n0 = len(out)
+    while len(out) < n0 + N_AXIS:
+        html = (r2.choice(BASE[:3]) + r2.choice(BENIGN) + r2.choice(OPEN) + r2.choice(FOREIGN) + r2.choice(ENDT) + r2.choice(ENDT[-8:]) +
+                r2.choice(RAWHIDE) + r2.choice(["<p>", ""]) + r2.choice(EVIL))
+        if html in seen:
+            continue
+        seen.add(html)
+        out.append({"id": "axis-%04d" % (len(out) - n0), "html": html})
     for o in out:
         print(json.dumps(o, ensure_ascii=False))
 

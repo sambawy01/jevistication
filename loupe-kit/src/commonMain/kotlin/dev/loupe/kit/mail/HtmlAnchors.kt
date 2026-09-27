@@ -53,6 +53,12 @@ internal object HtmlAnchors {
         "template", "textarea", "tfoot", "th", "thead", "title", "tr", "track", "ul", "wbr", "xmp",
     )
 
+    /** What the tree builder keeps in the head: before anything else, the body has not started. */
+    private val HEAD_OK = setOf("html", "head", "meta", "link", "style", "script", "title", "base", "basefont", "bgsound", "noframes", "noscript", "template")
+
+    /** Table parts: the tree builder ignores them outside a table. */
+    private val TABLE_PARTS = setOf("td", "th", "tr", "tbody", "thead", "tfoot", "caption", "col", "colgroup")
+
     /** The elements that bound "has an element in scope" (the default scope). */
     private val SCOPE_HTML = setOf("applet", "caption", "html", "table", "td", "th", "marquee", "object", "template")
     private val SVG_HTML_IP = setOf("foreignobject", "desc", "title")
@@ -63,11 +69,40 @@ internal object HtmlAnchors {
 
     private class El(val name: String, val ns: Int, val htmlIp: Boolean)
     private class Tag(val name: String, val end: Boolean, val attrs: Map<String, String>, val start: Int, val after: Int, val selfClosing: Boolean)
-    private class Link(val raw: String, val text: StringBuilder, val fixedText: String?)
+    private class Link(val raw: String, val text: StringBuilder, val fixedText: String?, val start: Int)
 
     fun anchors(html: String, max: Int): List<Pair<String, String>> {
+        // (a) the tree-aware reading: namespaces, raw text, link text and the document's <base>
         val links = mutableListOf<Link>()
         val bases = mutableListOf<Pair<String, Boolean>>() // (href, outside SVG/MathML), in document order
+        scan(html, true, links, bases)
+        // (b) the no-skip reading (fix loop 9): the same tokeniser, but no raw text, RCDATA, plaintext or
+        // foreign-content state skips anything, so every <a href>, <area href>, SVG link and meta refresh
+        // that is a start tag anywhere outside a real comment is judged. A missed link would need the
+        // tree builder emulated exactly; the union makes over-finding the only possible error. A link only
+        // (b) finds is judged with empty text: it can raise host signals, never a text mismatch.
+        val flat = mutableListOf<Link>()
+        val flatBases = mutableListOf<Pair<String, Boolean>>()
+        scan(html, false, flat, flatBases)
+        val seenStarts = links.mapTo(HashSet()) { it.start }
+        for (l in flat) if (l.start !in seenStarts) links += Link(l.raw, StringBuilder(), "", l.start)
+        links.sortBy { it.start }
+        for (b in flatBases) if (bases.none { it.first == b.first }) bases += b.first to false
+        return resolveAll(links, bases, max)
+    }
+
+    /**
+     * The tree-aware reading alone (a), for tests that hold its precision (link text and <base> depend
+     * on it): the regression set's links must all be found by it, not only by the union.
+     */
+    internal fun treeAnchors(html: String, max: Int): List<Pair<String, String>> {
+        val links = mutableListOf<Link>()
+        val bases = mutableListOf<Pair<String, Boolean>>()
+        scan(html, true, links, bases)
+        return resolveAll(links, bases, max)
+    }
+
+    private fun scan(html: String, tree: Boolean, links: MutableList<Link>, bases: MutableList<Pair<String, Boolean>>) {
         val stack = ArrayList<El>()
         val count = HashMap<String, Int>()
         var open: Link? = null
@@ -100,6 +135,8 @@ internal object HtmlAnchors {
          * ignored.
          */
         fun close(name: String) {
+            // </body> and </html> only switch insertion mode; they never pop (fix loop 9)
+            if (name == "body" || name == "html") return
             if ((count[name] ?: 0) <= 0) return
             var i = stack.size - 1
             if (stack.isNotEmpty() && stack[i].ns != HTML) {
@@ -108,16 +145,27 @@ internal object HtmlAnchors {
                     i--
                 }
             }
+            // the in-body walk starts at the current node, so an integration point above the HTML
+            // element is a scope boundary (fix loop 9)
+            i = stack.size - 1
             val specialName = name in SPECIAL_HTML
             while (i >= 0) {
                 val e = stack[i]
-                if (e.ns == HTML && e.name == name) { popTo(i); return }
+                if (e.ns == HTML && e.name == name) {
+                    if (name == "form") { // </form> removes the form element only, nothing above it
+                        stack.removeAt(i)
+                        count[name] = (count[name] ?: 1) - 1
+                    } else popTo(i)
+                    return
+                }
                 if ((e.ns == HTML && e.name in SCOPE_HTML) || foreignIp(e)) return
+                if (name == "li" && e.ns == HTML && (e.name == "ul" || e.name == "ol")) return // list item scope
                 if (!specialName && e.ns == HTML && e.name in SPECIAL_HTML) return
                 i--
             }
         }
         fun text(from: Int, to: Int) {
+            if (!tree) return
             val l = open ?: return
             // text right inside a foreign title/desc/style/script is not shown (HTML inside one is)
             val cur = stack.lastOrNull()
@@ -125,11 +173,16 @@ internal object HtmlAnchors {
             l.text.append(html, from, minOf(to, from + TEXT_MAX - l.text.length))
         }
 
+        // Whether the body has started (a start tag the head does not keep, or text): a <noscript> before
+        // it is the head's, which the next other start tag closes, so its end tag later closes nothing
+        // (fix loop 9: `<noscript><svg></noscript><style>` stays in SVG)
+        var bodyStarted = false
         var i = 0
         val n = html.length
         while (i < n) {
             val lt = html.indexOf('<', i)
             if (lt < 0) { text(i, n); break }
+            if (!bodyStarted) for (k in i until lt) if (!space(html[k])) { bodyStarted = true; break }
             text(i, lt)
             if (html.startsWith("<!--", lt)) { i = commentEnd(html, lt + 4); continue }
             // `<!…` (also `<![CDATA[`, see above) and `<?…`: a bogus comment to the next `>`
@@ -148,6 +201,7 @@ internal object HtmlAnchors {
             i = tag.after
             val name = tag.name
             if (tag.end) {
+                if (!tree) continue
                 if (!inHtml() && (name == "p" || name == "br")) leaveForeign()
                 if (name == "a") open = null
                 close(name)
@@ -157,7 +211,7 @@ internal object HtmlAnchors {
             // breakout tag, which first leaves SVG/MathML), else the namespace of the foreign element it is in
             var ns = HTML
             val c = current()
-            if (c != null && c.ns != HTML) {
+            if (tree && c != null && c.ns != HTML) {
                 val ip = c.htmlIp || (c.ns == MATH && c.name in MATHML_TEXT_IP && name != "mglyph" && name != "malignmark")
                 val font = name == "font" && (tag.attrs.containsKey("color") || tag.attrs.containsKey("face") || tag.attrs.containsKey("size"))
                 ns = when {
@@ -167,24 +221,30 @@ internal object HtmlAnchors {
                     else -> c.ns
                 }
             }
-            if (ns == HTML && name == "svg") ns = SVG
-            if (ns == HTML && name == "math") ns = MATH
+            if (tree && ns == HTML && name == "svg") ns = SVG
+            if (tree && ns == HTML && name == "math") ns = MATH
             val selfClosing = tag.selfClosing && ns != HTML
             when {
                 name == "base" && tag.attrs.containsKey("href") -> bases += decodeAttribute(tag.attrs.getValue("href")) to (ns == HTML)
                 // <area> and a meta refresh are read in any namespace (a doubt about the namespace
                 // must not lose one; in SVG/MathML a browser has no such link: over-finding)
                 name == "meta" && tag.attrs["http-equiv"]?.trim()?.lowercase() == "refresh" ->
-                    refreshUrl(decodeAttribute(tag.attrs["content"] ?: ""))?.let { links += Link(it, StringBuilder(), "") }
-                name == "area" -> tag.attrs["href"]?.let { links += Link(it, StringBuilder(), decodeText(tag.attrs["alt"] ?: "")) }
+                    refreshUrl(decodeAttribute(tag.attrs["content"] ?: ""))?.let { links += Link(it, StringBuilder(), "", tag.start) }
+                name == "area" -> tag.attrs["href"]?.let { links += Link(it, StringBuilder(), decodeText(tag.attrs["alt"] ?: ""), tag.start) }
                 name == "a" -> {
                     if (ns == HTML) open = null // an <a> closes the one still open (the adoption agency)
-                    val raw = tag.attrs["href"] ?: if (ns == SVG) tag.attrs["xlink:href"] else null
-                    if (raw != null) { val l = Link(raw, StringBuilder(), null); links += l; open = l }
+                    val raw = tag.attrs["href"] ?: if (ns == SVG || !tree) tag.attrs["xlink:href"] else null
+                    if (raw != null) { val l = Link(raw, StringBuilder(), null, tag.start); links += l; open = l }
                 }
             }
+            if (!tree) continue
             if (ns == HTML) {
-                if (name !in VOID) push(El(name, HTML, false))
+                // html/head/body are the document's own (a stray one is merged or ignored); table parts
+                // outside a table are ignored by the tree builder (fix loop 9)
+                val headNoscript = name == "noscript" && !bodyStarted
+                if (name !in HEAD_OK) bodyStarted = true
+                val ignored = name == "html" || name == "head" || name == "body" || headNoscript || (name in TABLE_PARTS && (count["table"] ?: 0) <= 0)
+                if (name !in VOID && !ignored) push(El(name, HTML, false))
                 when {
                     name == "plaintext" -> { text(i, n); i = n }
                     name in RAW_TEXT -> {
@@ -198,6 +258,9 @@ internal object HtmlAnchors {
             }
         }
 
+    }
+
+    private fun resolveAll(links: List<Link>, bases: List<Pair<String, Boolean>>, max: Int): List<Pair<String, String>> {
         // resolve: the first <base href> outside SVG/MathML is the document's; the href as written and
         // every other absolute <base href> are judged too when they give another host (lean toward finding)
         val docBase = bases.firstOrNull { it.second }?.first?.let { Hosts.cleanHref(it) }
@@ -220,6 +283,42 @@ internal object HtmlAnchors {
                 if (out.size >= max) break
                 val h = hostOf(r) ?: continue
                 if (seen.add(h)) out += r to shown
+            }
+        }
+        return out
+    }
+
+    /** Attributes whose URL loads or describes something (an image, a font, a namespace): nobody follows it. */
+    private val NON_NAV_ATTRS = setOf("src", "srcset", "background", "poster", "lowsrc", "dynsrc", "longdesc", "cite", "codebase", "classid", "profile", "archive", "itemtype", "itemprop")
+
+    /**
+     * The URLs of [html] that no reader follows (fix loop 9): the DOCTYPE's (a DTD), namespace URIs
+     * (`xmlns`, `xmlns:*`), and the values of attributes that load or describe rather than link (`src`,
+     * `srcset`, `background`, `poster`, …; `<link href>`, a stylesheet or icon). The mail's pattern links
+     * (`EmailFacts.links`) found only there are not judged.
+     */
+    fun nonNavigableUrls(html: String): Set<String> {
+        val out = HashSet<String>()
+        var i = 0
+        val n = html.length
+        while (i < n) {
+            val lt = html.indexOf('<', i)
+            if (lt < 0) break
+            if (html.startsWith("<!--", lt)) { i = commentEnd(html, lt + 4); continue }
+            if (lt + 1 < n && (html[lt + 1] == '!' || html[lt + 1] == '?')) {
+                val e = html.indexOf('>', lt + 2).let { if (it < 0) n else it }
+                Regex("[\"']([^\"']*://[^\"']*)[\"']").findAll(html.substring(lt, e)).forEach { out += it.groupValues[1].trim() }
+                i = e + 1
+                continue
+            }
+            val tag = readTag(html, lt)
+            if (tag == null || tag.after < 0) { i = lt + 1; continue }
+            i = tag.after
+            for ((k, v) in tag.attrs) {
+                if (k == "xmlns" || k.startsWith("xmlns:") || k in NON_NAV_ATTRS || (tag.name == "link" && k == "href")) {
+                    val d = decodeAttribute(v).trim()
+                    if (k == "srcset") d.split(',').forEach { out += it.trim().substringBefore(' ') } else out += d
+                }
             }
         }
         return out

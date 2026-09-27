@@ -483,6 +483,24 @@ LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
   - 2,000 documents, 0 missing. All 141 round-7 files still give every Chrome host.
 - **Criteria against 699761a** unchanged: 18 browser-correct rows, legitimate none higher.
 
+**Fix loop 9 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix9/`.
+- **Coverage by construction:** the links judged are the union of the tree-aware reading and a no-skip
+  reading, so only real comments hide a link. Links only the latter finds have no link text.
+- **Round 9's 71,429 documents:** 0 missing against Chrome (the tree-aware reading alone also 0 after the
+  B1/B2 and head-noscript fixes).
+- **Fuzz and tests:**
+  - The anchor fuzz gains the OPEN and END-TAG axes: 3,000 documents, 0 missing, tree-aware 0.
+  - `end-pinned.json`: 856 regression documents.
+  - `HtmlAnchorsUnionTest` pins the by-construction promise.
+- **Plants:**
+  - no union fails HtmlAnchorsUnionTest and the corpus;
+  - loop-7 pop-through fails AnchorParityFuzzTest and EndTagRegressionTest;
+  - no integration-point boundaries fails AnchorParityFuzzTest and EndTagRegressionTest.
+- **`fromItem`:** drops non-navigable pattern links. MailFallbackTest covers r9's ten emls, all 0 safe.
+- **Criteria against 699761a:** legitimate 255 rows, none higher.
+  - Attack: the same 18 browser-correct rows (Chrome has no link). Ten of them are now flagged 53 by the
+    union (no link text, hence not 83).
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).

@@ -63,18 +63,24 @@ data class MailMessage(
             var replyTo = ""
             var auth = ""
             var anchors: List<Pair<String, String>> = emptyList()
+            var nonNavigable: Set<String> = emptySet()
             var labels: List<String> = emptyList()
             if (raw != null) {
                 val entity = MimeParser.parseEntity(raw.encodeToByteArray())
                 replyTo = entity.header("reply-to")?.trim() ?: ""
                 auth = entity.header("authentication-results")?.trim()?.take(2000) ?: ""
                 labels = (entity.header("x-keywords") ?: entity.header("keywords") ?: "").split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
-                anchors = htmlParts(entity).flatMap { anchors(it) }.distinct().take(Phishing.MAX_LINKS)
+                val parts = htmlParts(entity)
+                anchors = parts.flatMap { anchors(it) }.distinct().take(Phishing.MAX_LINKS)
+                nonNavigable = parts.flatMapTo(HashSet()) { HtmlAnchors.nonNavigableUrls(it) }
             }
             // the source's own link list (found by pattern in the raw mail) is judged too where no anchor
             // covers its host, so one harmless anchor cannot switch the fallback off (fix loop 7)
             val covered = anchors.mapNotNull { ParsedUrl.parse(Hosts.linkUrl(it.first))?.host?.ifEmpty { null } }.toSet()
+            // ...but not a URL nobody follows (a DTD, a namespace URI, an image's src; fix loop 9), unless
+            // the visible text shows it
             val extra = (facts?.links ?: emptyList()).filter { l -> ParsedUrl.parse(Hosts.linkUrl(l))?.host?.ifEmpty { null }.let { it == null || it !in covered } }
+                .filter { l -> l.trim() !in nonNavigable || l.trim() in item.text }
             val links = (anchors + extra.map { it to "" }).distinct().take(Phishing.MAX_LINKS)
             return MailMessage(
                 id = item.id, sender = from, subject = facts?.subject ?: "", dateIso = item.dateIso, body = body,

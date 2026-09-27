@@ -2120,6 +2120,19 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
     documents with the links Chrome's DOMParser builds. Loupe misses none. Planting the loop-6 depth
     counter back fails 85.
   - All 141 round-7 files: every host Chrome links to is judged.
+- **Fix loop 9: coverage by construction.**
+  - The links judged are the union of the tree-aware reading (link text, `<base>`) and a no-skip reading of
+    the same tokens. Raw text, RCDATA, plaintext and SVG/MathML state skip nothing in the second reading, so
+    only real comments hide a link.
+  - A link only the no-skip reading finds is judged with empty text, so it can't raise a text mismatch.
+  - Round 9's 71,429 generated documents: 0 missing against Chrome (the tree-aware reading alone also 0).
+  - Tree-builder fixes for link-text precision:
+    - the in-body end-tag walk starts at the current node, so integration points bound it;
+    - `</body>`/`</html>` pop nothing, `</form>` removes the form element only, and ul/ol bound `</li>`;
+    - table parts are ignored outside a table, and html/head/body are never pushed;
+    - a `<noscript>` before the body is the head's.
+  - `fromItem` drops pattern links nobody follows: DTDs, xmlns URIs, and src/srcset/background/`<link href>`
+    values, unless the visible text shows them.
 - **URLs are split as browsers split them** (fix loop 3; hosts checked against Chrome 153,
   r3/chrome1.out): C0 controls and spaces at both ends are stripped; for http, https, ws, wss, ftp and
   file the host follows the scheme however many `/` or `\` come first, so a mail link
