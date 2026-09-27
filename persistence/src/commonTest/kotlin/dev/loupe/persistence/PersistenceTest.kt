@@ -115,6 +115,17 @@ class PersistenceTest {
     }
 
     @Test
+    fun aChoiceSavedBeforeTheTenOptionCapStillLoads() {
+        // Up to 12 options were allowed before 2026-09-27; such a judgment must load (a file entry
+        // that fails to decode is dropped on the next save), though nothing new may be that big.
+        val kind = allJudgments().first { it.templateId == "receipt-kind" }
+        val twelve = (1..11).map { "kind $it" } + "not a purchase"
+        val saved = JudgmentCodec.encode(kind.copy(shape = dev.loupe.templates.Shape.Pick(twelve, "not a purchase"), baseline = null))
+        val loaded = JudgmentCodec.decodeFile(JsonText.pretty(JsonValue.Arr(listOf(saved))))
+        assertEquals(twelve, loaded.single().choice.candidates)
+    }
+
+    @Test
     fun theParserRejectsWhatIsNotJson() {
         for (bad in listOf("", "{", "{\"a\":}", "[1,]", "{\"a\":1}x", "\"\\q\"", "01", "tru")) {
             assertFailsWith<IllegalArgumentException>(bad) { JsonValue.parse(bad) }
