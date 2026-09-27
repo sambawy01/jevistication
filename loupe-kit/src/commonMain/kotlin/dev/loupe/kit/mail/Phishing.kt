@@ -9,6 +9,7 @@ import dev.loupe.kit.site.OnlineContext
 import dev.loupe.kit.site.OnlineSignals
 import dev.loupe.kit.site.ParsedUrl
 import dev.loupe.kit.site.SiteConfig
+import dev.loupe.kit.site.SiteContext
 import dev.loupe.kit.site.SiteSignals
 import dev.loupe.kit.site.fillTemplate
 import dev.loupe.sources.common.MimeParser
@@ -25,6 +26,11 @@ import dev.loupe.sources.common.MimeParser
  * Mechanical differences: addresses are parsed with the phone's own `MimeParser.mailboxes` (Station:
  * `email.utils`), registrable domains come from the engine's pinned PSL, and IDNA uses NFKC +
  * punycode (Station: Python's IDNA 2003 codec).
+ *
+ * Formula v1.3 (docs/PHISHING-FORMULA.md changelog; Station commit 0ff886d,
+ * `docs/formula/phishing-formula-v1.3.md`): the `self_vouching` signal, 15 points, from
+ * [PhishingOwnWords] — Station's `VOUCHING_RE`, `_SENTENCE_SPLIT`, `self_vouching()` and
+ * `_is_contact_address()` in `mail/phishing.py`, and `own_text()` of `baselines.py`, verbatim.
  *
  * Real security alerts, receipts and bank notices read exactly like phishing, so the text alone
  * never decides. [assess] looks at facts a scam cannot hide: sender (the From domain imitates a
@@ -52,6 +58,8 @@ data class PhishVerdict(
     val domain: String,
     /** Gates that capped the score (`online_age_only_cap`). */
     val gates: List<String> = emptyList(),
+    /** The shared formula's version this verdict was computed with (Station's `formula`, v1.3). */
+    val formula: String = Phishing.FORMULA_VERSION,
 ) {
     val codes: Set<String> get() = reasons.map { it.code }.toSet()
 
@@ -68,6 +76,17 @@ object Phishing {
     const val LAYA_WEAK = 10
     const val MAX_LINKS = 60
     const val MAX_TRUSTED = 500
+
+    /** The shared Loupe phishing formula's version: one number for the email and page profiles (Station's two FORMULA_VERSIONs). */
+    const val FORMULA_VERSION = SiteContext.FORMULA_VERSION
+
+    /**
+     * Formula v1.3: a sentence in the sender's own words vouches for the message ("verified by our
+     * security team", "Verified sender ✓", "تم التحقق", "متأكد منها"), from a sender that is not a
+     * known brand, not a trusted sender and not one of your contacts. Below [RISK_MIN] and
+     * [REVIEW_AT]: not a risk code, so alone it never flags a message and never makes it "caution".
+     */
+    const val W_SELF_VOUCHING = 15
 
     /** code -> (weight, plain-language reason). `{placeholders}` come from the reason's params. */
     val WEIGHTS: Map<String, Pair<Int, String>> = linkedMapOf(
@@ -112,6 +131,8 @@ object Phishing {
         "contact_homograph_domain" to (60 to "The sender's name is your contact {name}, and {domain} imitates their domain {target} with look-alike letters."),
         "contact_lookalike_domain" to (45 to "The sender's name is your contact {name}, but {domain} is a near miss of {target}, the domain they write from."),
         "contact_name_other_address" to (30 to "The sender's name is your contact {name}, but {address} is not an address they write from."),
+        // formula v1.3: a sentence in the message vouching for itself, in mail from an unknown sender (weak: never flags alone)
+        "self_vouching" to (W_SELF_VOUCHING to "The message vouches for itself (\"{phrase}\"): a real sender rarely needs to say its own mail is verified, approved or safe."),
         // Laya (weight shown is the maximum; 0.5-0.8 counts half)
         "laya_phishing" to (LAYA_STRONG to "The decision model's reading of the text: it looks like a phishing or scam attempt."),
     ).also { m -> m.putAll(OnlineSignals.MAIL_WEIGHTS) }
@@ -120,7 +141,7 @@ object Phishing {
         "trusted_sender" to "You marked {domain} as a trusted sender.",
     )
     val REASON_CODES: List<String> = WEIGHTS.keys.toList() + INFO_TEXT.keys
-    val REASON_PARAMS = listOf("brand", "domain", "shown", "target", "host", "tld", "name", "address")
+    val REASON_PARAMS = listOf("brand", "domain", "shown", "target", "host", "tld", "name", "address", "phrase")
     val RISK_CODES: Set<String> = WEIGHTS.filter { (c, w) -> w.first >= RISK_MIN && c != "laya_phishing" }.keys
 
     private val SENDER_CODES = mapOf(
@@ -437,6 +458,18 @@ object Phishing {
             add(code, "contact", *params.map { it.key to it.value }.toTypedArray())
         }
 
+        // formula v1.3: the message vouches for itself, from a sender that is not one of your contacts
+        val phrase = PhishingOwnWords.selfVouching(text)
+        if (phrase != null && !isContactAddress(address, contacts)) {
+            // The phrase is the sender's own text: shown in its own direction (it may be Arabic) and
+            // unable to reorder the sentence around it (bidi isolates; its own bidi controls removed).
+            val params = mapOf("phrase" to phrase)
+            val shown = mapOf("phrase" to FSI + phrase + PDI)
+            if (reasons.none { it.code == "self_vouching" }) {
+                reasons += PhishReason("self_vouching", reasonText("self_vouching", shown), W_SELF_VOUCHING, params, "text")
+            }
+        }
+
         // opt-in online checks (never for a trusted or brand sender: those returned above)
         if (online != null) {
             val evidence = runCatching { OnlineSignals.mailEvidence(reg.takeUnless { freemail }, linkTargets(text, links, reg, config), online) }
@@ -463,6 +496,16 @@ object Phishing {
             flag = score >= PHISHING_AT && hasRisk, score = score, reasons = reasons.sortedByDescending { it.weight },
             known = false, trusted = false, domain = reg ?: "", gates = gates,
         )
+    }
+
+    private const val FSI = "\u2068"
+    private const val PDI = "\u2069"
+
+    /** Station's `_is_contact_address`: the From address is one of a contact's own addresses. */
+    internal fun isContactAddress(address: String, contacts: List<Contact>): Boolean {
+        val a = PhishingOwnWords.pyStrip(address).lowercase()
+        if (a.isEmpty()) return false
+        return contacts.any { c -> c.addresses.any { PhishingOwnWords.pyStrip(it).lowercase() == a } }
     }
 
     /** Webmail domains: anyone can open a second address there, so a known name on one is always checked. */

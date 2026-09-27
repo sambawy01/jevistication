@@ -1,6 +1,7 @@
 package dev.loupe.kit.settings
 
 import dev.loupe.kit.watchers.TEST_TMP
+import dev.loupe.persistence.JsonText
 import dev.loupe.persistence.JsonValue
 import dev.loupe.persistence.PlatformFiles
 import kotlin.random.Random
@@ -38,8 +39,11 @@ class EngineSettingsTest {
         assertEquals(Features.ALL, features.fields.keys.toList())
 
         val station = JsonValue.parse(stationDefaults) as JsonValue.Obj
-        // Global: same keys, same order, same values.
-        assertEquals(station["global"], settings["global"])
+        // Global: same keys, same order, same values — except use_calibration, off on the phone by default
+        // (owner, 2026-09-27) where Station defaults it on.
+        val stationGlobal = JsonValue.Obj(LinkedHashMap((station["global"] as JsonValue.Obj).fields).also { it["use_calibration"] = JsonValue.Bool(false) })
+        assertEquals(stationGlobal, settings["global"])
+        assertNull(doc[EngineSettings.CALIBRATION_OPT_IN])
         // Station's features: same keys in the same order, same defaults.
         for (id in Features.STATION) assertEquals(station["features"]!!.asObj[id], features[id], id)
         // The phone's features: the common keys, and the game's one extra.
@@ -59,7 +63,9 @@ class EngineSettingsTest {
         assertEquals("balanced", d.memoryMode)
         assertEquals(10.0, d.idleUnloadMin)
         assertNull(d.acceptConfidence)
-        assertTrue(d.useCalibration && d.rulesFirst && d.baselineSwitch)
+        assertTrue(d.rulesFirst && d.baselineSwitch)
+        assertFalse(d.useCalibration, "calibration is off by default: the old, uncalibrated behaviour")
+        for (f in Features.ALL) assertFalse(d.policy(f).useCalibration, f)
         assertNull(d.gameMaxDecisionsPerS)
         for (f in Features.ALL) {
             val p = d.policy(f)
@@ -178,6 +184,27 @@ class EngineSettingsTest {
         assertEquals(JsonValue.Bool(false), doc["settings"]!!.asObj["features"]!!.asObj["flights"]!!.asObj["use_laya"])
         b.resetAll()
         assertEquals(EngineSettings.DEFAULTS, EngineSettingsStore(dir).current)
+    }
+
+    @Test
+    fun calibrationStaysOffForOldFilesAndOnWhenTheUserTurnedItOn() {
+        // A file from before 2026-09-27 wrote every key, and use_calibration's old default was true: never set, so off.
+        val old = dir()
+        dev.loupe.persistence.PlatformFiles.createDirectories(old)
+        val legacy = JsonText.pretty(EngineSettings.DEFAULTS.documentJson()).replace("\"use_calibration\": false", "\"use_calibration\": true")
+        assertTrue("\"use_calibration\": true" in legacy)
+        dev.loupe.persistence.PlatformFiles.writeAtomically("$old/${EngineSettings.FILE_NAME}", legacy)
+        assertFalse(EngineSettingsStore(old).current.useCalibration)
+        // Turned on by the user: written with the opt-in mark, and on again after a relaunch.
+        val d = dir()
+        val a = EngineSettingsStore(d)
+        assertFalse(a.current.useCalibration)
+        a.setBool("global.use_calibration", true)
+        assertTrue("\"${EngineSettings.CALIBRATION_OPT_IN}\": true" in a.document())
+        assertTrue(EngineSettingsStore(d).current.useCalibration)
+        // And off again stays off.
+        a.setBool("global.use_calibration", false)
+        assertFalse(EngineSettingsStore(d).current.useCalibration)
     }
 
     @Test

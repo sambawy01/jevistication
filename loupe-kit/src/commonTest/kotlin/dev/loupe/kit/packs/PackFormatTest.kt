@@ -92,6 +92,28 @@ class PackFormatTest {
     }
 
     @Test
+    fun aChoiceKeepsToTenOptionsAndAScoreToStationsTwenty() {
+        fun choice(n: Int) = miniPack().preset0 {
+            it.with("questions", JsonValue.obj("q" to JsonValue.obj(
+                "type" to JsonValue.Str("choice"), "instructions" to JsonValue.Str("Which kind?"),
+                "criteria" to JsonValue.strings((1..n).map { i -> "kind $i" }),
+            )))
+        }
+        valid(choice(10))
+        val e = invalid(choice(11))
+        assertEquals(listOf("presets", "0", "questions", "q", "choice", "criteria"), e.problems.single().loc)
+        assertTrue("at most 10 options (this has 11)" in e.problems.single().msg && "Split it" in e.problems.single().msg, e.lines.toString())
+        // The labelled-dict form is held to the same cap.
+        val dict = JsonValue.Obj(LinkedHashMap((1..11).associate { "k$it" to (JsonValue.Null as JsonValue) }))
+        invalid(miniPack().preset0 { it.with("questions", JsonValue.obj("q" to JsonValue.obj("type" to JsonValue.Str("choice"), "instructions" to JsonValue.Str("Which?"), "criteria" to dict))) })
+        // Score levels keep Station's limit (the lint then keeps a score to 10 bands).
+        valid(miniPack().preset0 { it.with("questions", JsonValue.obj("q" to JsonValue.obj(
+            "type" to JsonValue.Str("score"), "instructions" to JsonValue.Str("How much?"),
+            "criteria" to JsonValue.strings((1..20).map { i -> "level $i" }),
+        ))) })
+    }
+
+    @Test
     fun validateIdsNamesAndDuplicates() {
         val twice = miniPack().let { p ->
             val first = p["presets"]!!.asArr.items[0]

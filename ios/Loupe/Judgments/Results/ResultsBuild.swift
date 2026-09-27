@@ -144,7 +144,11 @@ enum ResultsFixture {
         let plan = JudgmentResults.shared.plan(all: [], judgment: j, items: all, rerunAll: true)
         await Task.detached(priority: .userInitiated) {
             let bridge = SweepBridge(progress: { _ in }, rows: { ledger.record($0) })
-            _ = JudgmentSweep(backend: FixtureResultsBackend()).run(judgment: j, plan: plan, observer: bridge, autoBaseline: false)
+            // Calibration off: the stand-in's spread is its own, not the real graph's the shipped prior is fitted to.
+            let store = EngineSettingsStore(directory: nil)
+            _ = store.setBool(key: "global.use_calibration", value: false)
+            _ = JudgmentSweep(backend: FixtureResultsBackend()).runWith(judgment: j, plan: plan, observer: bridge, autoBaseline: false,
+                                                                     policy: store.current.policy(feature: Features.shared.JUDGMENTS))
             ledger.flush()
         }.value
         JudgmentRunLog.stamp([j.id], at: Date().addingTimeInterval(-42 * 60))

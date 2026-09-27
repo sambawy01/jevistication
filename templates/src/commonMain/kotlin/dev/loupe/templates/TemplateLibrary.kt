@@ -6,6 +6,7 @@ import dev.loupe.engine.FailurePosture.LOUD
 import dev.loupe.engine.FailurePosture.NULL_ACTION
 import dev.loupe.engine.FailurePosture.OPEN
 import dev.loupe.engine.JudgmentDefinition
+import dev.loupe.engine.JudgmentLint
 import dev.loupe.templates.Baseline.Constant
 import dev.loupe.templates.Baseline.DateBefore
 import dev.loupe.templates.Baseline.Keyword
@@ -381,7 +382,7 @@ object TemplateLibrary {
             id = "urgency",
             category = Category.EMAIL,
             title = "How soon something needs attention",
-            question = "How soon does this need my attention, where 0 is no action, 1 is this month, 2 is this week and 3 is today?",
+            question = "How soon does this need my attention, where 0 is never, 1 is this month, 2 is this week and 3 is today?",
             shape = Shape.Ordinal(0..3, listOf("no action needed", "this month", "this week", "today")),
             invariant = "The band is set by the earliest consequence for the recipient, not by how loudly the message is worded.",
             breaks = "Messages that need nothing at all are 0, however urgent they sound.",
@@ -1189,7 +1190,7 @@ object TemplateLibrary {
         "reply-from-sender" to ("waiting on my response" to "not waiting on me"),
         "meeting-request" to ("a request to meet" to "not a meeting request"),
         "someone-will-follow-up" to ("a promise to get back to me" to "no promise to follow up"),
-        "unsubscribe-candidate" to ("bulk mail I no longer read" to "mail worth keeping"),
+        "unsubscribe-candidate" to ("bulk mail I no longer read" to "not bulk mail I no longer read"),
         "subscription-charge" to ("a recurring subscription charge" to "not a subscription charge"),
         "trial-ending" to ("a free trial about to charge me" to "not a trial warning"),
         "price-rise" to ("a price rise for me" to "no price rise for me"),
@@ -1197,8 +1198,10 @@ object TemplateLibrary {
         "cancellation-confirmed" to ("a confirmed cancellation" to "not a cancellation"),
         "is-duplicate" to ("a redundant copy" to "not a redundant copy"),
         "is-stale" to ("no longer useful to keep" to "still useful to keep"),
-        "is-junk" to ("worthless to keep" to "worth keeping"),
-        "refetchable-download" to ("a download I could fetch again" to "personal or one-off"),
+        "is-junk" to ("worthless to keep" to "not worthless to keep"),
+        "refetchable-download" to ("a download I could fetch again" to "not a download I could fetch again"),
+        // Not rephrased as "not an earlier, superseded version" (owner item #7, 2026-09-27): on the labelled
+        // items that wording called 12 more current documents superseded (87% -> 62%); see BUILD.md.
         "superseded-version" to ("an earlier, superseded version" to "a current or unique version"),
         "screenshot-worth-keeping" to ("a screenshot worth keeping" to "nothing worth keeping"),
         "photo-of-document" to ("a photo of a paper document" to "not a document photo"),
@@ -1211,11 +1214,11 @@ object TemplateLibrary {
         "booking-confirmed" to ("a confirmed travel booking" to "not a confirmed booking"),
         "trip-changed" to ("a change to a trip I booked" to "no change to a trip"),
         "entry-requirement" to ("an entry requirement for a trip" to "no entry requirement"),
-        "phishing" to ("a scam or phishing attempt" to "an ordinary message"),
-        "impostor-sender" to ("someone pretending to be someone else" to "consistent with its sender"),
+        "phishing" to ("a phishing attempt" to "not a phishing attempt"),
+        "impostor-sender" to ("someone pretending to be someone else" to "not someone pretending to be someone else"),
         "pressure-tactics" to ("pressure to act immediately" to "no pressure to act now"),
         "asks-for-secrets" to ("a request for a password, code or card number" to "no request for secrets"),
-        "claims-brand" to ("claims to come from that brand" to "does not claim to be that brand"),
+        "claims-brand" to ("claims to come from that brand" to "does not claim to come from that brand"),
         "too-good-to-be-true" to ("an unrequested prize or windfall" to "no unrequested windfall"),
         "health-record" to ("a medical record, prescription or appointment" to "not a health record"),
         "about-person" to ("about this person" to "not about this person"),
@@ -1241,6 +1244,8 @@ object TemplateLibrary {
             .map { t ->
                 val options = OPTIONS[t.id]
                 check((options != null) == (t.shape == Shape.YesNo)) { "${t.id}: every yes/no template needs descriptive options" }
+                // Presence questions only (owner, 2026-09-27): the model answers absence questions badly.
+                check(JudgmentLint.absence(t.question).isEmpty()) { "${t.id}: asks an absence question" }
                 if (options == null) t else t.described(options.first, options.second)
             }
             .sortedBy { it.category.ordinal }

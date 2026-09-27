@@ -46,7 +46,10 @@ final class JudgmentsTests: XCTestCase {
     private func service(installed: Bool = true, items: [SourceItem]? = nil, backend: FakeJudgmentBackend = FakeJudgmentBackend()) -> (JudgmentsService, FakeModel) {
         let model = FakeModel(installed: installed, backend: backend)
         let list = items ?? [item("r1", "Receipt for a donation"), item("n1", "Lunch plans, about the payment"), item("img", "", hasText: false)]
-        let s = JudgmentsService(ledger: LedgerService(home: home), items: { list }, model: model)
+        // Calibration off: the fake's 0.95 / 0.6 are not the real graph's answers, which the shipped prior is fitted to.
+        let settings = FakeSettings()
+        _ = settings.store.setBool(key: "global.use_calibration", value: false)
+        let s = JudgmentsService(ledger: LedgerService(home: home), items: { list }, model: model, settings: settings)
         s.load()
         return (s, model)
     }

@@ -117,6 +117,42 @@ class TemplateLibraryTest {
     }
 
     @Test
+    fun `no template asks an absence question`() {
+        for (t in all) assertTrue(JudgmentLint.absence(t.question).isEmpty(), "${t.id}: ${t.question}")
+        // The one shipped question that used it (owner item #2, 2026-09-27): urgency's "0 is no action".
+        assertEquals(
+            "How soon does this need my attention, where 0 is never, 1 is this month, 2 is this week and 3 is today?",
+            TemplateLibrary.byId("urgency")!!.question,
+        )
+    }
+
+    @Test
+    fun `every choice keeps to ten options - and a template with more is refused`() {
+        assertTrue(all.all { t -> (t.shape as? Shape.Pick)?.candidates?.size?.let { it <= 10 } ?: true })
+        val kind = TemplateLibrary.byId("receipt-kind")!!
+        val eleven = Shape.Pick((1..10).map { "kind $it" } + "not a purchase", noOp = "not a purchase")
+        val e = kotlin.runCatching { kind.copy(shape = eleven, baseline = null, examples = kind.examples.map { it.copy(answer = "not a purchase") }) }
+        assertTrue(e.exceptionOrNull()?.message?.contains("keeps to 10 options") == true, e.toString())
+    }
+
+    @Test
+    fun `the two-option negatives say the plain opposite of the positive - owner item 7`() {
+        val expected = mapOf(
+            "phishing" to ("a phishing attempt" to "not a phishing attempt"),
+            "impostor-sender" to ("someone pretending to be someone else" to "not someone pretending to be someone else"),
+            "claims-brand" to ("claims to come from that brand" to "does not claim to come from that brand"),
+            "is-junk" to ("worthless to keep" to "not worthless to keep"),
+            "unsubscribe-candidate" to ("bulk mail I no longer read" to "not bulk mail I no longer read"),
+            "refetchable-download" to ("a download I could fetch again" to "not a download I could fetch again"),
+            // Kept: the plain opposite measured 87% -> 62% on the labelled items (BUILD.md, 2026-09-27).
+            "superseded-version" to ("an earlier, superseded version" to "a current or unique version"),
+        )
+        for ((id, options) in expected) {
+            assertEquals(Shape.Binary(options.first, options.second), TemplateLibrary.byId(id)!!.shape, id)
+        }
+    }
+
+    @Test
     fun `search matches titles and questions - within a category`() {
         assertTrue(TemplateLibrary.search("passport").isNotEmpty())
         assertTrue(TemplateLibrary.search("").size == all.size)
@@ -214,6 +250,32 @@ class UserJudgmentTest {
     }
 
     @Test
+    fun `an edit may not ask an absence question - nor give a choice more than ten options`() {
+        val absent = assertIs<UserJudgment.EditResult.Rejected>(receipt.reword("Is the receipt missing a total?"))
+        assertTrue(absent.findings.any { it.rule == "absence-phrasing" })
+        assertIs<UserJudgment.EditResult.Rejected>(receipt.reword("هل الإيصال بدون مبلغ؟"))
+        // One saved before the rule keeps its title and criteria editable until its question changes.
+        val legacy = receipt.copy(question = "Is the total missing?")
+        assertIs<UserJudgment.EditResult.Edited>(legacy.reword(legacy.question, newTitle = "Totals"))
+        val kind = (TemplateLibrary.byId("receipt-kind")!!.instantiate("u-kind") as Template.InstantiateResult.Created).judgment
+        val eleven = (1..10).map { "kind $it" } + "not a purchase"
+        val many = assertIs<UserJudgment.EditResult.Rejected>(kind.reword(kind.question, options = eleven))
+        assertTrue(many.findings.single().message.contains("keep a choice to 10 options (this has 11)"), many.findings.toString())
+        assertIs<UserJudgment.EditResult.Edited>(kind.reword(kind.question, options = eleven.drop(1)))
+    }
+
+    @Test
+    fun `a judgment saved before the cap with twelve options still loads - nothing new can be that big`() {
+        val twelve = (1..11).map { "kind $it" } + "none"
+        assertEquals(12, Shape.Pick(twelve, "none").candidates.size)
+        assertTrue(kotlin.runCatching { Shape.Pick(twelve + "other", "none") }.isFailure)
+        val draft = JudgmentDraft(question = "Which kind is this?", options = twelve)
+        assertTrue(draft.findings().any { it.rule == "too-many-options" })
+        assertIs<UserJudgment.EditResult.Rejected>(draft.compile("u-twelve"))
+        assertTrue(JudgmentDraft(question = "Which kind is this?", options = twelve.drop(2)).findings().isEmpty())
+    }
+
+    @Test
     fun `changing a choice's options keeps the no-op only if it survives`() {
         val kind = (TemplateLibrary.byId("receipt-kind")!!.instantiate("u-kind") as Template.InstantiateResult.Created).judgment
         val edited = assertIs<UserJudgment.EditResult.Edited>(
@@ -229,6 +291,9 @@ class UserJudgmentTest {
         assertTrue(JudgmentDraft(question = "Rate this from 1 to 10").findings().any { it.rule == "rating-scale" })
         assertTrue(JudgmentDraft(question = "Which folder").findings().any { it.rule == "no-candidates" })
         assertTrue(JudgmentDraft(question = "Which folder", options = listOf("a", "b")).findings().isEmpty())
+        assertTrue(JudgmentDraft(question = "Is the signature missing?").findings().any { it.rule == "absence-phrasing" })
+        assertTrue(JudgmentDraft(question = "هل لا يوجد توقيع؟").findings().any { it.rule == "absence-phrasing" })
+        assertTrue(JudgmentDraft(question = "Does it show a signature?").findings().isEmpty())
         val made = assertIs<UserJudgment.EditResult.Edited>(
             JudgmentDraft(question = "Is this from my landlord?", baselineKeywords = listOf("landlord")).compile("u-mine"),
         ).judgment

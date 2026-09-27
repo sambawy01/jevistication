@@ -1845,6 +1845,136 @@ their acceptance criteria are met; entries here record increments toward them.
   probe). Gate: `./gradlew check` green (1,480 tests; game 109 JVM, 90 iOS-simulator Kotlin, the goldens
   identical on both); LoupeKit rebuilt; iOS simulator 431 unit (2 skipped) + 56 UI (5 skipped), 0 failures.
 
+- **2026-09-27 — Phishing formula v1.3 mirrored on mobile: self-vouching (owner-approved model fix 6; not
+  yet committed).** Loupe Station (commit 0ff886d, `docs/formula/phishing-formula-v1.3.md`) added one email
+  signal; the iPhone now gives the same answers. `loupe-kit` `dev.loupe.kit.mail`: `self_vouching` **15**
+  in `Phishing.WEIGHTS` (not a risk code: alone it never flags and stays "No warning signs found"), fired
+  after the known / trusted early return and only when the From address is not one of a contact's
+  addresses; `PhishingOwnWords` ports Station's `own_text` (subject + body, cut at the first quoted-reply
+  marker, `>` lines dropped, everything from the first bulk-mail footer phrase on dropped, URLs blanked),
+  the sentence split and the EN / MSA / Egyptian keyword rule verbatim, with Python's Unicode `\b`, `\s`,
+  `strip()`, `splitlines()` and code-point cut spelled out so the JVM and Kotlin/Native agree (Kotlin/Native
+  rejects `\p{N}` at class initialisation: `\p{Nd}\p{Nl}\p{No}` instead). Reason param `phrase` (≤ 80
+  characters, 79 + "…"); the reason text wraps it in bidi isolates. Version: `SiteContext.FORMULA_VERSION`
+  and `Phishing.FORMULA_VERSION` are `1.3`; `PhishVerdict` now carries `formula` like the page verdict.
+  Input change (not formula): `PhishingCalibration` is the seam for the model's calibrated `is_phishing`
+  probability, `RAW` until the phone's calibration file is wired (mail triage feeds no model reading
+  today: its `is_phishing` answer is the keyword baseline). Vectors: `docs/phishing-vectors-v1.3.json`
+  (Station's file byte-for-byte). Tests: `PhishingFormulaV13Test` (8 v1.3 vectors; the 12 v1.1 email
+  vectors unchanged; the ten lab sentences; EN, MSA, Egyptian; quoted text, signatures, footers, links and
+  the From line ignored; known, trusted and contact-address senders ignored, a contact's name on another
+  address still counts; alone below caution; the phrase cut and its bidi controls; the calibration seam),
+  JVM and iOS simulator; `PhishingFormulaTest` (57 v1.1) and `PhishingFormulaV12Test` (51 v1.2) unchanged
+  and green. Differences from Station: the phrase's own bidi controls (U+202A–202E, U+2066–2069) are
+  removed; no Arabic reason text (the iPhone's phishing reasons are English only).
+
+- **2026-09-27 — Owner-approved model fixes #2, #3, #7 (iPhone side), measured; and #1 / #5: the phone's own
+  calibration prior and confidence gates (not yet committed).**
+  *#3, at most 10 options per Choice.* `Shape.Pick.MAX_OPTIONS = 10` (Template.kt): a template with more is
+  refused; "Write your own" (`JudgmentDraft`, `JudgmentBook`), rewording and packs refuse more than 10 with
+  "keep a choice to 10 options (this has N) … split it into two questions, or fold rare options into
+  \"other\"". `PackFormat.MAX_CHOICE_OPTIONS = 10` refuses such a pack whole (Station's 20 stays for score
+  levels). A judgment **saved** before today with 11–12 options still loads (`SAVED_MAX_OPTIONS = 12`):
+  `decodeFile` drops an entry that fails to decode and the next save would lose it. No shipped template
+  exceeded 10 (largest: 8); the example pack's `gmail-triage.category` has exactly 10.
+  *#2, absence phrasing.* `JudgmentLint.absence` (engine): "missing", "absent", "lack(s/ing)", "omit",
+  "without", "nothing", "none", "no X" (not "no longer", "no-reply", "yes or no"), "not have/contain/include/
+  mention/show…", "n't (it) have…", "there is not", "fails to include…"; Arabic ناقص / نقص / مفقود / لا يوجد
+  (and لا توجد / يتوفر / يحتوي / يتضمن / يذكر / يظهر / يشمل) / ليس فيه / غير (مش) موجود / عدم وجود / خالٍ من /
+  يخلو / يفتقر / يفتقد / غائب / غياب / بدون / بلا (not inside بلاغ) / من دون / من غير / مفيش / مافيش; Franco
+  mafeesh, bedoon, men gheir, mesh mawgood(a), na2es. The message asks for the presence question ("Does it
+  show a signature?" / هل يظهر توقيع؟). Applied to built-ins, the library, written judgments, rewording (only
+  when the question changes, so an old judgment's title stays editable) and pack questions (shown, not
+  added); **not** to web and flight questions, whose free text is a list of wishes ("no layovers"). The one
+  shipped question that used it: `urgency` "where 0 is no action" → "where 0 is never" (labels unchanged).
+  *#7, plain opposites.* `phishing` "a phishing attempt" / "not a phishing attempt" (the owner's example;
+  "not a scam or phishing attempt" measured worse, 55% vs 62%); `impostor-sender` "… / not someone pretending
+  to be someone else"; `claims-brand` "… / does not claim to come from that brand"; `is-junk` "worthless to
+  keep" / "not worthless to keep"; `unsubscribe-candidate` "… / not bulk mail I no longer read";
+  `refetchable-download` "… / not a download I could fetch again". **`superseded-version` was not changed**:
+  its plain opposite ("not an earlier, superseded version") called 12 more current documents superseded
+  (41/47 → 29/47; "not an earlier version" 33/47). **Owner decision (2026-09-27): keep the old wording**
+  ("an earlier, superseded version" / "a current or unique version"), an exception to the plain-opposite rule,
+  to revisit with the fine-tune. **Calibration restarts** for
+  judgments made from `phishing`, `impostor-sender`, `claims-brand`, `is-junk`, `unsubscribe-candidate`,
+  `refetchable-download` and `urgency` from now on: the criteria hash (question + options) is how the code
+  versions wording, so new rows never mix with old ones; there is no separate template version to bump.
+  Judgments already saved keep their wording and their calibration (nothing migrates them).
+  *Measured* (`ModelFixesMeasurementTest`, loupe-kit jvmTest, gated on `models/`, INT8 multilingual graph,
+  model only, raw probabilities): 716 labelled questions — every template's worked examples (117), the 45
+  synthetic sample items × is-receipt/phishing/needs-reply (`sample-labels.tsv`, 135), Station's 22 emails ×
+  phishing (22), the six receipt-gate documents (6), the golden/criteria/score-reversed fixtures with the
+  answer each was written to have (45), and, written today by the person measuring and reported apart, the
+  sample × the #7 templates and urgency (298), the 22 emails × impostor/claims-brand/unsubscribe (65) and the
+  example pack's sample texts × its own questions (28; the only Egyptian Arabic and Franco items).
+  Before (main) → after, same items:
+
+  | cell | n | accuracy | ECE | wrong at ≥ 0.9 | wrong at ≥ 0.99 |
+  |---|---|---|---|---|---|
+  | noul, all | 627 | 60.3% → 66.8% | 0.188 → 0.124 | 28.5% → 26.0% | 17.7% → 15.9% |
+  | noul, repo labels only | 259 | 59.5% → 61.0% | 0.214 → 0.187 | 35.2% → 29.7% | 23.8% → 18.8% |
+  | noul/en | 587 | 59.6% → 66.4% | 0.195 → 0.128 | 27.4% → 24.9% | 18.1% → 16.2% |
+  | noul/ar | 14 | 64.3% → 64.3% | 0.227 → 0.265 | 40% → 20% | 0 → 0 |
+  | noul/arz | 10 | 90% → 80% | 0.286 → 0.364 | 100% → 100% | 0 → 0 |
+  | noul/franco | 2 | 50% → 50% | — | — | — |
+  | choice (unchanged wording) | 47 | 76.6% | 0.133 | 45.5% | 18.2% |
+  | score | 42 | 26.2% → 28.6% | 0.294 → 0.346 | 12.9% → 13.3% | 0 → 0 |
+
+  Per changed judgment (before → after accuracy): phishing 58.0% → 62.3% (sample 21 → 27 of 45, Station's
+  emails 17 → 14 of 22; wrong at ≥ 0.99 48% → 31%), impostor-sender 51.5% → 67.6%, claims-brand 50.7% →
+  62.3%, is-junk 40.0% → 77.8%, unsubscribe-candidate 69.6% → 66.7% (wrong at ≥ 0.9 14% → 4%),
+  refetchable-download 61.7% → 70.2%, urgency 24.2% → 27.3%. Options per Choice: templates 5–8, fixtures 3–10,
+  pack 3–10; none above 10. **n is too small to conclude anything per language** except English (Arabic 14–31
+  answers, Egyptian 10, Franco 2–4), and the #7 gains rest mostly on labels written today by the person
+  measuring (few positives: is-junk has one). Score answers are at chance on these items (the urgency
+  template reads bare 0–3 digits; its bands reach the model only with criteria in the prompt).
+  Temperatures fitted as a cross-check (probability space, 2-fold): noul 12.9 (repo labels only 23.3;
+  English 14.0, Arabic 2.4, n = 14), choice 2.2, score unbounded (no signal). Station reported noul 7.20
+  (Arabic 5.2, Franco 18.4), choice 3.07, score 1.21: same direction and order for noul and choice, stronger
+  over-confidence on ours; score disagrees because ours carries no information.
+  *#1 / #5, the calibration prior and gates (Station's `docs/model-calibration.md`, 0ff886d).* Shared Kotlin:
+  `LangGroup` (en / ar / franco / es-fr / other; `isFranco` ported word for word from `langgroup.py`, a script
+  count and a stop-word vote in place of laya's detector); `CalibrationFile` / `GatesFile` (format_version 1
+  readers with Station's validation, lookup `languages[group][type]` then `types[type]`, low-trust groups);
+  `ModelPrior` (the shipped files, embedded at build time from `loupe-kit/data/model-prior/` by
+  `:loupe-kit:generateModelPrior` and bundled by the app; `recalibrator(useCalibration)` — the engine now
+  passes the judgment and state to `Recalibrator.calibrate`, and `LogitScaling` applies `sigmoid((z_yes −
+  z_no)/T + b)` / `softmax(z/T)` to the backend's masses, exact because the checkpoint's own T is 1;
+  `gate(...)` act / confirm / person with phishing never acting and Franco always a person's;
+  `calibratedPhishingProbability(rawYes, text)` for the phishing formula). Wired: judgment sweeps (Sort
+  included), flights and web questions honour `use_calibration`; off is exactly the old path.
+  The bands are an API; no screen reads them yet. *Fitting tool:* `CalibrationFit` (Station's method:
+  raw logits, Newton on 1/T, 5-fold CV grouped by text, seed 11, min n 60 / 100 / 1% gain, the jeval sweep
+  with Station's placeholder costs) run by `ModelPriorFitTest` (gated; `-Ploupe.fit.write=true` rewrites the
+  shipped files, otherwise it checks they still match). Fitted on the 716 answers above: noul T 12.88,
+  choice 2.17, score 50 (the bound: no information), b = 0 everywhere, no language cell (none reached 60
+  labels except English, whose own cell did not beat the type's). A Platt bias would have won by Station's
+  rule (noul b = −1.46) but it learned these labels' base rate (four in five answers are the negative
+  option), so the phone ships temperatures only and calibration never changes an answer (asserted). Out of
+  sample (5-fold): noul ECE 0.124 → 0.163 (the fit trades ECE for NLL, 1.17 → 0.68), wrong at ≥ 0.99 15.9% →
+  0%, at ≥ 0.9 26.0% → 0%; choice ECE 0.133 → 0.173, wrong at ≥ 0.99 18.2% → 9.1%; score ECE 0.346 → 0.025;
+  phishing (72) ECE 0.301 → 0.151, wrong at ≥ 0.99 30.8% → 0%; Arabic, Franco, es-fr cells all n < 30.
+  **Shipped off (owner decision, 2026-09-27): `use_calibration` now defaults to false** (Station: true), so
+  the iPhone and desktop behave exactly as before. Why: turned on, yes/no answers at or above the 0.80
+  starting threshold go from 48% to 4% of answers (73% → 77% right), choice at 0.60 from 83% to 72%, and
+  score answers never reach 0.60, so most answers would wait in "Needs you"; and the yes/no ECE got
+  *worse* out of sample (0.124 → 0.163) even as the wrong answers at ≥ 0.9 and ≥ 0.99 went to 0. The
+  code, the fitted files, the gates API and the fitting tool stay. Plan: retune the starting thresholds
+  for calibrated confidence, refit on real labels (the owner's Unsure-queue corrections), then turn it on.
+  Existing installs: a settings file written before today wrote `true` for this never-set key, so that
+  `true` reads as off; a `true` set from now on is written with `"calibration_opt_in": true` and stays on
+  (`EngineSettingsTest`). Gates fitted: noul and score never act or confirm
+  (a person), choice act 0.95 / confirm 0.33, phishing confirm 0.88, never act. Station's multilingual
+  numbers (noul 9.32, choice 3.13) are not used: logits differ by export and quantisation.
+  Tests: `JudgmentAuthorTest` (+5: absence EN, AR/arz/Franco, look-alikes accepted, flights exempt,
+  built-ins), `TemplateLibraryTest` (+5), `PersistenceTest` (+1, a 12-option judgment still loads),
+  `PackFormatTest` (+1), `PackJudgmentsTest` (+1), `JudgmentsSharedTest` (+1), `ModelPriorTest` (14:
+  Franco and groups, file reading and refusal, the formula on fixed logits, argmax unchanged, the engine
+  path, the phishing reading, bands and fixed rules, the jeval sweep by hand, a fit recovering a known T, the
+  shipped files), `SettingsConsumersTest` / `SweepCoordinatorTest` (defaults with calibration off are the old
+  paths; on softens), `ModelFixesMeasurementTest`, `ModelPriorFitTest`. Gate: `./gradlew check` green
+  (1,576 tests, 0 failures, Android targets skipped without an SDK); iOS simulator (LoupeKit rebuilt, xcodegen): 431 unit (2 skipped), 0 failures; 56 UI (5 skipped), **1 failure** — `ReviewPacksUITests.testApproveAPrivacyCheckProposedAction` waits 90 s for the privacy check's "Remove the extra copy" proposal and it never appears (also after uninstalling the app); that path is rules only (PrivacyCheck, ReviewProducers, the review-demo inbox seed) and none of it changed here. Settled: run alone it is **pre-existing and flaky on clean HEAD too** (7e13578 in a worktree: failed after a fresh install, then passed, then failed) and on this tree (passed once, failed after a fresh install and on the next run), so it depends on simulator state, not on this work; left open. The iOS test fakes and the two DEBUG fixtures that stand in for the model (`-LoupeQueueDemo`, `-LoupeResultsFixture`) run with `use_calibration` off: their numbers are not the real graph's. The app bundles `loupe-kit/data/model-prior/`; Me → Model settings describes the calibration.
+
 ## Where the build stands
 
 As of 2026-09-23. Everything below was built on JVM Kotlin: no iOS or Android build, no device.

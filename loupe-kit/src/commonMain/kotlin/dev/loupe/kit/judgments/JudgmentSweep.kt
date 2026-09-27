@@ -2,6 +2,7 @@ package dev.loupe.kit.judgments
 
 import dev.loupe.engine.Backend
 import dev.loupe.engine.DecisionEngine
+import dev.loupe.kit.settings.ModelPrior
 import dev.loupe.engine.LedgerRow
 import dev.loupe.engine.Mechanical
 import dev.loupe.engine.Probability
@@ -109,6 +110,7 @@ class JudgmentSweep(private val backend: Backend?) {
             val model = backend ?: if (layaOff) NO_MODEL else throw IllegalStateException("the model is not available")
             val engine = DecisionEngine(
                 model, Probability.of(policy.thresholdFor(judgment)),
+                recalibrator = ModelPrior.recalibrator(policy.useCalibration),
                 stateBudget = policy.budget(DecisionEngine.DEFAULT_STATE_BUDGET),
             )
             for (item in todo) {

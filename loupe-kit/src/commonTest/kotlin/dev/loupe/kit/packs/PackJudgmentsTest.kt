@@ -40,6 +40,29 @@ class PackJudgmentsTest {
     }
 
     @Test
+    fun anAbsenceQuestionInAPackIsShownButNotAdded() {
+        val text = """{"format": "laya-preset-pack", "version": 1, "name": "Absent", "presets": [
+            {"id": "en", "name": "English", "questions": {"q": {"type": "noul", "instructions": "Is the signature missing?",
+              "criteria": {"true": "the signature is missing", "false": "a signature is there"}}}},
+            {"id": "ar", "name": "Arabic", "questions": {"q": {"type": "choice", "instructions": "ما الذي لا يوجد في الطلب؟",
+              "criteria": ["الصوص", "الخبز", "أخرى"]}}},
+            {"id": "score", "name": "Score", "questions": {"q": {"type": "score", "instructions": "How much is missing from the order?",
+              "criteria": ["nothing", "a little", "a lot"]}}},
+            {"id": "ok", "name": "Presence", "questions": {"q": {"type": "noul", "instructions": "Does it show a signature?",
+              "criteria": {"true": "a signature is shown", "false": "no signature shown"}}}}]}"""
+        val pack = assertIs<PackParse.Valid>(PackFormat.parse(text)).pack
+        val plans = PackJudgments.plan(pack, emptyList()).associateBy { it.presetId }
+        for (id in listOf("en", "ar", "score")) {
+            val p = plans.getValue(id)
+            assertTrue(!p.addable && p.problems.any { "presence question" in it }, "$id ${p.problems}")
+        }
+        assertTrue(plans.getValue("ok").addable, plans.getValue("ok").problems.toString())
+        val added = PackJudgments.add(plans.values.toList(), emptyList(), ConflictChoice.SKIP, emptyList())
+        assertEquals(listOf("j-ok"), added.added)
+        assertEquals(3, added.refused.size)
+    }
+
+    @Test
     fun addingSettlesConflictsByReplaceKeepBothOrSkip() {
         val plans = PackJudgments.plan(bistro, emptyList())
         val addable = plans.count { it.addable }

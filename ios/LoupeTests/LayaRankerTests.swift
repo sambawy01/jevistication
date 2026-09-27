@@ -48,7 +48,12 @@ final class LayaRankerTests: XCTestCase {
         }
         let backend = FakeBackend(table)
         var seen: [(Int, Int)] = []
-        let r = try LayaRanker(backend: backend).rank(offers, by: priorities) { seen.append(($0, $1)) }
+        // Calibration off: the table is the fake's raw view; the shipped prior (fitted on the real graph) would soften it.
+        var ranker = LayaRanker(backend: backend)
+        let store = EngineSettingsStore(directory: nil)
+        _ = store.setBool(key: "global.use_calibration", value: false)
+        ranker.policy = store.current.policy(feature: Features.shared.FLIGHTS)
+        let r = try ranker.rank(offers, by: priorities) { seen.append(($0, $1)) }
         XCTAssertEqual(r.count, offers.count)
         XCTAssertEqual(backend.calls, offers.count)
         XCTAssertEqual(r.map(\.rank), Array(1...offers.count))

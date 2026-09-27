@@ -34,7 +34,8 @@ data class NotCounted(val code: String, val text: String, val wouldAdd: Int, val
 data class SiteContextInfo(val tier: String, val paymentExpected: Boolean, val processor: String?)
 
 object SiteContext {
-    const val FORMULA_VERSION = "1.2"
+    /** The shared formula's version (v1.3 changes only the email profile: `self_vouching`, [dev.loupe.kit.mail.Phishing]). */
+    const val FORMULA_VERSION = "1.3"
     const val ESTABLISHED_DAYS = 365
     const val WEAK_MIN_DAYS = 180
     const val CERT_SETTLED_DAYS = 90

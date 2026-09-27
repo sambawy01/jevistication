@@ -218,7 +218,7 @@ class WebJudge(
         }
         val s = scored.getOrThrow()
         val truncation = Truncation(state.budgetCut, s.modelContext, s.optionCriteria)
-        val calibrated = recalibrator.calibrate(raw.getOrThrow())
+        val calibrated = recalibrator.calibrate(raw.getOrThrow(), judgment, state)
         val decision = Policy.onCutInput(Policy.decide(calibrated, Probability.of(threshold)), truncation, judgment.onFailure)
         val labels = judgment.candidates
         val (value, level) = if (judgment.ordinal) {
@@ -261,7 +261,7 @@ class WebJudge(
 
         /** A judge under Model settings: its threshold as [threshold], `text_chars` for the budget. */
         fun forPolicy(backend: Backend, source: String, type: WebDecisionType, policy: dev.loupe.kit.settings.RunPolicy): WebJudge =
-            WebJudge(backend, source, threshold(type, policy), policy.budget(BUDGET), Recalibrator.Identity)
+            WebJudge(backend, source, threshold(type, policy), policy.budget(BUDGET), dev.loupe.kit.settings.ModelPrior.recalibrator(policy.useCalibration))
 
         /**
          * Best first: usable answers by value, then unusable ones; ties keep the order given (the

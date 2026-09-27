@@ -10,12 +10,16 @@ import dev.loupe.persistence.JsonValue
  * `laya_studio/packs.py` and the question rules of `laya_studio/schemas.py` (ChoiceQuestion,
  * ScoreQuestion, NoulQuestion, PredictRequest), commit ea7697a4f78e9a648ba49fc8bf9d13226c26cb0e).
  * The pack format (`laya-preset-pack`, version 1), every limit (512 000 bytes, 100 presets, 60 /
- * 80 / 300 characters, 20 questions, 2-20 options, 600-character instructions, 100-character labels,
- * 1 000-character descriptions), the slug / preset-id / question-id patterns, `slugify`, the
+ * 80 / 300 characters, 20 questions, 2-20 score levels, 600-character instructions, 100-character
+ * labels, 1 000-character descriptions), the slug / preset-id / question-id patterns, `slugify`, the
  * "strip our own namespace" rule, the Arabic `translations` block and the error locations
  * (`presets.2.questions.team`) are copied. Station's messages are kept where Station writes them;
  * where Station relays a pydantic message, the message here is Loupe's own wording (the location
  * is the same). Lengths count code points, as Python does.
+ *
+ * One limit is Loupe's, stricter than Station's (owner, 2026-09-27): a choice question keeps to 10
+ * options ([MAX_CHOICE_OPTIONS]; Station allows 20), because past 10 Station measured the model's
+ * confidently wrong answers rising sharply. A pack with a bigger choice is refused whole, with why.
  *
  * What Loupe adds on top (PackJudgments.kt): every question also passes the C2 lint before it can
  * become a judgment. A pack that Station refuses is refused here, whole; a question Station accepts
@@ -111,6 +115,9 @@ object PackFormat {
     // schemas.py
     const val MAX_QUESTIONS: Int = 20
     const val MAX_OPTIONS: Int = 20
+
+    /** A choice question's options: Loupe's cap, stricter than Station's [MAX_OPTIONS] (owner, 2026-09-27). */
+    const val MAX_CHOICE_OPTIONS: Int = 10
     const val MAX_INSTRUCTIONS_CHARS: Int = 600
     const val MAX_LABEL_CHARS: Int = 100
     const val MAX_LEVEL_CHARS: Int = 1_000
@@ -449,7 +456,11 @@ object PackFormat {
     private fun checkLabels(labels: List<String>, unique: Boolean, loc: List<String>, errors: MutableList<PackProblem>) {
         when {
             labels.size < 2 -> errors += PackProblem(loc, "a choice question needs at least 2 options")
-            labels.size > MAX_OPTIONS -> errors += PackProblem(loc, "a choice question can have at most $MAX_OPTIONS options")
+            labels.size > MAX_CHOICE_OPTIONS -> errors += PackProblem(
+                loc,
+                "a choice question can have at most $MAX_CHOICE_OPTIONS options (this has ${labels.size}): past 10 the model grows " +
+                    "confidently wrong. Split it into two questions (a broad choice, then a narrower one), or fold rare options into \"other\"",
+            )
             else -> {
                 for (l in labels) {
                     if (l.isBlank()) { errors += PackProblem(loc, "option labels must be non-empty strings"); return }

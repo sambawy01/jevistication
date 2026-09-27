@@ -111,7 +111,7 @@ class DecisionEngine(
                 )
             }
         val truncation = Truncation(state.budgetCut, modelContext, optionCriteria)
-        val calibrated = recalibrator.calibrate(raw)
+        val calibrated = recalibrator.calibrate(raw, judgment, state)
         val greedy = Policy.decide(calibrated, threshold)
         val guarded = Policy.onCutInput(greedy, truncation, judgment.onFailure)
         if (guarded !== greedy) {

@@ -261,7 +261,11 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
     }
 
     /** The document on disk: `{"version":1,"settings":{…}}`. */
-    fun documentJson(): JsonValue.Obj = JsonValue.obj("version" to JsonValue.num(VERSION), "settings" to settingsJson())
+    fun documentJson(): JsonValue.Obj = JsonValue.obj("version" to JsonValue.num(VERSION), "settings" to settingsJson()).also {
+        // Since `use_calibration` became real (and off by default), a stored `true` is the user's choice: marked
+        // so, because a file from before wrote the old default `true` for a key nobody had set.
+        if (useCalibration) it.fields[CALIBRATION_OPT_IN] = JsonValue.Bool(true)
+    }
 
     override fun equals(other: Any?): Boolean = other is EngineSettings && other.values == values
     override fun hashCode(): Int = values.hashCode()
@@ -269,6 +273,9 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
 
     companion object {
         const val VERSION: Int = 1
+
+        /** Top-level document field: `use_calibration` = true was chosen by the user (see [documentJson]). */
+        const val CALIBRATION_OPT_IN: String = "calibration_opt_in"
         const val FILE_NAME: String = "engine_settings.json"
         const val GLOBAL: String = "global"
 
@@ -335,8 +342,11 @@ class EngineSettings internal constructor(internal val values: Map<String, JsonV
             add(global("memory_mode", SettingKind.ENUM, s(MEMORY_BALANCED), choices = MEMORY_MODES, reload = true))
             add(global("idle_unload_min", SettingKind.NUMBER, n(10), 0.0, 1_440.0, reload = true))
             add(global("accept_confidence", SettingKind.NULLABLE_NUMBER, NULL, 0.05, 0.99))
-            add(global("use_calibration", SettingKind.BOOL, b(true),
-                note = "No calibration is fitted on iPhone yet, so on and off both use the decision model's raw confidence today."))
+            // Off by default (owner, 2026-09-27): the fitted prior (loupe-kit/data/model-prior) softens the
+            // model's confidence so much that most answers would wait for the user; it is turned on after the
+            // thresholds are retuned and the prior refitted on real corrections. Off is the old behaviour.
+            add(global("use_calibration", SettingKind.BOOL, b(false),
+                note = "Off by default: the calibration fitted for this phone's model waits for retuned thresholds and a refit on your corrections."))
             add(global("rules_first", SettingKind.BOOL, b(true)))
             add(global("baseline_switch", SettingKind.BOOL, b(true)))
             add(global("bias_correction", SettingKind.ENUM, s(BIAS_OFF), choices = BIAS_CORRECTIONS,

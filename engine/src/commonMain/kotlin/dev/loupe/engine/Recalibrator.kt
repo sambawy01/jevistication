@@ -9,6 +9,13 @@ package dev.loupe.engine
 fun interface Recalibrator {
     fun calibrate(raw: Distribution): CalibratedDistribution
 
+    /**
+     * Calibrates [raw], the answer to [judgment] on [state]. What the engine calls. A recalibrator
+     * whose parameters depend on the question type or the input's language (the calibration prior,
+     * `loupe-kit` `ModelPrior`) overrides this; every other one ignores the context.
+     */
+    fun calibrate(raw: Distribution, judgment: Judgment.Choice, state: TextState): CalibratedDistribution = calibrate(raw)
+
     companion object {
         /**
          * The no-op recalibrator: passes masses through unchanged. It is the honest baseline until

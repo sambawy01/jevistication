@@ -39,7 +39,7 @@ on the phone.** `reload` is `["global.memory_mode", "global.idle_unload_min"]`.
 | `memory_mode` | `full` \| `balanced` \| `low` | `balanced` | Laya's load/unload policy (`ModelMemory`): **full** keeps it loaded once opened (what the app did before); **balanced** frees it after `idle_unload_min` idle minutes; **low** frees it as soon as a run ends and the model lane is free. A freed Laya is reopened (files re-verified, a few seconds) by the next decision. Applies at once. |
 | `idle_unload_min` | 0..1440 (0 = never) | 10 | Balanced only. Checked every 30 s (the maintenance tick), never while foreground work or the game holds the model. |
 | `accept_confidence` | null \| 0.05..0.99 | null | null = each feature's own rule (judgments: their starting threshold; flights 0.80; expiry watcher 0.5). A number replaces those. A judgment whose threshold was set on Measure (differs from its shape's starting threshold) keeps it. |
-| `use_calibration` | bool | true | Kept and shown. **No calibration is fitted on iPhone yet**, so on and off both use raw confidence today (identity recalibrator, as before). |
+| `use_calibration` | bool | **false** (Station: true) | **Real since 2026-09-27, off by default (owner decision).** On: every model answer (judgments, Sort, flights, web questions) is calibrated by the phone's own prior, `loupe-kit/data/model-prior/model_calibration.json` (Station's `loupe-calibration` v1, fitted on this phone's INT8 graph: yes/no T 12.88, choice T 2.17, score T 50 = no information, b = 0), by question type and the input's language group (`ModelPrior`, `LangGroup`). It never changes an answer, only its confidence. Off (the default): raw confidence, exactly as before. It is turned on after the thresholds are retuned and the prior refitted on real corrections (the Unsure queue). Existing installs: a file written before 2026-09-27 wrote `true` for every never-set key, so that `true` reads as off; a `true` the user sets now is written with `"calibration_opt_in": true` beside `settings` and stays on. The gates (`model_gates.json`) are the API `ModelPrior.gate` (phishing never acts, Franco always a person's); no screen reads them yet. |
 | `rules_first` | bool | true | Off: the exact-duplicate rule and the money judgments' transaction-evidence gate (`no-transaction-evidence`, BUILD.md C1a) no longer answer before Laya in sweeps. The per-judgment "Always baseline" still answers (it is the judgment's own override). |
 | `baseline_switch` | bool | true | The automatic baseline (e45e806). Off: Laya keeps answering under Auto. The per-judgment Auto / Always baseline / Always Laya choice still wins. |
 | `bias_correction` | `contextual` \| `domain` \| `off` | `off` | **Added 2026-09-24 (Station, after `baseline_switch`).** Station's answer re-weighting; Station measured both methods worse (clear-cut 1,035 and 1,019 of 1,621 vs 1,090 shipped; yes-rate on negatives 24% → 44% / 48%), hence `off`. **iPhone implements `off` only:** the other two are stored and shown as "Loupe Station only" and run as `off` (`EngineSettings.effectiveBiasCorrection`). |
@@ -109,8 +109,11 @@ Every default reproduces what the app did before, checked against the code (test
    10 idle minutes and the next use waits a few seconds to reopen it.
 2. **`scan`, `email`, `browser` `use_laya = true`:** these run on rules on the phone (Laya is not
    wired into them yet), so "on" changes nothing; only "off" is visible (the banner).
-3. **`use_calibration = true`:** no calibration is fitted on the phone, so it is the identity
-   either way.
+3. **`use_calibration = false`** (a deliberate difference from Station): with it on, on the
+   labelled sets 48% of yes/no answers were at or above the 0.80 starting threshold raw and 4% after
+   calibration (77% right against 73%); choice 83% → 72%; score answers never reached 0.60 — most
+   answers would wait for the user. Off is the old behaviour exactly (tests: `EngineSettingsTest`,
+   `SettingsConsumersTest`, `ModelPriorTest`).
 4. **`scan.content_budget_s`, `browser.time_limit_s`, `browser.queue_size`:** the phone has nothing
    they could limit; "no limit" (the old behaviour) is not a value in Station's ranges, so they
    keep Station's defaults and are marked Loupe Station only.

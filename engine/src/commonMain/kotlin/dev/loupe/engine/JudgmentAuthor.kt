@@ -62,6 +62,65 @@ object JudgmentLint {
         }
         return findings
     }
+
+    // --------------------------------------------------------------- absence phrasing (owner, 2026-09-27)
+
+    private val ABSENCE_EN = Regex(
+        """\b(?:missing|absent|absence|lacks?|lacking|lacked|omits?|omitted|omitting|devoid|without|nothing|none)\b""" +
+            """|(?<!or\s)\bno\s+(?!longer\b)\p{L}""" +
+            """|\bnot\s+(?:have|has|contain|contains|include|includes|mention|mentions|show|shows|carry|list|state|name|give|provide|specify)\b""" +
+            """|n['’]t\s+(?:(?:it|this|that|they|there)\s+)?(?:have|has|contain|include|mention|show|carry|list|state|name|give|provide|specify|there)\b""" +
+            """|\bthere\s+(?:is\s+|are\s+)?not\b""" +
+            """|\bfails?\s+to\s+(?:include|mention|show|state|provide|list|give)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Egyptian Arabic in Latin letters ("Franco"): mafeesh, bedoon, men gheir, mesh mawgood, na2es. */
+    private val ABSENCE_FRANCO = Regex(
+        """\b(?:ma?fee?sh|mafish|mafesh|mfeesh|mafihoo?sh|bedo+n|bdo+n|(?:men|min|mn)\s+(?:gh?|8)[ei]+r|m[ei]?sh\s+mawgo+u?d[ae]?|na2e?s|na2sa|maf[qk]oo?d)\b""",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /**
+     * Arabic, MSA and Egyptian. No `\b` (it does not see Arabic letters as word characters on every
+     * engine): a letter boundary is spelled out where a word could sit inside a longer one (بلا in
+     * بلاغ, "a report").
+     */
+    private val ABSENCE_AR = Regex(
+        """ناقص|نواقص|نقص(?!د)|مفقود|يخلو|تخلو|يفتقر|تفتقر|يفتقد|تفتقد|غائب|غياب""" +
+            """|لا\s+(?:يوجد|توجد|يُوجد|تُوجد|يتوفر|تتوفر|يحتوي|تحتوي|يتضمن|تتضمن|يذكر|تذكر|يظهر|تظهر|يشمل|تشمل)""" +
+            """|ليست?\s+(?:هناك|فيه|فيها|به|بها|لديه|لديها)""" +
+            """|(?:غير|مش|مو)\s+موجود""" +
+            """|عدم\s+(?:وجود|توفر|ذكر)""" +
+            """|خال(?:ي|ية|ٍ)?\s+من""" +
+            """|(?<![\p{L}\p{M}])[وف]?(?:بدون|بلا)(?![\p{L}\p{M}])""" +
+            """|من\s+(?:دون|غير)""" +
+            """|(?:م|ما\s?)في(?:ش|هوش|هاش)""",
+    )
+
+    /**
+     * Rejects a question that asks whether something is **absent** ("Is the signature missing?",
+     * "Does it lack a date?", "no due date", "without a receipt", ناقص / لا يوجد / بدون / مفقود).
+     *
+     * Why: the model answers absence questions far worse than the presence question they negate.
+     * Loupe Station measured "Is X missing?" at 23/60 on the multilingual model (1/24 in Arabic)
+     * against 47/60 (18/24) for "Does it contain X?" on the same texts, with opposite verdicts on
+     * 50 of 60 (docs/BACKLOG.md, Station lab result 13). Ask the presence question and let the
+     * negative option carry the absence. Applied to templates, judgments people write, and packs —
+     * not to the web and flight questions, whose free text is a list of wishes ("no layovers").
+     */
+    fun absence(question: String): List<LintFinding> {
+        val q = question.trim()
+        if (!ABSENCE_EN.containsMatchIn(q) && !ABSENCE_AR.containsMatchIn(q) && !ABSENCE_FRANCO.containsMatchIn(q)) return emptyList()
+        return listOf(
+            LintFinding(
+                "absence-phrasing",
+                "asks whether something is absent (missing, lacking, \"no …\", \"without …\"), which the model answers " +
+                    "unreliably; ask the presence question instead — \"Does it show a signature?\", not \"Is the signature " +
+                    "missing?\" (هل يظهر توقيع؟ بدلاً من هل التوقيع ناقص؟) — and let the \"no\" option carry the absence",
+            ),
+        )
+    }
 }
 
 /** The outcome of compiling a written question. */

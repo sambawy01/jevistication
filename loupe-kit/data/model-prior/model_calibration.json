@@ -1,0 +1,55 @@
+{
+  "format": "loupe-calibration",
+  "format_version": 1,
+  "version": "1.0",
+  "created": "2026-09-27",
+  "model": {
+    "repo": "convaiinnovations/laya-multilingual",
+    "graph": "laya-multilingual-choice.int8.onnx (the phone's INT8 fixed-choice export)"
+  },
+  "applies_to": "raw logits (the checkpoint's own temperatures are 1.0): this file is applied to the graph's logits at T = 1",
+  "method": {
+    "noul": "p_yes = sigmoid((z_yes - z_no) / T + b)",
+    "choice": "p = softmax(z / T)",
+    "score": "p = softmax(z / T), levels in the order the model read them"
+  },
+  "lookup": "languages[group][type] when present, else types[type]; groups: en, ar, franco, es-fr; any other language uses types[type]",
+  "min_n": {
+    "language_cell": 60,
+    "bias": 100,
+    "gain": 0.01
+  },
+  "fit": {
+    "labels": "ModelFixesMeasurementTest's labelled sets (716 answers; see docs/BUILD.md 2026-09-27)",
+    "cv": "5 folds grouped by input text, seed 11",
+    "tool": "loupe-kit/src/jvmTest/kotlin/dev/loupe/kit/measure/ModelPriorFitTest.kt (CalibrationFit)"
+  },
+  "checkpoints": {
+    "multilingual": {
+      "types": {
+        "noul": {
+          "T": 12.8818,
+          "b": 0.0,
+          "n": 627,
+          "method": "temperature"
+        },
+        "choice": {
+          "T": 2.1686,
+          "b": 0.0,
+          "n": 47,
+          "method": "temperature"
+        },
+        "score": {
+          "T": 50.0,
+          "b": 0.0,
+          "n": 42,
+          "method": "temperature"
+        }
+      },
+      "languages": {},
+      "low_trust_languages": [
+        "franco"
+      ]
+    }
+  }
+}

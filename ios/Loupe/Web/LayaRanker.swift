@@ -8,7 +8,7 @@ import LoupeKit
 struct LayaRanker: OfferRanker {
     let name = "Decision model"
     let backend: Backend
-    /// Model settings for flights (threshold, text budget); the defaults are the old behaviour.
+    /// Model settings for flights (threshold, text budget, calibration); with `use_calibration` off the defaults are the old behaviour.
     var policy: RunPolicy = RunPolicy.companion.defaults(feature: Features.shared.FLIGHTS)
 
     enum Failure: Error, Equatable {

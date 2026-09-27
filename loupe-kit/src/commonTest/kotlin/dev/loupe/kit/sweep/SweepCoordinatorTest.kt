@@ -57,7 +57,9 @@ class SweepCoordinatorTest {
         val js = twoJudgments()
         val backend = Fake()
         val host = Host()
-        val r = SweepCoordinator(backend, ModelLane()).run(js, items, emptyList(), "2026-09-23", host)
+        // Calibration off: the fake's 0.97 / 0.55 are not the real graph's answers, which the shipped prior is fitted to.
+        val raw = dev.loupe.kit.settings.EngineSettings(mapOf("global.use_calibration" to dev.loupe.persistence.JsonValue.Bool(false)))
+        val r = SweepCoordinator(backend, ModelLane()).runWith(js, items, emptyList(), "2026-09-23", host, emptyMap(), raw)
         assertTrue(r.finished)
         assertNull(r.error)
         assertEquals(40, r.progress.total, "20 items with text × 2 judgments; the image is never sent")
@@ -65,6 +67,10 @@ class SweepCoordinatorTest {
         assertEquals(40, host.rows.size)
         assertEquals(40, r.summary.sorted)
         assertEquals(30, r.summary.needYou, "the 0.55 answers are below threshold and wait for the user")
+        // With calibration turned on the prior softens the over-confident yes/no answers, so no fewer wait.
+        val on = dev.loupe.kit.settings.EngineSettings(mapOf("global.use_calibration" to dev.loupe.persistence.JsonValue.Bool(true)))
+        val calibrated = SweepCoordinator(Fake(), ModelLane()).runWith(js, items, emptyList(), "2026-09-23", Host(), emptyMap(), on)
+        assertTrue(calibrated.summary.needYou >= 30)
         assertNotNull(r.watchers)
         assertFalse(host.progress.last().running)
         assertTrue(host.progress.any { it.watching })

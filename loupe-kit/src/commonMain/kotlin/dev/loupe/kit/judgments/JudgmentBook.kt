@@ -3,6 +3,7 @@ package dev.loupe.kit.judgments
 import dev.loupe.engine.AuthorResult
 import dev.loupe.engine.FailurePosture
 import dev.loupe.engine.JudgmentAuthor
+import dev.loupe.engine.JudgmentLint
 import dev.loupe.engine.LintFinding
 import dev.loupe.templates.Baseline
 import dev.loupe.templates.JudgmentDraft
@@ -86,7 +87,7 @@ data class EditorInput(
  * so the desktop's behaviour is mirrored, not re-typed in Swift.
  */
 object JudgmentBook {
-    /** At most this many bands in a score: the lint's "keep to 12" applies to options. */
+    /** At most this many bands in a score (a choice keeps to `Shape.Pick.MAX_OPTIONS`, also 10). */
     const val MAX_BANDS: Int = 10
 
     /** The desktop's id rule: `j-` plus a slug of [base], made unique among [existing]. */
@@ -143,6 +144,7 @@ object JudgmentBook {
                 if (bands.map { it.lowercase() }.distinct().size != bands.size) out += LintFinding("duplicate-bands", "two bands are the same")
                 val compiled = JudgmentAuthor.compile("draft", input.question, input.candidates.ifEmpty { listOf("1", "2") }, input.onFailure)
                 if (compiled is AuthorResult.Rejected) out += compiled.findings
+                out += JudgmentLint.absence(input.question)
             }
         }
         return out.distinct()

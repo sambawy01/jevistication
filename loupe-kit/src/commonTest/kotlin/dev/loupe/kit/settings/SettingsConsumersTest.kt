@@ -104,7 +104,7 @@ class SettingsConsumersTest {
     fun sweepReadsThresholdBudgetAndRulesFirst() {
         val j = receipt()   // yes/no: starts at 0.80
         val seen = Seen()
-        val policy = RunPolicy.defaults(Features.JUDGMENTS).copy(acceptConfidence = 0.99, textChars = 1_000, rulesFirst = false)
+        val policy = RunPolicy.defaults(Features.JUDGMENTS).copy(acceptConfidence = 0.99, textChars = 1_000, rulesFirst = false, useCalibration = false)
         val r = sweep(j, backend(seen, p = 0.95), policy)
         assertEquals(3, seen.calls, "rules_first off: Laya answers the exact duplicate too")
         assertTrue(seen.budgets.all { it == 1_000 })
@@ -187,11 +187,16 @@ class SettingsConsumersTest {
         val a = Seen()
         val b = Seen()
         val old = FlightJudge(backend(a, p = 0.85)).decide(judgment, offer)
-        val new = FlightJudge.forPolicy(backend(b, p = 0.85), RunPolicy.defaults(Features.FLIGHTS)).decide(judgment, offer)
+        // use_calibration off (the default) is the old judge exactly; on, the prior softens the answer.
+        val raw = RunPolicy.defaults(Features.FLIGHTS)
+        assertTrue(!raw.useCalibration)
+        val new = FlightJudge.forPolicy(backend(b, p = 0.85), raw).decide(judgment, offer)
         assertEquals(old.verdict, new.verdict)
         assertEquals(a.budgets, b.budgets)
         assertEquals(listOf(480), b.budgets)
-        val strict = FlightJudge.forPolicy(backend(Seen(), p = 0.85), RunPolicy.defaults(Features.FLIGHTS).copy(acceptConfidence = 0.9, textChars = 200))
+        val calibrated = FlightJudge.forPolicy(backend(Seen(), p = 0.85), raw.copy(useCalibration = true)).decide(judgment, offer).verdict
+        assertTrue(calibrated.fit > 0.5 && calibrated.fit < 0.85, "the shipped prior (T > 1) softens 0.85: ${calibrated.fit}")
+        val strict = FlightJudge.forPolicy(backend(Seen(), p = 0.85), raw.copy(acceptConfidence = 0.9, textChars = 200))
         assertTrue(strict.decide(judgment, offer).verdict.unsure)
     }
 

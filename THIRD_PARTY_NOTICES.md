@@ -153,6 +153,16 @@ its sources".
   `scan/content.py` (10 000 members, ratio 200 above 4 MB). Ported tests from `tests/test_items.py`.
   The DEFLATE decoder (`Inflate.kt`) is written for this repository from RFC 1951, in the manner of
   zlib's public `puff.c` reference decoder; no zlib code is included and no dependency was added.
+- **Also used in (phishing formula v1.3, read 2026-09-27 at commit
+  `0ff886d65958077adc4269fc8d98c58795612e83`):** `loupe-kit/src/commonMain/kotlin/dev/loupe/kit/mail/PhishingOwnWords.kt`
+  and `Phishing.kt` — the self-vouching keyword list (English, Modern Standard Arabic, Egyptian Arabic;
+  `VOUCHING_RE`, the lab's `tools/lab/authority_injection.py` `KEYWORD_RE`), the sentence split, the
+  80-character phrase cut, the `self_vouching` weight and reason wording of `laya_studio/mail/phishing.py`,
+  and the quoted-reply, signature, bulk-mail-footer and link patterns of `own_text()` in
+  `laya_studio/baselines.py`; the test vectors `docs/phishing-vectors-v1.3.json` are
+  `tests/fixtures/phishing-vectors-v1.3.json` verbatim, and the ported cases in
+  `loupe-kit/src/commonTest/kotlin/dev/loupe/kit/site/PhishingFormulaV13Test.kt` come from
+  `tests/test_formula_v13.py`.
 
 ---
 

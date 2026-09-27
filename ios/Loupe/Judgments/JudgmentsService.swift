@@ -460,7 +460,11 @@ extension JudgmentsService {
         let plan = JudgmentResults.shared.plan(all: ledger.allRows(), judgment: j, items: all, rerunAll: false)
         let ledger = self.ledger
         let bridge = SweepBridge(progress: { _ in }, rows: { ledger.record($0) })
-        _ = JudgmentSweep(backend: FixtureQueueBackend()).run(judgment: j, plan: plan, observer: bridge, autoBaseline: false)
+        // Calibration off: the stand-in's spread is its own, not the real graph's the shipped prior is fitted to.
+        let store = EngineSettingsStore(directory: nil)
+        _ = store.setBool(key: "global.use_calibration", value: false)
+        _ = JudgmentSweep(backend: FixtureQueueBackend()).runWith(judgment: j, plan: plan, observer: bridge, autoBaseline: false,
+                                                               policy: store.current.policy(feature: Features.shared.JUDGMENTS))
         ledger.flush()
         refreshLedger()
     }

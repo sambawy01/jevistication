@@ -115,8 +115,14 @@ data class UserJudgment(
         newBreaks: String = breaks,
         newLookalikes: String = lookalikes,
     ): EditResult {
+        // New wording may not ask an absence question; a judgment saved before the rule keeps its own
+        // wording editable (its title and criteria text) until the question itself is changed.
+        if (newQuestion.trim() != question.trim()) {
+            JudgmentLint.absence(newQuestion).takeIf { it.isNotEmpty() }?.let { return EditResult.Rejected(it) }
+        }
         val newShape = when (val s = shape) {
             is Shape.Pick -> if (options == null) s else runCatching {
+                require(options.size <= Shape.Pick.MAX_OPTIONS) { tooManyOptions(options.size) }
                 Shape.Pick(options, s.noOp?.takeIf { it in options })
             }.getOrElse { return EditResult.Rejected(listOf(LintFinding("invalid-options", it.message ?: "invalid options"))) }
             is Shape.Binary -> if (options == null) s else runCatching {
@@ -158,6 +164,11 @@ data class UserJudgment(
     }
 
     companion object {
+        /** Why a list of [count] options is refused: the cap, and what to do instead. */
+        fun tooManyOptions(count: Int): String =
+            "keep a choice to ${Shape.Pick.MAX_OPTIONS} options (this has $count): past 10 the model grows confidently wrong. " +
+                "Split it into two questions (a broad choice, then a narrower one), or fold rare options into \"other\""
+
         /** What an unwritten criterion is saved as; never shown to the model. */
         const val UNWRITTEN: String = "(not written yet)"
 
@@ -191,12 +202,13 @@ data class JudgmentDraft(
     /** Every problem with the draft right now; empty means it will compile. Cheap: run per keystroke. */
     fun findings(): List<LintFinding> {
         val findings = JudgmentLint.check(question).toMutableList()
+        findings += JudgmentLint.absence(question)
         val compiled = JudgmentAuthor.compile("draft", question, options.ifEmpty { null }, onFailure)
         if (compiled is AuthorResult.Rejected) {
             findings += compiled.findings.filter { it !in findings }
         }
-        if (options.isNotEmpty() && options.size > 12) {
-            findings += LintFinding("too-many-options", "keep to 12 options; the decision model's card advises under ~20, and fewer is sharper")
+        if (options.size > Shape.Pick.MAX_OPTIONS) {
+            findings += LintFinding("too-many-options", UserJudgment.tooManyOptions(options.size))
         }
         if (options.any { it.isBlank() }) findings += LintFinding("blank-option", "an option is blank")
         return findings

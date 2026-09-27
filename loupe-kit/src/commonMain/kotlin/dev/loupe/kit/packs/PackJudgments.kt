@@ -171,7 +171,7 @@ object PackJudgments {
      * The user's judgments as a pack (Station's "Export my presets"): one preset per judgment, its
      * one question `q`. A yes/no whose options are bare yes/no exports as a noul without criteria
      * (a valid pack; importing it again is refused by the lint, as writing it would be). Judgments
-     * the format cannot carry (a question over 600 characters, more than 20 options) are left out
+     * the format cannot carry (a question over 600 characters, a choice over 10 options) are left out
      * and named in [PackExport.left]. The result is validated before it is returned.
      */
     fun export(judgments: List<UserJudgment>): PackExport {

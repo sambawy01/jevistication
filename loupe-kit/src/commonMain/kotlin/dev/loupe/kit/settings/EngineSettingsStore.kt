@@ -47,7 +47,7 @@ class EngineSettingsStore(directory: String?) {
     private fun load(): EngineSettings {
         val p = path ?: return EngineSettings.DEFAULTS
         val text = runCatching { PlatformFiles.readText(p) }.getOrNull() ?: return EngineSettings.DEFAULTS
-        return runCatching { parseDocument(text) }.getOrElse {
+        return runCatching { fromFile(parseDocument(text), text) }.getOrElse {
             problem = "engine_settings.json could not be read (${it.message}); using the defaults"
             EngineSettings.DEFAULTS
         }
@@ -178,6 +178,16 @@ class EngineSettingsStore(directory: String?) {
          * A document (or a bare `settings` object) to settings: every known key read and validated,
          * anything missing or invalid at its default, unknown keys and features ignored.
          */
+        /**
+         * A saved file's settings. A `use_calibration: true` without the opt-in mark was written before the
+         * setting became real, when every key was written and `true` was the default: never set, so off.
+         */
+        internal fun fromFile(parsed: EngineSettings, text: String): EngineSettings {
+            if (!parsed.useCalibration) return parsed
+            val marked = ((JsonValue.parse(text) as? JsonValue.Obj)?.get(EngineSettings.CALIBRATION_OPT_IN) as? JsonValue.Bool)?.value == true
+            return if (marked) parsed else EngineSettings(parsed.values + ("global.use_calibration" to JsonValue.Bool(false)))
+        }
+
         fun parseDocument(text: String): EngineSettings {
             val root = JsonValue.parse(text) as? JsonValue.Obj ?: throw IllegalArgumentException("not a JSON object")
             val settings = (root["settings"] as? JsonValue.Obj) ?: root

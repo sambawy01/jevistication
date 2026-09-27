@@ -1,0 +1,59 @@
+{
+  "format": "loupe-gates",
+  "format_version": 1,
+  "version": "1.0",
+  "created": "2026-09-27",
+  "calibration_version": "1.0",
+  "bands": {
+    "act": "confidence >= act: used as it is",
+    "confirm": "confidence >= confirm: a person confirms",
+    "human": "below confirm: a person answers"
+  },
+  "rules": [
+    "phishing questions never act (act is null)",
+    "a low-trust language of the calibration file (franco) is always human"
+  ],
+  "costs": {
+    "act": {
+      "false_accept": 10.0,
+      "escalate": 1.0,
+      "false_reject": 0.0
+    },
+    "confirm": {
+      "false_accept": 2.0,
+      "escalate": 1.0,
+      "false_reject": 0.0
+    },
+    "phishing_act": null,
+    "phishing_confirm": {
+      "false_accept": 3.0,
+      "escalate": 1.0,
+      "false_reject": 0.0
+    }
+  },
+  "costs_note": "PLACEHOLDERS, Loupe Station's (tools/lab/gate_costs.json at 0ff886d), not a recommendation",
+  "checkpoints": {
+    "multilingual": {
+      "noul": {
+        "act": null,
+        "confirm": null,
+        "n": 555
+      },
+      "choice": {
+        "act": 0.95,
+        "confirm": 0.33,
+        "n": 47
+      },
+      "score": {
+        "act": null,
+        "confirm": null,
+        "n": 42
+      },
+      "phishing": {
+        "act": null,
+        "confirm": 0.88,
+        "n": 72
+      }
+    }
+  }
+}

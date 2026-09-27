@@ -194,7 +194,7 @@ class FlightJudge(
         }
         val s = scored.getOrThrow()
         val truncation = Truncation(state.budgetCut, s.modelContext, s.optionCriteria)
-        val calibrated = recalibrator.calibrate(raw.getOrThrow())
+        val calibrated = recalibrator.calibrate(raw.getOrThrow(), judgment, state)
         val decision = Policy.onCutInput(Policy.decide(calibrated, Probability.of(threshold)), truncation, judgment.onFailure)
         val verdict = OfferVerdict(
             id = offer.id,
@@ -226,7 +226,7 @@ class FlightJudge(
          * it then ranks by the rules and asks no judge.)
          */
         fun forPolicy(backend: Backend, policy: dev.loupe.kit.settings.RunPolicy): FlightJudge =
-            FlightJudge(backend, policy.threshold(DEFAULT_THRESHOLD), Recalibrator.Identity, policy.budget(FlightState.BUDGET))
+            FlightJudge(backend, policy.threshold(DEFAULT_THRESHOLD), dev.loupe.kit.settings.ModelPrior.recalibrator(policy.useCalibration), policy.budget(FlightState.BUDGET))
 
         /** The ledger source for flight offers (epic #6): offers come from Duffel via the helper. */
         const val SOURCE: String = "web:duffel"

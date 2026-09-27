@@ -85,6 +85,21 @@ class JudgmentsSharedTest {
     }
 
     @Test
+    fun editorRefusesAbsenceQuestionsInEveryShapeAndChoicesOverTen() {
+        val yesNo = base.copy(question = "Is the signature missing?", positive = "missing a signature", negative = "signed")
+        val pick = base.copy(question = "Which part is missing?", shape = DraftShape.PICK, optionsText = "date\nsignature\nnone of these")
+        val score = base.copy(question = "How much is missing from the order?", shape = DraftShape.SCORE, bandsText = "nothing\nsome\nmost")
+        val arabic = base.copy(question = "هل لا يوجد توقيع؟", positive = "لا يوجد توقيع", negative = "يوجد توقيع")
+        for (input in listOf(yesNo, pick, score, arabic)) {
+            assertTrue(JudgmentBook.findings(input).any { it.rule == "absence-phrasing" }, input.question)
+            assertTrue(JudgmentBook.fromEditor(input, emptyList()) is BookResult.Refused, input.question)
+        }
+        val eleven = base.copy(question = "Which kind of bill is this?", shape = DraftShape.PICK, optionsText = (1..10).joinToString("\n") { "kind $it" } + "\nnone of these")
+        assertTrue(JudgmentBook.findings(eleven).any { it.rule == "too-many-options" && "keep a choice to 10" in it.message })
+        created(JudgmentBook.fromEditor(eleven.copy(optionsText = (1..9).joinToString("\n") { "kind $it" } + "\nnone of these"), emptyList()))
+    }
+
+    @Test
     fun pickAndScoreCompile() {
         val pick = base.copy(question = "Which kind of bill is this?", shape = DraftShape.PICK, optionsText = "energy\nwater, phone\nnone of these")
         val p = created(JudgmentBook.fromEditor(pick, emptyList()))
@@ -164,7 +179,9 @@ class JudgmentsSharedTest {
         val tax = created(JudgmentBook.fromTemplate("tax-receipt", emptyMap(), emptyList()))
         val items = (1..10).map { item("i$it", "receipt $it") }
         val rec = Recorder(cancelAfter = 3)
-        val end = JudgmentSweep(backend()).run(tax, JudgmentResults.plan(emptyList(), tax, items, false), rec)
+        // Calibration off: this fake model's 0.95 is not the real graph's, so the prior would not fit it.
+        val raw = dev.loupe.kit.settings.RunPolicy.defaults(dev.loupe.kit.settings.Features.JUDGMENTS).copy(useCalibration = false)
+        val end = JudgmentSweep(backend()).runWith(tax, JudgmentResults.plan(emptyList(), tax, items, false), rec, false, raw)
         assertTrue(end.cancelled)
         assertEquals(3, end.done)
         assertEquals(3, rec.rows.size)

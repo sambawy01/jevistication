@@ -1,0 +1,139 @@
+{
+  "formula": "loupe-phishing-formula",
+  "version": "1.3",
+  "extends": {
+    "version": "1.2",
+    "file": "phishing-vectors-v1.2.json",
+    "note": "v1.3 changes only the email profile (self_vouching); every v1.1 email vector and every v1.2 page vector gives the same verdict"
+  },
+  "psl": "2026-09-21_18-50-07_UTC",
+  "now": "2026-09-27T12:00:00Z",
+  "emails": [
+    {
+      "id": "selfvouch-unknown-alone",
+      "note": "a vouching sentence from an unknown sender with no other evidence: a reason, weight 15, never caution alone",
+      "from": "Omar Farouk <omar@nilefreight.com>",
+      "body": "Please find the shipment schedule for next week below. This message has been verified by our security team.",
+      "expect": {
+        "level": "safe",
+        "score": 15,
+        "signals": [
+          "self_vouching"
+        ],
+        "flag": false
+      }
+    },
+    {
+      "id": "selfvouch-badge-freemail-brand",
+      "note": "a brand's name on a free personal address plus a 'Verified sender' badge",
+      "from": "PayPal Security <paypal.security.team@gmail.com>",
+      "body": "Verified sender ✓\nYour account is limited. Confirm your details today to restore access.",
+      "expect": {
+        "level": "danger",
+        "score": 65,
+        "signals": [
+          "display_brand_freemail",
+          "self_vouching"
+        ],
+        "flag": true
+      }
+    },
+    {
+      "id": "selfvouch-msa-lookalike-link",
+      "note": "MSA vouching sentence next to a look-alike bank link",
+      "from": "إدارة الأمن <security@cairo-notices.net>",
+      "body": "عميلنا العزيز، يرجى تحديث بياناتك. تم التحقق من هذه الرسالة من قبل إدارة أمن البنك.",
+      "links": [
+        [
+          "https://paypa1-secure.com/login",
+          "تحديث البيانات"
+        ]
+      ],
+      "expect": {
+        "level": "danger",
+        "score": 60,
+        "signals": [
+          "link_lookalike_brand",
+          "self_vouching"
+        ],
+        "flag": true
+      }
+    },
+    {
+      "id": "selfvouch-egyptian-replyto-freemail",
+      "note": "Egyptian Arabic vouching sentence plus replies to a personal address: caution, not flagged",
+      "from": "قسم الحسابات <accounts@eg-supplies.com>",
+      "replyTo": "accounts.eg.supplies@gmail.com",
+      "body": "الرسالة دي متأكد منها من قسم الأمان في البنك، متقلقش. حول المبلغ النهارده على الحساب الجديد.",
+      "expect": {
+        "level": "caution",
+        "score": 40,
+        "signals": [
+          "reply_to_freemail",
+          "self_vouching"
+        ],
+        "flag": false
+      }
+    },
+    {
+      "id": "selfvouch-known-brand-sender",
+      "note": "a known brand's own domain says 'verified': known sender, no signal",
+      "from": "Stripe <support@stripe.com>",
+      "body": "Good news: your business has been verified. Payouts will start on your normal schedule.",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "flag": false
+      }
+    },
+    {
+      "id": "selfvouch-contact-address",
+      "note": "the sender is one of your contacts (same address): no signal",
+      "from": "Sara Hassan <sara@ourcompany.com>",
+      "body": "Hi, your leave request was approved by your manager.",
+      "contacts": [
+        {
+          "name": "Sara Hassan",
+          "addresses": [
+            "sara@ourcompany.com"
+          ]
+        }
+      ],
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "flag": false
+      }
+    },
+    {
+      "id": "selfvouch-quoted-only",
+      "note": "the vouching words are only in the quoted reply: the sender's own words say nothing of the kind",
+      "from": "Nadia <nadia@olive-traders.com>",
+      "body": "Thanks, see you Tuesday.\n\nOn Mon, 21 Sep 2026, Omar wrote:\n> The order was approved by finance.",
+      "expect": {
+        "level": "safe",
+        "score": 0,
+        "signals": [],
+        "flag": false
+      }
+    },
+    {
+      "id": "selfvouch-with-lookalike-sender",
+      "note": "a look-alike sender domain plus a vouching sentence",
+      "from": "Microsoft 365 <no-reply@rnicrosoft-support.com>",
+      "body": "This email was scanned and confirmed safe by your IT department. Sign in to keep your mailbox.",
+      "expect": {
+        "level": "danger",
+        "score": 100,
+        "signals": [
+          "display_brand_mismatch",
+          "self_vouching",
+          "sender_lookalike_brand"
+        ],
+        "flag": true
+      }
+    }
+  ]
+}

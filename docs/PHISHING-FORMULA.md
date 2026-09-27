@@ -1,5 +1,10 @@
 # The phishing / site formula
 
+*Formula version 1.3 (self-vouching, email profile only) — **proposed by Loupe Station under the owner's
+approval of the eight model fixes (fix 6), 2026-09-27; implemented in Station (0ff886d); mobile ported
+2026-09-27** (`dev.loupe.kit.mail.Phishing` + `PhishingOwnWords`: all 8 v1.3 vectors pass on the JVM and the
+iOS simulator, every v1.1 and v1.2 vector keeps its verdict).*
+
 *Formula version 1.2 (site facts) — **approved by the owner 2026-09-24; implemented in Loupe Station;
 mobile ported** (`loupe-kit` `dev.loupe.kit.site`, 2026-09-24: all 51 v1.2 vectors pass on the JVM and
 the iOS simulator). Version 1.1 was decided by the owner 2026-09-24 (decisions A
@@ -20,6 +25,16 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
   code stays `safe`.
 
 **Changelog**
+- **v1.3 (2026-09-27, owner-approved model fix 6):** *a message that vouches for itself.* One new email
+  signal, `self_vouching` **15** (§6.2): a sentence in the sender's own words says the message, its sender
+  or its request is verified, approved, trusted or safe (English, MSA, Egyptian Arabic keyword rule), and
+  the sender is unknown (not a known brand, not a trusted sender, not one of your contacts' addresses).
+  Not a risk code: alone it never flags and never reaches caution. The page profile is unchanged. The
+  version is recorded as `1.3` on page and email verdicts. New vectors
+  [`phishing-vectors-v1.3.json`](phishing-vectors-v1.3.json) (8 emails; extends v1.2). Related input
+  change, not a formula change: the decision model's `is_phishing` probability enters the formula
+  calibrated (Station's `docs/model-calibration.md`); mobile's seam is `PhishingCalibration` (raw until
+  the calibration file ships on the phone). Station's write-up: `docs/formula/phishing-formula-v1.3.md`.
 - **v1.2 (approved 2026-09-24):** *site facts that reduce false alarms and add real evidence.* New opt-in
   inputs: DNS / email-authentication facts (§5b), domain blocklists (DNSBL, §5c), the hosts of a page's
   frames and scripts (§5d). New rules: a blocklist listing is a risk signal (`online_dnsbl_phish` 60,
@@ -322,8 +337,9 @@ receiving server (`spoofed_known_sender` 60, `auth_dmarc_fail` 45, `auth_spf_dki
 (`link_homograph_brand` 60, `link_lookalike_brand` 45, `link_brand_domain_in_subdomain` 45,
 `link_brand_in_subdomain` 30, `link_brand_in_domain_bait` 35, `link_mixed_script` 35,
 `link_text_mismatch` 40, `link_brand_text` 30, `link_data` 40, `link_userinfo` 30, `link_ip` 25,
-`link_suspicious_tld` 8, `link_shortener` 5); contacts (rule 6, below); online (§5); Laya's text
-reading 20 / 10 only next to deterministic evidence. Conditions, tables (free-mail, trackers,
+`link_suspicious_tld` 8, `link_shortener` 5); contacts (rule 6, below); online (§5); self-vouching
+(v1.3, below) `self_vouching` 15; the decision model's text reading (calibrated `is_phishing` ≥ 0.8 / ≥ 0.5)
+20 / 10 only next to deterministic evidence. Conditions, tables (free-mail, trackers,
 service words) and order are Station's `mail/phishing.py`, unchanged except: no `sender_punycode`,
 the contact and online codes.
 
@@ -334,6 +350,17 @@ address of the same organisation); else if the domain is an **international** na
 equals one of their domains' skeletons, `contact_homograph_domain` 60; else if it is within
 Levenshtein 1–2 of one of their domains, `contact_lookalike_domain` 45; else
 `contact_name_other_address` 30.
+
+**Self-vouching (v1.3).** After the known / trusted early return and unless the From address is one of a
+contact's `addresses` (a contact's *name* on another address still counts as unknown): the sender's own
+words — the subject plus the body cut at the first quoted-reply marker (`On … wrote:`, `Le … a écrit :`,
+`El … escribió:`, `-----Original Message-----` / `Forwarded message`, `From: … Sent:`, `Sent from my …`, a
+`-- ` signature line), lines starting with `>` dropped, everything from the first bulk-mail footer phrase
+on dropped, URLs replaced by a space — split into sentences on `.`, `!`, `?`, `؟` followed by white space
+and on new lines. The first sentence matching (case-insensitive)
+`\b(verified|approved|authori[sz]ed|whitelisted|trusted|genuine|legitimate|confirmed safe|safe to open|signed off|not phishing|security check passed)\b|✓|✔|تم التحقق|موثق|موثّق|موثوق|معتمد|اعتماد|وافق|متأكد منها|آمن|اطمن|متراجع`
+gives `self_vouching` 15, source `text`, param `phrase` = that sentence cut to 80 characters (79 + `…`),
+shown in its own direction. Weight 15 < 25: not a risk code.
 
 ```
 score = min(100, Σ weights + laya)
@@ -381,6 +408,11 @@ file, vectors: 57}, psl, now, testPoints, pages}`. A v1.2 page vector may add `e
 ad}}` — the raw resolver answers, so a port runs its own DNS-fact and blocklist parsing; a question not
 listed is NXDOMAIN, except the zones' test points, which default to the file's `testPoints`. `expect`
 adds `notCounted`, `facts`, `reassuring` (the good-tone facts), `tier`, `paymentExpected`.
+
+**v1.3 vectors** (`docs/phishing-vectors-v1.3.json`, byte-identical to Station's
+`tests/fixtures/phishing-vectors-v1.3.json`): `{formula, version: "1.3", extends: {version: "1.2", file},
+psl, now, emails}` in the v1.1 email vector format; 8 self-vouching vectors. All 12 v1.1 email vectors and
+all 51 v1.2 page vectors are unchanged (`PhishingFormulaV13Test`).
 
 ## 9. Before / after (2026-09-24, pinned PSL `2026-09-21_18-50-07_UTC`)
 

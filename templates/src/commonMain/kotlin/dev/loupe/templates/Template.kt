@@ -82,8 +82,18 @@ sealed interface Shape {
             require(candidates.size >= 2) { "a choice needs at least two options" }
             require(candidates.distinct().size == candidates.size) { "options must be distinct" }
             require(noOp == null || noOp in candidates) { "the no-op '$noOp' must be one of the options" }
-            // Laya's own card advises staying under ~20 options; the library stays well under.
-            require(candidates.size <= 12) { "a template choice keeps to 12 options, had ${candidates.size}" }
+            // At most MAX_OPTIONS for anything new (owner, 2026-09-27: past 10 options Station measured
+            // answers at >= 0.99 going from 20% to 67%). A judgment saved before then with up to 12
+            // still loads, so the file is never silently dropped; nothing new can be made that big.
+            require(candidates.size <= SAVED_MAX_OPTIONS) { "a choice keeps to $MAX_OPTIONS options, had ${candidates.size}" }
+        }
+
+        companion object {
+            /** The most options a choice may have: templates, written judgments and packs. */
+            const val MAX_OPTIONS: Int = 10
+
+            /** The old cap, still accepted when a judgment saved before 2026-09-27 is loaded. */
+            const val SAVED_MAX_OPTIONS: Int = 12
         }
     }
 
@@ -237,6 +247,9 @@ data class Template(
             "template '$id' must be authored to the three-part template"
         }
         require(examples.size in 2..3) { "template '$id' needs two or three examples, had ${examples.size}" }
+        require(shape !is Shape.Pick || shape.candidates.size <= Shape.Pick.MAX_OPTIONS) {
+            "template '$id' choice keeps to ${Shape.Pick.MAX_OPTIONS} options, had ${shape.candidates.size}"
+        }
         require(examples.all { it.answer in shape.candidates }) {
             "template '$id' has an example whose answer is not an option"
         }

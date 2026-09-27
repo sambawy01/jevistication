@@ -114,6 +114,8 @@ object BuiltInJudgments {
             "built-in judgment '$id' does not pass its own lint: " +
                 (result as AuthorResult.Rejected).findings
         }
+        // The template rules too: a built-in never asks whether something is absent.
+        check(JudgmentLint.absence(question).isEmpty()) { "built-in judgment '$id' asks an absence question" }
         return JudgmentDefinition(result.judgment, invariant, breaks, lookalikes)
     }
 }
