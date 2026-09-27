@@ -2082,6 +2082,18 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
   - The fuzz oracle is stricter. "No host" counts only when both bases give none, and Apple Mail's host
     only when the href has its own scheme. Reverting backslash scheme-relative hrefs now fails 67 cases;
     reading `https:host` as relative fails 494.
+- **Fix loop 7** (rebased onto origin/main 699761a, formula v1.3):
+  - The HTML tokeniser keeps a namespace stack. SVG and MathML end at breakout tags, `</p>`/`</br>` and an
+    HTML ancestor's end tag; integration points hold HTML; `<base>` inside them is ignored.
+  - Every doubt leans toward finding links. CDATA always ends at the first `>`, `<template>` content is
+    read, and relative hrefs are also judged as written and against every other absolute base.
+  - `<area>` and meta refresh are links. Link text joins across comments and leaves out SVG title/desc text.
+  - A regex-found link whose host no anchor covers is judged too, so one harmless anchor can't switch off
+    the fallback.
+  - The anchor-parity fuzz (`tools/parity/fuzz/anchor_*`, `AnchorParityFuzzTest`) pins 2,000 generated
+    documents with the links Chrome's DOMParser builds. Loupe misses none. Planting the loop-6 depth
+    counter back fails 85.
+  - All 141 round-7 files: every host Chrome links to is judged.
 - **URLs are split as browsers split them** (fix loop 3; hosts checked against Chrome 153,
   r3/chrome1.out): C0 controls and spaces at both ends are stripped; for http, https, ws, wss, ftp and
   file the host follows the scheme however many `/` or `\` come first, so a mail link

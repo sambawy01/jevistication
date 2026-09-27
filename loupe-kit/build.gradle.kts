@@ -40,6 +40,8 @@ val parityCorpus = rootProject.file("tools/parity/corpus.json")
 val parityEvaluator = rootProject.file("tools/parity/kotlin")
 // The differential host-parity fuzz: hrefs and text lines with Chrome's and the linkifiers' hosts.
 val hostParityFuzz = rootProject.file("tools/parity/fuzz/pinned.json")
+// The anchor-parity fuzz: mail documents with the hosts of the links Chrome's DOMParser finds in them.
+val anchorParityFuzz = rootProject.file("tools/parity/fuzz/anchor-pinned.json")
 // shared_hosts.json: copied verbatim from Loupe Station (laya_studio/online/shared_hosts.json, commit
 // 4cb9026). It is the one source of the list: generateSharedHosts turns it into commonMain Kotlin.
 val sharedHostsJson = project.file("data/shared_hosts.json")
@@ -104,6 +106,7 @@ val generateTestPaths by tasks.registering {
     inputs.property("modelPriorDir", modelPriorDir.absolutePath)
     inputs.property("parityCorpus", parityCorpus.absolutePath)
     inputs.property("hostParityFuzz", hostParityFuzz.absolutePath)
+    inputs.property("anchorParityFuzz", anchorParityFuzz.absolutePath)
     val scratch = layout.buildDirectory.dir("tmp/kit-tests").get().asFile.absolutePath
     inputs.property("scratch", scratch)
     outputs.dir(outDir)
@@ -123,6 +126,7 @@ val generateTestPaths by tasks.registering {
                 "internal const val MODEL_PRIOR_DIR: String = \"" + modelPriorDir.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val PARITY_CORPUS: String = \"" + parityCorpus.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val HOST_PARITY_FUZZ: String = \"" + hostParityFuzz.absolutePath.replace("\\", "/") + "\"\n" +
+                "internal const val ANCHOR_PARITY_FUZZ: String = \"" + anchorParityFuzz.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val TEST_TMP: String = \"" + scratch.replace("\\", "/") + "\"\n",
         )
     }
@@ -134,6 +138,7 @@ val generateTestPaths by tasks.registering {
 tasks.withType<AbstractTestTask>().configureEach {
     inputs.file(parityCorpus).withPropertyName("parityCorpus").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(hostParityFuzz).withPropertyName("hostParityFuzz").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(anchorParityFuzz).withPropertyName("anchorParityFuzz").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(phishingVectors).withPropertyName("phishingVectors").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(phishingVectorsV12).withPropertyName("phishingVectorsV12").withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.file(examplePack).withPropertyName("examplePack").withPathSensitivity(PathSensitivity.RELATIVE)

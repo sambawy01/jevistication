@@ -1,5 +1,8 @@
 package dev.loupe.kit.settings
 
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
+
 /**
  * Which language group an input belongs to, for the calibration prior and trust: `en`, `ar`,
  * `franco`, `es-fr` or `other` — the groups of Loupe Station's `model_calibration.json`.
@@ -32,9 +35,10 @@ object LangGroup {
 
     // Letters-and-digits tokens that are English or technical, never Franco (units, ordinals, times, formats).
     private val NOT_FRANCO = Regex(
-        "^(\\d+(st|nd|rd|th|am|pm|k|m|g|gb|mb|kb|tb|kg|km|cm|mm|ml|x|s|h|d|y|hz|khz|mhz|ghz|mp|px|pt|v|w|kw|kwh|p|fps)" +
-            "|(mp|m4|h|x|b|p|a|f|e|g|s|t|v|w|u|q|r)\\d+[a-z]?|[a-z]{1,3}\\d{2,}|\\d+[a-z]{1,2}\\d+|utf\\d+|sha\\d+|md5|win\\d+" +
-            "|covid\\d+|b2b|b2c|p2p|g2g|3d|2d|4k|5g|4g|3g|2fa|mp3|mp4|a4|a3|a5|b5)$",
+        // (tokens are [a-z0-9']: `[0-9]` is the `\d` it was, spelled portably; fix loop 7)
+        "^([0-9]+(st|nd|rd|th|am|pm|k|m|g|gb|mb|kb|tb|kg|km|cm|mm|ml|x|s|h|d|y|hz|khz|mhz|ghz|mp|px|pt|v|w|kw|kwh|p|fps)" +
+            "|(mp|m4|h|x|b|p|a|f|e|g|s|t|v|w|u|q|r)[0-9]+[a-z]?|[a-z]{1,3}[0-9]{2,}|[0-9]+[a-z]{1,2}[0-9]+|utf[0-9]+|sha[0-9]+|md5|win[0-9]+" +
+            "|covid[0-9]+|b2b|b2c|p2p|g2g|3d|2d|4k|5g|4g|3g|2fa|mp3|mp4|a4|a3|a5|b5)$",
     )
 
     // Common Egyptian Arabic words in Latin letters that are not English words (Station's list, verbatim).
@@ -45,7 +49,7 @@ object LangGroup {
         bukra naharda nahrda tamam ahlan habibi yalla inshallah insha2allah khalas ba3d ba3den 2abl ma3a ma3ana ma3ak 3ala
         3al fel lel elly elli 3ashan 3shan 3alashan leeh leih wala walla ya3ni yaani ma3lesh ma3lesh mafeesh mafish
         gedid gedida gedeed 3amel 3amla 3amlin ne7gez a7gez te2olly te2olulna te2dar a3raf ne3raf etba3at wesel wesselna weselsh wesselsh
-    """.trim().split(Regex("\\s+")).toSet()
+    """.trim().split(Regex("${Rx.SP}+")).toSet()
 
     /** (digit words, Franco words, Latin word tokens) in [text]. */
     fun francoEvidence(text: String): Triple<Int, Int, Int> {
@@ -104,15 +108,28 @@ object LangGroup {
         "der", "die", "das", "und", "ist", "nicht", "ich", "sie", "het", "een", "niet", "van", "il", "di", "che", "non",
         "per", "não", "você", "uma", "och", "är", "jest", "nie", "się", "bir", "ve", "bu", "için", "và", "của", "là",
     )
-    private val WORD = Regex("[\\p{L}']+")
+    /** Runs of letters and apostrophes (`[\\p{L}']+`), read from the pinned Unicode data (fix loop 7). */
+    private fun words(text: String): List<String> {
+        val out = ArrayList<String>()
+        var i = 0
+        var start = -1
+        while (i <= text.length) {
+            val cp = if (i < text.length) PortableText.codePointAt(text, i) else -1
+            val inWord = cp == '\''.code || (cp >= 0 && PortableText.isLetter(cp))
+            if (inWord && start < 0) start = i
+            if (!inWord && start >= 0) { out += text.substring(start, i); start = -1 }
+            i += if (cp >= 0x10000) 2 else 1
+        }
+        return out
+    }
 
     /** English, Spanish/French or another Latin language, by a stop-word vote; English when nothing votes. */
     private fun latinLanguage(text: String): String {
         var en = 0
         var esFr = 0
         var other = 0
-        for (m in WORD.findAll(text.lowercase())) {
-            val w = m.value.trim('\'')
+        for (word in words(text.lowercase())) {
+            val w = word.trim('\'')
             if (w in EN_WORDS) en++
             if (w in ES_FR_WORDS) esFr++
             if (w in OTHER_LATIN_WORDS) other++

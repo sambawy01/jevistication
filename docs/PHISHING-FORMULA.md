@@ -82,11 +82,17 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
    token that starts with a URL or a host with a listed TLD is judged (`https://paypal.com，evil.com/login`),
    and a known or brand URL whose host a stop runs straight into another domain is `link_stitched` (30); a stop after the
    first URL's path began (`www.facebook.com/nileshoes｜www.nileshoes.com`) is two links side by side, not a stitch (*fix loops 5–6*).
-   Hrefs are read as the browser reads them (*fix loops 5–6*): the HTML is tokenised in full (comments,
-   bogus comments, script/style/textarea/title/xmp/iframe/noembed/noframes text and `<template>` hide no
-   anchor and make none up), every HTML character reference in the attribute decoded (numeric and the
+   Hrefs are read as the browser reads them (*fix loops 5–7*): the HTML is tokenised in full with a stack of
+   open elements and their namespaces, so SVG and MathML end where the tree builder ends them (breakout
+   tags, `</p>`, `</br>`, an HTML ancestor's end tag) and integration points (`foreignObject`, `desc`,
+   `title`, `mi` `mo` `mn` `ms` `mtext`, `annotation-xml`) hold HTML; comments, bogus comments and the text of
+   script/style/textarea/title/xmp/iframe/noembed/noframes/plaintext in HTML hide no anchor and make none
+   up. Every doubt leans toward finding more links: `<![CDATA[` always ends at the first `>`, `<template>`
+   content is read, and a relative href is also judged as written and against every other absolute
+   `<base href>`. `<area href>` and `<meta http-equiv=refresh>` are links; a link's text joins across
+   comments and leaves out an SVG `<title>`/`<desc>`'s own text; every HTML character reference in the attribute decoded (numeric and the
    full WHATWG named table), `href` only as a whole attribute name (`xlink:href` for an `<a>` inside
-   `<svg>`), a relative href resolved against the document's first absolute `<base href>`;
+   `<svg>`), a relative href resolved against the document's first `<base href>` outside SVG/MathML;
    C0 controls, spaces and no-break spaces trimmed and tabs and newlines removed **before** the scheme
    is read (`ht\ntps://x` is https://x); two leading `/` or `\` in any mix are scheme-relative
    (`\\x`, `/\x`, `///x` are host x); one leading `/` or `\` before a host name with a listed TLD is

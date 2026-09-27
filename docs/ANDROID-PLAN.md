@@ -431,6 +431,36 @@ LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
   - Performance linear; the check is now the median of five with `t(4n) < 12 t(n) + 250 ms`.
 - **Sizes:** release APK unchanged; LoupeKit arm64 30,509,208 bytes (+41 KB).
 
+**Fix loop 7 (2026-09-27, same branch, rebased onto origin/main 699761a).** Evidence: `.../loupe-android-evidence/parity-fix7/`.
+- **Rebase:** onto 699761a (formula v1.3, model fixes). Conflicts in `docs/BUILD.md` and `loupe-kit/build.gradle.kts`
+  were both kept whole. Phishing.kt merged cleanly with `self_vouching`, and the v1.3 vectors pass.
+  - The branch's portable-regex lint then flagged origin/main's new `JudgmentAuthor.kt`, `PhishingOwnWords.kt` and
+    `LangGroup.kt` (`\b`, `\s`, `\p{..}`, IGNORE_CASE). They are ported to `BoundedRegex`, `Rx`, folded text and
+    code checks from the pinned Unicode data; their tests and the v1.3 vectors pass.
+- **HTML tokeniser:** a namespace stack.
+  - SVG/MathML end at breakout tags, `</p>`/`</br>` and an HTML ancestor's end tag; integration points hold HTML;
+    `<base>` inside them is ignored.
+  - Every doubt leans toward finding links: CDATA always ends at the first `>`, template content is read, and
+    relative hrefs are also judged as written and against other bases.
+  - `<area>` and meta refresh are links. Link text joins across comments. Regex-found links whose host no anchor
+    covers are judged.
+- **Anchor-parity fuzz:** 2,000 documents pinned with Chrome's DOMParser links; Loupe misses none. Planting the
+  loop-6 depth counter back fails 85.
+- **All 141 round-7 files:** every host Chrome links to is judged.
+- **Criteria against the new origin/main:**
+  - 603 of 621 attack rows are not lower. The other 18 are files whose Chrome document has no link at all (Chrome
+    DOMParser; for example plaintext, xmp, textarea, noembed, CDATA inside SVG, `xlink:href` on an HTML `<a>`):
+    origin/main's regex found one there.
+  - 255 legitimate rows are not higher (8 accepted +10 notes).
+  - AttackRowsTest (267 rows) and LegitimateMailTest (255 rows) pin it, with floors and ceilings measured on 699761a.
+- **Gates:**
+  - `clean check` green, 3,224 tests, 0 failed; no-SDK 1,666.
+  - Corpus 1,198 cases, 0 differ on API 29, API 35, the iOS simulator and the JVM.
+  - Planted faults in corpus.json and anchor-pinned.json fail on iOS.
+  - ICU 147 compiled, 0 rejected; API check 725 classes, 0 problems.
+  - Performance linear; the text-URL rows now grow one token, not the token count.
+- **Sizes:** release APK 1,970,131 bytes; LoupeKit arm64 31,880,120 bytes (origin/main's new code included).
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).

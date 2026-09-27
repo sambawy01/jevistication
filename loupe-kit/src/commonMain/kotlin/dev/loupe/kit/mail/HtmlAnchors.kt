@@ -2,54 +2,102 @@ package dev.loupe.kit.mail
 
 import dev.loupe.engine.PortableText
 import dev.loupe.kit.site.Hosts
-import dev.loupe.sources.common.HtmlText
+import dev.loupe.kit.site.ParsedUrl
 
 /**
- * The links of an HTML mail as a browser reads them (fix loops 5–6). One forward pass tokenises every
- * tag, comment and raw-text element by the WHATWG rules, so nothing hides an anchor or makes one up:
- * - comments (`<!-- … -->`, also `<!-->`), bogus comments (`<!…>`, `<?…>`, and `<![CDATA[…` outside
- *   SVG/MathML, which ends at the first `>`), and the text of script, style, xmp, iframe, noembed,
- *   noframes, textarea and title are not markup; an anchor inside `<template>` is not in the document;
- * - attribute names are whole (`data-href` is not `href`), quoted values may hold `>` and `<a`, the
- *   first of a repeated attribute wins, and a quote left open runs to the end of the document;
- * - an `<a>` inside `<svg>` takes `href`, else `xlink:href`; an anchor left open ends at the next `<a>`;
- * - a relative href is resolved against the document's first `<base href>` with an absolute web URL,
- *   as a browser resolves it, and that URL is judged.
- * The value's character references are decoded ([decodeAttribute]).
+ * The links of an HTML mail as a browser reads them (fix loops 5–7). One forward pass tokenises every
+ * tag, comment and raw-text element by the WHATWG rules and keeps a stack of open elements with their
+ * namespaces, so that SVG and MathML are left where the tree builder leaves them: at a breakout tag
+ * (`<p>`, `<div>`, `<br>`, `<b>`, `<img>`, `<table>`…), at `</p>` and `</br>`, at an end tag that closes an
+ * HTML ancestor, and for the children of an integration point (SVG `foreignObject`, `desc`, `title`;
+ * MathML `mi`, `mo`, `mn`, `ms`, `mtext`; `annotation-xml` for HTML).
+ *
+ * Every doubt leans toward finding MORE links, never fewer (fix loop 7):
+ * - `<![CDATA[` always ends at the first `>` (a bogus comment), even where a browser would read a CDATA
+ *   section: text a browser shows literally may then be read as a tag, but nothing is hidden;
+ * - `<template>` content is read like any other (a browser keeps it out of the document);
+ * - a relative href is judged against the first `<base href>` outside SVG/MathML, as a browser resolves
+ *   it, and also as written (its own scheme) and against every other absolute `<base href>`, when those
+ *   give another host.
+ * Raw text (script, style, xmp, iframe, noembed, noframes, textarea, title, plaintext) is skipped only
+ * for an element the stack puts in the HTML namespace. `<a>` and `<area>` take `href` (an `<a>` in SVG,
+ * else `xlink:href`); `<meta http-equiv=refresh content="0;url=…">` is a link too. A tag cut off by the
+ * end of the document is dropped, as the tokenizer drops it. The visible text of a link is the text the
+ * tokenizer passes inside it (comments join what they split; script, style and title text is not shown).
  */
 internal object HtmlAnchors {
-    /** Visible text of an anchor that is never closed: at most this much of what follows. */
-    private const val OPEN_TEXT_MAX = 4000
+    /** Visible text kept per link. */
+    private const val TEXT_MAX = 4000
+
+    /** Open elements tracked at most (a deeper, malformed document is read as HTML beyond this). */
+    private const val STACK_MAX = 4096
 
     private val RAW_TEXT = setOf("script", "style", "xmp", "iframe", "noembed", "noframes", "textarea", "title")
+    /** Foreign elements whose text is not shown (an SVG `<title>` is a tooltip, not link text). */
+    private val HIDDEN_FOREIGN = setOf("title", "desc", "style", "script")
+    private val VOID = setOf("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr", "param", "keygen", "frame", "basefont", "bgsound")
+    private val BREAKOUT = setOf(
+        "b", "big", "blockquote", "body", "br", "center", "code", "dd", "div", "dl", "dt", "em", "embed", "h1", "h2", "h3", "h4", "h5", "h6",
+        "head", "hr", "i", "img", "li", "listing", "menu", "meta", "nobr", "ol", "p", "pre", "ruby", "s", "small", "span", "strong", "strike",
+        "sub", "sup", "table", "tt", "u", "ul", "var",
+    )
+    private val MATHML_TEXT_IP = setOf("mi", "mo", "mn", "ms", "mtext")
+    private val SVG_HTML_IP = setOf("foreignobject", "desc", "title")
 
+    private const val HTML = 0
+    private const val SVG = 1
+    private const val MATH = 2
+
+    private class El(val name: String, val ns: Int, val htmlIp: Boolean)
     private class Tag(val name: String, val end: Boolean, val attrs: Map<String, String>, val start: Int, val after: Int, val selfClosing: Boolean)
+    private class Link(val raw: String, val text: StringBuilder, val fixedText: String?)
 
     fun anchors(html: String, max: Int): List<Pair<String, String>> {
-        val found = mutableListOf<Triple<String, Int, Int>>() // (raw href, content start, content end)
-        var base: String? = null
-        var open = -1 // index in found of the anchor whose content is running
-        var openHref: String? = null
-        var foreign = 0 // depth inside <svg>/<math>
-        var template = 0
-        fun closeOpen(at: Int) {
-            if (open >= 0) { val (h, cs, _) = found[open]; found[open] = Triple(h, cs, at) }
-            open = -1
+        val links = mutableListOf<Link>()
+        val bases = mutableListOf<Pair<String, Boolean>>() // (href, outside SVG/MathML), in document order
+        val stack = ArrayList<El>()
+        val count = HashMap<String, Int>()
+        var open: Link? = null
+        fun push(e: El) {
+            if (stack.size >= STACK_MAX) return
+            stack += e
+            count[e.name] = (count[e.name] ?: 0) + 1
         }
+        fun pop() {
+            val e = stack.removeAt(stack.size - 1)
+            count[e.name] = (count[e.name] ?: 1) - 1
+        }
+        fun current(): El? = stack.lastOrNull()
+        fun inHtml(): Boolean { val c = current(); return c == null || c.ns == HTML }
+        /** Pop foreign elements until the current node is HTML or an integration point (a breakout). */
+        fun leaveForeign() {
+            while (true) {
+                val c = current() ?: return
+                if (c.ns == HTML || c.htmlIp || (c.ns == MATH && c.name in MATHML_TEXT_IP)) return
+                pop()
+            }
+        }
+        /** Pop through the nearest open element named [name], if any (an end tag). */
+        fun close(name: String) {
+            if ((count[name] ?: 0) <= 0) return
+            while (stack.isNotEmpty()) { val top = current()!!.name; pop(); if (top == name) return }
+        }
+        fun text(from: Int, to: Int) {
+            val l = open ?: return
+            // text right inside a foreign title/desc/style/script is not shown (HTML inside one is)
+            val cur = stack.lastOrNull()
+            if ((cur != null && cur.ns != HTML && cur.name in HIDDEN_FOREIGN) || to <= from || l.text.length >= TEXT_MAX) return
+            l.text.append(html, from, minOf(to, from + TEXT_MAX - l.text.length))
+        }
+
         var i = 0
         val n = html.length
         while (i < n) {
             val lt = html.indexOf('<', i)
-            if (lt < 0) break
-            // comments and other markup declarations
-            if (html.startsWith("<!--", lt)) {
-                i = commentEnd(html, lt + 4)
-                continue
-            }
-            if (html.startsWith("<![CDATA[", lt) && foreign > 0) {
-                i = html.indexOf("]]>", lt + 9).let { if (it < 0) n else it + 3 }
-                continue
-            }
+            if (lt < 0) { text(i, n); break }
+            text(i, lt)
+            if (html.startsWith("<!--", lt)) { i = commentEnd(html, lt + 4); continue }
+            // `<!…` (also `<![CDATA[`, see above) and `<?…`: a bogus comment to the next `>`
             if (lt + 1 < n && (html[lt + 1] == '!' || html[lt + 1] == '?')) {
                 i = html.indexOf('>', lt + 2).let { if (it < 0) n else it + 1 }
                 continue
@@ -60,46 +108,113 @@ internal object HtmlAnchors {
                 continue
             }
             val tag = readTag(html, lt)
-            if (tag == null) { i = lt + 1; continue }
+            if (tag == null) { text(lt, lt + 1); i = lt + 1; continue }
+            if (tag.after < 0) break // cut off by the end of the document: dropped, and nothing follows
             i = tag.after
+            val name = tag.name
             if (tag.end) {
-                when (tag.name) {
-                    "a" -> if (template == 0) closeOpen(tag.start)
-                    "svg", "math" -> if (foreign > 0) foreign--
-                    "template" -> if (template > 0) template--
-                }
+                if (!inHtml() && (name == "p" || name == "br")) leaveForeign()
+                if (name == "a") open = null
+                close(name)
                 continue
             }
-            when (tag.name) {
-                "svg", "math" -> if (!tag.selfClosing) foreign++
-                "template" -> if (!tag.selfClosing) template++
-                "base" -> if (base == null && template == 0) tag.attrs["href"]?.let { base = decodeAttribute(it) }
-                "a" -> if (template == 0) {
-                    closeOpen(tag.start)
-                    val raw = tag.attrs["href"] ?: if (foreign > 0) tag.attrs["xlink:href"] else null
-                    if (raw != null) {
-                        found += Triple(raw, tag.after, -1)
-                        open = found.size - 1
-                    }
+            // where the start tag goes: HTML (no foreign element open, an integration point's child, or a
+            // breakout tag, which first leaves SVG/MathML), else the namespace of the foreign element it is in
+            var ns = HTML
+            val c = current()
+            if (c != null && c.ns != HTML) {
+                val ip = c.htmlIp || (c.ns == MATH && c.name in MATHML_TEXT_IP && name != "mglyph" && name != "malignmark")
+                val font = name == "font" && (tag.attrs.containsKey("color") || tag.attrs.containsKey("face") || tag.attrs.containsKey("size"))
+                ns = when {
+                    ip -> HTML
+                    c.ns == MATH && c.name == "annotation-xml" && name == "svg" -> SVG
+                    name in BREAKOUT || font -> { leaveForeign(); HTML }
+                    else -> c.ns
                 }
             }
-            // the text of a raw-text or RCDATA element is not markup (outside SVG/MathML)
-            // (HTML ignores `/>` on these: `<script/>` still opens script text)
-            if (foreign == 0 && tag.name in RAW_TEXT) i = rawTextEnd(html, tag.after, tag.name)
-            if (found.size > max && open < 0) break
+            if (ns == HTML && name == "svg") ns = SVG
+            if (ns == HTML && name == "math") ns = MATH
+            val selfClosing = tag.selfClosing && ns != HTML
+            when {
+                name == "base" && tag.attrs.containsKey("href") -> bases += decodeAttribute(tag.attrs.getValue("href")) to (ns == HTML)
+                name == "meta" && ns == HTML && tag.attrs["http-equiv"]?.trim()?.lowercase() == "refresh" ->
+                    refreshUrl(decodeAttribute(tag.attrs["content"] ?: ""))?.let { links += Link(it, StringBuilder(), "") }
+                name == "area" && ns == HTML -> tag.attrs["href"]?.let { links += Link(it, StringBuilder(), decodeText(tag.attrs["alt"] ?: "")) }
+                name == "a" -> {
+                    if (ns == HTML) open = null // an <a> closes the one still open (the adoption agency)
+                    val raw = tag.attrs["href"] ?: if (ns == SVG) tag.attrs["xlink:href"] else null
+                    if (raw != null) { val l = Link(raw, StringBuilder(), null); links += l; open = l }
+                }
+            }
+            if (ns == HTML) {
+                if (name !in VOID) push(El(name, HTML, false))
+                when {
+                    name == "plaintext" -> { text(i, n); i = n }
+                    name in RAW_TEXT -> {
+                        val end = rawTextEnd(html, tag.after, name)
+                        if (name == "textarea" || name == "xmp") text(tag.after, end)
+                        i = end
+                    }
+                }
+            } else if (!selfClosing) {
+                push(El(name, ns, (ns == SVG && name in SVG_HTML_IP) || (ns == MATH && name == "annotation-xml" && tag.attrs["encoding"]?.trim()?.lowercase().let { it == "text/html" || it == "application/xhtml+xml" })))
+            }
         }
-        closeOpen(-1)
-        val absBase = base?.let { Hosts.cleanHref(it) }?.takeIf { Hosts.isWebUrl(it) && Hosts.splitUrl(it).authority?.isNotEmpty() == true }
+
+        // resolve: the first <base href> outside SVG/MathML is the document's; the href as written and
+        // every other absolute <base href> are judged too when they give another host (lean toward finding)
+        val docBase = bases.firstOrNull { it.second }?.first?.let { Hosts.cleanHref(it) }
+        val absDoc = docBase?.takeIf { absoluteWeb(it) }
+        val others = bases.map { Hosts.cleanHref(it.first) }.filter { absoluteWeb(it) && it != absDoc }.distinct()
         val out = mutableListOf<Pair<String, String>>()
-        for ((raw, cs, ce) in found) {
+        for (l in links) {
             if (out.size >= max) break
-            var href = decodeAttribute(raw)
-            if (Hosts.stripC0(href).isEmpty() && absBase == null) continue
-            if (absBase != null) href = Hosts.resolve(absBase, href)
-            val end = if (ce >= 0) ce else minOf(n, cs + OPEN_TEXT_MAX)
-            out += href to PortableText.collapseSpaces(HtmlText.toText(html.substring(cs, maxOf(cs, end))))
+            val href = decodeAttribute(l.raw)
+            val shown = l.fixedText ?: PortableText.collapseSpaces(decodeText(l.text.toString()))
+            val readings = LinkedHashSet<String>()
+            readings += if (absDoc != null) Hosts.resolve(absDoc, href) else href
+            for (b in others) readings += Hosts.resolve(b, href)
+            readings += href
+            val first = readings.first()
+            if (Hosts.stripC0(first).isEmpty()) continue
+            out += first to shown
+            val seen = mutableSetOf(hostOf(first))
+            for (r in readings.drop(1)) {
+                if (out.size >= max) break
+                val h = hostOf(r) ?: continue
+                if (seen.add(h)) out += r to shown
+            }
         }
         return out
+    }
+
+    /** The host the mail check judges for [href], or null for none. */
+    private fun hostOf(href: String): String? = ParsedUrl.parse(Hosts.linkUrl(href))?.host?.ifEmpty { null }
+
+    private fun absoluteWeb(u: String): Boolean = Hosts.isWebUrl(u) && Hosts.splitUrl(u).authority?.isNotEmpty() == true
+
+    /** The URL of a meta refresh's content (`0; url='https://…'`), or null. */
+    internal fun refreshUrl(content: String): String? {
+        var j = 0
+        val s = content
+        while (j < s.length && (s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r' || s[j] == '\u000C')) j++
+        while (j < s.length && (s[j].isDigit() || s[j] == '.')) j++
+        while (j < s.length && (s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r' || s[j] == '\u000C')) j++
+        if (j < s.length && (s[j] == ';' || s[j] == ',')) j++
+        while (j < s.length && (s[j] == ' ' || s[j] == '\t' || s[j] == '\n' || s[j] == '\r' || s[j] == '\u000C')) j++
+        if (s.regionMatches(j, "url", 0, 3, ignoreCase = true)) {
+            var k = j + 3
+            while (k < s.length && s[k] == ' ') k++
+            if (k < s.length && s[k] == '=') {
+                k++
+                while (k < s.length && s[k] == ' ') k++
+                j = k
+            }
+        }
+        var u = s.substring(j)
+        if (u.isNotEmpty() && (u[0] == '"' || u[0] == '\'')) u = u.substring(1).substringBefore(u[0])
+        u = u.trim()
+        return u.ifEmpty { null }
     }
 
     /** Where a comment opened at [from] (after `<!--`) ends: `-->`, `--!>`, or the abrupt `<!-->` / `<!--->`. */
@@ -129,7 +244,7 @@ internal object HtmlAnchors {
     private fun space(c: Char) = c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u000C'
     private fun letter(c: Char) = c in 'a'..'z' || c in 'A'..'Z'
 
-    /** The start or end tag at [lt] (`<` then a letter, or `</` then a letter), or null when there is none. */
+    /** The start or end tag at [lt], or null when there is none; `after` is -1 when the document ends inside it. */
     private fun readTag(s: String, lt: Int): Tag? {
         val end = lt + 1 < s.length && s[lt + 1] == '/'
         val ns = lt + (if (end) 2 else 1)
@@ -141,16 +256,16 @@ internal object HtmlAnchors {
         return Tag(name, end, attrs, lt, after, selfClosing)
     }
 
-    /** The tag's attributes from [pos] (after its name), first occurrence of each name, where the tag ends, and `/>`. */
+    /** The tag's attributes from [pos] (after its name), first occurrence of each name, where the tag ends (-1: never), and `/>`. */
     private fun tagAttributes(s: String, pos: Int): Triple<Map<String, String>, Int, Boolean> {
         val attrs = LinkedHashMap<String, String>()
         var j = pos
         val n = s.length
-        var slash = false
+        var slash: Boolean
         while (true) {
             slash = false
             while (j < n && (space(s[j]) || s[j] == '/')) { slash = s[j] == '/'; j++ }
-            if (j >= n) return Triple(attrs, n, false)
+            if (j >= n) return Triple(attrs, -1, false)
             if (s[j] == '>') return Triple(attrs, j + 1, slash)
             val ns = j
             if (s[j] == '=') j++
@@ -163,9 +278,10 @@ internal object HtmlAnchors {
                 while (j < n && space(s[j])) j++
                 if (j < n && (s[j] == '"' || s[j] == '\'')) {
                     val q = s[j]
-                    val e = s.indexOf(q, j + 1).let { if (it < 0) n else it }
+                    val e = s.indexOf(q, j + 1)
+                    if (e < 0) return Triple(attrs, -1, false)
                     value = s.substring(j + 1, e)
-                    j = minOf(n, e + 1)
+                    j = e + 1
                 } else {
                     val vs = j
                     while (j < n && !space(s[j]) && s[j] != '>') j++
@@ -175,6 +291,9 @@ internal object HtmlAnchors {
             if (name !in attrs) attrs[name] = value
         }
     }
+
+    /** Text's character references decoded (as in an attribute, without the attribute-only rule). */
+    private fun decodeText(t: String): String = decodeAttribute(t, attribute = false)
 
     private val NAMED: Map<String, String> by lazy {
         val m = HashMap<String, String>(2400)
@@ -208,7 +327,7 @@ internal object HtmlAnchors {
      * become U+FFFD, 128–159 Windows-1252), every named reference of the HTML table with its `;`,
      * and the legacy names without it unless a letter, digit or `=` follows (in an attribute).
      */
-    fun decodeAttribute(v: String): String {
+    fun decodeAttribute(v: String, attribute: Boolean = true): String {
         if ('&' !in v && '\u0000' !in v) return v
         val sb = StringBuilder(v.length)
         var i = 0
@@ -258,7 +377,7 @@ internal object HtmlAnchors {
                 val p = run.substring(0, k)
                 if (p in LEGACY) {
                     val next = if (i + 1 + k < n) v[i + 1 + k] else null
-                    if (next == null || !(next == '=' || alnum(next))) {
+                    if (!attribute || next == null || !(next == '=' || alnum(next))) {
                         sb.append(NAMED.getValue(p))
                         i += 1 + k
                         done = true

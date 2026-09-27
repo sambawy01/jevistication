@@ -71,7 +71,11 @@ data class MailMessage(
                 labels = (entity.header("x-keywords") ?: entity.header("keywords") ?: "").split(',', ' ').map { it.trim() }.filter { it.isNotEmpty() }
                 anchors = htmlParts(entity).flatMap { anchors(it) }.distinct().take(Phishing.MAX_LINKS)
             }
-            val links = anchors.ifEmpty { (facts?.links ?: emptyList()).map { it to "" } }
+            // the source's own link list (found by pattern in the raw mail) is judged too where no anchor
+            // covers its host, so one harmless anchor cannot switch the fallback off (fix loop 7)
+            val covered = anchors.mapNotNull { ParsedUrl.parse(Hosts.linkUrl(it.first))?.host?.ifEmpty { null } }.toSet()
+            val extra = (facts?.links ?: emptyList()).filter { l -> ParsedUrl.parse(Hosts.linkUrl(l))?.host?.ifEmpty { null }.let { it == null || it !in covered } }
+            val links = (anchors + extra.map { it to "" }).distinct().take(Phishing.MAX_LINKS)
             return MailMessage(
                 id = item.id, sender = from, subject = facts?.subject ?: "", dateIso = item.dateIso, body = body,
                 text = item.text, replyTo = replyTo, authResults = auth, links = links,

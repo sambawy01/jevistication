@@ -69,38 +69,75 @@ object JudgmentLint {
 
     // --------------------------------------------------------------- absence phrasing (owner, 2026-09-27)
 
-    private val ABSENCE_EN = Regex(
-        """\b(?:missing|absent|absence|lacks?|lacking|lacked|omits?|omitted|omitting|devoid|without|nothing|none)\b""" +
-            """|(?<!or\s)\bno\s+(?!longer\b)\p{L}""" +
-            """|\bnot\s+(?:have|has|contain|contains|include|includes|mention|mentions|show|shows|carry|list|state|name|give|provide|specify)\b""" +
-            """|n['’]t\s+(?:(?:it|this|that|they|there)\s+)?(?:have|has|contain|include|mention|show|carry|list|state|name|give|provide|specify|there)\b""" +
-            """|\bthere\s+(?:is\s+|are\s+)?not\b""" +
-            """|\bfails?\s+to\s+(?:include|mention|show|state|provide|list|give)\b""",
-        RegexOption.IGNORE_CASE,
+    // Portable spelling (fix loop 7, the parity rules: no `\b` `\s` `\p{..}` or case-insensitive flag).
+    // The English and Franco patterns run on [PortableText.lowercase]d text; a `\b` before a word is
+    // BoundedRegex's check, one after it [Rx.WB_END]; `\s` is [Rx.SP].
+
+    private const val EN_VERBS = "have|has|contain|contains|include|includes|mention|mentions|show|shows|carry|list|state|name|give|provide|specify"
+
+    private val ABSENCE_EN = BoundedRegex(
+        "(?:missing|absent|absence|lacks?|lacking|lacked|omits?|omitted|omitting|devoid|without|nothing|none)${Rx.WB_END}" +
+            "|not${Rx.SP}+(?:$EN_VERBS)${Rx.WB_END}" +
+            "|there${Rx.SP}+(?:is${Rx.SP}+|are${Rx.SP}+)?not${Rx.WB_END}" +
+            "|fails?${Rx.SP}+to${Rx.SP}+(?:include|mention|show|state|provide|list|give)${Rx.WB_END}",
+    )
+
+    /** `\bno\s+(?!longer\b)` then a letter (checked in code, from the pinned data), not after "or ". */
+    private val ABSENCE_EN_NO = BoundedRegex("no${Rx.SP}+(?!longer${Rx.WB_END})")
+
+    /** `n't` (straight or curly) after a word: no boundary before it ("doesn't have"). */
+    private val ABSENCE_EN_NT = Regex(
+        "n['’]t${Rx.SP}+(?:(?:it|this|that|they|there)${Rx.SP}+)?(?:have|has|contain|include|mention|show|carry|list|state|name|give|provide|specify|there)${Rx.WB_END}",
     )
 
     /** Egyptian Arabic in Latin letters ("Franco"): mafeesh, bedoon, men gheir, mesh mawgood, na2es. */
-    private val ABSENCE_FRANCO = Regex(
-        """\b(?:ma?fee?sh|mafish|mafesh|mfeesh|mafihoo?sh|bedo+n|bdo+n|(?:men|min|mn)\s+(?:gh?|8)[ei]+r|m[ei]?sh\s+mawgo+u?d[ae]?|na2e?s|na2sa|maf[qk]oo?d)\b""",
-        RegexOption.IGNORE_CASE,
+    private val ABSENCE_FRANCO = BoundedRegex(
+        "(?:ma?fee?sh|mafish|mafesh|mfeesh|mafihoo?sh|bedo+n|bdo+n|(?:men|min|mn)${Rx.SP}+(?:gh?|8)[ei]+r|m[ei]?sh${Rx.SP}+mawgo+u?d[ae]?|na2e?s|na2sa|maf[qk]oo?d)${Rx.WB_END}",
     )
 
     /**
      * Arabic, MSA and Egyptian. No `\b` (it does not see Arabic letters as word characters on every
      * engine): a letter boundary is spelled out where a word could sit inside a longer one (بلا in
-     * بلاغ, "a report").
+     * بلاغ, "a report"), checked in code for بدون / بلا ([absenceWithout]).
      */
     private val ABSENCE_AR = Regex(
-        """ناقص|نواقص|نقص(?!د)|مفقود|يخلو|تخلو|يفتقر|تفتقر|يفتقد|تفتقد|غائب|غياب""" +
-            """|لا\s+(?:يوجد|توجد|يُوجد|تُوجد|يتوفر|تتوفر|يحتوي|تحتوي|يتضمن|تتضمن|يذكر|تذكر|يظهر|تظهر|يشمل|تشمل)""" +
-            """|ليست?\s+(?:هناك|فيه|فيها|به|بها|لديه|لديها)""" +
-            """|(?:غير|مش|مو)\s+موجود""" +
-            """|عدم\s+(?:وجود|توفر|ذكر)""" +
-            """|خال(?:ي|ية|ٍ)?\s+من""" +
-            """|(?<![\p{L}\p{M}])[وف]?(?:بدون|بلا)(?![\p{L}\p{M}])""" +
-            """|من\s+(?:دون|غير)""" +
-            """|(?:م|ما\s?)في(?:ش|هوش|هاش)""",
+        "ناقص|نواقص|نقص(?!د)|مفقود|يخلو|تخلو|يفتقر|تفتقر|يفتقد|تفتقد|غائب|غياب" +
+            "|لا${Rx.SP}+(?:يوجد|توجد|يُوجد|تُوجد|يتوفر|تتوفر|يحتوي|تحتوي|يتضمن|تتضمن|يذكر|تذكر|يظهر|تظهر|يشمل|تشمل)" +
+            "|ليست?${Rx.SP}+(?:هناك|فيه|فيها|به|بها|لديه|لديها)" +
+            "|(?:غير|مش|مو)${Rx.SP}+موجود" +
+            "|عدم${Rx.SP}+(?:وجود|توفر|ذكر)" +
+            "|خال(?:ي|ية|ٍ)?${Rx.SP}+من" +
+            "|من${Rx.SP}+(?:دون|غير)" +
+            "|(?:م|ما${Rx.SP}?)في(?:ش|هوش|هاش)",
     )
+    private val AR_WITHOUT = Regex("[وف]?(?:بدون|بلا)")
+
+    private fun letterOrMark(cp: Int): Boolean = UnicodeData.category(cp).let {
+        it == UnicodeData.LETTER || it == UnicodeData.NONSPACING_MARK || it == UnicodeData.SPACING_MARK || it == UnicodeData.ENCLOSING_MARK
+    }
+
+    /** `(?<![\p{L}\p{M}])[وف]?(?:بدون|بلا)(?![\p{L}\p{M}])`, with the letter-or-mark test in code. */
+    private fun absenceWithout(q: String): Boolean {
+        for (m in AR_WITHOUT.findAll(q)) {
+            val s0 = m.range.first
+            val e = m.range.last + 1
+            val before = if (s0 == 0) -1 else PortableText.codePointAt(q, if (s0 >= 2 && q[s0 - 1].isLowSurrogate()) s0 - 2 else s0 - 1)
+            val after = if (e >= q.length) -1 else PortableText.codePointAt(q, e)
+            if ((before < 0 || !letterOrMark(before)) && (after < 0 || !letterOrMark(after))) return true
+        }
+        return false
+    }
+
+    /** `(?<!or\s)\bno\s+(?!longer\b)\p{L}` on lower-cased [q]. */
+    private fun absenceNo(q: String): Boolean {
+        for (m in ABSENCE_EN_NO.findAll(q)) {
+            val s0 = m.range.first
+            if (s0 >= 3 && q[s0 - 3] == 'o' && q[s0 - 2] == 'r' && PortableText.isSpace(q[s0 - 1])) continue
+            val e = m.range.last + 1
+            if (e < q.length && PortableText.isLetter(PortableText.codePointAt(q, e))) return true
+        }
+        return false
+    }
 
     /**
      * Rejects a question that asks whether something is **absent** ("Is the signature missing?",
@@ -115,7 +152,10 @@ object JudgmentLint {
      */
     fun absence(question: String): List<LintFinding> {
         val q = question.trim()
-        if (!ABSENCE_EN.containsMatchIn(q) && !ABSENCE_AR.containsMatchIn(q) && !ABSENCE_FRANCO.containsMatchIn(q)) return emptyList()
+        val lower = PortableText.lowercase(q)
+        val absent = ABSENCE_EN.containsMatchIn(lower) || absenceNo(lower) || ABSENCE_EN_NT.containsMatchIn(lower) ||
+            ABSENCE_AR.containsMatchIn(q) || absenceWithout(q) || ABSENCE_FRANCO.containsMatchIn(lower)
+        if (!absent) return emptyList()
         return listOf(
             LintFinding(
                 "absence-phrasing",

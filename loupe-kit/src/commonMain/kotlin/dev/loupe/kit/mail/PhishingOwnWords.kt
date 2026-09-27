@@ -1,5 +1,7 @@
 package dev.loupe.kit.mail
 
+import dev.loupe.engine.PortableText
+
 /*
  * Formula v1.3 (self-vouching): the sender's own words of an email, and the first of their sentences
  * that vouches for the message.
@@ -21,34 +23,53 @@ object PhishingOwnWords {
     private const val WS = "\\t\\n\\x0B\\f\\r\\x1C-\\x1F \\x85\\xA0\\u1680\\u2000-\\u200A\\u2028\\u2029\\u202F\\u205F\\u3000"
     private const val S = "[$WS]"
     private const val NOT_S = "[^$WS]"
-    /** Python's `\b` in a Unicode pattern: between a `\w` ([\p{L}\p{Nd}\p{Nl}\p{No}_]) and a non-`\w`. */
-    private const val B_START = "(?<![\\p{L}\\p{Nd}\\p{Nl}\\p{No}_])"
-    private const val B_END = "(?![\\p{L}\\p{Nd}\\p{Nl}\\p{No}_])"
-
-    /** Station's `VOUCHING_RE` (English, Modern Standard Arabic, Egyptian Arabic), case-insensitive. */
-    val VOUCHING_RE = Regex(
-        B_START + "(verified|approved|authori[sz]ed|whitelisted|trusted|genuine|legitimate|confirmed safe|safe to open|" +
-            "signed off|not phishing|security check passed)" + B_END + "|✓|✔|تم التحقق|موثق|موثّق|موثوق|معتمد|اعتماد|وافق|" +
-            "متأكد منها|آمن|اطمن|متراجع",
-        RegexOption.IGNORE_CASE,
+    /**
+     * Station's `VOUCHING_RE` (English, Modern Standard Arabic, Egyptian Arabic), case-insensitive,
+     * spelled portably (fix loop 7): the English words, each between Python's Unicode `\b` (a `\w` is
+     * a letter, a number or `_`, from the pinned Unicode data), found on [PortableText.fold]ed text;
+     * the marks and the Arabic phrases anywhere, as in Station's pattern (no boundary there).
+     */
+    private val VOUCHING_WORDS = listOf(
+        "verified", "approved", "authorised", "authorized", "whitelisted", "trusted", "genuine", "legitimate", "confirmed safe",
+        "safe to open", "signed off", "not phishing", "security check passed",
     )
+    private val VOUCHING_ANYWHERE = listOf("✓", "✔", "تم التحقق", "موثق", "موثّق", "موثوق", "معتمد", "اعتماد", "وافق", "متأكد منها", "آمن", "اطمن", "متراجع")
+
+    private fun pyWord(cp: Int): Boolean = cp == '_'.code || PortableText.isLetter(cp) || PortableText.isNumber(cp)
+
+    /** Whether [sentence] vouches for itself (Station's `VOUCHING_RE.search`). */
+    fun vouches(sentence: String): Boolean {
+        if (VOUCHING_ANYWHERE.any { it in sentence }) return true
+        val f = PortableText.fold(sentence)
+        for (w in VOUCHING_WORDS) {
+            var at = f.indexOf(w)
+            while (at >= 0) {
+                val end = at + w.length
+                val before = if (at == 0) -1 else PortableText.codePointAt(f, if (at >= 2 && f[at - 1].isLowSurrogate() && f[at - 2].isHighSurrogate()) at - 2 else at - 1)
+                val after = if (end >= f.length) -1 else PortableText.codePointAt(f, end)
+                if ((before < 0 || !pyWord(before)) && (after < 0 || !pyWord(after))) return true
+                at = f.indexOf(w, at + 1)
+            }
+        }
+        return false
+    }
 
     /** Station's `_SENTENCE_SPLIT`: after `.`, `!`, `?`, `؟` followed by white space, and on new lines. */
     private val SENTENCE_SPLIT = Regex("(?<=[.!?؟])$S+|\\n+")
 
-    private val HEADER_RE = Regex("^(from|subject|to|cc|date|reply-to)$S*:", RegexOption.IGNORE_CASE)
+    // The patterns below are case-insensitive in Station: they are written in lower case and run on
+    // [PortableText.fold]ed text (same length as the text, so a position is the original's), fix loop 7.
+    private val HEADER_RE = Regex("^(from|subject|to|cc|date|reply-to)$S*:")
     private val QUOTE_CUT_RE = Regex(
         "^$S*(on$S.+${S}wrote:$S*$|le$S.+${S}a${S}écrit$S*:|el$S.+${S}escribió:|-{2,}$S*(original message|forwarded message)" +
             "|from:$S.+$S(sent|date):|sent from my$S|--$S*$)",
-        RegexOption.IGNORE_CASE,
     )
     private val FOOTER_RE = Regex(
         "unsubscribe|view (it |this email )?in (your |a )?browser|manage (your )?(email )?preferences|email preferences" +
             "|you('| a)re receiving this|you received this (email|message) because|this (email|message) was sent to" +
             "|se désabonner|désinscri|darse de baja|cancelar (la )?suscripci[oó]n|إلغاء الاشتراك",
-        RegexOption.IGNORE_CASE,
     )
-    private val URL_RE = Regex("https?://$NOT_S+|www\\.$NOT_S+", RegexOption.IGNORE_CASE)
+    private val URL_RE = Regex("https?://$NOT_S+|www\\.$NOT_S+")
     /** Python's `str.splitlines()` boundaries. */
     private val LINE_BREAK = Regex("\\r\\n|[\\n\\r\\x0B\\f\\x1C\\x1D\\x1E\\x85\\u2028\\u2029]")
     /** Bidi embedding, override and isolate controls: never kept in a phrase shown to the user. */
@@ -73,7 +94,7 @@ object PhishingOwnWords {
         var sender = ""
         var subject = ""
         var i = 0
-        while (i < lines.size && i < 8 && HEADER_RE.find(lines[i]) != null) {
+        while (i < lines.size && i < 8 && HEADER_RE.find(PortableText.fold(lines[i])) != null) {
             val key = pyStrip(lines[i].substringBefore(':')).lowercase()
             val value = pyStrip(lines[i].substringAfter(':'))
             if (key == "from" && sender.isEmpty()) sender = value else if (key == "subject" && subject.isEmpty()) subject = value
@@ -87,13 +108,13 @@ object PhishingOwnWords {
         val (_, subject, body) = splitEmail(text)
         val kept = mutableListOf<String>()
         for (line in splitLines(body)) {
-            if (QUOTE_CUT_RE.find(line) != null) break
+            if (QUOTE_CUT_RE.find(PortableText.fold(line)) != null) break
             if (line.trimStart(::isPySpace).startsWith(">")) continue
             kept += line
         }
         var own = (listOf(subject) + kept).joinToString("\n")
-        FOOTER_RE.find(own)?.let { own = own.substring(0, it.range.first) }          // everything from the first footer phrase on
-        return URL_RE.replace(own, " ")
+        FOOTER_RE.find(PortableText.fold(own))?.let { own = own.substring(0, it.range.first) } // everything from the first footer phrase on
+        return PortableText.replaceFolded(own, URL_RE, " ")
     }
 
     /**
@@ -105,7 +126,7 @@ object PhishingOwnWords {
         if (text.isEmpty()) return null
         for (raw in ownText(text).split(SENTENCE_SPLIT)) {
             val sentence = pyStrip(raw)
-            if (sentence.isNotEmpty() && VOUCHING_RE.containsMatchIn(sentence)) {
+            if (sentence.isNotEmpty() && vouches(sentence)) {
                 val cut = if (codePoints(sentence) <= MAX_PHRASE_CHARS) sentence
                 else takeCodePoints(sentence, MAX_PHRASE_CHARS - 1).trimEnd(::isPySpace) + "…"
                 return BIDI_CONTROLS.replace(cut, "")

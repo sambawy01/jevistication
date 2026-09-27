@@ -67,9 +67,14 @@ class PortableRegexPerformanceTest {
         linear("mail anchors", { "<a class=x title=y href=\"https://e.com\">t</a> ".repeat(250 * it) }) { MailMessage.anchors(it) }
         // anchors without an href that never close: every one is read, none counts toward the cap
         // text URLs full of stops (fix loop 6: the rescan after a cut was quadratic per token on iOS)
+        // one token that grows (fix loop 7: the text above is capped by MAX_LINKS and URL_RE's 2,000
+        // characters, so its time does not grow; this calls the per-token scan directly)
+        linear("text URL token pieces", { "https://a.com" + "|x".repeat(2_000 * it) }) { Phishing.textUrlsOf(it) }
+        linear("text URL token full-width pieces", { "https://a.com" + "，x".repeat(2_000 * it) }) { Phishing.textUrlsOf(it) }
+        linear("text URL token stand-in dots", { "https://a" + "。a".repeat(2_000 * it) + "/x" }) { Phishing.textUrlsOf(it) }
+        linear("text URL token userinfo cuts", { "https://www.paypal.com" + "|x".repeat(2_000 * it) + "@paypa1-secure.xyz/x" }) { Phishing.textUrlsOf(it) }
+        // whole messages of such tokens (bounded by MAX_LINKS: a check that the cap holds, not of growth)
         linear("text URL pieces", { ("https://a.com" + "|x".repeat(995) + " ").repeat(8 * it) }) { Phishing.urls(it) }
-        linear("text URL full-width pieces", { ("https://a.com" + "，x".repeat(995) + " ").repeat(8 * it) }) { Phishing.urls(it) }
-        linear("text URL stand-in dots", { ("https://a" + "。a".repeat(995) + " ").repeat(8 * it) }) { Phishing.urls(it) }
         linear("html lone lt", { "<".repeat(20_000 * it) }) { MailMessage.anchors(it) }
         linear("html open attributes", { "<a x".repeat(5_000 * it) }) { MailMessage.anchors(it) }
         linear("html entity href", { "<a href=\"" + "&amp;&#x41;&notin;&copy".repeat(1_000 * it) + "\">x</a>" }) { MailMessage.anchors(it) }

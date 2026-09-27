@@ -637,6 +637,9 @@ object Phishing {
 
     internal fun urls(text: String): List<String> = textLinks(text).first
 
+    /** The URLs one text token stands for ([textUrls]), for tests that grow a single token past URL_RE's cap. */
+    internal fun textUrlsOf(token: String): List<String> = mutableListOf<String>().also { textUrls(token, it, 0, mutableListOf()) }
+
     /** [urls], and the (cut URL, URL right after the cut) pairs a stop joined in the text. */
     internal fun textLinks(text: String): Pair<List<String>, List<Pair<String, String>>> {
         val out = mutableListOf<String>()

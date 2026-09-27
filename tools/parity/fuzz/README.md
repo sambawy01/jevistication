@@ -37,3 +37,22 @@ Regenerate (macOS: Chrome, node with linkify-it, swift):
     python3 gen.py | LINKIFY_IT=/path/to/node_modules/linkify-it python3 oracle.py > pinned.json
 
 `pinned.json` records the oracle versions. `oracle.py` removes its temporary Chrome profile when done. Review the diff before committing a new pin.
+
+## Anchor parity (fix loop 7)
+
+`anchor_gen.py` generates 2,000 mail documents (fixed seed). Each mixes SVG and MathML, breakout tags,
+integration points, `<template>`, CDATA, comments, raw text, open quotes, malformed tags and `<base>`,
+then an attacker's link, sometimes after a harmless PayPal link.
+
+`anchor_oracle.py` parses each document with Chrome's DOMParser (`text/html`) and pins, in
+`anchor-pinned.json`, the web hosts of the links a reader can follow in the document Chrome builds:
+- HTML `<a>` and `<area>`;
+- SVG `<a>` (`href`, or `xlink:href`);
+- an HTML meta refresh;
+
+each resolved against the document's base. `AnchorParityFuzzTest` fails when Loupe does not judge one of
+those hosts. Finding more is counted, not failed: Loupe reads CDATA and template content and tries the
+other bases. Planting the loop-6 bug back (CDATA honoured inside SVG/MathML, no breakouts) fails 85
+documents.
+
+    python3 anchor_gen.py | python3 anchor_oracle.py > anchor-pinned.json
