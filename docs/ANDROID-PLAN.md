@@ -429,7 +429,7 @@ LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
   - Planted faults in corpus.json and pinned.json fail on iOS.
   - ICU 129 compiled, 0 rejected; API check 691 classes, 0 problems.
   - Performance linear; the check is now the median of five with `t(4n) < 12 t(n) + 250 ms`.
-- **Sizes:** release APK unchanged; LoupeKit arm64 30,475,560 bytes.
+- **Sizes:** release APK unchanged; LoupeKit arm64 30,509,208 bytes (+41 KB).
 
 ## Needed from the owner
 
