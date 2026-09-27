@@ -140,7 +140,7 @@ Swift callers need no change. The constructor threw on a bad pattern before too 
 ## Known parity gaps
 
 **B1 and B2 are closed** (2026-09-27, branch `parity`; record below). Android, iOS and the JVM now give
-the same mechanical answers, pinned by a shared corpus (`tools/parity/corpus.json`, 332 cases) that
+the same mechanical answers, pinned by a shared corpus (`tools/parity/corpus.json`, 374 cases) that
 runs in `commonTest` (JVM, iOS simulator, Android unit tests) and on the API 29 and API 35 emulators
 (`tools/parity/run-device.sh`). Loupe Station is to be made to pass the same file (its format:
 `tools/parity/README.md`). Every answer that changed for the iPhone or the desktop is listed in
@@ -192,7 +192,7 @@ ICU is 76.1, Unicode 16.0, and 16.0 mappings are unchanged in 17.0 by the stabil
 (the engine's registrable-domain lookup and the site check's host mapping), NFKC/NFKD, case folding
 and the letter/number/mark categories all read it; `java.net.IDN`, `java.text.Normalizer`, ICU and
 Foundation are no longer used for them; the site check and the registrable-domain lookup share one
-mapping. Two phishing signals read how a host is written (docs/PHISHING-FORMULA.md §4, §6.2):
+mapping, UTS #46 non-transitional as browsers resolve it (fix loop 2). Phishing signals read how a host is written (docs/PHISHING-FORMULA.md §4, §6.2):
 `disguised_host` (stand-in letters such as `ｐａｙｐａｌ.com`, which maps to paypal.com; mail senders
 written with non-ASCII are never known or trusted) and `unicode_drift_host` (a character that IDNA 2003
 nameprep, passing unassigned characters through, and the pinned mapping map differently: about 5,600
@@ -339,6 +339,19 @@ clone green, 1,544 tests; corpus 332 cases, 0 differ on API 29 and 35 and the iO
 125 compiled, 0 rejected on both; API check 685 classes, 0 problems; the performance test checks each
 pattern is linear (n vs 4n) on every target. Release APK unchanged (1,953,747 bytes); LoupeKit arm64
 release +59 KB over the first parity build.
+
+**Fix loop 2 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix2/`. Loupe now
+judges the host the browser opens: UTS #46 non-transitional (new engine `Uts46`, verified on the
+1,214 error-free IdnaTestV2.txt answers; 37 URLs equal Chrome 153's `new URL().host`, `browser/`),
+WHATWG host parsing for http(s) (backslash, percent-decoding, `。．｡`); the IDNA 2003 reading only
+feeds `deviation_host` (10) and `deviation_known_host` (45, impostor). Stand-ins are code points whose
+NFKC is not themselves; senders are read literally too, and none scores below origin/main
+(HostReadingTest). Gates: `clean check` green, 3,018 tests (2,982 before), 0 failed; no-SDK clone
+green, 1,562 tests; corpus 374 cases, 0 differ on API 29, API 35, the iOS simulator and the JVM (a
+planted wrong answer fails on the iOS simulator: `ios-planted-fault.log`); ICU check 126 compiled,
+0 rejected on both; API check 687 classes, 0 problems; the card-cue fuzz (20,000 texts, seed 7)
+matches the pre-fix output line for line. Release APK 1,970,131 bytes (+16 KB: the UTS #46 and joining
+tables); LoupeKit arm64 release +181 KB.
 
 ## Needed from the owner
 
