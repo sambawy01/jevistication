@@ -83,7 +83,7 @@ object PublicSuffix {
     /** One label to its lowercase ASCII (punycode) form, or null if it is not a valid label. */
     internal fun toAsciiLabel(label: String): String? {
         if (label.isEmpty()) return null
-        val lower = label.lowercase()
+        val lower = PortableText.lowercase(label)
         if (lower.all { it.code < 128 }) return lower
         return idnaToAscii(lower)?.takeIf { it.isNotEmpty() }
     }

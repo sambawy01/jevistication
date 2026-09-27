@@ -34,6 +34,10 @@ val phishingVectorsV12 = rootProject.file("docs/phishing-vectors-v1.2.json")
 // Formula v1.3 vectors (self_vouching, email profile), byte-identical to Station's tests/fixtures (0ff886d).
 val phishingVectorsV13 = rootProject.file("docs/phishing-vectors-v1.3.json")
 val phishingDbFixtures = project.file("src/commonTest/fixtures/phishingdb")
+// The cross-platform parity corpus (tools/parity/README.md) and its evaluator, shared with
+// :android-app's debug build so the same cases also run on an emulator or phone.
+val parityCorpus = rootProject.file("tools/parity/corpus.json")
+val parityEvaluator = rootProject.file("tools/parity/kotlin")
 // shared_hosts.json: copied verbatim from Loupe Station (laya_studio/online/shared_hosts.json, commit
 // 4cb9026). It is the one source of the list: generateSharedHosts turns it into commonMain Kotlin.
 val sharedHostsJson = project.file("data/shared_hosts.json")
@@ -96,6 +100,7 @@ val generateTestPaths by tasks.registering {
     inputs.property("phishingDbFixtures", phishingDbFixtures.absolutePath)
     inputs.property("sharedHostsJson", sharedHostsJson.absolutePath)
     inputs.property("modelPriorDir", modelPriorDir.absolutePath)
+    inputs.property("parityCorpus", parityCorpus.absolutePath)
     val scratch = layout.buildDirectory.dir("tmp/kit-tests").get().asFile.absolutePath
     inputs.property("scratch", scratch)
     outputs.dir(outDir)
@@ -113,6 +118,7 @@ val generateTestPaths by tasks.registering {
                 "internal const val PHISHINGDB_FIXTURES: String = \"" + phishingDbFixtures.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val SHARED_HOSTS_JSON: String = \"" + sharedHostsJson.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val MODEL_PRIOR_DIR: String = \"" + modelPriorDir.absolutePath.replace("\\", "/") + "\"\n" +
+                "internal const val PARITY_CORPUS: String = \"" + parityCorpus.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val TEST_TMP: String = \"" + scratch.replace("\\", "/") + "\"\n",
         )
     }
@@ -179,6 +185,7 @@ kotlin {
         }
         commonTest {
             kotlin.srcDir(generateTestPaths)
+            kotlin.srcDir(parityEvaluator)
             dependencies {
                 implementation(kotlin("test"))
             }

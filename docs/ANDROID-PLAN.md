@@ -3,8 +3,8 @@
 Status: **in development, in parallel with iOS** (owner, 2026-09-26). The Loupe Station session builds it on branch `android` (a worktree on /Volumes/Sambawy); changes to shared modules merge to `main` only after review and a green iOS suite.
 *History:* from 2026-09-25 to 2026-09-26 Android was on hold until every iPhone feature worked on a real device; the owner lifted the hold on 2026-09-26.
 It follows the iOS route (epic #6 / #7): the same Kotlin Multiplatform core, a native UI and the same
-model as the iPhone app and Loupe Station, aiming at the same answers. Where Android does not give
-them yet is listed under "Known parity gaps" below.
+model as the iPhone app and Loupe Station, aiming at the same answers. The gaps found at A0 are
+closed; see "Known parity gaps" below.
 
 ## Decisions
 
@@ -63,7 +63,9 @@ echo "sdk.dir=$ANDROID_HOME" > local.properties           # gitignored; one per 
 ./gradlew :android-app:assembleDebug        # android-app/build/outputs/apk/debug/android-app-debug.apk
 ./gradlew check                             # JVM + iOS simulator + Android unit tests + Android lint
 tools/android-regex-check/check.sh          # every shared regex literal compiled by Android's ICU, on a device
+tools/parity/run-device.sh                  # the cross-platform parity corpus on a device (debug APK)
 tools/android-api-check/check.py            # no API above minSdk 29 in our compiled Android classes
+python3 tools/unicode/gen_unicode_tables.py # regenerate the pinned Unicode table (engine), from the UCD
 ```
 
 The SDK needs `platforms;android-36`, `build-tools;35.0.0` and `platform-tools`; the emulator smoke
@@ -92,9 +94,9 @@ only APIs Android has at API 29 (`Paths.get`, `Collectors.toList`, a strict UTF-
 `Files.readString`, which Android lacks). The engine's Android actuals follow iOS instead of the JVM:
 the portable IDNA, script table and number formatter, and the embedded Public Suffix List, so these
 do not follow the phone's Unicode data or locale (`"%.2f"` prints Arabic-Indic digits on an
-Arabic-locale phone). SHA-256 (`MessageDigest`) and NFKC (`java.text.Normalizer`) come from the
-platform, and so does the regex engine: those are where Android's answers can still differ (see
-"Known parity gaps").
+Arabic-locale phone). SHA-256 (`MessageDigest`) and the regex engine come from the platform; NFKC and
+IDNA no longer do (pinned Unicode 16.0 data), and shared regexes spell their classes out so ICU,
+the JDK and Kotlin/Native read them alike (see "Known parity gaps", closed).
 
 **Builds without an Android SDK.** `settings.gradle.kts` looks for an SDK as the Android Gradle
 Plugin does: `sdk.dir` in `local.properties`, else `ANDROID_HOME`, else `ANDROID_SDK_ROOT`; the
@@ -137,50 +139,58 @@ Swift callers need no change. The constructor threw on a bad pattern before too 
 
 ## Known parity gaps
 
-Android does **not** yet give the iPhone's and Loupe Station's answers for every input on every
-phone. Two gaps are known and measured; their fixes wait on a cross-platform decision (they change
-shared regex semantics or the NFKC implementation, which the iOS app and Station share), so A0 only
-records them. Measurements: `/Volumes/Sambawy/loupe-android-evidence/a0-fix/parity-probe-*.txt`
-(the same `ParityProbe` class run on the host JDK 21 and, through `app_process`, on the API 29 and
-API 35 emulators).
+**B1 and B2 are closed** (2026-09-27, branch `parity`; record below). Android, iOS and the JVM now give
+the same mechanical answers, pinned by a shared corpus (`tools/parity/corpus.json`, 175 cases) that
+runs in `commonTest` (JVM, iOS simulator, Android unit tests) and on the API 29 and API 35 emulators
+(`tools/parity/run-device.sh`). Loupe Station is to be made to pass the same file (its format:
+`tools/parity/README.md`). Every answer that changed for the iPhone or the desktop is listed in
+docs/BUILD.md, "Parity B1/B2: changed answers". No gap is open.
 
-**B1. Regex character classes and case folding.** Android's `java.util.regex` is ICU, whose `\d`,
-`\s`, `\w`, `\b`, `\p{…}` and case-insensitive matching are Unicode-aware; the JDK's are ASCII unless
-`UNICODE_CHARACTER_CLASS` is set, and Kotlin/Native's regex follows the JDK's rules (reported by
-review; not re-measured here). The same pattern therefore compiles on all three but matches
-different text:
+The measurements that opened them, kept for the record (`/Volumes/Sambawy/loupe-android-evidence/a0-fix/parity-probe-*.txt`;
+the Kotlin/Native column was measured at the fix, `parity-probe-kotlin-native-ios-sim.txt`):
 
-| Probe | JDK 21 | Android API 29 | Android API 35 |
-|---|---|---|---|
-| `\d` finds Arabic-Indic `٣` (U+0663) | no | **yes** | **yes** |
-| `\s` finds NBSP (U+00A0) | no | **yes** | **yes** |
-| `\w` finds `é` (U+00E9) | no | **yes** | **yes** |
-| `caf\b` finds a boundary inside `café` | yes | **no** | **no** |
-| `\p{Alpha}` finds `é` | no | **yes** | **yes** |
-| IGNORE_CASE `ss` finds `ß` (and `ß` finds `SS`) | no | **yes** | **yes** |
-| IGNORE_CASE `i` finds `İ` (U+0130), and back | yes | **no** | **no** |
+| Probe | JDK 21 | Kotlin/Native (iOS) | Android API 29 | Android API 35 |
+|---|---|---|---|---|
+| `\d` finds Arabic-Indic `٣` (U+0663) | no | no | **yes** | **yes** |
+| `\s` finds NBSP (U+00A0) | no | no | **yes** | **yes** |
+| `\w` finds `é` (U+00E9) | no | no | **yes** | **yes** |
+| `caf\b` finds a boundary inside `café` | yes | **no** | **no** | **no** |
+| `\p{Alpha}` finds `é` | no | no | **yes** | **yes** |
+| IGNORE_CASE `ss` finds `ß` (and `ß` finds `SS`) | no | no | **yes** | **yes** |
+| IGNORE_CASE `i` finds `İ` (U+0130), and back | yes | yes | **no** | **no** |
+| NFKC of U+1E030 | `а` (U+0430) | (Foundation) | unchanged | `а` |
 
-So on a phone, dates written in Arabic-Indic digits, amounts after a no-break space, accented words
-at a `\b` and German or Turkish case pairs can match where the iPhone and Station do not, or the
-reverse. Affected shared code (regexes using those classes or IGNORE_CASE on user text):
-`engine/.../DateFacts.kt`, `engine/.../TermChange.kt`, `loupe-kit/.../watchers/WatcherRun.kt`,
-`loupe-kit/.../privacy/Evidence.kt`, `loupe-kit/.../mail/Classify.kt`,
-`sources-common/.../CsvRows.kt`, `sources-common/.../Mime.kt` (and user baselines,
-`Baseline.Pattern`, which are IGNORE_CASE). The regex check proves only that every pattern
-**compiles** on ICU. Options for the decision: spell the ASCII classes out (`[0-9]`, `[ \t\n\x0B\f\r]`,
-`[A-Za-z0-9_]`) in shared code so every engine agrees, or deliberately adopt Unicode classes
-everywhere (`UNICODE_CHARACTER_CLASS` on the JDK; not available on Kotlin/Native).
+**B1, how it was closed (owner's decisions).** Shared main sources no longer use `\d \w \s \b \D \W
+\S \B \p{..}` or any case-insensitive flag; `tools/android-regex-check/lint.py` fails `check` if one
+comes back (allowlist with a justification per entry). The engine's `Rx` spells the classes out and
+`PortableText` does the rest in code:
 
-**B2. NFKC and IDNA data.** NFKC on Android is the device's ICU (`java.text.Normalizer`), whose
-Unicode version rises with the API level, so the same string can normalise differently on two
-phones: U+1E030 (MODIFIER LETTER CYRILLIC SMALL A, Unicode 15) becomes `а` (U+0430) under JDK 21
-and on API 35, but stays unchanged on API 29 (ICU of Unicode 11). NFKC feeds the IDNA step
-(`idnaToAscii`) and loupe-kit's homograph check (`Hosts`, `nfkc`). The JDK's `java.net.IDN`,
-which the desktop's IDNA is pinned against, implements IDNA 2003 over Unicode **3.2**; the portable
-port Android and iOS use follows it, but its NFKC step comes from the platform, so characters newer
-than Unicode 3.2 can take different paths. Options: ship one NFKC table (generated from the JDK's
-data, as the script table is) for every platform, or pin the answer to Unicode 3.2 and reject newer
-code points in hosts, as IDNA 2003 does.
+- *Digits:* ASCII, Arabic-Indic (U+0660–0669) and Persian (U+06F0–06F9) digits are numbers on every
+  platform (owner's decision): text is digit-folded (`PortableText.foldDigits`, same length) before
+  dates, amounts and IDs are parsed; no engine `\d`, no `toInt` on other scripts.
+- *Spaces:* one set everywhere, `Rx.SP`: ASCII whitespace + U+00A0, U+2007, U+2009, U+202F. Machine
+  syntax (MIME headers, mbox, RFC 2047, HTML tags, DMARC records) uses `Rx.ASCII_SP`, as before.
+- *Words:* ASCII rules use `[A-Za-z0-9_]` boundaries written as lookarounds (the JDK's `\b`, now also
+  on iOS); keyword rules use letters and numbers from the pinned Unicode data (`containsWord`);
+  `\p{..}` classes became code or a same-length "shadow" string (`PortableText.shadow`, `Rx.LN`).
+- *Case:* no IGNORE_CASE or `(?i)` (on ICU even a pure-ASCII pattern folds `ss`/`ß` and `st`/`ﬆ`):
+  text is folded with the pinned simple fold `lower(upper(c))` (`PortableText.fold`, same length;
+  `İ`→`i`, `ı`→`i`, `ß` stays `ß`), or ASCII case is spelled out (`[hH][rR][eE][fF]`) where a captured
+  value must keep its case. User baselines (`Baseline.Pattern` from judgments.json) are compiled
+  through `PortableRegex.translate`, which does the same to a pattern and refuses what it cannot
+  make portable (`\p{..}`, `\X`, ...).
+
+**B2, how it was closed.** One Unicode table for every platform, generated from the Unicode **16.0**
+UCD by `tools/unicode/gen_unicode_tables.py` (sources and SHA-256 recorded in the generated
+`UnicodeDataTable.kt`; verified at generation against NormalizationTest.txt and the NFKC_Casefold
+property, and in a jvmTest against the JDK on every code point it knows). 16.0 is the newest version
+both browsers implement: Chrome stable (155) ships ICU 78.2, Unicode 17.0; Apple's latest published
+ICU is 76.1, Unicode 16.0, and 16.0 mappings are unchanged in 17.0 by the stability policy. IDNA
+(the engine's registrable-domain lookup and the site check's host mapping), NFKC/NFKD, case folding
+and the letter/number/mark categories all read it; `java.net.IDN`, `java.text.Normalizer`, ICU and
+Foundation are no longer used for them. A new phishing signal, `unicode_drift_host` (30; mail
+`sender_unicode_drift` / `link_unicode_drift`), flags a host with a character that was unassigned in
+Unicode 3.2 or maps differently under IDNA 2003 nameprep (docs/PHISHING-FORMULA.md §4).
 
 ## A0 record (2026-09-26)
 

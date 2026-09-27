@@ -6,8 +6,6 @@ import kotlinx.cinterop.convert
 import kotlinx.cinterop.usePinned
 import platform.CoreCrypto.CC_SHA256
 import platform.CoreCrypto.CC_SHA256_DIGEST_LENGTH
-import platform.Foundation.NSString
-import platform.Foundation.precomposedStringWithCompatibilityMapping
 
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun sha256(input: ByteArray): ByteArray {
@@ -27,11 +25,6 @@ internal actual fun sha256(input: ByteArray): ByteArray {
 internal actual fun bundledPublicSuffixList(): String = PslEmbedded.CHUNKS.joinToString("")
 
 internal actual fun bundledPublicSuffixListSha256(): String = PslEmbedded.SHA256_FILE
-
-@Suppress("CAST_NEVER_SUCCEEDS")
-private fun nfkc(s: String): String = (s as NSString).precomposedStringWithCompatibilityMapping
-
-internal actual fun idnaToAscii(label: String): String? = Idna.toAsciiLabel(label, ::nfkc)
 
 internal actual fun letterScript(codePoint: Int): Int = UnicodeScripts.letterScript(codePoint)
 

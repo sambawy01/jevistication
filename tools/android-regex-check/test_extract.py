@@ -18,12 +18,35 @@ class ExtractTest(unittest.TestCase):
               'val c = Pattern.compile("[a-z]", Pattern.COMMENTS)\n'
         self.assertEqual(found(src), [("a{2}", None, 0), ("x", None, 66), ("[a-z]", None, 4)])
 
-    def test_baseline_pattern_constructors_are_ignore_case(self):
+    def test_baseline_patterns_are_sent_translated_without_flags(self):
+        # Was test_baseline_pattern_constructors_are_ignore_case: Baseline.Pattern now compiles
+        # PortableRegex.translate(pattern) with no flags (docs/BUILD.md, parity B1), so the device must
+        # compile exactly that. The same three constructions are checked.
+        rx = extract.global_consts()
         src = 'val n = Baseline.Pattern("[?]\\\\s*$", "yes", "no", "q")\n' \
               'val t = Pattern("""\\bcopy\\b""", "yes", "no", "copy")\n' \
               'data class Pattern(\n    val pattern: String,\n)\n' \
               'val d = Baseline.Pattern(s("pattern"), "a", "b", "c")\n'
-        self.assertEqual(found(src), [("[?]\\s*$", None, 66), ("\\bcopy\\b", None, 66), (None, "not a literal", 66)])
+        self.assertEqual(found(src), [
+            ("[?]" + rx["Rx.SP"] + "*$", None, 0),
+            (rx["Rx.WB"] + "copy" + rx["Rx.WB"], None, 0),
+            (None, "not a literal", 0),
+        ])
+
+    def test_rx_constants_and_guarded_regex_are_resolved(self):
+        rx = extract.global_consts()
+        self.assertEqual(rx["Rx.SP"], "[ \t\n\x0b\x0c\r\u00a0\u2007\u2009\u202f]")
+        self.assertEqual(rx["Rx.DIGIT"], "[0-9\u0660-\u0669\u06f0-\u06f9]")
+        src = 'val a = Regex("""x${Rx.SP}+y""")\nval g = GuardedRegex("""(\\d+)${Rx.WB_END}""") { it == \'a\' }\n' \
+              'class GuardedRegex(pattern: String)\n'
+        self.assertEqual(found(src), [("x" + rx["Rx.SP"] + "+y", None, 0), ("(\\d+)" + rx["Rx.WB_END"], None, 0)])
+
+    def test_translate_refuses_engine_defined_classes(self):
+        rx = extract.global_consts()
+        for bad in ["\\p{L}", "[\\D]", "\\X", "[\\b]"]:
+            with self.assertRaises(extract.portable.TranslateError, msg=bad):
+                extract.portable.translate(bad, rx)
+        self.assertEqual(extract.portable.translate("(?i)Invoice ٢٠٢٦", rx), "invoice 2026")
 
     def test_comments_and_strings_are_not_code(self):
         src = '// Regex("no")\n/* Regex("no /* nested */") */\nval s = "Regex(\\"no\\")"\n'

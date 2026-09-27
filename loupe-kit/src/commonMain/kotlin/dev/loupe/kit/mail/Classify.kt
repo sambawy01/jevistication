@@ -1,6 +1,8 @@
 package dev.loupe.kit.mail
 
 import dev.loupe.engine.Contact
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import dev.loupe.kit.site.OnlineContext
 
 import dev.loupe.templates.Baseline
@@ -99,37 +101,19 @@ object MailClassify {
     val IS_PHISHING: Baseline = Baseline.Keyword(PHISHING_WORDS, "yes", "no")
 
     /**
-     * The keyword rules answered without a lookbehind. [Baseline]'s word regex starts each keyword
-     * with a negative lookbehind, which Kotlin/Native runs in O(n) per position (a 300-character
-     * email took ~0.5 s per question on the simulator). This finds each keyword case-insensitively
-     * and checks the characters on either side against the same class (`\p{L}\p{Nd}\p{Nl}\p{No}`),
-     * the GuardedRegex approach of the privacy port. MailClassifyParityTest pins it to
-     * `Baseline.answer` on every case and sample email.
+     * The keyword rules, answered as [Baseline] answers them: [PortableText.indexOfWord] (the text and
+     * keyword in match form, no letter or number of the pinned Unicode data on either side), with no
+     * regex at all, so no engine's lookbehind cost (Kotlin/Native ran one in O(n) per position) and no
+     * engine's case folding. MailClassifyParityTest pins it to `Baseline.answer` on every case and
+     * sample email.
      */
     internal object Keywords {
-        // Built once, read-only afterwards: safe to share across threads.
-        private val compiled: Map<String, Regex> by lazy {
-            (CATEGORY_RULES.flatMap { it.first } + URGENT_NOW + URGENT_SOON + PHISHING_WORDS).distinct()
-                .associateWith { Regex(Regex.escape(it), RegexOption.IGNORE_CASE) }
+        fun found(keyword: String, text: String): Boolean = PortableText.indexOfWord(text, keyword) >= 0
+
+        fun any(keywords: List<String>, text: String): Boolean {
+            val folded = PortableText.matchForm(text)
+            return keywords.any { PortableText.indexOfWord(text, it, folded) >= 0 }
         }
-
-        private fun wordish(c: Char): Boolean = c.isLetter() || c.category == CharCategory.DECIMAL_DIGIT_NUMBER ||
-            c.category == CharCategory.LETTER_NUMBER || c.category == CharCategory.OTHER_NUMBER
-
-        fun found(keyword: String, text: String): Boolean {
-            val re = compiled[keyword] ?: Regex(Regex.escape(keyword), RegexOption.IGNORE_CASE)
-            var from = 0
-            while (from <= text.length) {
-                val m = re.find(text, from) ?: return false
-                val start = m.range.first
-                val end = m.range.last + 1
-                if ((start == 0 || !wordish(text[start - 1])) && (end >= text.length || !wordish(text[end]))) return true
-                from = start + 1
-            }
-            return false
-        }
-
-        fun any(keywords: List<String>, text: String): Boolean = keywords.any { found(it, text) }
     }
 
     private fun category(text: String): String = CATEGORY_RULES.firstOrNull { Keywords.any(it.first, text) }?.second ?: "other"
@@ -158,19 +142,30 @@ object MailClassify {
     // ------------------------------------------------------------------ naming
     private val ACRONYMS = mapOf("hr" to "HR", "vip" to "VIP", "it" to "IT", "vat" to "VAT", "ai" to "AI", "faq" to "FAQ", "pr" to "PR")
     /** A label is at most 64 characters, prefix included (Station's limit), so 58 after `Loupe/`. */
+    private val LABEL_JUNK = Regex("[^${Rx.LN}_ .&+-]+")
     private val LABEL_RE = Regex("^Loupe/[^\\x00-\\x1f\\x7f\"\\\\{}\\[\\]*%]{1,58}$")
-    private val REPLY_RE = Regex("reply|respon", RegexOption.IGNORE_CASE)
+    /** Matched on [PortableText.fold]ed text. */
+    private val REPLY_RE = Regex("reply|respon")
 
     fun words(key: String): String =
-        key.split(Regex("[_\\-\\s]+")).filter { it.isNotEmpty() }
+        key.split(Regex("[_\\-${Rx.SPACE}]+")).filter { it.isNotEmpty() }
             .joinToString(" ") { p -> ACRONYMS[p.lowercase()] ?: (p.take(1).uppercase() + p.drop(1)) }
 
     fun validLabel(name: String): Boolean =
         LABEL_RE.matches(name) && name == name.trim() && name.split("/").drop(1).all { it.isNotEmpty() && it == it.trim() && it != "." && it != ".." }
 
     private fun label(title: String): String? {
-        var name = LABEL_PREFIX + title.replace(Regex("[^\\p{L}\\p{Nd}\\p{Nl}\\p{No}_ .&+-]+"), " ").trim()
-        name = name.split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ").take(64).trimEnd()
+        // [^\p{L}\p{Nd}\p{Nl}\p{No}_ .&+-]+ -> " ", on the shadow (Rx.LN) so every platform agrees
+        var name = LABEL_PREFIX + PortableText.shadow(title).let { sh ->
+            val out = StringBuilder(title.length)
+            var last = 0
+            for (m in LABEL_JUNK.findAll(sh)) {
+                out.append(title, last, m.range.first).append(' ')
+                last = m.range.last + 1
+            }
+            out.append(title, last, title.length).toString()
+        }.trim()
+        name = PortableText.collapseSpaces(name).take(64).trimEnd()
         return name.takeIf { validLabel(it) }
     }
 
@@ -206,11 +201,11 @@ object MailClassify {
     }
 
     // ------------------------------------------------------------------ flags and labels (classify.py)
+    /** Matched on [PortableText.fold]ed text (lowercase words), not with an engine's IGNORE_CASE. */
     val TRANSACTIONAL_RE = Regex(
         "receipt|order|invoice|payment|statement|security alert|sign[- ]?in|password|verification code|" +
             "booking|shipped|delivery|renewal|إيصال|فاتورة|طلب|تأكيد|تنبيه|كشف حساب|recibo|pedido|factura|reçu|" +
             "commande|facture",
-        RegexOption.IGNORE_CASE,
     )
 
     /** Station's `laya_readings`: (phishing p, spam p, urgency 0..1) from the answers; null: not asked. */
@@ -266,7 +261,7 @@ object MailClassify {
         val evidence = Phishing.assess(m.sender, m.body, m.replyTo, m.authResults, m.links, layaP = phishP, trusted = trusted, contacts = contacts, online = online)
         val pcat = providerCategory(m.provider, m.labels, m.folder, m.inference)
         val key = pcat?.key
-        val transactional = key == "updates" || evidence.known || evidence.trusted || TRANSACTIONAL_RE.containsMatchIn(m.subject)
+        val transactional = key == "updates" || evidence.known || evidence.trusted || TRANSACTIONAL_RE.containsMatchIn(PortableText.fold(m.subject))
         val spamSource = when {
             key == SPAM -> "provider"
             key == "promotions" && (spamP ?: 0.0) >= SPAM_STRONG && !transactional && !evidence.trusted -> "provider+laya"
@@ -298,7 +293,7 @@ object MailClassify {
                 }
                 "noul" -> if (a.p >= NOUL_MIN) {
                     if ("phish" in low || "spam" in low) continue
-                    if (junk && REPLY_RE.containsMatchIn(qid)) continue
+                    if (junk && REPLY_RE.containsMatchIn(PortableText.fold(qid))) continue
                     add(questionLabel(qid), qid, a.weak)
                 }
                 "score" -> if ("urgen" in low && !junk && a.p >= URGENT_MIN) add(URGENT_LABEL, qid, a.weak)

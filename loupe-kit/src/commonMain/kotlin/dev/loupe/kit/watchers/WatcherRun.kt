@@ -12,9 +12,11 @@ import dev.loupe.engine.ImpersonationReason
 import dev.loupe.engine.ImpersonationSignal
 import dev.loupe.engine.Message
 import dev.loupe.engine.OriginFacts
+import dev.loupe.engine.PortableText
 import dev.loupe.engine.Probability
 import dev.loupe.engine.RecurringCharge
 import dev.loupe.engine.RecurringMoney
+import dev.loupe.engine.Rx
 import dev.loupe.kit.settings.Features
 import dev.loupe.kit.settings.RunPolicy
 import dev.loupe.kit.site.PageFacts
@@ -89,16 +91,19 @@ object WatcherRun {
 
     val SIX_MONTHS: ValidityRule = ValidityRule("six months of validity (e.g. Schengen passports)", 6)
 
-    private val EXPIRY_WORDS = Regex("""\b(expir\w*|valid until|valid to|valid thru|renewal date|4b\.)""", RegexOption.IGNORE_CASE)
-    private val CHARGE_WORDS = Regex("""\b(charged|payment received|paid|receipt for)\b""", RegexOption.IGNORE_CASE)
-    private val AMOUNT = Regex("""[£$€]\s?(\d[\d,]*(?:\.\d{2})?)""")
+    // EXPIRY_WORDS, CHARGE_WORDS and INSTITUTIONAL_NAME are matched on PortableText.matchForm (case
+    // and digits folded) and AMOUNT on digit-folded text, with the classes spelled out (Rx): the same
+    // answer on every regex engine, Arabic-Indic and Persian digits read as numbers.
+    private val EXPIRY_WORDS = Regex("""${Rx.WB_START}(expir${Rx.W}*|valid until|valid to|valid thru|renewal date|4b\.)""")
+    private val CHARGE_WORDS = Regex("""${Rx.WB_START}(charged|payment received|paid|receipt for)${Rx.WB_END}""")
+    private val AMOUNT = Regex("""[£$€]${Rx.SP}?([0-9][0-9,]*(?:\.[0-9]{2})?)""")
     private val INSTITUTIONAL_LOCAL = setOf("service", "security", "support", "noreply", "no-reply", "account", "accounts", "billing", "alerts", "info", "verify")
     /** Domains where anyone can register an address, so the domain says nothing about the sender. */
     private val WEBMAIL = setOf(
         "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "yahoo.com", "icloud.com",
         "me.com", "aol.com", "proton.me", "protonmail.com", "gmx.com", "gmx.net", "mail.com", "yandex.com",
     )
-    private val INSTITUTIONAL_NAME = Regex("""\b(security|support|billing|account|team|bank|service)\b""", RegexOption.IGNORE_CASE)
+    private val INSTITUTIONAL_NAME = Regex("""${Rx.WB_START}(security|support|billing|account|team|bank|service)${Rx.WB_END}""")
 
     fun run(items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule = SIX_MONTHS): WatcherReport =
         run(items, today, backend, rule, RunPolicy.defaults(Features.WATCHERS))
@@ -183,7 +188,7 @@ object WatcherRun {
     /** Items with an expiry word and a date within a year (or already passed), latest date taken. */
     fun expiryCandidates(items: List<SourceItem>, today: LocalDate, rule: ValidityRule): List<ExpiryCandidate> =
         items.mapNotNull { item ->
-            if (!EXPIRY_WORDS.containsMatchIn(item.text)) return@mapNotNull null
+            if (!EXPIRY_WORDS.containsMatchIn(PortableText.matchForm(item.text))) return@mapNotNull null
             val dates = DateFacts.find(item.text)
             if (dates.isEmpty()) return@mapNotNull null
             val latest = dates.maxBy { it.date }
@@ -217,7 +222,7 @@ object WatcherRun {
         for (item in items) {
             val email = item.email
             if (item.kind == ItemKind.EMAIL && email != null) {
-                val body = item.text.substringAfter("\n\n", item.text)
+                val body = PortableText.matchForm(item.text.substringAfter("\n\n", item.text))
                 if (!CHARGE_WORDS.containsMatchIn(body)) continue
                 val amount = AMOUNT.find(body)?.groupValues?.get(1) ?: continue
                 val date = email.date ?: item.date ?: continue
@@ -248,7 +253,8 @@ object WatcherRun {
         return lines.drop(1).mapNotNull { line ->
             val cells = line.split(',').map { it.trim() }
             val date = cells.getOrNull(d)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapNotNull null
-            val amount = cells.getOrNull(a)?.removePrefix("-")?.takeIf { it.matches(Regex("""\d[\d]*(\.\d{1,2})?""")) } ?: return@mapNotNull null
+            val amount = cells.getOrNull(a)?.removePrefix("-")?.let(PortableText::foldDigits)
+                ?.takeIf { it.matches(Regex("""[0-9][0-9]*(\.[0-9]{1,2})?""")) } ?: return@mapNotNull null
             val merchant = cells.getOrNull(m)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
             item to Charge(merchant, date, minor(amount))
         }
@@ -267,7 +273,7 @@ object WatcherRun {
             if (item.kind == ItemKind.EMAIL) {
                 "mail:" + item.email?.fromAddress
             } else {
-                "file:" + item.path.substringBeforeLast('/', "") + "/" + item.fileName.replace(Regex("""\d+"""), "#")
+                "file:" + item.path.substringBeforeLast('/', "") + "/" + PortableText.foldDigits(item.fileName).replace(Regex("""[0-9]+"""), "#")
             }
         }
         val out = mutableListOf<TermChangeFinding>()
@@ -366,8 +372,9 @@ object WatcherRun {
         val name = displayName?.trim().orEmpty()
         if (name.isEmpty()) return null
         val local = address.substringBefore('@').lowercase()
-        if (local !in INSTITUTIONAL_LOCAL && !INSTITUTIONAL_NAME.containsMatchIn(name)) return null
-        val first = name.split(Regex("""\s+""")).first().lowercase().filter { it.isLetterOrDigit() }
+        if (local !in INSTITUTIONAL_LOCAL && !INSTITUTIONAL_NAME.containsMatchIn(PortableText.matchForm(name))) return null
+        val first = PortableText.lowercase(PortableText.splitSpaces(name).firstOrNull() ?: return null)
+            .filter { PortableText.isLetterOrDecimalDigit(it.code) }
         return first.takeIf { it.length >= 3 && OriginFacts.labels(it).isNotEmpty() }
     }
 }

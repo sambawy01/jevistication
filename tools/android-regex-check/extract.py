@@ -22,6 +22,9 @@ import pathlib
 import re
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import portable  # noqa: E402
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MODULES = ["engine", "templates", "persistence", "sources-common", "game", "backend-laya-common", "loupe-kit", "android-app"]
 # The source sets compiled into the Android app: the shared modules' and :android-app's own "main".
@@ -32,8 +35,8 @@ JAVA_FLAGS = {
     "UNIX_LINES": 1, "CASE_INSENSITIVE": 2, "COMMENTS": 4, "MULTILINE": 8, "LITERAL": 16,
     "DOTALL": 32, "UNICODE_CASE": 64, "CANON_EQ": 128, "UNICODE_CHARACTER_CLASS": 256,
 }
-# Baseline.Pattern compiles with RegexOption.IGNORE_CASE.
-BASELINE_FLAGS = 2 | 64
+# Baseline.Pattern compiles PortableRegex.translate(pattern) with no flags.
+BASELINE_FLAGS = 0
 KOTLIN_OPTIONS = {
     "IGNORE_CASE": 2 | 64, "MULTILINE": 8, "LITERAL": 16, "UNIX_LINES": 1, "COMMENTS": 4,
     "DOT_MATCHES_ALL": 32, "CANON_EQ": 128,
@@ -57,7 +60,7 @@ def parse_literal(src: str, i: int, consts: dict):
             return m.group(0)
         if raw:
             body = body.replace("${'$'}", "\x00")
-        body = re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)", repl, body)
+        body = re.sub(r"\$\{([A-Za-z_][A-Za-z0-9_.]*)\}|\$([A-Za-z_][A-Za-z0-9_]*)", repl, body)
         if re.search(r"\$\{", body):
             dynamic = True
         return body.replace("\x00", "$"), dynamic
@@ -86,7 +89,7 @@ def parse_literal(src: str, i: int, consts: dict):
             j += 1
         value, dynamic = substitute("".join(out), raw=False)
         return value.replace("\x00", "$"), j + 1, dynamic
-    m = re.match(r"([A-Za-z_][A-Za-z0-9_]*)", src[i:])
+    m = re.match(r"([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*)", src[i:])
     if m and m.group(1) in consts:
         return consts[m.group(1)], i + len(m.group(1)), False
     return None
@@ -108,9 +111,22 @@ def parse_expression(src: str, i: int, consts: dict):
         value, end, dynamic = value + nxt[0], nxt[1], dynamic or nxt[2]
 
 
+_GLOBAL = None
+
+
+def global_consts() -> dict:
+    """The engine's Rx / PortableText constants, which any file may use as `${Rx.SP}`."""
+    global _GLOBAL
+    if _GLOBAL is None:
+        _GLOBAL = {}
+        _GLOBAL = portable.rx_constants()
+    return _GLOBAL
+
+
 def file_consts(src: str) -> dict:
-    """The file's `const val NAME = <literal chain>` values, resolved in order of appearance."""
-    consts = {}
+    """The file's `const val NAME = <literal chain>` values, resolved in order of appearance (they
+    may use the engine's Rx / PortableText constants)."""
+    consts = dict(global_consts())
     for m in re.finditer(r"\bconst val ([A-Za-z_][A-Za-z0-9_]*)\s*(?::\s*String\s*)?=\s*", src):
         parsed = parse_expression(src, m.end(), consts)
         if parsed and not parsed[2]:
@@ -226,11 +242,11 @@ def flags_of(rest: str) -> int:
 
 def patterns_in(src: str):
     """(offset, value or None, dynamic reason or None, flags) for each regex construction in code."""
-    consts = file_consts(src)
+    consts = {**global_consts(), **file_consts(src)}
     is_code, literal_ends = code_mask(src)
     out = []
-    for m in re.finditer(r"(?<![\w.])Regex\(\s*|\bPattern\.compile\(\s*", src):
-        if not is_code[m.start()]:
+    for m in re.finditer(r"(?<![\w.])(?:Guarded)?Regex\(\s*|\bPattern\.compile\(\s*", src):
+        if not is_code[m.start()] or re.search(r"\bclass\s+$", src[:m.start()]):
             continue
         parsed = parse_expression(src, m.end(), consts)
         if parsed is None:
@@ -239,8 +255,9 @@ def patterns_in(src: str):
         value, end, dynamic = parsed
         flags = flags_of(call_args(src, end))
         out.append((m.start(), None if dynamic else value, "built at run time" if dynamic else None, flags))
-    # Baseline.Pattern(<pattern>, ...): templates compile their first argument with IGNORE_CASE
-    # (Baseline.kt), i.e. CASE_INSENSITIVE | UNICODE_CASE. `class Pattern(` is the declaration itself.
+    # Baseline.Pattern(<pattern>, ...): Baseline.kt compiles PortableRegex.translate(<pattern>) with no
+    # flags (the text is matched in PortableText.matchForm), so that is what the device compiles.
+    # `class Pattern(` is the declaration itself.
     for m in re.finditer(r"(?<![\w.])(?:Baseline\.)?Pattern\(\s*", src):
         if not is_code[m.start()] or re.search(r"\bclass\s+$", src[:m.start()]):
             continue
@@ -249,7 +266,15 @@ def patterns_in(src: str):
             out.append((m.start(), None, "not a literal", BASELINE_FLAGS))
             continue
         value, _, dynamic = parsed
-        out.append((m.start(), None if dynamic else value, "built at run time" if dynamic else None, BASELINE_FLAGS))
+        if dynamic:
+            out.append((m.start(), None, "built at run time", BASELINE_FLAGS))
+            continue
+        try:
+            translated = portable.translate(value, global_consts())
+        except portable.TranslateError as e:
+            out.append((m.start(), None, f"refused by PortableRegex.translate: {e}", BASELINE_FLAGS))
+            continue
+        out.append((m.start(), translated, None, BASELINE_FLAGS))
     for m in re.finditer(r"\.toRegex\(", src):
         if not is_code[m.start()]:
             continue

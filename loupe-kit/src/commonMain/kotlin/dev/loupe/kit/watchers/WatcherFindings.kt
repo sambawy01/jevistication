@@ -1,6 +1,8 @@
 package dev.loupe.kit.watchers
 
 import dev.loupe.engine.Cadence
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
@@ -144,8 +146,9 @@ object WatcherFindings {
     /** Verdicts are keyed by this, not by a judgment's criteria hash: the watchers have no wording. */
     const val CRITERIA = "watcher-v1"
 
-    private val EXPIRY_LINE = Regex("""\b(expir\w*|valid until|valid to|valid thru|renewal date|4b\.)""", RegexOption.IGNORE_CASE)
-    private val MONEY = Regex("""([£$€])\s?(\d[\d,]*(?:\.\d{1,2})?)""")
+    // EXPIRY_LINE on PortableText.matchForm, MONEY on digit-folded text (see WatcherRun).
+    private val EXPIRY_LINE = Regex("""${Rx.WB_START}(expir${Rx.W}*|valid until|valid to|valid thru|renewal date|4b\.)""")
+    private val MONEY = Regex("""([£$€])${Rx.SP}?([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
 
     fun summarise(
         report: WatcherReport,
@@ -206,7 +209,7 @@ object WatcherFindings {
                 breachesRule = c.breachesRule,
                 documentType = alerts?.get(c.item.id)?.documentType,
                 findingKey = if (c.breachesRule) "expiry:" + c.item.id else null,
-                line = c.item.text.lines().firstOrNull { EXPIRY_LINE.containsMatchIn(it) }?.trim(),
+                line = c.item.text.lines().firstOrNull { EXPIRY_LINE.containsMatchIn(PortableText.matchForm(it)) }?.trim(),
                 sample = isSample(c.item),
             )
         }.sortedBy { it.daysRemaining }
@@ -279,7 +282,7 @@ object WatcherFindings {
         val alerts = report.expiryAlerts?.associateBy { it.itemId }
         for (c in report.expiryCandidates.filter { it.breachesRule }) {
             val alert = alerts?.get(c.item.id)
-            val line = c.item.text.lines().firstOrNull { EXPIRY_LINE.containsMatchIn(it) }?.trim()
+            val line = c.item.text.lines().firstOrNull { EXPIRY_LINE.containsMatchIn(PortableText.matchForm(it)) }?.trim()
             val days = c.daysRemaining
             val when_ = if (days < 0) "expired ${-days} days ago" else "expires in $days days"
             val why = when {
@@ -410,7 +413,7 @@ object WatcherFindings {
     }
 
     private fun symbolFor(text: String, minor: Long): String? =
-        MONEY.findAll(text).firstOrNull { m ->
+        MONEY.findAll(PortableText.foldDigits(text)).firstOrNull { m ->
             val parts = m.groupValues[2].replace(",", "").split(".")
             val value = parts[0].toLongOrNull()?.let { it * 100 + (parts.getOrNull(1)?.padEnd(2, '0')?.take(2)?.toLongOrNull() ?: 0L) }
             value == minor

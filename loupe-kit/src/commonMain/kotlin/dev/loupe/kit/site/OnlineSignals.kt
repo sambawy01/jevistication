@@ -1,6 +1,7 @@
 package dev.loupe.kit.site
 
 import dev.loupe.engine.OriginFacts
+import dev.loupe.engine.PortableText
 import dev.loupe.engine.PublicSuffix
 import dev.loupe.persistence.JsonValue
 import kotlinx.datetime.Instant
@@ -112,7 +113,7 @@ class FeedIndex(entries: Map<String, List<String>>) : PhishingList {
             web.archive.org s3.amazonaws.com blob.core.windows.net r2.dev pages.dev workers.dev vercel.app netlify.app
             herokuapp.com glitch.me replit.app repl.co codepen.io jsfiddle.net typeform.com jotform.com formstack.com
             wufoo.com surveymonkey.com mailchi.mp
-        """.trimIndent().split(Regex("\\s+")).filter { it.isNotEmpty() }.toSet() + Brands.SHORTENERS
+        """.trimIndent().let(PortableText::splitSpaces).toSet() + Brands.SHORTENERS
     }
 }
 

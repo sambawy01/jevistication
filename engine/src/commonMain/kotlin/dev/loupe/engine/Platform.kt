@@ -19,9 +19,10 @@ internal expect fun bundledPublicSuffixListSha256(): String
 
 /**
  * A non-ASCII, already lowercased label to its IDNA ASCII form, or null when it is not a valid
- * label. JVM: `java.net.IDN.toASCII(label, ALLOW_UNASSIGNED)`; iOS: [Idna.toAsciiLabel].
+ * label: [Idna.toAsciiLabel] on every platform, over Loupe's pinned Unicode data (not a platform
+ * seam any more: `java.net.IDN` is Unicode 3.2, the phones' ICU and Foundation vary by OS version).
  */
-internal expect fun idnaToAscii(label: String): String?
+internal fun idnaToAscii(label: String): String? = Idna.toAsciiLabel(label)
 
 /**
  * The script of [codePoint] as an opaque id when it is a letter of a real script, or -1 when it

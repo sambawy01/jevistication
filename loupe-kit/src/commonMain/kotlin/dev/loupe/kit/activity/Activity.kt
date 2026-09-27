@@ -1,5 +1,6 @@
 package dev.loupe.kit.activity
 
+import dev.loupe.engine.Rx
 import dev.loupe.persistence.JsonText
 import dev.loupe.persistence.JsonValue
 import kotlin.math.abs
@@ -71,7 +72,7 @@ object Activity {
     // "\", "@", quotes or brackets, so a path, an address or a sentence never fits (Station's `safe_token`).
     // Kotlin/Native's regex has no \\p{L}, so a word character is anything but space, punctuation that builds a
     // path, an address or a sentence, and the colon (allowed only inside a word): letters of any script pass.
-    private const val CH = "[^\\s/\\\\@\"'`<>(){}\\[\\]:,;=?!#$%&*|~^]"
+    private const val CH = "[^${Rx.SPACE}/\\\\@\"'`<>(){}\\[\\]:,;=?!#$%&*|~^]"
     private const val WORD = "$CH+(?::$CH+)*"
     private val TOKEN = Regex("^$WORD(?: $WORD){0,2}$")
     private val KEY = Regex("^act\\.[A-Za-z0-9_.]{1,60}$")

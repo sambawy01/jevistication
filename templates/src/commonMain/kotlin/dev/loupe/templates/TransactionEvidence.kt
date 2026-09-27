@@ -1,5 +1,8 @@
 package dev.loupe.templates
 
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
+
 /**
  * The transaction-evidence gate for the money judgments (A3's "mechanical first", like the
  * exact-duplicate rule): a document that carries **no sign that money moved or is owed** is
@@ -82,10 +85,13 @@ object TransactionEvidence {
         is Shape.Ordinal -> null
     }
 
-    /** Lowercase; Arabic diacritics and tatweel removed; alef, yaa and taa marbuta folded. */
+    /**
+     * Lowercase ([PortableText.matchForm]: case and Arabic-Indic / Persian digits folded, the same on
+     * every platform); Arabic diacritics and tatweel removed; alef, yaa and taa marbuta folded.
+     */
     fun normalise(text: String): String {
         val sb = StringBuilder(text.length)
-        for (c in text.lowercase()) {
+        for (c in PortableText.matchForm(text)) {
             when (c) {
                 in 'ً'..'ٟ', 'ٰ', 'ـ' -> Unit
                 'أ', 'إ', 'آ', 'ٱ' -> sb.append('ا')
@@ -108,13 +114,13 @@ object TransactionEvidence {
         w("receipts?|e-?receipt|tax invoice|invoice|proof of purchase|payment receipt|sales receipt"),
         w("order confirm(?:ation|ed)|thank(?:s| you) for (?:your )?(?:order|purchase|payment|donation)|purchase confirmation"),
         w("amount paid|total paid|paid in full|payment received|payment successful|payment confirmed|amount charged|you(?:'ve| have) been charged|was charged|charged to your"),
-        w("paid (?:with|by|via|using)|payment method|card ending(?: in)?|ending in \\d{4}|auth(?:orisation|orization)? code|transaction id"),
+        w("paid (?:with|by|via|using)|payment method|card ending(?: in)?|ending in [0-9]{4}|auth(?:orisation|orization)? code|transaction id"),
         w("amount due|balance due|payment due|total due|due date|please pay|overdue|final notice|direct debit"),
         w("refunded|refund (?:of|issued|processed|has been|amount|to your)|reimbursed"),
         w("donation|gift aid"),
         // An order / invoice / receipt number: the word, optional "no"/"#", then a code with a digit.
-        Regex("(?<![a-z\u00C0-\u024F])(?:order|invoice|receipt|transaction|booking|confirmation|inv)\\s*(?:no\\.?|number|num|id|#|ref)?\\s*[:#]?\\s*[a-z0-9-]*\\d[a-z0-9-]{2,}"),
-        Regex("[*x•]{2,}\\s?\\d{4}(?!\\d)"),
+        Regex("(?<![a-z\u00C0-\u024F])(?:order|invoice|receipt|transaction|booking|confirmation|inv)${Rx.SP}*(?:no\\.?|number|num|id|#|ref)?${Rx.SP}*[:#]?${Rx.SP}*[a-z0-9-]*[0-9][a-z0-9-]{2,}"),
+        Regex("[*x•]{2,}${Rx.SP}?[0-9]{4}(?![0-9])"),
         // AR
         Regex("فاتور|ايصال|وصل استلام|وصل دفع|سند قبض|اثبات (?:ال)?شراء|تاكيد (?:ال)?طلب|رقم (?:ال)?طلب|رقم (?:ال)?فاتوره|تم (?:ال)?دفع|المبلغ المدفوع|اجمالي المدفوع|تم الخصم|طريقه (?:ال)?دفع|المبلغ المستحق|تاريخ (?:ال)?استحقاق|تم (?:ال)?استرداد|مبلغ مسترد|تبرع"),
         // FR / DE / ES core words
@@ -127,11 +133,11 @@ object TransactionEvidence {
     )
 
     private val LISTING: List<Regex> = listOf(
-        w("add to (?:cart|bag|basket|trolley|wish ?list)|buy (?:it )?now|shop now|order now|in stock|out of stock|only \\d+ left|free (?:delivery|shipping|returns)|customer reviews|\\d+ reviews?|write a review|rated \\d|compare (?:at|price)|select (?:size|colou?r)|choose (?:your )?(?:size|colou?r)|you may also like|frequently bought|product (?:details|description)|specifications|sku"),
+        w("add to (?:cart|bag|basket|trolley|wish ?list)|buy (?:it )?now|shop now|order now|in stock|out of stock|only [0-9]+ left|free (?:delivery|shipping|returns)|customer reviews|[0-9]+ reviews?|write a review|rated [0-9]|compare (?:at|price)|select (?:size|colou?r)|choose (?:your )?(?:size|colou?r)|you may also like|frequently bought|product (?:details|description)|specifications|sku"),
         Regex("(?:اضف|اضافه) (?:الي )?(?:ال|لل|ل)سله|اشتر(?:ي)? الان|تسوق الان|متوفر(?: في المخزون)?|غير متوفر|نفذت الكميه|تقييمات|مراجعات|اكتب تقييم|توصيل مجاني|شحن مجاني|مواصفات|تفاصيل المنتج"),
         w("ajouter au panier|acheter maintenant|en stock|in den warenkorb|jetzt kaufen|auf lager|añadir al carrito|comprar ahora|en existencia"),
     )
 
     /** "Total … 12.45" style lines: a sum with a number, in any script covered above. */
-    private val AMOUNT_WITH_TOTAL = Regex("(?:total|اجمالي|المجموع)[^\\n]{0,20}\\d")
+    private val AMOUNT_WITH_TOTAL = Regex("(?:total|اجمالي|المجموع)[^\\n]{0,20}[0-9]")
 }

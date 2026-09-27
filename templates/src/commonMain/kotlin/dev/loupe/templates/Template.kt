@@ -4,6 +4,7 @@ import dev.loupe.engine.AuthorResult
 import dev.loupe.engine.FailurePosture
 import dev.loupe.engine.JudgmentAuthor
 import dev.loupe.engine.LintFinding
+import dev.loupe.engine.PortableText
 import kotlinx.datetime.LocalDate
 
 /** Where a template sits in the library. The order is the order the library shows them in. */
@@ -155,9 +156,9 @@ data class Parameter(
         if (FORBIDDEN.any { it in trimmed }) return "must not contain any of ${FORBIDDEN.joinToString(" ")}"
         return when (kind) {
             ParamKind.TEXT ->
-                if (TEXT.matches(trimmed)) null else "use letters, digits, spaces and . - ' & only"
+                if (lettersNumbersAnd(trimmed, " .'&-")) null else "use letters, digits, spaces and . - ' & only"
             ParamKind.SENDER ->
-                if (SENDER.matches(trimmed)) null else "use a name, an email address or a domain"
+                if (lettersNumbersAnd(trimmed, " .'@_+-")) null else "use a name, an email address or a domain"
             ParamKind.DATE -> try {
                 LocalDate.parse(trimmed)
                 null
@@ -170,8 +171,21 @@ data class Parameter(
     companion object {
         const val MAX_LENGTH: Int = 60
         private val NAME = Regex("""^[a-z][a-z0-9_]*$""")
-        private val TEXT = Regex("""^[\p{L}\p{Nd}\p{Nl}\p{No}][\p{L}\p{Nd}\p{Nl}\p{No} .'&\-]*$""")
-        private val SENDER = Regex("""^[\p{L}\p{Nd}\p{Nl}\p{No}][\p{L}\p{Nd}\p{Nl}\p{No} .'@_+\-]*$""")
+
+        /**
+         * `^[\p{L}\p{Nd}\p{Nl}\p{No}][\p{L}\p{Nd}\p{Nl}\p{No}<extra>]*$`, with the letters and numbers
+         * read from the pinned Unicode data so every platform accepts the same values.
+         */
+        private fun lettersNumbersAnd(s: String, extra: String): Boolean {
+            if (s.isEmpty()) return false
+            var i = 0
+            while (i < s.length) {
+                val cp = PortableText.codePointAt(s, i)
+                if (!PortableText.isLetterOrNumber(cp) && (i == 0 || cp >= 0x80 || extra.indexOf(cp.toChar()) < 0)) return false
+                i += if (cp >= 0x10000) 2 else 1
+            }
+            return true
+        }
 
         /** Braces would forge a placeholder, `?` a second question, `<`/`>` a model marker. */
         private val FORBIDDEN = listOf("{", "}", "?", "<", ">", "\"")

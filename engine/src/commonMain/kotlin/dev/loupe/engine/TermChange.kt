@@ -39,8 +39,9 @@ data class TermComparison(
  */
 object TermChangeDetector {
 
+    // On digit-folded text: Arabic-Indic and Persian digits are amounts too (PortableText).
     private val LABELLED_AMOUNT = Regex(
-        """([A-Za-z][A-Za-z ]{0,29}?)\s*[:=]?\s*[£$€]\s*(\d[\d,]*(?:\.\d{1,2})?)""",
+        """([A-Za-z][A-Za-z ]{0,29}?)${Rx.SP}*[:=]?${Rx.SP}*[£$€]${Rx.SP}*([0-9][0-9,]*(?:\.[0-9]{1,2})?)""",
     )
 
     /**
@@ -53,7 +54,7 @@ object TermChangeDetector {
      */
     fun amounts(text: String): Map<String, Long> {
         val found = LinkedHashMap<String, Long>()
-        for (match in LABELLED_AMOUNT.findAll(text)) {
+        for (match in LABELLED_AMOUNT.findAll(PortableText.foldDigits(text))) {
             val label = normalise(match.groupValues[1]) ?: continue
             found[label] = toMinorUnits(match.groupValues[2])
         }

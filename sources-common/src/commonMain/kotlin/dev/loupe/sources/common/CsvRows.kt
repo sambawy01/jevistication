@@ -1,6 +1,8 @@
 package dev.loupe.sources.common
 
 import dev.loupe.engine.DateFacts
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import kotlinx.datetime.LocalDate
 
 /**
@@ -35,15 +37,17 @@ object CsvRows {
 
     /** Station's `_MARKERS`, longest / most specific first. */
     private val MARKERS: List<Pair<Regex, String>> = listOf(
-        "جنيه\\s+(?:إ|ا)سترليني" to "GBP", "جنيه\\s+مصري" to "EGP", "ريال\\s+سعودي" to "SAR",
-        "US\\$" to "USD", "E£" to "EGP", "L\\.E\\.?" to "EGP", "ج\\.\\s?م\\.?" to "EGP", "ر\\.\\s?س\\.?" to "SAR", "د\\.\\s?إ\\.?" to "AED",
+        "جنيه${Rx.SP}+(?:إ|ا)سترليني" to "GBP", "جنيه${Rx.SP}+مصري" to "EGP", "ريال${Rx.SP}+سعودي" to "SAR",
+        "US\\$" to "USD", "E£" to "EGP", "L\\.E\\.?" to "EGP", "ج\\.${Rx.SP}?م\\.?" to "EGP", "ر\\.${Rx.SP}?س\\.?" to "SAR", "د\\.${Rx.SP}?إ\\.?" to "AED",
         "EGP" to "EGP", "USD" to "USD", "EUR" to "EUR", "SAR" to "SAR", "AED" to "AED", "GBP" to "GBP",
         "LE" to "EGP", "SR" to "SAR", "Dhs?" to "AED",
         "جنيه" to "EGP", "جم" to "EGP", "ريال" to "SAR", "درهم" to "AED", "دولار" to "USD", "يورو" to "EUR",
         "\\$" to "USD", "€" to "EUR", "£" to "GBP",
     ).map { (re, code) -> Regex(re) to code }
 
-    private val NUMERIC_CELL = Regex("^[-+(]?\\s*[^\\sA-Za-z]{0,4}\\s*[0-9٠-٩][0-9٠-٩,.٫٬  ]*\\s*[^\\s0-9]{0,6}\\)?$")
+    // Spaces are Rx.SP (NBSP, U+2007, U+2009, U+202F included) and digits any of the three scripts
+    // (PortableText), spelled out so every regex engine reads a cell alike.
+    private val NUMERIC_CELL = Regex("^[-+(]?${Rx.SP}*[^${Rx.SPACE}A-Za-z]{0,4}${Rx.SP}*${Rx.DIGIT}[${Rx.DIGITS},.٫٬${Rx.SPACE}]*${Rx.SP}*[^${Rx.SPACE}0-9]{0,6}\\)?$")
 
     /** A statement row's facts: amount in minor units with the file's sign, currency, direction. */
     data class Money(val date: LocalDate, val amountMinor: Long, val currency: String?, val direction: String?, val merchant: String?, val description: String?)
@@ -163,17 +167,15 @@ object CsvRows {
 
     private fun looksLikeValue(cell: String): Boolean = parseDate(cell) != null || parseAmount(cell).first != null
 
-    fun normalizeDigits(s: String): String = buildString(s.length) {
-        for (c in s) append(if (c in '٠'..'٩') '0' + (c - '٠') else if (c in '۰'..'۹') '0' + (c - '۰') else c)
-    }
+    fun normalizeDigits(s: String): String = PortableText.foldDigits(s)
 
     fun parseDate(cell: String, dayFirst: Boolean = true): LocalDate? {
         val s = normalizeDigits(cell)
         DateFacts.find(s, dayFirst).firstOrNull()?.let { return it.date }
-        Regex("\\s*([0-9]{4})([0-9]{2})([0-9]{2})\\s*").matchEntire(s)?.let { m ->
+        Regex("${Rx.SP}*([0-9]{4})([0-9]{2})([0-9]{2})${Rx.SP}*").matchEntire(s)?.let { m ->
             return date(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt())
         }
-        Regex("\\s*([0-9]{1,2})[/.\\-]([0-9]{1,2})[/.\\-]([0-9]{2})\\s*").matchEntire(s)?.let { m ->
+        Regex("${Rx.SP}*([0-9]{1,2})[/.\\-]([0-9]{1,2})[/.\\-]([0-9]{2})${Rx.SP}*").matchEntire(s)?.let { m ->
             val a = m.groupValues[1].toInt()
             val b = m.groupValues[2].toInt()
             val y = 2000 + m.groupValues[3].toInt()
@@ -202,7 +204,7 @@ object CsvRows {
             }
         }
         if (currency == null && !NUMERIC_CELL.matches(s)) return null to null
-        core = core.replace(Regex("[^0-9٠-٩,.٫٬  ]"), "").trim()
+        core = core.replace(Regex("[^${Rx.DIGITS},.٫٬${Rx.SPACE}]"), "").trim()
         val minor = parseNumber(core) ?: return null to null
         return (if (neg) -minor else minor) to currency
     }
@@ -210,7 +212,7 @@ object CsvRows {
     /** Station's `facts.money.parse_number`: a written number -> minor units, or null when ambiguous. */
     fun parseNumber(raw: String): Long? {
         var s = normalizeDigits(raw).trim().replace('٬', ',').replace('٫', '.')
-        s = s.replace(Regex("[\u00a0\u202f ]"), " ")
+        s = s.replace(Regex("[${Rx.SPACE}]"), " ")
         if (s.isEmpty() || !Regex("[0-9][0-9 ,.]*").matches(s)) return null
         if (' ' in s) {
             val groups = s.split(' ')
@@ -251,7 +253,7 @@ object CsvRows {
         return major.toLongOrNull()?.let { it * 100 + frac.toLong() }
     }
 
-    private fun norm(h: String): String = h.trim().lowercase().replace('_', ' ').split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+    private fun norm(h: String): String = PortableText.collapseSpaces(h.trim().lowercase().replace('_', ' '))
 
     /** Station's `detect_mapping`: by header name first, then by what the values look like. */
     fun detectMapping(headers: List<String>, rows: List<List<String>>): Pair<Map<String, String>, Map<String, String>> {
@@ -321,8 +323,8 @@ object CsvRows {
         }
         val amount = minor ?: return null
         cell("currency").trim().uppercase().takeIf { it in CURRENCIES }?.let { ccy = it }
-        val merchant = cell("merchant").split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ").take(200).ifEmpty { null }
-        val desc = cell("description").split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ").take(200).ifEmpty { null }
+        val merchant = PortableText.collapseSpaces(cell("merchant")).take(200).ifEmpty { null }
+        val desc = PortableText.collapseSpaces(cell("description")).take(200).ifEmpty { null }
         return Money(d, amount, ccy, direction, merchant, desc)
     }
 

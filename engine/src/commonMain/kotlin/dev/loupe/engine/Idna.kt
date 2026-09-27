@@ -1,13 +1,16 @@
 package dev.loupe.engine
 
 /**
- * IDNA 2003 ToASCII for one label, in portable Kotlin: the iOS stand-in for
- * `java.net.IDN.toASCII(label, IDN.ALLOW_UNASSIGNED)` (no STD3 rules), which the JVM keeps using.
+ * IDNA ToASCII for one label, in portable Kotlin, the same on the JVM, Android and iOS: IDNA 2003's
+ * shape (`java.net.IDN.toASCII(label, IDN.ALLOW_UNASSIGNED)`, no STD3 rules) over Loupe's pinned,
+ * modern Unicode data ([PortableText.UNICODE_VERSION]) instead of Unicode 3.2.
  *
- * Nameprep is approximated as: map-to-nothing (RFC 3454 B.1), lowercase plus the two B.2 case
- * folds that lowercase does not do (`ß`→`ss`, final `ς`→`σ`), then NFKC via [nfkc]. Nameprep's
- * prohibited-output and bidi checks are not replicated. A jvmTest checks agreement with the JDK on
- * every non-ASCII label of the bundled PSL and on the official PSL test vectors.
+ * Nameprep's mapping becomes: map-to-nothing (RFC 3454 B.1), then toNFKC_Casefold (full case
+ * folding, so `ß`→`ss` and `ς`→`σ` as in nameprep's B.2; NFKC; default ignorables removed). Nameprep's
+ * prohibited-output and bidi checks are not replicated. Where Unicode 3.2 and the pinned version
+ * map a character differently the answers differ from the JDK's, on purpose, and the label is
+ * reported by [PortableText.unicode32Drift]; a jvmTest checks agreement with the JDK on every
+ * non-ASCII label of the bundled PSL and on the official PSL test vectors.
  */
 internal object Idna {
 
@@ -17,17 +20,12 @@ internal object Idna {
         cp == 0x00AD || cp == 0x034F || cp == 0x1806 || cp in 0x180B..0x180D ||
             cp in 0x200B..0x200D || cp == 0x2060 || cp in 0xFE00..0xFE0F || cp == 0xFEFF
 
-    fun toAsciiLabel(label: String, nfkc: (String) -> String): String? {
+    fun toAsciiLabel(label: String): String? {
         val mapped = StringBuilder()
         for (cp in codePoints(label)) {
-            when {
-                mapToNothing(cp) -> Unit
-                cp == 0x00DF -> mapped.append("ss")
-                cp == 0x03C2 -> mapped.append('σ')
-                else -> appendCodePoint(mapped, cp)
-            }
+            if (!mapToNothing(cp)) appendCodePoint(mapped, cp)
         }
-        val prepared = nfkc(mapped.toString().lowercase()).lowercase()
+        val prepared = PortableText.nfkcCasefold(mapped.toString())
         if (prepared.all { it.code < 128 }) {
             return prepared.takeIf { it.length <= 63 }
         }

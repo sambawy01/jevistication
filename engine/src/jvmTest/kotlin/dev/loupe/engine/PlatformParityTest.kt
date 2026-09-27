@@ -48,10 +48,9 @@ class PlatformParityTest {
             .filter { it.isNotEmpty() && it.any { c -> c.code > 127 } }
             .toSet() + setOf("faß", "ｃｏｍ", "ﾃｽﾄ", "a­b", "ς", "xn--ä", "ä".repeat(70))
         assertTrue(labels.size > 300, "only ${labels.size} labels")
-        val nfkc: (String) -> String = { Normalizer.normalize(it, Normalizer.Form.NFKC) }
         for (label in labels) {
             val jdk = runCatching { IDN.toASCII(label, IDN.ALLOW_UNASSIGNED).lowercase() }.getOrNull()
-            assertEquals(jdk, Idna.toAsciiLabel(label, nfkc), "toAscii($label)")
+            assertEquals(jdk, Idna.toAsciiLabel(label), "toAscii($label)")
         }
     }
 

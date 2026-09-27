@@ -1,5 +1,7 @@
 package dev.loupe.kit.mail
 
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import dev.loupe.kit.site.Brand
 import dev.loupe.kit.site.Brands
 import dev.loupe.engine.Contact
@@ -93,6 +95,7 @@ object Phishing {
         // sender domain (site protection's host checks, applied to the From domain)
         "sender_homograph_brand" to (60 to "The sender's domain imitates {brand} with look-alike letters ({domain})."),
         "sender_mixed_script" to (35 to "The sender's domain mixes letters from different alphabets ({domain})."),
+        "sender_unicode_drift" to (30 to "The sender's domain uses characters that older and newer software read differently ({domain})."),
         "sender_lookalike_brand" to (45 to "The sender's domain {domain} looks like {brand} but is not {brand}'s."),
         "sender_brand_domain_in_subdomain" to (45 to "{brand}'s address is placed in front of an unrelated sender domain ({domain})."),
         "sender_brand_in_subdomain" to (30 to "The name {brand} is placed in front of an unrelated sender domain ({domain})."),
@@ -120,6 +123,7 @@ object Phishing {
         "link_brand_in_subdomain" to (30 to "A link puts the name {brand} in front of an unrelated website ({domain})."),
         "link_brand_in_domain_bait" to (35 to "A link goes to {domain}, which glues {brand} to words like \"login\" or \"secure\"."),
         "link_mixed_script" to (35 to "A link's website name mixes letters from different alphabets ({domain})."),
+        "link_unicode_drift" to (30 to "A link's website name uses characters that older and newer software read differently ({domain})."),
         "link_text_mismatch" to (40 to "A link shows {shown} but really goes to {domain}."),
         "link_brand_text" to (30 to "A link asks you to sign in or verify with {brand}, but goes to {domain}."),
         "link_data" to (40 to "A link opens a data: address, which has no real website behind it."),
@@ -149,14 +153,14 @@ object Phishing {
         "lookalike_brand" to "sender_lookalike_brand", "brand_domain_in_subdomain" to "sender_brand_domain_in_subdomain",
         "brand_in_subdomain" to "sender_brand_in_subdomain", "brand_in_domain_bait" to "sender_brand_in_domain_bait",
         "brand_other_tld" to "sender_brand_other_tld", "brand_in_domain" to "sender_brand_in_domain",
-        "suspicious_tld" to "sender_suspicious_tld", "ip_host" to "sender_ip",
+        "suspicious_tld" to "sender_suspicious_tld", "ip_host" to "sender_ip", "unicode_drift_host" to "sender_unicode_drift",
     )
     private val LINK_CODES = mapOf(
         "homograph_brand" to "link_homograph_brand", "lookalike_brand" to "link_lookalike_brand",
         "brand_domain_in_subdomain" to "link_brand_domain_in_subdomain", "brand_in_subdomain" to "link_brand_in_subdomain",
         "brand_in_domain_bait" to "link_brand_in_domain_bait", "mixed_script" to "link_mixed_script",
         "ip_host" to "link_ip", "suspicious_tld" to "link_suspicious_tld", "data_url" to "link_data",
-        "userinfo_in_url" to "link_userinfo", "url_shortener" to "link_shortener",
+        "userinfo_in_url" to "link_userinfo", "url_shortener" to "link_shortener", "unicode_drift_host" to "link_unicode_drift",
     )
     private val SUBDOMAIN_CODES = setOf("brand_domain_in_subdomain", "brand_in_subdomain")
     private val IMPOSTOR = setOf("homograph_brand", "lookalike_brand", "brand_domain_in_subdomain", "brand_in_subdomain", "brand_in_domain_bait", "mixed_script")
@@ -180,7 +184,7 @@ object Phishing {
         "Google" to listOf("googlemail.com"),
     )
 
-    private fun words(s: String): Set<String> = s.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.toSet()
+    private fun words(s: String): Set<String> = PortableText.splitSpaces(s).toSet()
 
     /** Free personal mailboxes: anyone can have an address there, so "from gmail.com" is not "from Google". */
     val FREEMAIL: Set<String> = words(
@@ -220,16 +224,18 @@ object Phishing {
         """,
     )
 
+    // Spelled out for every regex engine (PortableText, Rx): no \s \b \p{..} or IGNORE_CASE.
+    // BAIT_WORDS and AUTH_RE run on PortableText.fold(text); URL_RE and DOMAINISH_RE spell the ASCII
+    // case out so the captured text keeps its case; ADDR_IN_TEXT_RE runs on PortableText.shadow(text),
+    // where Rx.LN stands for \p{L}\p{Nd}\p{Nl}\p{No}.
     private val BAIT_WORDS = Regex(
-        "sign[\\s-]?in|log[\\s-]?in|log[\\s-]?on|verify|verification|confirm|unlock|update|" +
+        "sign[${Rx.SPACE}-]?in|log[${Rx.SPACE}-]?in|log[${Rx.SPACE}-]?on|verify|verification|confirm|unlock|update|" +
             "password|account|secure|تسجيل|الدخول|تحقق|تأكيد|تحديث|كلمة المرور|حسابك",
-        RegexOption.IGNORE_CASE,
     )
-    private val URL_RE = Regex("""(?:https?://|www\.)[^\s<>"'()\[\]{}]{3,2000}""", RegexOption.IGNORE_CASE)
-    private val DOMAINISH_RE = Regex("""^(?:https?://)?(?:www\.)?((?:[a-z0-9-]+\.)+[a-z]{2,24})(?:[/:?#]\S*)?$""", RegexOption.IGNORE_CASE)
-    private val ADDR_IN_TEXT_RE = Regex("""[\p{L}\p{Nd}\p{Nl}\p{No}_.+-]+@((?:[\p{L}\p{Nd}\p{Nl}\p{No}_-]+\.)+[a-z]{2,24})""", RegexOption.IGNORE_CASE)
-    private val AUTH_RE = Regex("""\b(spf|dkim|dmarc|compauth)\s*=\s*([a-z]+)""", RegexOption.IGNORE_CASE)
-    private val WORD_RE = Regex("""[\p{L}\p{Nd}\p{Nl}\p{No}]+""")
+    private val URL_RE = Regex("""(?:[hH][tT][tT][pP][sS]?://|[wW][wW][wW]\.)[^${Rx.SPACE}<>"'()\[\]{}]{3,2000}""")
+    private val DOMAINISH_RE = Regex("""^(?:[hH][tT][tT][pP][sS]?://)?(?:[wW][wW][wW]\.)?((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,24})(?:[/:?#]${Rx.NSP}*)?$""")
+    private val ADDR_IN_TEXT_RE = Regex("""[${Rx.LN}_.+-]+@(?:[${Rx.LN}_-]+\.)+[a-zA-Z]{2,24}""")
+    private val AUTH_RE = Regex("""${Rx.WB_START}(spf|dkim|dmarc|compauth)${Rx.SP}*=${Rx.SP}*([a-z]+)""")
 
     fun isFreemail(reg: String?): Boolean {
         if (reg.isNullOrEmpty()) return false
@@ -237,7 +243,7 @@ object Phishing {
         val label = reg.substringBefore('.')
         val suffix = if ('.' in reg) reg.substringAfter('.') else ""
         val last = suffix.substringAfterLast('.')
-        return label in FREEMAIL_LABELS && last.length == 2 && last.all { it.isLetter() } && suffix.count { it == '.' } <= 1
+        return label in FREEMAIL_LABELS && last.length == 2 && last.all { PortableText.isLetter(it.code) } && suffix.count { it == '.' } <= 1
     }
 
     // ------------------------------------------------------------------------ config
@@ -264,7 +270,7 @@ object Phishing {
      */
     fun authResults(header: String?): Map<String, String> {
         val out = LinkedHashMap<String, String>()
-        for (m in AUTH_RE.findAll(header ?: "")) {
+        for (m in AUTH_RE.findAll(PortableText.fold(header ?: ""))) {
             val method = m.groupValues[1].lowercase()
             val result = m.groupValues[2].lowercase()
             if (method == "compauth") {
@@ -279,7 +285,7 @@ object Phishing {
     }
 
     private val TRUSTED_DOMAIN = Regex("""(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}""")
-    private val TRUSTED_LOCAL = Regex("""[^\s@<>"(),;:]{1,64}""")
+    private val TRUSTED_LOCAL = Regex("""[^${Rx.SPACE}@<>"(),;:]{1,64}""")
 
     /**
      * Trusted senders: "someone@example.com" (that address) or "example.com" (that domain and its
@@ -320,11 +326,11 @@ object Phishing {
     private fun brandClaim(display: String, config: SiteConfig): Brand? {
         val text = display.trim()
         if (text.isEmpty()) return null
-        val words = WORD_RE.findAll(text).map { it.value.lowercase() }.toList()
+        val words = PortableText.letterNumberRuns(text).map { PortableText.lowercase(it) }
         for ((name, brand) in config.namePatterns) {
             if (!SiteSignals.containsWord(text, name)) continue
-            val own = (listOf(brand.name) + brand.tokens).flatMap { n -> WORD_RE.findAll(n).map { it.value.lowercase() } }.toSet()
-            val rest = words.filter { it !in own && it !in SERVICE_WORDS && !it.all { c -> c.isDigit() } }
+            val own = (listOf(brand.name) + brand.tokens).flatMap { n -> PortableText.letterNumberRuns(n).map { PortableText.lowercase(it) } }.toSet()
+            val rest = words.filter { it !in own && it !in SERVICE_WORDS && !it.all { c -> PortableText.isDecimalDigit(c.code) } }
             if (rest.isEmpty()) return brand
         }
         return null
@@ -395,7 +401,10 @@ object Phishing {
         // the sender's domain
         val hostCodes = mutableListOf<String>()
         if (domain.isNotEmpty() && !freemail) {
-            for ((code, params) in hostCodes(domain, config)) {
+            // The domain as written, when it is not ASCII: its IDNA form can hide what
+            // `unicode_drift_host` looks for (ParsedUrl.typedHost).
+            val typed = address.substringAfterLast('@').trim().trim('.', '>').takeIf { d -> d.any { it.code >= 128 } }
+            for ((code, params) in hostCodes(typed ?: domain, config)) {
                 val mapped = SENDER_CODES[code]
                 if (mapped != null && code != "many_subdomains") {
                     hostCodes += code
@@ -405,10 +414,11 @@ object Phishing {
         }
 
         // the display name
-        ADDR_IN_TEXT_RE.find(display)?.let { shown ->
-            val shownDomain = shown.groupValues[1].lowercase()
+        ADDR_IN_TEXT_RE.find(PortableText.shadow(display))?.let { m ->
+            val shown = display.substring(m.range)
+            val shownDomain = PortableText.lowercase(shown.substringAfter('@'))
             val shownReg = reg(shownDomain).first ?: shownDomain
-            if (reg != null && shownReg != reg) add("display_address_mismatch", "sender", "shown" to shown.value, "domain" to reg)
+            if (reg != null && shownReg != reg) add("display_address_mismatch", "sender", "shown" to shown, "domain" to reg)
         }
         val claim = brandClaim(display, config)
         if (claim != null && reg != null && !config.owns(claim, reg, suffix)) {
@@ -618,7 +628,7 @@ object Phishing {
                 }
             }
             // "Sign in to PayPal" / "Verify your Apple ID" pointing at an unrelated domain
-            if (BAIT_WORDS.containsMatchIn(visible)) {
+            if (BAIT_WORDS.containsMatchIn(PortableText.fold(visible))) {
                 for ((name, brand) in config.namePatterns) {
                     if (SiteSignals.containsWord(visible, name) && !config.owns(brand, u.registrable, u.suffix)) {
                         add("link_brand_text", "brand" to brand.name, "domain" to reg)

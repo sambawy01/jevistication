@@ -1,5 +1,7 @@
 package dev.loupe.kit.privacy
 
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import kotlinx.datetime.LocalDate
 
 /*
@@ -61,7 +63,7 @@ object PrivacyMask {
 
     /** "•••• •••• •••• 1234": all but the last four hidden, in groups of four. */
     fun card(value: String): String {
-        val d = value.filter { it.isDigit() }
+        val d = PortableText.foldDigits(value).filter { it in '0'..'9' }
         return (List((d.length - 4 + 3) / 4) { "••••" } + d.takeLast(4)).joinToString(" ")
     }
 
@@ -127,8 +129,9 @@ data class EvidenceHit(
 object PrivacyEvidence {
     const val MAX_HITS = 12
     const val CONTEXT_WIDTH = 48
-    private val LONG_DIGITS = Regex("""\d{5,}""")
-    private val SPACES = Regex("""\s+""")
+    // On digit-folded text; spaces are Rx.SP (the same on every regex engine).
+    private val LONG_DIGITS = Regex("""[0-9]{5,}""")
+    private val SPACES = Regex("""${Rx.SP}+""")
 
     /** Station's `SIGNAL_KINDS`: which detector kinds a finding's rule points at. */
     val SIGNAL_KINDS: Map<String, List<String>> = mapOf(

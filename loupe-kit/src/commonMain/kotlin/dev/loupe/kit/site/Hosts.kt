@@ -1,6 +1,7 @@
 package dev.loupe.kit.site
 
 import dev.loupe.engine.OriginFacts
+import dev.loupe.engine.PortableText
 
 /*
  * Host and URL helpers for site protection and mail phishing checks.
@@ -138,10 +139,17 @@ object Hosts {
     private fun privateV4(v: Long): Boolean = PRIVATE_V4.any { (net, bits) -> inNet(v, net, bits) }
 
     // ------------------------------------------------------------------------ IDNA
-    /** One label to its IDNA ASCII form (NFKC, lowercase, punycode); ASCII labels are only lowercased. */
+    /**
+     * One label to its IDNA ASCII form (NFKC, lowercase, punycode); ASCII labels are only lowercased,
+     * and a label that NFKC makes ASCII (`ｅｘａｍｐｌｅ`, `ex🄰mple`) is that ASCII, as a browser sends it,
+     * not an `xn--` of it. NFKC and lowercase come from the pinned Unicode data, so every phone
+     * encodes a label alike.
+     */
     fun toAsciiLabel(label: String): String? {
         if (label.all { it.code < 128 }) return label.lowercase()
-        return Punycode.encode(nfkc(label).lowercase())?.let { "xn--$it" }
+        val mapped = PortableText.lowercase(nfkc(label))
+        if (mapped.all { it.code < 128 }) return mapped
+        return Punycode.encode(mapped)?.let { "xn--$it" }
     }
 
     /** An `xn--` label decoded to Unicode, or the label unchanged when it is not valid punycode. */
@@ -173,6 +181,12 @@ data class ParsedUrl(
     val registrable: String?,
     val subdomain: String,
     val raw: String,
+    /**
+     * The host as it was written, lowercased, before IDNA mapping ("" when the URL has none). The
+     * mapping can erase what [SiteSignals]' `unicode_drift_host` looks for (U+1E030 maps to a plain
+     * Cyrillic letter), so that check reads this form too.
+     */
+    val typedHost: String = "",
 ) {
     companion object {
         private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.\\-]*$")
@@ -202,7 +216,8 @@ data class ParsedUrl(
             val hostname = if (hostPort.startsWith("[")) hostPort.substring(1).substringBefore(']')
             else hostPort.substringBefore(':')
             // A host typed in Unicode (pаypal.com) is read in its IDNA ASCII form, as a browser sends it.
-            val host = hostname.lowercase().trimEnd('.').let { h -> if (h.all { it.code < 128 }) h else Hosts.toAsciiDomain(h) ?: h }
+            val typed = PortableText.lowercase(hostname).trimEnd('.')
+            val host = typed.let { h -> if (h.all { it.code < 128 }) h else Hosts.toAsciiDomain(h) ?: h }
             val labels = if (host.isNotEmpty()) host.split(".") else emptyList()
             return ParsedUrl(
                 scheme = scheme,
@@ -216,6 +231,7 @@ data class ParsedUrl(
                 registrable = Hosts.registrableDomain(host),
                 subdomain = Hosts.subdomainPart(host),
                 raw = url,
+                typedHost = typed,
             )
         }
     }

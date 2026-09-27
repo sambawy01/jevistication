@@ -1,5 +1,6 @@
 package dev.loupe.kit.site
 
+import dev.loupe.engine.Rx
 import kotlin.random.Random
 
 /*
@@ -197,7 +198,8 @@ data class DnsFacts(
 }
 
 object DnsFactsReader {
-    private val DMARC_P = Regex("""(?:^|;)\s*p\s*=\s*([a-z]+)\s*(?:;|$)""", RegexOption.IGNORE_CASE)
+    // DNS TXT syntax: ASCII whitespace and ASCII case spelled out (the JDK's \s and IGNORE_CASE here).
+    private val DMARC_P = Regex("""(?:^|;)${Rx.ASCII_SP}*[pP]${Rx.ASCII_SP}*=${Rx.ASCII_SP}*([a-zA-Z]+)${Rx.ASCII_SP}*(?:;|$)""")
 
     /** The policy of the one `v=DMARC1` record; "absent" without one; "invalid" for several or a bad `p=`. */
     fun dmarcPolicy(records: List<String>): String {

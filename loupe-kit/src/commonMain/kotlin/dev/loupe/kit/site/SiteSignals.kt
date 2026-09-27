@@ -1,6 +1,7 @@
 package dev.loupe.kit.site
 
 import dev.loupe.engine.OriginFacts
+import dev.loupe.engine.PortableText
 
 /*
  * Deterministic page signals: no network, no model.
@@ -12,8 +13,8 @@ import dev.loupe.engine.OriginFacts
  * check's order and conditions are copied verbatim; only the language changed. Mechanical
  * differences: registrable domains come from the engine's pinned Mozilla PSL (see [Hosts]); "does
  * this label mix scripts" is the engine's `OriginFacts.hasMixedScripts` (Unicode script property)
- * where Station used the first word of each character's Unicode name; NFKC/NFKD come from the
- * platform (`java.text.Normalizer`, `NSString`).
+ * where Station used the first word of each character's Unicode name; NFKC/NFKD, lower case and
+ * marks come from Loupe's pinned Unicode data (the engine's PortableText), the same on every platform.
  *
  * What is checked:
  *   host      raw IP address, punycode / mixed-script labels (IDN homographs), look-alikes of
@@ -129,6 +130,7 @@ object SiteSignals {
         // host
         "ip_host" to (25 to "The address is a bare IP number instead of a website name."),
         "mixed_script" to (35 to "The website name mixes letters from different alphabets, a trick to imitate another name."),
+        "unicode_drift_host" to (30 to "The website name uses characters that older and newer software read differently, so the name you see may not be the website you reach."),
         "homograph_brand" to (60 to "The website name imitates {brand} with look-alike letters from another alphabet."),
         "lookalike_brand" to (45 to "The website name looks like {brand} but is not {brand}'s website."),
         "brand_domain_in_subdomain" to (45 to "{brand}'s address is placed at the start of an unrelated website name ({domain})."),
@@ -166,7 +168,7 @@ object SiteSignals {
         wallet auth authentication support service services help recovery recover unlock unblock suspended
         alert payment pay refund invoice id webscr session validate validation customer client portal online
         track tracking delivery parcel shipment package redelivery web prime gift bonus reward claim free
-    """.trimIndent().split(Regex("\\s+")).filter { it.isNotEmpty() }.toSet()
+    """.trimIndent().let(PortableText::splitSpaces).toSet()
 
     private val CONFUSABLE: Map<Char, Char> = mapOf(
         // Cyrillic
@@ -185,10 +187,31 @@ object SiteSignals {
     // ------------------------------------------------------------------------ helpers
     /** Lowercase, confusables folded to ASCII, hyphens dropped: "pаypa1" -> "paypal". */
     fun skeleton(s: String): String {
-        var t = nfkc(s).lowercase().map { CONFUSABLE[it] ?: it }.joinToString("")
-        t = nfkd(t).filter { it.category != CharCategory.NON_SPACING_MARK && it.category != CharCategory.ENCLOSING_MARK }
+        var t = PortableText.lowercase(nfkc(s)).map { CONFUSABLE[it] ?: it }.joinToString("")
+        t = withoutMarks(nfkd(t))
         for ((a, b) in MULTI) t = t.replace(a, b)
         return t.replace("-", "").replace("_", "")
+    }
+
+    /**
+     * The code points of [u]'s host, as typed and in its decoded `xn--` labels, that read
+     * differently under Unicode 3.2 and the pinned Unicode version ([PortableText.unicode32Drift]).
+     */
+    fun unicodeDrift(u: ParsedUrl): List<Int> =
+        (PortableText.unicode32Drift(u.typedHost) + u.labels.filter { it.startsWith("xn--") }
+            .flatMap { PortableText.unicode32Drift(Hosts.decodeLabel(it)) }).distinct()
+
+    /** [s] without nonspacing and enclosing marks (Mn, Me), read from the pinned Unicode data. */
+    private fun withoutMarks(s: String): String {
+        val out = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val cp = PortableText.codePointAt(s, i)
+            val n = if (cp >= 0x10000) 2 else 1
+            if (!PortableText.isNonspacingOrEnclosingMark(cp)) out.append(s, i, i + n)
+            i += n
+        }
+        return out.toString()
     }
 
     /** Optimal string alignment distance (Levenshtein plus adjacent transposition), capped at [limit]. */
@@ -237,7 +260,7 @@ object SiteSignals {
 
     fun isCctld(suffix: String): Boolean {
         val last = suffix.substringAfterLast('.')
-        return last.length == 2 && last.all { it.isLetter() }
+        return last.length == 2 && last.all { PortableText.isLetter(it.code) }
     }
 
     // ------------------------------------------------------------------------ the checks
@@ -250,6 +273,9 @@ object SiteSignals {
         if (Hosts.isPrivateHost(host)) return out
         if (Hosts.isIp(host)) return listOf(SiteSignal("ip_host", mapOf("host" to host)))
         if (config.known(reg, suffix)) return out
+        // Characters that Unicode 3.2 software (IDNA 2003) and current software map differently, or
+        // that did not exist in 3.2: one written name, two possible websites.
+        if (unicodeDrift(u).isNotEmpty()) out += SiteSignal("unicode_drift_host", mapOf("host" to u.unicodeHost))
         // IDN: punycode labels, mixed scripts, homographs of a brand
         val regLabel = if (reg != null && suffix != null) reg.dropLast(suffix.length + 1) else ""
         var homograph = false
@@ -448,21 +474,25 @@ object SiteSignals {
     }
 
     // ------------------------------------------------------------------------ text helpers
-    private fun isWordChar(c: Char, dashIsWord: Boolean = false): Boolean =
-        c.isLetterOrDigit() || c == '_' || (dashIsWord && c == '-')
+    /** Python's `\w` for these checks: a letter or decimal digit (pinned Unicode data), or `_`. */
+    private fun isWordChar(cp: Int, dashIsWord: Boolean = false): Boolean =
+        PortableText.isLetterOrDecimalDigit(cp) || cp == '_'.code || (dashIsWord && cp == '-'.code)
 
     /** Python `(?<![\w])needle(?![\w])` with re.I, without a lookbehind (slow on Kotlin/Native). */
     fun containsWord(text: String, needle: String): Boolean = containsBounded(text, needle, dashIsWord = false, ignoreCase = true)
 
     internal fun containsBounded(text: String, needle: String, dashIsWord: Boolean, ignoreCase: Boolean = false): Boolean {
         if (needle.isEmpty()) return false
+        // Case-insensitive through the pinned simple fold (same length), not the platform's case tables.
+        val t = if (ignoreCase) PortableText.fold(text) else text
+        val n = if (ignoreCase) PortableText.fold(needle) else needle
         var from = 0
         while (true) {
-            val at = text.indexOf(needle, from, ignoreCase)
+            val at = t.indexOf(n, from)
             if (at < 0) return false
-            val end = at + needle.length
-            val beforeOk = at == 0 || !isWordChar(text[at - 1], dashIsWord)
-            val afterOk = end >= text.length || !isWordChar(text[end], dashIsWord)
+            val end = at + n.length
+            val beforeOk = at == 0 || !isWordChar(PortableText.codePointBefore(t, at), dashIsWord)
+            val afterOk = end >= t.length || !isWordChar(PortableText.codePointAt(t, end), dashIsWord)
             if (beforeOk && afterOk) return true
             from = at + 1
         }
@@ -501,4 +531,4 @@ object SiteSignals {
 
 /** Station's `template.format_map(_Missing(params))`: `{name}` from [params], "…" when missing. */
 internal fun fillTemplate(template: String, params: Map<String, String>): String =
-    Regex("\\{(\\w+)\\}").replace(template) { params[it.groupValues[1]] ?: "…" }
+    Regex("\\{([A-Za-z0-9_]+)\\}").replace(template) { params[it.groupValues[1]] ?: "…" }

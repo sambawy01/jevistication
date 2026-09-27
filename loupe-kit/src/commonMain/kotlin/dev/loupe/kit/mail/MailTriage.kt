@@ -2,6 +2,8 @@ package dev.loupe.kit.mail
 
 import dev.loupe.engine.Contact
 import dev.loupe.engine.Message
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import dev.loupe.kit.site.Hosts
 import dev.loupe.kit.site.OnlineContext
 import dev.loupe.kit.site.OnlineSignals
@@ -39,13 +41,18 @@ data class MailMessage(
     val inference: String = "",
 ) {
     companion object {
-        private val ANCHOR = Regex("""<a\b[^>]*?\bhref\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))[^>]*>(.*?)</a\s*>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+        // HTML syntax, ASCII case spelled out so the captured href and text keep their case, and
+        // ASCII whitespace (the JDK's \s and IGNORE_CASE on this pattern), the same on every engine.
+        private val ANCHOR = Regex(
+            """<[aA]${Rx.WB_END}[^>]*?${Rx.WB_START}[hH][rR][eE][fF]${Rx.ASCII_SP}*=${Rx.ASCII_SP}*(?:"([^"]*)"|'([^']*)'|([^${Rx.ASCII_SPACE}>]+))[^>]*>(.*?)</[aA]${Rx.ASCII_SP}*>""",
+            RegexOption.DOT_MATCHES_ALL,
+        )
 
         /** (href, visible text) pairs from HTML, at most [Phishing.MAX_LINKS]. */
         fun anchors(html: String): List<Pair<String, String>> =
             ANCHOR.findAll(html).take(Phishing.MAX_LINKS).map { m ->
                 val href = (m.groupValues[1].ifEmpty { m.groupValues[2] }.ifEmpty { m.groupValues[3] }).replace("&amp;", "&").trim()
-                href to HtmlText.toText(m.groupValues[4]).replace(Regex("\\s+"), " ").trim()
+                href to PortableText.collapseSpaces(HtmlText.toText(m.groupValues[4]))
             }.filter { it.first.isNotEmpty() }.toList()
 
         /**

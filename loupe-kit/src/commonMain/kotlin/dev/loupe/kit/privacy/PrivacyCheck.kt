@@ -1,5 +1,7 @@
 package dev.loupe.kit.privacy
 
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import dev.loupe.persistence.CorrectionKey
 import dev.loupe.persistence.CorrectionRecord
 import dev.loupe.sources.common.ItemKind
@@ -289,14 +291,21 @@ object NameHints {
         "visa", "جواز", "بطاقة", "هوية", "رقم قومي", "شهادة ميلاد", "إقامة", "اقامة", "رخصة",
     )
     private val ARABIC = Regex("[؀-ۿ]")
-    // Python's `[^\w]+|_` (Unicode): anything but a letter, digit or mark, and the underscore.
-    private val NON_WORD = Regex("[^\\p{L}\\p{Nd}\\p{M}]+|_")
+    // Python's `[^\w]+|_` (Unicode): anything but a letter, digit or mark, and the underscore. Run on
+    // PortableText.shadow, where Rx.LDM stands for \p{L}\p{Nd}\p{M} of the pinned Unicode data.
+    private val NON_WORD = Regex("[^${Rx.LDM}]+|_")
     private val CAMEL = Regex("(?<=[a-z])(?=[A-Z])")
-    private val SPACES = Regex("\\s+")
 
     fun normalise(text: String): String {
-        val camel = CAMEL.replace(text, " ")
-        val words = NON_WORD.replace(camel.lowercase(), " ").split(SPACES).filter { it.isNotEmpty() }
+        val lower = PortableText.lowercase(CAMEL.replace(text, " "))
+        val shadow = PortableText.shadow(lower)
+        val out = StringBuilder(lower.length)
+        var last = 0
+        for (m in NON_WORD.findAll(shadow)) {
+            out.append(lower, last, m.range.first).append(' ')
+            last = m.range.last + 1
+        }
+        val words = PortableText.splitSpaces(out.append(lower, last, lower.length).toString())
         return " " + words.joinToString(" ") + " "
     }
 

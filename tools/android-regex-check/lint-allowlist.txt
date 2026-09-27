@@ -1,0 +1,4 @@
+# Exceptions to tools/android-regex-check/lint.py: `path | text in the literal or line | justification`.
+# Every entry needs a justification, and an entry that matches nothing fails the lint.
+engine/src/commonMain/kotlin/dev/loupe/engine/Export.kt | \b | JSON string escaping writes backslash-b for U+0008 (RFC 8259); the literal is output text, never a regex.
+persistence/src/commonMain/kotlin/dev/loupe/persistence/JsonValue.kt | \b | JSON string escaping writes backslash-b for U+0008 (RFC 8259); the literal is output text, never a regex.

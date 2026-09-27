@@ -48,6 +48,14 @@ android {
         compose = true
     }
 
+    sourceSets {
+        // Debug builds only: the cross-platform parity corpus runner (tools/parity/README.md), run on
+        // an emulator or phone through app_process by tools/parity/run-device.sh. Not in release.
+        getByName("debug") {
+            kotlin.srcDir(rootProject.file("tools/parity/kotlin"))
+        }
+    }
+
     lint {
         // The AndroidX pins follow Kotlin 2.1.0 (see dependencies); lint's "newer version available"
         // would ask for libraries built with a newer Kotlin than the repo's.

@@ -1,6 +1,5 @@
 package dev.loupe.engine
 
-import java.net.IDN
 import java.security.MessageDigest
 
 internal actual fun sha256(input: ByteArray): ByteArray =
@@ -17,9 +16,6 @@ private fun resourceText(name: String): String {
 internal actual fun bundledPublicSuffixList(): String = resourceText(PSL_RESOURCE)
 
 internal actual fun bundledPublicSuffixListSha256(): String = resourceText("$PSL_RESOURCE.sha256")
-
-internal actual fun idnaToAscii(label: String): String? =
-    runCatching { IDN.toASCII(label, IDN.ALLOW_UNASSIGNED).lowercase() }.getOrNull()
 
 internal actual fun letterScript(codePoint: Int): Int {
     if (!Character.isLetter(codePoint)) return -1

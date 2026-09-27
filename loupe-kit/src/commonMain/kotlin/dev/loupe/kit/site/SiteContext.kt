@@ -57,7 +57,7 @@ object SiteContext {
 
     val IMPOSTOR_CODES: Set<String> = setOf(
         "homograph_brand", "lookalike_brand", "brand_domain_in_subdomain", "brand_in_subdomain",
-        "brand_in_domain_bait", "brand_other_tld", "mixed_script", "userinfo_in_url",
+        "brand_in_domain_bait", "brand_other_tld", "mixed_script", "userinfo_in_url", "unicode_drift_host",
     )
     val DISQUALIFY_CODES: Set<String> = IMPOSTOR_CODES + setOf(
         "brand_mismatch", "brand_mismatch_login", "brand_in_domain", "brand_in_path", "impostor_login",

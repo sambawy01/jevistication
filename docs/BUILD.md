@@ -1975,6 +1975,59 @@ their acceptance criteria are met; entries here record increments toward them.
   paths; on softens), `ModelFixesMeasurementTest`, `ModelPriorFitTest`. Gate: `./gradlew check` green
   (1,576 tests, 0 failures, Android targets skipped without an SDK); iOS simulator (LoupeKit rebuilt, xcodegen): 431 unit (2 skipped), 0 failures; 56 UI (5 skipped), **1 failure** — `ReviewPacksUITests.testApproveAPrivacyCheckProposedAction` waits 90 s for the privacy check's "Remove the extra copy" proposal and it never appears (also after uninstalling the app); that path is rules only (PrivacyCheck, ReviewProducers, the review-demo inbox seed) and none of it changed here. Settled: run alone it is **pre-existing and flaky on clean HEAD too** (7e13578 in a worktree: failed after a fresh install, then passed, then failed) and on this tree (passed once, failed after a fresh install and on the next run), so it depends on simulator state, not on this work; left open. The iOS test fakes and the two DEBUG fixtures that stand in for the model (`-LoupeQueueDemo`, `-LoupeResultsFixture`) run with `use_calibration` off: their numbers are not the real graph's. The app bundles `loupe-kit/data/model-prior/`; Me → Model settings describes the calibration.
 
+## Parity B1/B2: changed answers (Android session, 2026-09-27, branch `parity`)
+
+*Written by the Android session at the iOS session's request; kept to this section. Why and how:
+docs/ANDROID-PLAN.md, "Known parity gaps" (closed). The cases are pinned in `tools/parity/corpus.json`.*
+Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Station must follow.
+
+- **Arabic-Indic (U+0660–0669) and Persian (U+06F0–06F9) digits are numbers** (owner's decision):
+  `DateFacts.find` reads them in every pattern (`٢٠٢٧-٠٣-١٥`, `۱۵/۰۳/۲۰۲۷`; `DateMatch.text` stays as
+  written), so the expiry radar, `Baseline.DateBefore` and the watchers see those dates;
+  `TermChangeDetector.amounts` (`Annual fee £١٢٠`), the watchers' charge amounts, CSV amount cells
+  and `symbolFor`, the transaction-evidence gate (`ending in ٤٥٦٧`), the judgment lint's rating
+  check and baseline patterns' `\d` all read them. CSV cells now take Persian digits too (Arabic-Indic
+  only before). Other scripts' digits (Devanagari, ...) are still not numbers.
+- **No-break spaces are spaces**: U+00A0, U+2007, U+2009 and U+202F count as space in dates
+  (`3 March 2026` with NBSP), labelled amounts, watcher amounts (`£ 45`), CSV cells, currency markers
+  (`ج. م`) and thousands groups (`1 234,50` with a thin space), keyword/word splitting, blank-line
+  collapsing, and baseline patterns' `\s`. A bare link now **ends at a no-break space** (`Links.find`,
+  mail `urls`, `SiteCheck.linksIn`), and a trusted-sender local part or an activity token may not
+  contain one. Mail headers, mbox `From ` lines, RFC 2047 words, HTML tags and DMARC records keep
+  ASCII whitespace, as before.
+- **Case**: every case-insensitive match uses one fold, `lower(upper(c))` from the pinned table:
+  `İ` and `ı` match `i`, `ß` never matches `ss` (it did on Android), the Kelvin sign matches `k`.
+  User baseline patterns (`Baseline.Pattern` from judgments.json) are compiled through
+  `PortableRegex.translate`: a pattern using `\p{..}`, `\P{..}`, `\X`, `\R`, `\h`, `\v`, `\N`, or `\D`
+  `\S` `\W` `\b` `\B` inside `[...]` is now **refused** (the judgment is skipped at load with the
+  reason, as for any bad pattern; `Baseline.Pattern.problem` says why); `(?i)` is accepted and has no
+  further effect.
+- **Word boundaries (iOS only)**: Kotlin/Native's `\b` was Unicode-aware (`caf\b` did not match in
+  `café`, measured); every `\b` is now the JDK's ASCII boundary, so on the iPhone `paid` is found in
+  `paidé` and `expir…` rules match next to accented letters as on the desktop.
+- **IDNA / hosts (B2)**: the engine's IDNA (registrable domains, `OriginFacts.asciiLabel`) is no longer
+  `java.net.IDN` (Unicode 3.2) on the desktop or Foundation/ICU NFKC on the phones but Loupe's pinned
+  Unicode 16.0 mapping (RFC 3454 B.1, then NFKC_Casefold): characters new since 3.2 map
+  (`U+1E030`→`а`, `🄰`→`a`, `⅐`→`1⁄7`, `🯰`→`0`, `U+1CCF0`→`0`); the 174 characters of 3.2 whose
+  mapping changed follow 16.0 (Georgian capitals lowercase, Cherokee, bidi and other default-ignorable
+  controls are dropped where the JDK rejected the label). Host names are lower-cased with the pinned
+  table (no final sigma: `ΟΔΟΣ.gr` → `οδοσ.gr`, it was `οδος.gr`).
+- **Site-check hosts**: a Unicode label that NFKC makes ASCII is sent as that ASCII
+  (`ｅｘａｍｐｌｅ.com` → `example.com`, as browsers do; it was `xn--example-.com`), so such a host is
+  now checked as the name it really is. The skeleton (look-alike) check reads NFKC/NFKD and marks
+  from the pinned data.
+- **New phishing signal** `unicode_drift_host` (30, a risk and impostor code; mail
+  `sender_unicode_drift` 30 on the domain as written, `link_unicode_drift` 30): a host with a
+  character unassigned in Unicode 3.2 or mapped differently by IDNA 2003 nameprep. A link like
+  `https://ex🄰mple.com` alone is now *caution*. docs/PHISHING-FORMULA.md §4, §6.2.
+- **Letters and numbers** in template parameter checks, host validation, brand-name matching,
+  keyword boundaries, mail label names and the privacy words come from the pinned Unicode 16.0
+  categories instead of the platform's (differs only for characters newer than the platform's data).
+- **New public API** (additive, in LoupeKit's headers): `PortableText`, `Rx`, `PortableRegex`,
+  `OriginFacts.asciiLabel`, `ParsedUrl.typedHost` (a new last constructor parameter with a default),
+  `SiteSignals.unicodeDrift`. The engine's `idnaToAscii` is no longer an `expect`; iOS and Android no
+  longer have NFKC actuals (`Unicode.ios.kt`, `Unicode.jvm.kt` removed).
+
 ## Where the build stands
 
 As of 2026-09-23. Everything below was built on JVM Kotlin: no iOS or Android build, no device.

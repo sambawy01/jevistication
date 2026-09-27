@@ -45,29 +45,37 @@ object DateFacts {
         put("sept", 9)
     }
 
-    private val ISO = Regex("""\b(\d{4})-(\d{1,2})-(\d{1,2})\b""")
-    private val NUMERIC = Regex("""\b(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{4})\b""")
+    // Matched on digit-folded text (Arabic-Indic and Persian digits read as 0-9, the owner's decision),
+    // with the classes spelled out so every regex engine agrees (PortableText, Rx).
+    private val ISO = Regex("""${Rx.WB_START}([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})${Rx.WB_END}""")
+    private val NUMERIC = Regex("""${Rx.WB_START}([0-9]{1,2})[/.\-]([0-9]{1,2})[/.\-]([0-9]{4})${Rx.WB_END}""")
     private val DAY_MONTH_YEAR =
-        Regex("""\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})\b""")
+        Regex("""${Rx.WB_START}([0-9]{1,2})(?:st|nd|rd|th)?${Rx.SP}+([A-Za-z]{3,9})\.?,?${Rx.SP}+([0-9]{4})${Rx.WB_END}""")
     private val MONTH_DAY_YEAR =
-        Regex("""\b([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})\b""")
+        Regex("""${Rx.WB_START}([A-Za-z]{3,9})\.?${Rx.SP}+([0-9]{1,2})(?:st|nd|rd|th)?,?${Rx.SP}+([0-9]{4})${Rx.WB_END}""")
 
     /**
      * Finds every date in [text], in order of appearance.
+     *
+     * Digits may be ASCII, Arabic-Indic (U+0660-0669) or Persian (U+06F0-06F9); [DateMatch.text] is
+     * the text as written.
      *
      * @param dayFirst which reading to prefer for an ambiguous numeric date such as `03/04/2026`.
      *   The other reading is reported in [DateMatch.alternate].
      */
     fun find(text: String, dayFirst: Boolean = true): List<DateMatch> {
         val matches = mutableListOf<Pair<Int, DateMatch>>()
+        // Same length as text, so a match's range cuts the original out of text.
+        val folded = PortableText.foldDigits(text)
+        fun verbatim(m: MatchResult): String = text.substring(m.range)
 
-        for (m in ISO.findAll(text)) {
+        for (m in ISO.findAll(folded)) {
             val date = dateOrNull(m.groupValues[1].toInt(), m.groupValues[2].toInt(), m.groupValues[3].toInt())
                 ?: continue
-            matches += m.range.first to DateMatch(m.value, date, "iso", ambiguous = false)
+            matches += m.range.first to DateMatch(verbatim(m), date, "iso", ambiguous = false)
         }
 
-        for (m in NUMERIC.findAll(text)) {
+        for (m in NUMERIC.findAll(folded)) {
             val first = m.groupValues[1].toInt()
             val second = m.groupValues[2].toInt()
             val year = m.groupValues[3].toInt()
@@ -83,7 +91,7 @@ object DateFacts {
                 readingMonthFirst != null &&
                 readingDayFirst != readingMonthFirst
             matches += m.range.first to DateMatch(
-                text = m.value,
+                text = verbatim(m),
                 date = preferred,
                 pattern = if (dayFirst) "numeric-dmy" else "numeric-mdy",
                 ambiguous = ambiguous,
@@ -91,16 +99,16 @@ object DateFacts {
             )
         }
 
-        for (m in DAY_MONTH_YEAR.findAll(text)) {
+        for (m in DAY_MONTH_YEAR.findAll(folded)) {
             val month = MONTHS[m.groupValues[2].lowercase()] ?: continue
             val date = dateOrNull(m.groupValues[3].toInt(), month, m.groupValues[1].toInt()) ?: continue
-            matches += m.range.first to DateMatch(m.value, date, "textual-dmy", ambiguous = false)
+            matches += m.range.first to DateMatch(verbatim(m), date, "textual-dmy", ambiguous = false)
         }
 
-        for (m in MONTH_DAY_YEAR.findAll(text)) {
+        for (m in MONTH_DAY_YEAR.findAll(folded)) {
             val month = MONTHS[m.groupValues[1].lowercase()] ?: continue
             val date = dateOrNull(m.groupValues[3].toInt(), month, m.groupValues[2].toInt()) ?: continue
-            matches += m.range.first to DateMatch(m.value, date, "textual-mdy", ambiguous = false)
+            matches += m.range.first to DateMatch(verbatim(m), date, "textual-mdy", ambiguous = false)
         }
 
         return matches

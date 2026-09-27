@@ -10,12 +10,24 @@ package dev.loupe.engine
 object OriginFacts {
 
     /**
-     * A hostname: unicode letters and digits, plus dot, hyphen and underscore.
+     * A hostname: unicode letters and numbers (`\p{L}\p{Nd}\p{Nl}\p{No}`, read from the pinned
+     * Unicode data so every platform agrees), plus dot, hyphen and underscore, starting with a
+     * letter or number.
      *
      * Non-ASCII is explicitly allowed, because a homograph host is the attack we most need to
      * name, not one to discard as malformed.
      */
-    private val HOSTNAME = Regex("""^[\p{L}\p{Nd}\p{Nl}\p{No}][\p{L}\p{Nd}\p{Nl}\p{No}.\-_]*$""")
+    private fun isHostname(h: String): Boolean {
+        if (h.isEmpty()) return false
+        var i = 0
+        while (i < h.length) {
+            val cp = PortableText.codePointAt(h, i)
+            val ok = PortableText.isLetterOrNumber(cp) || (i > 0 && (cp == '.'.code || cp == '-'.code || cp == '_'.code))
+            if (!ok) return false
+            i += if (cp >= 0x10000) 2 else 1
+        }
+        return true
+    }
 
     /** The lowercase host of [url], or null if it cannot be parsed or names no host. */
     fun host(url: String): String? {
@@ -35,8 +47,8 @@ object OriginFacts {
             .substringAfterLast('@')
             .substringBefore(':')
 
-        val host = raw.lowercase().removeSuffix(".")
-        return host.takeIf { it.isNotEmpty() && HOSTNAME.matches(it) }
+        val host = PortableText.lowercase(raw).removeSuffix(".")
+        return host.takeIf { isHostname(it) }
     }
 
     /** The dot-separated labels of [host]. */
@@ -54,6 +66,13 @@ object OriginFacts {
         host.split('.').joinToString(".") { label ->
             if (label.startsWith("xn--", ignoreCase = true)) Punycode.decode(label.substring(4).lowercase()) ?: label else label
         }
+
+    /**
+     * One host label in its IDNA ASCII form (lowercase; `xn--` punycode for a non-ASCII label), or
+     * null when it cannot be one: the mapping the registrable-domain lookup uses, over Loupe's pinned
+     * Unicode data, so every platform gives the same answer.
+     */
+    fun asciiLabel(label: String): String? = PublicSuffix.toAsciiLabel(label)
 
     /** True when the host contains characters outside ASCII. */
     fun hasNonAsciiHost(host: String): Boolean = host.any { it.code > 127 }
@@ -88,7 +107,7 @@ object OriginFacts {
         setOf(HAN, HANGUL),
     )
 
-    private val IPV4 = Regex("""^\d{1,3}(\.\d{1,3}){3}$""")
+    private val IPV4 = Regex("""^[0-9]{1,3}(\.[0-9]{1,3}){3}$""")
 
     /**
      * The registrable domain (eTLD+1) of [host] under the Public Suffix List algorithm, or null
@@ -107,7 +126,7 @@ object OriginFacts {
         host: String,
         publicSuffixes: Set<String> = PublicSuffix.DEFAULT,
     ): String? {
-        var h = host.trim().lowercase()
+        var h = PortableText.lowercase(host.trim())
         if (h.endsWith(".")) h = h.dropLast(1)
         if (h.isEmpty() || h.startsWith("[") || ':' in h || IPV4.matches(h)) return null
         val original = h.split('.')
@@ -151,11 +170,24 @@ object OriginFacts {
         host: String,
         publicSuffixes: Set<String> = PublicSuffix.DEFAULT,
     ): Boolean {
-        val normalisedBrand = brand.lowercase().filter { it.isLetterOrDigit() }
+        val normalisedBrand = lettersAndDigits(PortableText.lowercase(brand))
         if (normalisedBrand.isEmpty()) return false
         val registrable = registrableDomain(host, publicSuffixes) ?: return false
-        val mainLabel = labels(registrable).first().filter { it.isLetterOrDigit() }
+        val mainLabel = lettersAndDigits(labels(registrable).first())
         return mainLabel == normalisedBrand
+    }
+
+    /** [s] keeping only letters and decimal digits (L, Nd), read from the pinned Unicode data. */
+    private fun lettersAndDigits(s: String): String {
+        val out = StringBuilder(s.length)
+        var i = 0
+        while (i < s.length) {
+            val cp = PortableText.codePointAt(s, i)
+            val n = if (cp >= 0x10000) 2 else 1
+            if (PortableText.isLetterOrDecimalDigit(cp)) out.append(s, i, i + n)
+            i += n
+        }
+        return out.toString()
     }
 
     /**

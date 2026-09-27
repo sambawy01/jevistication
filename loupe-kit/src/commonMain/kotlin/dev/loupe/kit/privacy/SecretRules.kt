@@ -1,6 +1,8 @@
 package dev.loupe.kit.privacy
 
 import dev.loupe.engine.ContentHash
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import kotlin.math.ln
 
 /*
@@ -37,42 +39,52 @@ object SecretRules {
     internal val DETECTORS: List<Detector> = listOf(
         Detector("private_key", "private key (PEM)",
             Regex("""-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----"""), 0),
-        Detector("anthropic_key", "Anthropic API key", Regex("""\bsk-ant-[A-Za-z0-9_\-]{20,}"""), 0),
+        Detector("anthropic_key", "Anthropic API key", Regex("""${Rx.WB_START}sk-ant-[A-Za-z0-9_\-]{20,}"""), 0),
         Detector("openai_key", "OpenAI API key",
-            Regex("""\bsk-(?!ant-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{20,}"""), 0),
-        Detector("aws_access_key", "AWS access key", Regex("""\b(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}\b"""), 0),
+            Regex("""${Rx.WB_START}sk-(?!ant-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{20,}"""), 0),
+        Detector("aws_access_key", "AWS access key", Regex("""${Rx.WB_START}(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}${Rx.WB_END}"""), 0),
         Detector("aws_secret_key", "AWS secret key",
-            Regex("""(?i)aws_?secret_?(?:access_?)?key["']?\s*[:=]\s*["']?([A-Za-z0-9/+=]{40})\b"""), 1),
-        Detector("google_api_key", "Google API key", Regex("""\bAIza[0-9A-Za-z_\-]{35}"""), 0),
-        Detector("google_oauth_secret", "Google OAuth client secret", Regex("""\bGOCSPX-[A-Za-z0-9_\-]{20,}"""), 0),
-        Detector("stripe_key", "Stripe key", Regex("""\b(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}"""), 0),
-        Detector("stripe_webhook_secret", "Stripe webhook secret", Regex("""\bwhsec_[0-9A-Za-z]{20,}"""), 0),
+            // (?i) spelled out for these ASCII words (the JDK's ASCII case-insensitivity, on every engine)
+            Regex("""[aA][wW][sS]_?[sS][eE][cC][rR][eE][tT]_?(?:[aA][cC][cC][eE][sS][sS]_?)?[kK][eE][yY]["']?${Rx.SP}*[:=]${Rx.SP}*["']?([A-Za-z0-9/+=]{40})${Rx.WB}"""), 1),
+        Detector("google_api_key", "Google API key", Regex("""${Rx.WB_START}AIza[0-9A-Za-z_\-]{35}"""), 0),
+        Detector("google_oauth_secret", "Google OAuth client secret", Regex("""${Rx.WB_START}GOCSPX-[A-Za-z0-9_\-]{20,}"""), 0),
+        Detector("stripe_key", "Stripe key", Regex("""${Rx.WB_START}(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}"""), 0),
+        Detector("stripe_webhook_secret", "Stripe webhook secret", Regex("""${Rx.WB_START}whsec_[0-9A-Za-z]{20,}"""), 0),
         Detector("github_token", "GitHub token",
-            Regex("""\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})"""), 0),
-        Detector("slack_token", "Slack token", Regex("""\bxox[abposre]-[A-Za-z0-9\-]{10,}"""), 0),
+            Regex("""${Rx.WB_START}(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})"""), 0),
+        Detector("slack_token", "Slack token", Regex("""${Rx.WB_START}xox[abposre]-[A-Za-z0-9\-]{10,}"""), 0),
         Detector("slack_webhook", "Slack webhook URL",
             Regex("""https://hooks\.slack\.com/services/[A-Za-z0-9/_\-]{20,}"""), 0),
-        Detector("jwt", "JSON Web Token", Regex("""\beyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"""), 0),
+        Detector("jwt", "JSON Web Token", Regex("""${Rx.WB_START}eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"""), 0),
     )
 
     // Possessive `++`: a prefix segment is a whole alphanumeric run, split only at separators, so a
     // long run of letters can't make the engine backtrack (it was polynomial before).
-    // Python: the same pattern with (?<![A-Za-z0-9_]) after (?i); guarded (see GuardedRegex).
+    // Python: the same pattern with (?<![A-Za-z0-9_]) after (?i); guarded (see GuardedRegex). The (?i)
+    // is spelled out as ASCII case classes (exactly the JDK's (?i), on every engine), so the groups
+    // keep the text's case; spaces are Rx.SP and digits [0-9] (the text is digit-folded first).
     internal val ASSIGN = GuardedRegex(
-        """(?i)((?:[A-Za-z0-9]++[_.\-]){0,4}?""" +
-            """(password|passwd|pwd|secret|token|api[_\-]?key|access[_\-]?key|auth[_\-]?key|client[_\-]?secret|""" +
-            """private[_\-]?key|credential)s?(?:[_.\-]?(?:key|value|hash|str|string|plain|b64|base64|secret|token|id|\d+))*)""" +
-            """["']?\s*(?:=|:|=>)\s*["']?([^\s"'#,;]{4,200})""",
+        """((?:[A-Za-z0-9]++[_.\-]){0,4}?""" +
+            """([pP][aA][sS][sS][wW][oO][rR][dD]|[pP][aA][sS][sS][wW][dD]|[pP][wW][dD]|[sS][eE][cC][rR][eE][tT]|[tT][oO][kK][eE][nN]|[aA][pP][iI][_\-]?[kK][eE][yY]|[aA][cC][cC][eE][sS][sS][_\-]?[kK][eE][yY]|[aA][uU][tT][hH][_\-]?[kK][eE][yY]|[cC][lL][iI][eE][nN][tT][_\-]?[sS][eE][cC][rR][eE][tT]|""" +
+            """[pP][rR][iI][vV][aA][tT][eE][_\-]?[kK][eE][yY]|[cC][rR][eE][dD][eE][nN][tT][iI][aA][lL])[sS]?(?:[_.\-]?(?:[kK][eE][yY]|[vV][aA][lL][uU][eE]|[hH][aA][sS][hH]|[sS][tT][rR]|[sS][tT][rR][iI][nN][gG]|[pP][lL][aA][iI][nN]|[bB]64|[bB][aA][sS][eE]64|[sS][eE][cC][rR][eE][tT]|[tT][oO][kK][eE][nN]|[iI][dD]|[0-9]+))*)""" +
+            """["']?${Rx.SP}*(?:=|:|=>)${Rx.SP}*["']?([^${Rx.SPACE}"'#,;]{4,200})""",
     ) { isAsciiAlnum(it) || it == '_' }
+
+    /** Matched on [PortableText.fold]ed text (only the ranges are used). */
     private val ASSIGN_KW = Regex(
-        """(?i)passw|pwd|secret|token|api[_\-]?key|access[_\-]?key|auth[_\-]?key|""" +
+        """passw|pwd|secret|token|api[_\-]?key|access[_\-]?key|auth[_\-]?key|""" +
             """client[_\-]?secret|private[_\-]?key|credential""",
     )
-    internal val PLACEHOLDER = Regex(
-        """(?i)^(?:x+|\*+|\.+|-+|null|none|nil|true|false|changeme|change[_\-]?me|example|sample|test|""" +
-            """password|secret|token|your[_\-].*|<.*>|\$\{.*\}|\$[A-Z_]+|\{\{.*\}\}|%\(.*\)s|os\.environ.*|""" +
+
+    /** Matched on [PortableText.fold]ed values: see [isPlaceholder]. */
+    private val PLACEHOLDER = Regex(
+        """^(?:x+|\*+|\.+|-+|null|none|nil|true|false|changeme|change[_\-]?me|example|sample|test|""" +
+            """password|secret|token|your[_\-].*|<.*>|\$\{.*\}|\$[a-z_]+|\{\{.*\}\}|%\(.*\)s|os\.environ.*|""" +
             """process\.env.*|env\(.*|getenv.*|input\(.*|required|optional|string|str|int|todo|tbd|redacted)$""",
     )
+
+    /** A value that is a placeholder, not a secret (`changeme`, `${API_KEY}`, `<token>`), case-insensitively. */
+    internal fun isPlaceholder(value: String): Boolean = PLACEHOLDER.containsMatchIn(PortableText.fold(value))
 
     private val LABELS: Map<String, String> = DETECTORS.associate { it.type to it.label } + mapOf(
         "password_assignment" to "password in plain text", "secret_assignment" to "secret or token assignment",
@@ -108,7 +120,7 @@ object SecretRules {
         if (group == 0) m.range.first else m.range.last + 1 - m.groupValues[group].length
 
     internal fun assignKeywords(window: String, from: Int): Sequence<MatchResult> =
-        if (from > window.length) emptySequence() else ASSIGN_KW.findAll(window, from)
+        if (from > window.length) emptySequence() else ASSIGN_KW.findAll(PortableText.fold(window), from)
 
     /** Scan one piece of text for credentials. Never returns the secret itself. */
     fun findSecrets(text: String?, name: String = "", isEnv: Boolean = false): List<SecretFinding> {
@@ -124,7 +136,7 @@ object SecretRules {
             out = d.rx.replace(out) { m -> if (d.group != 0) m.value.replace(m.groupValues[d.group], "[secret]") else "[secret]" }
         }
         out = ASSIGN.replace(out) { m ->
-            if (!PLACEHOLDER.containsMatchIn(m.groupValues[3])) m.value.replace(m.groupValues[3], "[secret]") else m.value
+            if (!isPlaceholder(m.groupValues[3])) m.value.replace(m.groupValues[3], "[secret]") else m.value
         }
         return out
     }
@@ -222,7 +234,7 @@ class SecretCollector(name: String = "", isEnv: Boolean = false) {
             val word = m.groupValues[2].lowercase()
             val value = m.groupValues[3]
             val vs = SecretRules.groupStart(m, 3)
-            if (SecretRules.PLACEHOLDER.containsMatchIn(value) || overlaps(vs, vs + value.length)) continue
+            if (SecretRules.isPlaceholder(value) || overlaps(vs, vs + value.length)) continue
             val kind = when {
                 word in setOf("password", "passwd", "pwd") -> "password_assignment"
                 value.length >= 20 && SecretRules.shannonEntropy(value) >= 3.5 -> "high_entropy_secret"

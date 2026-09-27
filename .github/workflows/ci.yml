@@ -41,6 +41,9 @@ jobs:
         run: python3 tools/android-api-check/check.py --min-sdk 29
       - name: Regex extractor tests
         run: python3 tools/android-regex-check/test_extract.py
+      # Also part of `check` (engine's portableRegexLint); run here too so a failure is named.
+      - name: Portable regex lint (no engine-defined classes or case folding in shared code)
+        run: python3 tools/android-regex-check/test_lint.py
       - name: Upload the Android debug APK
         uses: actions/upload-artifact@v4
         with:
@@ -65,8 +68,9 @@ jobs:
         run: ./gradlew :loupe-kit:assembleLoupeKitXCFramework --no-daemon --stacktrace
 
   # Android's regex engine is ICU, not the JDK's: every shared regex literal is compiled on an API 29
-  # emulator (minSdk), where the host JDK's unit tests cannot see a rejection. Nightly and on manual
-  # dispatch only: an emulator boot costs minutes.
+  # emulator (minSdk), where the host JDK's unit tests cannot see a rejection, and the parity corpus
+  # (tools/parity/corpus.json) runs there on the debug APK's classes. Nightly and on manual dispatch
+  # only: an emulator boot costs minutes.
   android-emulator:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
@@ -81,7 +85,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Regex check on an API 29 emulator
+      - name: Regex check and parity corpus on an API 29 emulator
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
@@ -89,4 +93,6 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: tools/android-regex-check/check.sh
+          script: |
+            tools/android-regex-check/check.sh
+            tools/parity/run-device.sh

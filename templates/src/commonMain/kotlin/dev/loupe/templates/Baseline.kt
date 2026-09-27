@@ -2,6 +2,8 @@ package dev.loupe.templates
 
 import dev.loupe.engine.DateFacts
 import dev.loupe.engine.Item
+import dev.loupe.engine.PortableRegex
+import dev.loupe.engine.PortableText
 import kotlinx.datetime.LocalDate
 
 /**
@@ -52,14 +54,14 @@ sealed interface Baseline {
             require(keywords.all { it.isNotBlank() }) { "keywords must not be blank" }
         }
 
-        private val regex by lazy { wordRegex(keywords) }
+        private val matcher by lazy { WordMatcher(keywords) }
 
         override val description: String
             get() = "'$whenFound' if the text mentions " +
                 keywords.joinToString(" or ") { "\"$it\"" } + ", otherwise '$otherwise'"
 
         override fun answer(text: String): String =
-            if (regex.containsMatchIn(text)) whenFound else otherwise
+            if (matcher.foundIn(text)) whenFound else otherwise
 
         override val labels: Set<String> get() = setOf(whenFound, otherwise)
 
@@ -90,7 +92,7 @@ sealed interface Baseline {
             require(rules.isNotEmpty()) { "a keyword map needs at least one rule" }
         }
 
-        private val compiled by lazy { rules.map { wordRegex(it.keywords) to it.label } }
+        private val compiled by lazy { rules.map { WordMatcher(it.keywords) to it.label } }
 
         override val description: String
             get() = rules.joinToString("; ") { rule ->
@@ -98,7 +100,9 @@ sealed interface Baseline {
             } + "; otherwise '$otherwise'"
 
         override fun answer(text: String): String =
-            compiled.firstOrNull { (regex, _) -> regex.containsMatchIn(text) }?.second ?: otherwise
+            PortableText.matchForm(text).let { folded ->
+                compiled.firstOrNull { (matcher, _) -> matcher.foundIn(text, folded) }?.second ?: otherwise
+            }
 
         override val labels: Set<String> get() = rules.map { it.label }.toSet() + otherwise
 
@@ -109,7 +113,14 @@ sealed interface Baseline {
             copy(rules = rules.map { it.copy(label = labels[it.label] ?: it.label) }, otherwise = labels[otherwise] ?: otherwise)
     }
 
-    /** [whenFound] if the regular expression [pattern] matches anywhere, else [otherwise]. */
+    /**
+     * [whenFound] if the regular expression [pattern] matches anywhere, else [otherwise].
+     *
+     * Case-insensitive, and the same on every platform: the pattern is compiled through
+     * [PortableRegex.translate] (`\d \s \w \b` spelled out, letters and digits in match form) and
+     * matched against [PortableText.matchForm] of the text, never with an engine's own Unicode case
+     * folding or classes. A construct that cannot be made portable (`\p{..}`, ...) is refused.
+     */
     data class Pattern(
         val pattern: String,
         val whenFound: String,
@@ -129,7 +140,7 @@ sealed interface Baseline {
             get() = "'$whenFound' if the text contains $meaning, otherwise '$otherwise'"
 
         override fun answer(text: String): String =
-            if (regex.containsMatchIn(text)) whenFound else otherwise
+            if (regex.containsMatchIn(PortableText.matchForm(text))) whenFound else otherwise
 
         override val labels: Set<String> get() = setOf(whenFound, otherwise)
 
@@ -148,7 +159,7 @@ sealed interface Baseline {
             }
 
             private fun compile(pattern: String): Regex = try {
-                Regex(pattern, RegexOption.IGNORE_CASE)
+                Regex(PortableRegex.translate(pattern))
             } catch (e: Exception) {
                 // PatternSyntaxException on the JVM and Android, IllegalArgumentException on Kotlin/Native.
                 throw IllegalArgumentException(
@@ -247,12 +258,16 @@ sealed interface Baseline {
         /** Replaces `{name}` placeholders; an unknown one is left as written. */
         internal fun fill(text: String, values: Map<String, String>): String =
             PLACEHOLDER.replace(text) { match -> values[match.groupValues[1]] ?: match.value }
-
-        /** Case-insensitive, whole-word alternation of literal keywords. */
-        private fun wordRegex(keywords: List<String>): Regex =
-            Regex(
-                keywords.joinToString("|") { """(?<![\p{L}\p{Nd}\p{Nl}\p{No}])""" + Regex.escape(it) + """(?![\p{L}\p{Nd}\p{Nl}\p{No}])""" },
-                RegexOption.IGNORE_CASE,
-            )
     }
+}
+
+/**
+ * Case-insensitive, whole-word matching of literal keywords, the same on every platform:
+ * [PortableText.containsWord] (match form, letters and numbers from the pinned Unicode data). It
+ * replaced a regex alternation with `\p{..}` lookarounds and IGNORE_CASE, whose classes and case
+ * folding differ between regex engines.
+ */
+internal class WordMatcher(private val keywords: List<String>) {
+    fun foundIn(text: String, folded: String = PortableText.matchForm(text)): Boolean =
+        keywords.any { PortableText.indexOfWord(text, it, folded) >= 0 }
 }

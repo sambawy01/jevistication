@@ -162,3 +162,33 @@ if (androidHost) {
 tasks.named<Test>("jvmTest") {
     useJUnitPlatform()
 }
+
+// ---- Cross-platform regex parity (docs/ANDROID-PLAN.md, "Known parity gaps", B1) ----------------
+//
+// Shared main sources must not use regex classes or case folding whose meaning differs between the
+// JDK, Kotlin/Native and Android's ICU; tools/android-regex-check/lint.py fails the build when they
+// do (with an allowlist that needs a justification per entry). Its tests and the regex extractor's
+// run with it. Needs python3 (3.9+), as the other repo tools do. Part of `check` on every host.
+val regexToolDir = rootProject.file("tools/android-regex-check")
+val sharedMainSources = rootProject.fileTree(rootProject.projectDir) {
+    listOf("engine", "templates", "persistence", "sources-common", "game", "backend-laya-common", "loupe-kit").forEach { m ->
+        listOf("commonMain", "jvmCommonMain", "jvmMain", "androidMain", "iosMain").forEach { s -> include("$m/src/$s/**/*.kt") }
+    }
+}
+fun registerPython(name: String, script: String, what: String) = tasks.register<Exec>(name) {
+    group = "verification"
+    description = what
+    workingDir = rootProject.projectDir
+    commandLine("python3", "tools/android-regex-check/$script")
+    inputs.files(sharedMainSources)
+    inputs.files(rootProject.fileTree(regexToolDir) { exclude("**/__pycache__/**") }).withPropertyName("tool")
+    val marker = layout.buildDirectory.file("verification/$name.ok")
+    outputs.file(marker)
+    doLast { marker.get().asFile.apply { parentFile.mkdirs(); writeText("ok\n") } }
+}
+val portableRegexLint = registerPython("portableRegexLint", "lint.py", "No engine-defined regex classes or case folding in shared main sources")
+val portableRegexLintTests = registerPython("portableRegexLintTests", "test_lint.py", "Tests of the portable regex lint")
+val regexExtractorTests = registerPython("regexExtractorTests", "test_extract.py", "Tests of the Android regex extractor")
+tasks.named("check") {
+    dependsOn(portableRegexLint, portableRegexLintTests, regexExtractorTests)
+}

@@ -13,42 +13,42 @@ data class LintFinding(val rule: String, val message: String)
  */
 object JudgmentLint {
 
+    // Matched on PortableText.matchForm (case and digits folded, the same on every platform) instead
+    // of IGNORE_CASE, whose Unicode folding differs between regex engines.
     private val RATING_SCALE = Regex(
-        """\b(rate|rating|score|rank)\b.{0,30}\b(\d+\s*(?:-|–|to)\s*\d+|out of \d+)\b|\bon a scale\b""",
-        RegexOption.IGNORE_CASE,
+        """${Rx.WB_START}(rate|rating|score|rank)${Rx.WB_END}.{0,30}${Rx.WB_START}([0-9]+${Rx.SP}*(?:-|–|to)${Rx.SP}*[0-9]+|out of [0-9]+)${Rx.WB_END}|${Rx.WB_START}on a scale${Rx.WB_END}""",
     )
     private val ASKS_FOR_PROSE = Regex(
-        """\b(explain|describe|summari[sz]e|elaborate|justify|why)\b""",
-        RegexOption.IGNORE_CASE,
+        """${Rx.WB_START}(explain|describe|summari[sz]e|elaborate|justify|why)${Rx.WB_END}""",
     )
     private val ASKS_TO_WRITE = Regex(
-        """\b(write|draft|compose|generate|reply to|tell me about)\b""",
-        RegexOption.IGNORE_CASE,
+        """${Rx.WB_START}(write|draft|compose|generate|reply to|tell me about)${Rx.WB_END}""",
     )
 
     /** Every problem with [question]; empty means it compiles. */
     fun check(question: String): List<LintFinding> {
         val findings = mutableListOf<LintFinding>()
         val trimmed = question.trim()
+        val folded = PortableText.matchForm(trimmed)
 
         if (trimmed.length < 3) {
             findings += LintFinding("empty", "a judgment needs an actual question")
             return findings
         }
-        if (RATING_SCALE.containsMatchIn(trimmed)) {
+        if (RATING_SCALE.containsMatchIn(folded)) {
             findings += LintFinding(
                 "rating-scale",
                 "asks for a free-form number; use a Score judgment with a declared range, " +
                     "or a Choice over named bands",
             )
         }
-        if (ASKS_FOR_PROSE.containsMatchIn(trimmed)) {
+        if (ASKS_FOR_PROSE.containsMatchIn(folded)) {
             findings += LintFinding(
                 "asks-for-prose",
                 "asks for an explanation; judgments are decided by a classifier, which answers with a choice, not prose",
             )
         }
-        if (ASKS_TO_WRITE.containsMatchIn(trimmed)) {
+        if (ASKS_TO_WRITE.containsMatchIn(folded)) {
             findings += LintFinding(
                 "asks-to-write",
                 "asks the engine to produce text; it decides, it does not compose",
@@ -139,9 +139,9 @@ sealed interface AuthorResult {
  */
 object JudgmentAuthor {
 
+    /** Matched on [PortableText.matchForm], as the lint's patterns are. */
     private val YES_NO_OPENER = Regex(
-        """^(is|are|was|were|does|do|did|has|have|had|will|would|should|can|could|must)\b""",
-        RegexOption.IGNORE_CASE,
+        """^(is|are|was|were|does|do|did|has|have|had|will|would|should|can|could|must)${Rx.WB_END}""",
     )
 
     /** The candidates inferred for a yes/no question. */
@@ -163,7 +163,7 @@ object JudgmentAuthor {
         val trimmed = question.trim()
 
         val resolved = candidates
-            ?: if (YES_NO_OPENER.containsMatchIn(trimmed)) YES_NO else null
+            ?: if (YES_NO_OPENER.containsMatchIn(PortableText.matchForm(trimmed))) YES_NO else null
 
         if (resolved == null) {
             findings += LintFinding(

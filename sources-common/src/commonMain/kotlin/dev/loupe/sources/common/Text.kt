@@ -1,5 +1,7 @@
 package dev.loupe.sources.common
 
+import dev.loupe.engine.PortableText
+import dev.loupe.engine.Rx
 import kotlin.io.encoding.Base64
 
 /** Byte-to-text decoders the sources need, in common code: UTF-8, ISO-8859-1, Windows-1252, ASCII. */
@@ -66,23 +68,25 @@ object PlainText {
 
 /** Visible text from HTML — the same rules as :sources-desktop's `HtmlText`. */
 object HtmlText {
-    private val DROP = Regex("""<(script|style|head|noscript)\b[^>]*>.*?</\1\s*>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+    // DROP and BLOCK are matched on PortableText.fold(text) (lowercase patterns) instead of with
+    // IGNORE_CASE, and the classes are spelled out: every regex engine then cuts the same tags.
+    private val DROP = Regex("""<(script|style|head|noscript)${Rx.WB_END}[^>]*>.*?</\1${Rx.ASCII_SP}*>""", RegexOption.DOT_MATCHES_ALL)
     private val COMMENT = Regex("""<!--.*?-->""", RegexOption.DOT_MATCHES_ALL)
-    private val BLOCK = Regex("""<\s*(br|/p|/div|/li|/tr|/h[1-6]|/table|p|div|li|tr|h[1-6])\b[^>]*>""", RegexOption.IGNORE_CASE)
+    private val BLOCK = Regex("""<${Rx.ASCII_SP}*(br|/p|/div|/li|/tr|/h[1-6]|/table|p|div|li|tr|h[1-6])${Rx.WB_END}[^>]*>""")
     private val TAG = Regex("""<[^>]+>""")
-    private val NUMERIC = Regex("""&#(x[0-9a-fA-F]+|\d+);""")
+    private val NUMERIC = Regex("""&#(x[0-9a-fA-F]+|[0-9]+);""")
     private val NAMED = listOf(
         "&nbsp;" to " ", "&amp;" to "&", "&lt;" to "<", "&gt;" to ">", "&quot;" to "\"",
         "&#39;" to "'", "&apos;" to "'", "&pound;" to "£", "&euro;" to "€", "&copy;" to "©",
         "&ndash;" to "–", "&mdash;" to "—", "&hellip;" to "…",
     )
     private val SPACES = Regex("[ \t ]+")
-    private val BLANK_LINES = Regex("""\n\s*\n\s*\n+""")
+    private val BLANK_LINES = Regex("""\n${Rx.SP}*\n${Rx.SP}*\n+""")
 
     fun toText(html: String): String {
         var s = COMMENT.replace(html, " ")
-        s = DROP.replace(s, " ")
-        s = BLOCK.replace(s, "\n")
+        s = PortableText.replaceFolded(s, DROP, " ")
+        s = PortableText.replaceFolded(s, BLOCK, "\n")
         s = TAG.replace(s, " ")
         s = NUMERIC.replace(s) { m ->
             val code = m.groupValues[1]
@@ -104,8 +108,10 @@ object HtmlText {
 
 /** Links in text or HTML, as :sources-desktop's `Links`. */
 object Links {
-    private val HREF = Regex("""href\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
-    private val BARE = Regex("""https?://[^\s"'<>)\]]+""", RegexOption.IGNORE_CASE)
+    // ASCII case spelled out (the JDK's IGNORE_CASE on these ASCII words, the same on every engine),
+    // so the captured link keeps its case; a link ends at any space, a no-break space included.
+    private val HREF = Regex("""[hH][rR][eE][fF]${Rx.ASCII_SP}*=${Rx.ASCII_SP}*["']([^"']+)["']""")
+    private val BARE = Regex("""[hH][tT][tT][pP][sS]?://[^${Rx.SPACE}"'<>)\]]+""")
 
     fun find(vararg texts: String): List<String> {
         val found = LinkedHashSet<String>()
@@ -168,7 +174,7 @@ object MimeCodecs {
     }
 
     private val ENCODED_WORD = Regex("""=\?([^?]+)\?([bBqQ])\?([^?]*)\?=""")
-    private val BETWEEN_WORDS = Regex("""(=\?[^?]+\?[bBqQ]\?[^?]*\?=)\s+(?==\?[^?]+\?[bBqQ]\?[^?]*\?=)""")
+    private val BETWEEN_WORDS = Regex("""(=\?[^?]+\?[bBqQ]\?[^?]*\?=)${Rx.ASCII_SP}+(?==\?[^?]+\?[bBqQ]\?[^?]*\?=)""")
 
     /** RFC 2047 encoded words in a header value; whitespace between two encoded words is dropped. */
     fun decodeHeader(value: String): String {

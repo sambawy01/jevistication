@@ -1,5 +1,6 @@
 package dev.loupe.kit.site
 
+import dev.loupe.engine.Rx
 import kotlinx.datetime.Clock
 
 /*
@@ -72,7 +73,7 @@ object SiteScoring {
     val CREDENTIAL_ASKS = setOf("laya_asks_sign_in", "laya_asks_payment")
     val IMPOSTOR_CODES = setOf(
         "homograph_brand", "lookalike_brand", "brand_domain_in_subdomain", "brand_in_subdomain",
-        "brand_in_domain_bait", "brand_other_tld", "mixed_script", "userinfo_in_url",
+        "brand_in_domain_bait", "brand_other_tld", "mixed_script", "userinfo_in_url", "unicode_drift_host",
     )
     val IMPOSTOR_LOGIN = Triple("impostor_login", 20, "It asks for a password or card details on that look-alike address.")
     val PRESSURE_LOGIN = Triple("pressure_login", 10, "It asks for a password or card details while pressuring you to act fast.")
@@ -328,7 +329,8 @@ object SiteCheck {
         return SiteCheckResult(url, verdict)
     }
 
-    private val URL_RE = Regex("""(?:https?://|www\.)[^\s<>"'()\[\]{}]{3,2000}""", RegexOption.IGNORE_CASE)
+    // ASCII case spelled out (the link keeps its case); a link ends at any Rx space, NBSP included.
+    private val URL_RE = Regex("""(?:[hH][tT][tT][pP][sS]?://|[wW][wW][wW]\.)[^${Rx.SPACE}<>"'()\[\]{}]{3,2000}""")
 
     /** The web links in a text (Station's mail `_urls` rule), deduplicated, at most [max]. */
     fun linksIn(text: String, max: Int = 60): List<String> =

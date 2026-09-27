@@ -1,6 +1,7 @@
 package dev.loupe.kit.privacy
 
 import dev.loupe.engine.ContentHash
+import dev.loupe.engine.PortableText
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -14,8 +15,9 @@ import kotlinx.datetime.todayIn
  * labels, tables (governorates, IBAN lengths, payroll terms), regular expressions, thresholds and
  * preview format are copied verbatim; only the language changed. Differences, all mechanical:
  * the in-memory distinct-value hash is SHA-256 (the engine's `ContentHash`) instead of BLAKE2b-64,
- * and `\d`/`\s` are ASCII here where Python's are Unicode (Arabic-Indic digits are still folded to
- * ASCII first, exactly as the original does).
+ * and the classes are spelled out (`[0-9]`, no `\d \s \w \b` or case-insensitive flags: see the
+ * engine's PortableText) where Python's are Unicode (Arabic-Indic and Persian digits are folded to
+ * ASCII first, exactly as the original does; keyword cues are matched on case-folded text).
  *
  * Signals (each [PiiSignal]):
  *   egypt_national_id  14 digits: century (2/3), valid birth date, valid governorate code
@@ -87,19 +89,9 @@ data class PiiSignal(
 )
 
 object PiiRules {
-    private const val ARABIC_DIGITS = "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹"
-    private const val ASCII_DIGITS = "01234567890123456789"
 
     /** Arabic-Indic and Eastern Arabic-Indic digits -> ASCII (same length, so offsets stay valid). */
-    fun foldDigits(text: String): String {
-        if (text.none { ARABIC_DIGITS.indexOf(it) >= 0 }) return text
-        val sb = StringBuilder(text.length)
-        for (ch in text) {
-            val i = ARABIC_DIGITS.indexOf(ch)
-            sb.append(if (i >= 0) ASCII_DIGITS[i] else ch)
-        }
-        return sb.toString()
-    }
+    fun foldDigits(text: String): String = PortableText.foldDigits(text)
 
     val LABELS: Map<String, String> = mapOf(
         "egypt_national_id" to "Egyptian national ID", "passport_number" to "passport number", "iban" to "IBAN",
@@ -120,7 +112,7 @@ object PiiRules {
         "35", "88",
     )
     // Python: (?<!\d)([23])(\d{2})(\d{2})(\d{2})(\d{2})(\d{5})(?!\d)
-    internal val NID = GuardedRegex("""([23])(\d{2})(\d{2})(\d{2})(\d{2})(\d{5})(?!\d)""") { isAsciiDigit(it) }
+    internal val NID = GuardedRegex("""([23])([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{2})([0-9]{5})(?![0-9])""") { isAsciiDigit(it) }
 
     fun validEgyptNid(s: String, today: LocalDate = systemToday()): Boolean {
         val m = NID.matchEntire(s) ?: return false
@@ -142,7 +134,7 @@ object PiiRules {
         "PT" to 25, "SE" to 24, "NO" to 15, "DK" to 18, "FI" to 18, "PL" to 28, "TR" to 26, "GR" to 27, "CY" to 28,
     )
     // Python: (?<![A-Za-z0-9])([A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,32})
-    internal val IBAN = GuardedRegex("""([A-Z]{2}\d{2}(?: ?[A-Z0-9]){11,32})""") { isAsciiAlnum(it) }
+    internal val IBAN = GuardedRegex("""([A-Z]{2}[0-9]{2}(?: ?[A-Z0-9]){11,32})""") { isAsciiAlnum(it) }
 
     fun ibanOk(s: String): Boolean {
         if (s.length !in 15..34 || !s.take(2).all { it.isLetter() } || !s.substring(2, 4).all { it in '0'..'9' }) return false
@@ -171,12 +163,12 @@ object PiiRules {
     }
 
     // Python _CARD_LOOSE: (?<![\d-])(\d(?:[ -]?\d){12,18})(?![\d]) — masking only: mask more, not less.
-    internal val CARD = GuardedRegex("""(\d(?:[ -]?\d){12,18})(?![\d])""") { isAsciiDigit(it) || it == '-' }
+    internal val CARD = GuardedRegex("""([0-9](?:[ -]?[0-9]){12,18})(?![[0-9]])""") { isAsciiDigit(it) || it == '-' }
 
     // Python _CARD: (?<![\w+\-/.#])(\d(?:[ -]?\d){12,18})(?!\w|[-/.:]\d) — card-shaped runs not glued to a
     // word, a "+" (a phone), a "#" (an order number), a slash, a dot or a dash (dates, versions, UUIDs).
-    internal val CARD_STRICT = GuardedRegex("""(\d(?:[ -]?\d){12,18})(?![A-Za-z0-9_\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u0600-\u06FF\u0750-\u077F]|[-/.:]\d)""") {
-        it.isLetterOrDigit() || it == '_' || it in "+-/.#"
+    internal val CARD_STRICT = GuardedRegex("""([0-9](?:[ -]?[0-9]){12,18})(?![A-Za-z0-9_\u00C0-\u024F\u0370-\u03FF\u0400-\u04FF\u0600-\u06FF\u0750-\u077F]|[-/.:][0-9])""") {
+        PortableText.isLetterOrDecimalDigit(it.code) || it == '_' || it in "+-/.#"
     }
 
     /** A card network: id, name, issuer range (IIN) and the lengths it issues (Station's CARD_BRANDS, in order). */
@@ -186,12 +178,12 @@ object PiiRules {
 
     val CARD_BRANDS: List<CardNetwork> = listOf(
         CardNetwork("amex", "American Express", "3[47]", setOf(15)),
-        CardNetwork("jcb", "JCB", "35(?:2[89]|[3-8]\\d)", (16..19).toSet()),
+        CardNetwork("jcb", "JCB", "35(?:2[89]|[3-8][0-9])", (16..19).toSet()),
         CardNetwork("diners", "Diners Club", "3(?:0[0-5]|095|[689])", (14..19).toSet()),
         CardNetwork("visa", "Visa", "4", setOf(13, 16, 19)),
         CardNetwork("meeza", "Meeza", "5078", setOf(16)),
         CardNetwork("maestro", "Maestro", "5018|5020|5038|5893|6304|6759|676[1-3]", (13..19).toSet()),
-        CardNetwork("mastercard", "Mastercard", "5[1-5]|2(?:22[1-9]|2[3-9]\\d|[3-6]\\d\\d|7[01]\\d|720)", setOf(16)),
+        CardNetwork("mastercard", "Mastercard", "5[1-5]|2(?:22[1-9]|2[3-9][0-9]|[3-6][0-9][0-9]|7[01][0-9]|720)", setOf(16)),
         CardNetwork("discover", "Discover", "6011|65|64[4-9]", (16..19).toSet()),
         CardNetwork("unionpay", "UnionPay", "62", (16..19).toSet()),
     )
@@ -201,13 +193,16 @@ object PiiRules {
     val CARD_GROUPINGS: Set<List<Int>> = setOf(
         listOf(4, 4, 4, 4), listOf(4, 6, 5), listOf(4, 6, 4), listOf(4, 4, 4, 4, 3), listOf(4, 4, 4, 1), listOf(4, 4, 5), listOf(4, 4, 4, 3),
     )
+    // CARD_CUE, OTHER_NUMBER_CUE, PASSPORT_KW and the payroll terms are matched on PortableText.fold
+    // (same length, so the ranges hold in the original) instead of with (?i), whose case folding
+    // differs between regex engines.
     private val CARD_CUE = Regex(
-        "(?i)(?<![A-Za-z])(?:card(?:holder| holder| no| number)?|visa|master ?card|amex|american express|discover|jcb|" +
+        "(?<![A-Za-z])(?:card(?:holder| holder| no| number)?|visa|master ?card|amex|american express|discover|jcb|" +
             "maestro|meeza|union ?pay|debit|credit|exp(?:iry|ires|iration)?|valid (?:thru|through|until|from)|good thru|" +
             "cvv2?|cvc2?)(?![A-Za-z])|بطاقة|البطاقة|فيزا|ماستر ?كارد|ميزة|ائتمان|الائتمان|صالحة حتى|تنتهي",
     )
     private val OTHER_NUMBER_CUE = Regex(
-        "(?i)(?<![A-Za-z])(?:order|tracking|track|awb|waybill|shipment|consignment|parcel|invoice|inv|ref|reference|" +
+        "(?<![A-Za-z])(?:order|tracking|track|awb|waybill|shipment|consignment|parcel|invoice|inv|ref|reference|" +
             "transaction|txn|imei|meid|serial|s/n|sn|barcode|sku|upc|ean|gtin|iccid|sim|tel|phone|mobile|mob|fax|" +
             "whatsapp|policy|account|acct|customer|member|ticket|booking|pnr)(?![A-Za-z])|رقم الطلب|طلب|شحنة|بوليصة|فاتورة|" +
             "هاتف|موبايل|تليفون|جوال|الرقم التسلسلي|حساب",
@@ -249,8 +244,8 @@ object PiiRules {
         return false
     }
 
-    private val LEFT_RUN = Regex("""(?:\d+[ -])+$""")
-    private val RIGHT_RUN = Regex("""^[ -](\d+)(?![\d/.:])""")
+    private val LEFT_RUN = Regex("""(?:[0-9]+[ -])+$""")
+    private val RIGHT_RUN = Regex("""^[ -]([0-9]+)(?![[0-9]/.:])""")
 
     /** The digits a..b continue with more space- or dash-separated groups: part of a longer number. */
     private fun longerRun(t: String, a: Int, b: Int): Boolean {
@@ -273,9 +268,9 @@ object PiiRules {
     /** The card word nearest to t[a:b] (within 80 characters before or 60 after), lower-cased. */
     private fun cardCue(t: String, a: Int, b: Int): String? {
         var best: Pair<Int, String>? = null
-        val head = t.substring(0, a)
+        val head = PortableText.fold(t.substring(0, a))
         for (m in CARD_CUE.findAll(head, maxOf(0, a - CUE_BEFORE))) best = (a - (m.range.last + 1)) to m.value
-        val tail = t.substring(0, minOf(t.length, b + CUE_AFTER))
+        val tail = PortableText.fold(t.substring(0, minOf(t.length, b + CUE_AFTER)))
         CARD_CUE.find(tail, b)?.let { m -> if (best == null || m.range.first - b < best!!.first) best = (m.range.first - b) to m.value }
         return best?.second?.lowercase()
     }
@@ -295,7 +290,7 @@ object PiiRules {
         val grouping = grouping(raw)
         if (grouping == null && dateLike(digits)) return null
         val cue = cardCue(t, a, b)
-        val head = t.substring(0, a)
+        val head = PortableText.fold(t.substring(0, a))
         val other = OTHER_NUMBER_CUE.findAll(head, maxOf(0, a - OTHER_BEFORE)).lastOrNull()
         if (other != null) {
             val nearCard = CARD_CUE.findAll(head, maxOf(0, a - OTHER_BEFORE)).lastOrNull()?.let { it.range.last + 1 }
@@ -307,15 +302,15 @@ object PiiRules {
     }
 
     // ------------------------------------------------------------------------ passport / contacts
-    internal val PASSPORT_KW = Regex("""(?i)(passport|جواز)""")
+    internal val PASSPORT_KW = Regex("""(passport|جواز)""")
     // Python: (?<![A-Za-z0-9])([A-Z]{1,2}\d{6,9})(?![A-Za-z0-9])
-    internal val PASSPORT_NO = GuardedRegex("""([A-Z]{1,2}\d{6,9})(?![A-Za-z0-9])""") { isAsciiAlnum(it) }
+    internal val PASSPORT_NO = GuardedRegex("""([A-Z]{1,2}[0-9]{6,9})(?![A-Za-z0-9])""") { isAsciiAlnum(it) }
     // Python: the same pattern with a leading (?<![A-Za-z0-9._%+\-])
     internal val EMAIL = GuardedRegex("""([A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9\-]{1,63}(?:\.[A-Za-z0-9\-]{1,63})*\.[A-Za-z]{2,24})""") { isAsciiAlnum(it) || it in "._%+-" }
     // Python: (?<![\d+])((?:\+20|0020|20)?[ \-]?0?1[0125](?:[ \-]?\d){8})(?!\d)
-    internal val PHONE_EG = GuardedRegex("""((?:\+20|0020|20)?[ \-]?0?1[0125](?:[ \-]?\d){8})(?!\d)""") { isAsciiDigit(it) || it == '+' }
+    internal val PHONE_EG = GuardedRegex("""((?:\+20|0020|20)?[ \-]?0?1[0125](?:[ \-]?[0-9]){8})(?![0-9])""") { isAsciiDigit(it) || it == '+' }
     // Python: (?<![\d+])(\+(?!20)\d{1,3}[ \-]?(?:\d[ \-]?){7,13}\d)(?!\d)
-    internal val PHONE_INTL = GuardedRegex("""(\+(?!20)\d{1,3}[ \-]?(?:\d[ \-]?){7,13}\d)(?!\d)""") { isAsciiDigit(it) || it == '+' }
+    internal val PHONE_INTL = GuardedRegex("""(\+(?!20)[0-9]{1,3}[ \-]?(?:[0-9][ \-]?){7,13}[0-9])(?![0-9])""") { isAsciiDigit(it) || it == '+' }
 
     // ------------------------------------------------------------------------ payroll headers
     val PAYROLL_CORE: List<String> = listOf(
@@ -332,7 +327,7 @@ object PiiRules {
 
     private fun escapeLiteral(s: String): String = buildString {
         for (ch in s) {
-            if (ch.isLetterOrDigit() || ch == ' ') append(ch) else append('\\').append(ch)
+            if (PortableText.isLetterOrDecimalDigit(ch.code) || ch == ' ') append(ch) else append('\\').append(ch)
         }
     }
 
@@ -349,10 +344,10 @@ object PiiRules {
         // re.escape(t).replace(r"\ ", r"[ _\-]?"): a space in a term also matches "_", "-" or nothing.
         // Python: (?<![A-Za-z])(?:...)(?![A-Za-z]) | (?:arabic...), with re.I.
         val l = if (latin.isEmpty()) null else GuardedRegex(
-            "(?:" + latin.joinToString("|") { t -> t.split(' ').joinToString("[ _\\-]?") { escapeLiteral(it) } } + ")(?![A-Za-z])",
-            setOf(RegexOption.IGNORE_CASE),
+            "(?:" + latin.joinToString("|") { t -> t.split(' ').joinToString("[ _\\-]?") { escapeLiteral(PortableText.fold(it)) } } + ")(?![A-Za-z])",
         ) { isAsciiLetter(it) }
-        val a = if (arabic.isEmpty()) null else Regex("(?:" + arabic.joinToString("|") { escapeLiteral(it) } + ")", RegexOption.IGNORE_CASE)
+        // Matched on PortableText.fold(text): lowercase terms, no engine case folding.
+        val a = if (arabic.isEmpty()) null else Regex("(?:" + arabic.joinToString("|") { escapeLiteral(it) } + ")")
         return TermRegex(l, a)
     }
 
@@ -385,7 +380,7 @@ object PiiRules {
         EMAIL to "[email]", IBAN to "[iban]", NID to "[national-id]", PHONE_EG to "[phone]",
         PHONE_INTL to "[phone]", CARD to "[card]", PASSPORT_NO to "[id-no]",
     )
-    private val LONG_DIGITS = Regex("""\d{9,}""")
+    private val LONG_DIGITS = Regex("""[0-9]{9,}""")
 
     /** Replace anything that looks like personal data by a placeholder. */
     fun maskPii(text: String): String {
@@ -427,8 +422,8 @@ fun PiiRules.detect(t: String, ocr: Boolean, today: LocalDate, lo: Int = 0, hi: 
     fun free(a: Int, b: Int): Boolean = taken.none { a < it.last + 1 && it.first < b }
     fun matches(rx: GuardedRegex): Sequence<MatchResult> =
         if (lo > window.length) emptySequence() else rx.findAll(window, lo).takeWhile { it.range.first < hi }
-    fun matches(rx: Regex): Sequence<MatchResult> =
-        if (lo > window.length) emptySequence() else rx.findAll(window, lo).takeWhile { it.range.first < hi }
+    fun matches(rx: Regex, input: String = window): Sequence<MatchResult> =
+        if (lo > input.length) emptySequence() else rx.findAll(input, lo).takeWhile { it.range.first < hi }
 
     for (m in matches(NID)) {
         if (validEgyptNid(m.value, today)) {
@@ -457,12 +452,13 @@ fun PiiRules.detect(t: String, ocr: Boolean, today: LocalDate, lo: Int = 0, hi: 
         taken += m.range
         out += PiiMatch("card_number", m.range.first, m.range.last + 1, m.groupValues[1].filter { it in '0'..'9' }, chk.asMap(), chk.lines(), chk)
     }
-    for (k in matches(PASSPORT_KW)) {
+    val folded = PortableText.fold(window)
+    for (k in matches(PASSPORT_KW, folded)) {
         val from = k.range.last + 1
         val tail = t.substring(from, minOf(t.length, from + 60))
         val n = PASSPORT_NO.findAll(tail).firstOrNull() ?: continue
-        out += PiiMatch("passport_number", from + n.range.first, from + n.range.last + 1, n.groupValues[1], mapOf("keyword" to k.value.lowercase()),
-            listOf("passport-number shape", "within 60 characters after “${k.value}”"))
+        out += PiiMatch("passport_number", from + n.range.first, from + n.range.last + 1, n.groupValues[1], mapOf("keyword" to k.value),
+            listOf("passport-number shape", "within 60 characters after “${t.substring(k.range)}”"))
     }
     for (m in matches(EMAIL)) {
         out += PiiMatch("email", m.range.first, m.range.last + 1, m.groupValues[1].lowercase(), mapOf("shape" to "email"), listOf("email address shape"))
@@ -488,6 +484,9 @@ fun PiiRules.detect(t: String, ocr: Boolean, today: LocalDate, lo: Int = 0, hi: 
 
 /** Station's `payroll_terms`: payroll column-header words (not personal data themselves). */
 fun PiiRules.detectPayroll(t: String): List<PiiMatch> =
+    PortableText.fold(t).let { tf -> detectPayrollFolded(tf) }
+
+private fun PiiRules.detectPayrollFolded(t: String): List<PiiMatch> =
     PAY_CORE.findAll(t).map { PiiMatch("payroll_headers", it.range.first, it.range.last + 1, normTerm(it.value), mapOf("core" to "true"), listOf("payroll term “${normTerm(it.value)}”")) }.toList() +
         PAY_OTHER.findAll(t).map { PiiMatch("payroll_headers", it.range.first, it.range.last + 1, normTerm(it.value), mapOf("core" to "false"), listOf("payroll term “${normTerm(it.value)}”")) }.toList()
 
@@ -527,8 +526,10 @@ class PiiCollector(private val today: LocalDate = PiiRules.systemToday(), privat
         fun free(a: Int, b: Int): Boolean = taken.none { a < it.last + 1 && it.first < b }
         fun matches(rx: Regex): Sequence<MatchResult> =
             if (lo > window.length) emptySequence() else rx.findAll(window, lo).takeWhile { it.range.first < hi }
+        // payroll terms: on the case-folded window (same length)
+        val folded = PortableText.fold(window)
         fun matches(rx: PiiRules.TermRegex): Sequence<MatchResult> =
-            if (lo > window.length) emptySequence() else rx.findAll(window, lo).takeWhile { it.range.first < hi }
+            if (lo > folded.length) emptySequence() else rx.findAll(folded, lo).takeWhile { it.range.first < hi }
         fun matches(rx: GuardedRegex): Sequence<MatchResult> =
             if (lo > window.length) emptySequence() else rx.findAll(window, lo).takeWhile { it.range.first < hi }
 

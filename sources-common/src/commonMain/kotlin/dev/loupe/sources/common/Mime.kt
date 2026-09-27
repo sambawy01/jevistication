@@ -1,5 +1,6 @@
 package dev.loupe.sources.common
 
+import dev.loupe.engine.Rx
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -218,7 +219,8 @@ object MimeParser {
         "MST" to -7 * 60, "MDT" to -6 * 60, "PST" to -8 * 60, "PDT" to -7 * 60,
     )
     private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
-    private val DATE = Regex("""(\d{1,2})\s+([A-Za-z]{3})[a-z]*\s+(\d{2,4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*([+-]\d{4}|[A-Za-z]{1,5})?""")
+    // RFC 5322 syntax: ASCII digits and whitespace, spelled out (the JDK's \d and \s) for every engine.
+    private val DATE = Regex("""([0-9]{1,2})${Rx.ASCII_SP}+([A-Za-z]{3})[a-z]*${Rx.ASCII_SP}+([0-9]{2,4})${Rx.ASCII_SP}+([0-9]{1,2}):([0-9]{2})(?::([0-9]{2}))?${Rx.ASCII_SP}*([+-][0-9]{4}|[A-Za-z]{1,5})?""")
 
     /** An RFC 5322 date (lenient about the weekday, seconds and the zone), or null. */
     fun parseDate(raw: String?): Instant? {
@@ -316,7 +318,7 @@ data class ParsedEmail(val facts: EmailFacts, val body: String) {
  * separator to the start of the next separator.
  */
 object Mbox {
-    private val FROM_LINE = Regex("""^From \S+.*\d{4}$""")
+    private val FROM_LINE = Regex("""^From ${Rx.ASCII_NSP}+.*[0-9]{4}$""")
 
     fun split(bytes: ByteArray): List<ByteArray> {
         val text = bytes.decodeToString()

@@ -1,5 +1,7 @@
 package dev.loupe.kit.site
 
+import dev.loupe.engine.PortableText
+
 /*
  * Default reference lists for site protection: frequently phished brands, URL shorteners and TLDs
  * that phishing kits favour.
@@ -105,13 +107,13 @@ object Brands {
     val SHORTENERS: Set<String> = """
         bit.ly bitly.com tinyurl.com t.ly is.gd v.gd ow.ly buff.ly rebrand.ly cutt.ly shorturl.at rb.gy
         tiny.cc bl.ink s.id lnkd.in trib.al qrco.de linktr.ee t2m.io shorte.st adf.ly
-    """.trimIndent().split(Regex("\\s+")).filter { it.isNotEmpty() }.toSet()
+    """.trimIndent().let(PortableText::splitSpaces).toSet()
 
     /** TLDs with a high share of abuse in public phishing feeds. Low weight: most sites on them are fine. */
     val SUSPICIOUS_TLDS: Set<String> = """
         zip mov tk ml ga cf gq xyz top click country kim work rest fit loan men date racing download review
         stream gdn bid win party science cricket accountant faith support icu cyou buzz monster sbs cfd
-    """.trimIndent().split(Regex("\\s+")).filter { it.isNotEmpty() }.toSet()
+    """.trimIndent().let(PortableText::splitSpaces).toSet()
 
     /**
      * Station's `psl.SHARED_HOSTING` (browser/psl.py, verbatim): shared hosting, free site builders,
@@ -130,7 +132,7 @@ object Brands {
         square.site myshopify.com godaddysites.com 000webhostapp.com carrd.co jimdosite.com site123.me
         strikingly.com yolasite.com tilda.ws notion.site gitbook.io readthedocs.io
         duckdns.org no-ip.org ddns.net hopto.org zapto.org sytes.net freemyip.com
-    """.trimIndent().split(Regex("\\s+")).filter { it.isNotEmpty() }.toSet()
+    """.trimIndent().let(PortableText::splitSpaces).toSet()
 
     fun brandDomains(brands: List<Brand>): Set<String> = brands.flatMap { b -> b.domains.map { it.lowercase() } }.toSet()
 }

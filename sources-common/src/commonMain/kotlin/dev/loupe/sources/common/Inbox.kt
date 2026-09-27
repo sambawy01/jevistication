@@ -1,6 +1,7 @@
 package dev.loupe.sources.common
 
 import dev.loupe.engine.ContentHash
+import dev.loupe.engine.Rx
 import dev.loupe.engine.TextState
 import dev.loupe.persistence.JsonText
 import dev.loupe.persistence.JsonValue
@@ -129,7 +130,7 @@ class Inbox(
         val id = newId(nowEpochMillis)
         val files = "$dir/$id/files"
         InboxFs.createDirectories(files)
-        val isLink = Regex("https?://\\S+").matches(trimmed)
+        val isLink = Regex("https?://${Rx.NSP}+").matches(trimmed)
         val body = if (isLink) "Link shared to Loupe: $trimmed\n" else "$trimmed\n"
         val name = safeName(title.ifBlank { if (isLink) "Link" else "Shared text" }).removeSuffix(".txt") + ".txt"
         InboxFs.writeNew("$files/$name", body.encodeToByteArray())
