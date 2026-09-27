@@ -129,9 +129,10 @@ object SiteSignals {
     /** code -> (weight, plain-language reason). `{placeholders}` come from the signal's params. */
     val WEIGHTS: Map<String, Pair<Int, String>> = linkedMapOf(
         // host
+        "unreadable_url" to (30 to "The address does not read as a normal web address; the website it leads to cannot be told for sure."),
         "ip_host" to (25 to "The address is a bare IP number instead of a website name."),
         "mixed_script" to (35 to "The website name mixes letters from different alphabets, a trick to imitate another name."),
-        "disguised_host" to (30 to "The website name is written with stand-in letters (such as full-width or mathematical letters) for {host}; real links are not written this way."),
+        "disguised_host" to (45 to "The website name is written with stand-in letters (such as full-width or mathematical letters) for {host}; real links are not written this way."),
         "deviation_host" to (10 to "The website name contains ß, ς or an invisible joiner, which older software reads as a different name ({target})."),
         "deviation_known_host" to (45 to "The website name contains ß, ς or an invisible joiner: older software reads it as {target}, a known site, but browsers open a different website."),
         "unicode_drift_host" to (30 to "The website name uses characters that older and newer software read differently, so the name you see may not be the website you reach."),
@@ -228,7 +229,9 @@ object SiteSignals {
      */
     fun disguise(u: ParsedUrl): List<Int> =
         (PortableText.disguisedCodePoints(u.typedHost) + u.labels.filter { it.startsWith("xn--") }
-            .flatMap { PortableText.disguisedCodePoints(Hosts.decodeLabel(it)) }).distinct()
+            .flatMap { PortableText.disguisedCodePoints(Hosts.decodeLabel(it)) } +
+            // a percent-encoded host (`%70aypal.com`): a browser decodes it, no real link writes it so
+            (if ('%' in Hosts.rawHost(u.raw)) listOf('%'.code) else emptyList())).distinct()
 
     /** [s] without nonspacing and enclosing marks (Mn, Me), read from the pinned Unicode data. */
     private fun withoutMarks(s: String): String {
@@ -475,8 +478,11 @@ object SiteSignals {
 
     /** All deterministic signals for one page, plus the facts scoring needs. */
     fun urlAndPageSignals(page: PageFacts, config: SiteConfig = SiteConfig.DEFAULT): Pair<List<SiteSignal>, PageVerdictFacts> {
-        val u = ParsedUrl.parse(page.url) ?: ParsedUrl.parse("")!!
+        val parsed = ParsedUrl.parse(page.url)
+        val u = parsed ?: ParsedUrl.parse("")!!
         val signals = urlSignals(u, config).toMutableList()
+        // An address a browser cannot parse is not an empty, safe page (WHATWG: a bad host fails).
+        if (Hosts.unreadableHost(parsed) && (parsed == null || u.scheme.isNotEmpty())) signals += SiteSignal("unreadable_url")
         val dataPage = u.scheme == "data" || u.scheme == "blob"
         if (!dataPage) signals += hostSignals(u, config)
         signals += formSignals(page, u)

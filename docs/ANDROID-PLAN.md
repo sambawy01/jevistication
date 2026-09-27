@@ -353,6 +353,23 @@ planted wrong answer fails on the iOS simulator: `ios-planted-fault.log`); ICU c
 matches the pre-fix output line for line. Release APK 1,970,131 bytes (+16 KB: the UTS #46 and joining
 tables); LoupeKit arm64 release +181 KB.
 
+**Fix loop 3 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix3/`. URLs are
+split as WHATWG splits them: C0 controls and spaces stripped at both ends; a special scheme always has an
+authority, so a mail link `https:\\x`, `https:/x`, `https:x` or `HTTPS:x` is judged as host x (and offered
+for the online check; only a bare host gets `http://`); userinfo ends at the last `@` (brackets there are
+ordinary characters); a host no browser opens (`%40`, `%00`, `%09`, `%20`) is `unreadable_url` /
+`link_unreadable` (30), never safe-empty; `https://evil.com\@paypal.com` keeps `userinfo_in_url`. The
+ideographic, full-width and halfwidth full stops in a sender or reply address are
+`sender_disguised_domain` / `reply_to_impostor` and never trusted. To stay at or above origin/main,
+`disguised_host` and `link_disguised` are 45 and `disguised_host` is an impostor code; `．`, `｡` and a
+percent-encoded host are stand-ins. The round-3 probes: 308 rows (61 of them B1/B2/B5/S1), none below
+origin/main. corpus.json is now an input of every loupe-kit test task (a corpus-only edit re-runs them).
+Gates: `clean check` green, 3,030 tests (3,018 before), 0 failed; no-SDK clone green, 1,568 tests
+(1,562), `LOUPE_REQUIRE_ANDROID=1` refuses; corpus 446 cases (374), 0 differ on API 29, API 35, the iOS
+simulator and the JVM (a planted wrong answer fails on the iOS simulator: `ios-planted-fault.log`); ICU
+check 126 compiled, 0 rejected on both; API check 688 classes, 0 problems; every performance pattern
+linear. Release APK 1,970,131 bytes (unchanged); LoupeKit arm64 release 30,249,896 bytes (+42 KB).
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).

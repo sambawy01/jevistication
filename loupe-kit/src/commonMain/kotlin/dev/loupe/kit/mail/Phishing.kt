@@ -128,12 +128,13 @@ object Phishing {
         "link_brand_in_subdomain" to (30 to "A link puts the name {brand} in front of an unrelated website ({domain})."),
         "link_brand_in_domain_bait" to (35 to "A link goes to {domain}, which glues {brand} to words like \"login\" or \"secure\"."),
         "link_mixed_script" to (35 to "A link's website name mixes letters from different alphabets ({domain})."),
-        "link_disguised" to (30 to "A link's website name is written with stand-in letters for {domain}; real links are not written this way."),
+        "link_disguised" to (45 to "A link's website name is written with stand-in letters for {domain}; real links are not written this way."),
         "link_deviation" to (10 to "A link's website name contains ß, ς or an invisible joiner, which older software reads as a different name ({domain})."),
         "link_deviation_known" to (45 to "A link goes to {domain}, which older software reads as a known site, but browsers open a different website."),
         "link_unicode_drift" to (30 to "A link's website name uses characters that older and newer software read differently ({domain})."),
         "link_text_mismatch" to (40 to "A link shows {shown} but really goes to {domain}."),
         "link_brand_text" to (30 to "A link asks you to sign in or verify with {brand}, but goes to {domain}."),
+        "link_unreadable" to (30 to "A link's address does not read as a normal web address; where it leads cannot be told for sure."),
         "link_data" to (40 to "A link opens a data: address, which has no real website behind it."),
         "link_userinfo" to (30 to "A link hides its real website behind text and an @ sign ({domain})."),
         "link_ip" to (25 to "A link goes to a bare IP number ({host}) instead of a website name."),
@@ -268,7 +269,7 @@ object Phishing {
     /** Lowercase ASCII (IDNA) domain of an address, "" when there is none. */
     internal fun domainOf(address: String): String {
         if ('@' !in address) return ""
-        val dom = address.substringAfterLast('@').trim().trim('.', '>').lowercase()
+        val dom = address.substringAfterLast('@').trim().trim('.', '>', '\u3002', '\uFF0E', '\uFF61').lowercase()
         if (dom.startsWith("[") && dom.endsWith("]")) return dom.substring(1, dom.length - 1)
         return Hosts.toAsciiDomain(dom) ?: dom
     }
@@ -364,6 +365,9 @@ object Phishing {
     private fun literalCodes(domain: String, config: SiteConfig): List<Pair<String, Map<String, String>>> =
         hostCodes(literal(domain), config).filter { it.first !in WRITTEN_CODES }
 
+    /** Full stops of other scripts: a dot to a browser, a stand-in in a written mail address. */
+    private const val STAND_IN_DOTS = "\u3002\uFF0E\uFF61"
+
     private val WRITTEN_CODES = setOf("disguised_host", "unicode_drift_host", "deviation_host", "deviation_known_host")
 
     private fun hostCodes(domain: String, config: SiteConfig): List<Pair<String, Map<String, String>>> {
@@ -448,6 +452,10 @@ object Phishing {
             }
         }
 
+        // An address written with an ideographic, full-width or halfwidth full stop (`paypal.com。`,
+        // `mybank。com`): browsers read it as a dot, but no real address is written so.
+        if (notAscii && written.any { it in STAND_IN_DOTS }) add("sender_disguised_domain", "sender", "domain" to (reg ?: domain))
+
         // A domain that older (IDNA 2003) software reads as a trusted one (billing@faß.de when you
         // trust fass.de) imitates it: browsers and mail reach a different domain.
         if (notAscii && domain.isNotEmpty()) {
@@ -489,7 +497,8 @@ object Phishing {
                 val codes = if (rtFree) emptyList() else if (rtNotAscii) hostCodes(rtWritten, config) + literalCodes(rtWritten, config) else hostCodes(rtDomain, config)
                 // replies to a domain that carries a brand's name the brand does not own
                 val impostor = codes.firstOrNull { it.second["brand"] != null }
-                val written = if (rtNotAscii) setOf("disguised_host", "deviation_known_host") intersect codes.map { it.first }.toSet() else emptySet()
+                val written = if (!rtNotAscii) emptySet() else (setOf("disguised_host", "deviation_known_host") intersect codes.map { it.first }.toSet()) +
+                    (if (rtWritten.any { it in STAND_IN_DOTS }) setOf("disguised_host") else emptySet())
                 val owner = if (rtNotAscii) config.brands.firstOrNull { config.owns(it, rtReg, reg(rtDomain).second) } else null
                 if (impostor != null) {
                     add("reply_to_impostor", "reply_to", "target" to rtReg, "brand" to impostor.second["brand"])
@@ -613,8 +622,8 @@ object Phishing {
         val hrefs = links.take(MAX_LINKS).map { it.first } + urls(text).map { if (it.lowercase().startsWith("http")) it else "http://$it" }
         val out = mutableListOf<String>()
         for (raw in hrefs) {
-            val href = raw.trim()
-            if (!(href.startsWith("http://", true) || href.startsWith("https://", true)) || href in out) continue
+            val href = Hosts.linkUrl(raw)
+            if (!Hosts.isWebUrl(href) || href in out) continue
             val u = ParsedUrl.parse(href) ?: continue
             if (u.host.isEmpty() || Hosts.isPrivateHost(u.host) || Hosts.isIp(u.host)) continue
             val reg = u.registrable ?: u.host
@@ -642,14 +651,27 @@ object Phishing {
         }
 
         for ((hrefRaw, visible) in pairs.take(MAX_LINKS)) {
-            val href = hrefRaw.trim()
-            val low = href.lowercase()
+            // as a browser reads the href: C0 controls and spaces stripped, tabs and newlines dropped
+            val href = Hosts.stripC0(hrefRaw)
+            val low = href.filter { it != '\t' && it != '\r' && it != '\n' }.lowercase()
             if (low.isEmpty() || listOf("mailto:", "tel:", "cid:", "#", "sms:").any { low.startsWith(it) }) continue
             if (listOf("data:", "blob:", "javascript:").any { low.startsWith(it) }) {
                 add("link_data")
                 continue
             }
-            val u = ParsedUrl.parse(if ("://" in href) href else "http://$href") ?: continue
+            // WHATWG: a special scheme always has an authority (`https:\\evil.com`), never "http://" + it
+            val parsed = ParsedUrl.parse(Hosts.linkUrl(href))
+            if (Hosts.unreadableHost(parsed)) {
+                add("link_unreadable")
+                // the text still shows a well-known address this link does not reach
+                DOMAINISH_RE.matchEntire(visible.trim())?.let { m ->
+                    val visDomain = m.groupValues[1].lowercase()
+                    val (visReg, visSuffix) = reg(visDomain)
+                    if (visReg != null && config.known(visReg, visSuffix) && !isFreemail(visReg)) add("link_text_mismatch", "shown" to visDomain, "domain" to (parsed?.host ?: href))
+                }
+                continue
+            }
+            val u = parsed!!
             val host = u.host
             val reg = u.registrable ?: u.host
             if (host.isEmpty()) continue

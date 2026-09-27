@@ -124,6 +124,13 @@ val generateTestPaths by tasks.registering {
     }
 }
 
+// The tests read the parity corpus from disk (PARITY_CORPUS above), so it is an input of every test
+// task: an edit to corpus.json alone re-runs them on the JVM, Android and the iOS simulator instead of
+// leaving them UP-TO-DATE.
+tasks.withType<AbstractTestTask>().configureEach {
+    inputs.file(parityCorpus).withPropertyName("parityCorpus").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 kotlin {
     // A JVM target keeps the module an ordinary participant in `./gradlew build` on Linux CI.
     jvm()

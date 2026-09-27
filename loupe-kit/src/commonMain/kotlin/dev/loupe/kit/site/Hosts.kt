@@ -174,45 +174,93 @@ object Hosts {
         return Uts46.toAscii(domain).ascii
     }
 
-    /** The URL schemes WHATWG calls special: a backslash in them is a slash. */
+    /** The URL schemes WHATWG calls special: they always have an authority, and `\\` is `/` in them. */
     private val SPECIAL = setOf("http", "https", "ws", "wss", "ftp", "file")
 
+    /** [url] without the leading and trailing C0 controls and spaces WHATWG strips (not only `trim()`'s). */
+    internal fun stripC0(url: String): String = url.trim { it.code <= 0x20 }
+
+    /** A URL's parts as a browser splits them. [backslashAt]: a `\\` before an `@` in the authority. */
+    internal class Split(val scheme: String, val authority: String?, val rest: String, val backslashAt: Boolean)
+
     /**
-     * (scheme, authority, rest) of [url], split as a browser splits it for a special scheme: tabs and
-     * newlines dropped, `\` read as `/`, any number of slashes before the authority (`https:\\evil.com`,
-     * `https:///evil.com`); otherwise as Python's `urlsplit` (`//` starts the authority).
+     * [url] split as a browser splits it for a special scheme (WHATWG URL): C0 controls and spaces
+     * stripped from both ends, tabs and newlines dropped, `\\` read as `/`, and an authority always
+     * (`https:evil.com`, `https:/evil.com`, `https:\\evil.com` and `https:///evil.com` all have host
+     * evil.com); the userinfo ends at the authority's last `@`. Otherwise as Python's `urlsplit`.
      */
-    internal fun splitUrl(url: String): Triple<String, String?, String> {
-        var rest = url.trim().filter { it != '\t' && it != '\r' && it != '\n' }
+    internal fun splitUrl(url: String): Split {
+        var rest = stripC0(url).filter { it != '\t' && it != '\r' && it != '\n' }
         var scheme = ""
         val colon = rest.indexOf(':')
         if (colon > 0 && SCHEME.matches(rest.substring(0, colon))) {
             scheme = rest.substring(0, colon).lowercase()
             rest = rest.substring(colon + 1)
         }
+        var backslashAt = false
         if (scheme in SPECIAL) {
-            rest = rest.replace('\\', '/')
-            if (rest.startsWith("/")) rest = "//" + rest.trimStart('/')
+            val body = rest.trimStart('/', '\\')
+            val end = body.indexOfFirst { it == '/' || it == '\\' || it == '?' || it == '#' }.let { if (it < 0) body.length else it }
+            // `https://evil.com\@paypal.com`: the browser opens evil.com, but the text still reads as
+            // userinfo in front of paypal.com, so it keeps the userinfo warning.
+            backslashAt = end < body.length && body[end] == '\\' && '@' in body.substring(end).substringBefore('/').substringBefore('?').substringBefore('#')
+            rest = "//" + body.replace('\\', '/')
         }
-        if (!rest.startsWith("//")) return Triple(scheme, null, rest)
+        if (!rest.startsWith("//")) return Split(scheme, null, rest, false)
         val after = rest.substring(2)
         val end = after.indexOfFirst { it == '/' || it == '?' || it == '#' }.let { if (it < 0) after.length else it }
-        return Triple(scheme, after.substring(0, end), after.substring(end))
+        return Split(scheme, after.substring(0, end), after.substring(end), backslashAt)
     }
 
-    /** The host in an authority (`user@host:port`, `[v6]`), as written, or null when brackets do not pair. */
+    /**
+     * The host in an authority, as written: after the authority's last `@` (brackets in the
+     * userinfo are ordinary characters), `[...]` for an IPv6 address, else up to the port. Null when
+     * a bracket does not pair in the host itself.
+     */
     internal fun hostOfAuthority(netloc: String): String? {
-        if (('[' in netloc) != (']' in netloc)) return null
         val hostPort = netloc.substringAfterLast('@')
-        return if (hostPort.startsWith("[")) hostPort.substring(1).substringBefore(']') else hostPort.substringBefore(':')
+        if (hostPort.startsWith("[")) {
+            if (']' !in hostPort) return null
+            return hostPort.substring(1).substringBefore(']')
+        }
+        val host = hostPort.substringBefore(':')
+        return if ('[' in host || ']' in host) null else host
     }
+
+    /** The host of [url] exactly as written, percent escapes included ("" when it has none). */
+    fun rawHost(url: String): String = splitUrl(url).authority?.let { hostOfAuthority(it) } ?: ""
 
     /** The host of [url] as written: percent-decoded (WHATWG), before IDNA mapping and lower-casing. */
     fun writtenHost(url: String): String {
-        val netloc = splitUrl(url).second ?: return ""
+        val netloc = splitUrl(url).authority ?: return ""
         val host = hostOfAuthority(netloc) ?: return ""
         return SiteSignals.percentDecode(host).trimEnd('.', '\u3002', '\uFF0E', '\uFF61')
     }
+
+    /**
+     * The URL a mail link opens, for the checks: [href] as it is when it has a scheme (a special
+     * scheme always has an authority, so `https:\\evil.com` is evil.com), `http://` + [href] for a
+     * bare host (`www.example.com/x`). `www.example.com:8080/x` is a bare host, not a scheme.
+     */
+    fun linkUrl(href: String): String {
+        val t = stripC0(href)
+        val colon = t.indexOf(':')
+        val scheme = if (colon > 0 && SCHEME.matches(t.substring(0, colon))) t.substring(0, colon).lowercase() else null
+        return if (scheme != null && (scheme in SPECIAL || t.startsWith("$scheme://", ignoreCase = true))) t else "http://$t"
+    }
+
+    /** True when [url]'s scheme is http or https (after stripping, in any case). */
+    fun isWebUrl(url: String): Boolean = splitUrl(url).scheme.let { it == "http" || it == "https" }
+
+    /**
+     * WHATWG's forbidden host code points: a host containing one does not parse in a browser. A
+     * link whose host does (or whose URL does not split at all) is not scored as an empty, safe page.
+     */
+    private val WEB_SCHEMES = setOf("http", "https", "ws", "wss", "ftp")
+    private const val FORBIDDEN_HOST = " #%/:<>?@[\\]^|"
+
+    fun unreadableHost(u: ParsedUrl?): Boolean =
+        u == null || (u.scheme in WEB_SCHEMES && !isIp(u.host) && (u.host.isEmpty() || u.host.any { it in FORBIDDEN_HOST || it.code < 0x20 }))
 
     private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.\\-]*$")
 }
@@ -247,8 +295,10 @@ data class ParsedUrl(
     companion object {
         /** A URL's parts; null where the authority's brackets do not pair (where urlsplit raises). */
         fun parse(url: String): ParsedUrl? {
-            val (scheme, netloc, afterAuthority) = Hosts.splitUrl(url)
-            val rest = afterAuthority.substringBefore('#')
+            val split = Hosts.splitUrl(url)
+            val scheme = split.scheme
+            val netloc = split.authority
+            val rest = split.rest.substringBefore('#')
             val query = if ('?' in rest) rest.substringAfter('?') else ""
             val path = rest.substringBefore('?')
             val authority = netloc ?: ""
@@ -262,7 +312,7 @@ data class ParsedUrl(
                 host = host,
                 unicodeHost = labels.joinToString(".") { Hosts.decodeLabel(it) },
                 labels = labels,
-                userinfo = '@' in authority,
+                userinfo = '@' in authority || split.backslashAt,
                 path = path.ifEmpty { "/" },
                 query = query,
                 suffix = Hosts.publicSuffix(host),

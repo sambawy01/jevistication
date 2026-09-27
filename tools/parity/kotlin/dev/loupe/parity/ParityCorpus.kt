@@ -84,6 +84,10 @@ object ParityCorpus {
 
     private fun list(items: List<String>): String = items.joinToString(",", "[", "]") { quote(it) }
 
+    /** `links`: [[href, visible text], ...] (a message's anchors). */
+    private fun links(args: JsonValue.Obj?): List<Pair<String, String>> =
+        args?.get("links")?.asArr?.items?.map { it.asArr.items.let { p -> p[0].asString to p[1].asString } } ?: emptyList()
+
     private fun hex(cp: Int): String = "U+" + cp.toString(16).uppercase().padStart(4, '0')
 
     /** The mechanical answer of [fn] for [input], as canonical JSON text. */
@@ -143,7 +147,9 @@ object ParityCorpus {
                 s, args?.get("body")?.asString ?: "",
                 replyTo = args?.get("replyTo")?.asString ?: "",
                 trusted = args?.get("trusted")?.asArr?.items?.map { it.asString } ?: emptyList(),
+                links = links(args),
             ).let { v -> "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.map { it.code }.sorted())}}" }
+            "mail.link_targets" -> list(Phishing.linkTargets(args?.get("body")?.asString ?: "", links(args), s.ifEmpty { null }, Phishing.DEFAULT_CONFIG))
             "link.check" -> SiteCheck.checkUrl(s).verdict.let { v ->
                 "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.filter { it.weight > 0 }.map { it.code }.sorted())}}"
             }

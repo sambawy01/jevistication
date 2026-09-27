@@ -62,7 +62,13 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
 
 ## 1. Input normalisation
 
-1. A URL is split like Python's `urlsplit` (scheme, userinfo, host, path, query; fragment dropped).
+1. A URL is split like Python's `urlsplit` (scheme, userinfo, host, path, query; fragment dropped), with
+   WHATWG's rules for the special schemes (http, https, ws, wss, ftp, file): C0 controls and spaces at
+   both ends are stripped, the authority follows the scheme however many `/` or `\` come first
+   (`https:\\x`, `https:/x`, `https:x`, `HTTPS:x` are all host `x`), a backslash is a slash, and the
+   userinfo ends at the **last** `@` of the authority (brackets there are ordinary characters:
+   `https://www.paypal.com[@evil.xyz` is evil.xyz). A mail link with any other scheme and no `//` is
+   read as a bare host (`http://` is added) (*fix loop 3, 2026-09-27; Station to port*).
 2. The host is lowercased, one trailing dot removed, and **converted to IDNA ASCII** when it contains
    non-ASCII (NFKC + lowercase + Punycode, IDNA 2003 without STD3). `https://pаypal.com` and
    `https://xn--pypal-4ve.com` are the same input.
@@ -138,7 +144,8 @@ order; each code counts once.
 | Code | W | Condition |
 |---|---|---|
 | `data_url` | 40 | scheme `data:` or `blob:` (then no host checks) |
-| `userinfo_in_url` | 30 | `user@` before the host |
+| `userinfo_in_url` | 30 | `user@` before the host, or a `\` before an `@` in the authority (`https://evil.com\@paypal.com` opens evil.com but reads as paypal.com) |
+| `unreadable_url` | 30 | a web URL whose host no browser opens: empty, or with a forbidden host code point after percent-decoding (`https://paypal.com%40evil.com`, `%00`, `%09`, `%20`) or a URL that does not parse. Never safe-empty (*fix loop 3; Station to port*) |
 | `url_shortener` | 10 | host or registrable domain on the shorteners list |
 | `long_url` | 5 | whole URL > 200 characters |
 | `encoded_url` | 5 | > 12 `%XX` in path + query |
@@ -146,7 +153,7 @@ order; each code counts once.
 | `ip_host` | 25 | host is an IP (dotted, decimal, hex, short forms, IPv6); private IPs never flagged. Stops the host checks |
 | `homograph_brand` | 60 | rule 2 (i), on any `xn--` label (brand checks on the registrable label are then skipped) |
 | `mixed_script` | 35 | rule 2 (ii) / rule 3 |
-| `disguised_host` | 30 | checked **before** the known-good return, so also on a known domain: the host as written (or a decoded `xn--` label) has a stand-in character, i.e. a compatibility character (NFKD ≠ NFD: full-width, mathematical, enclosed, ligatures, superscripts) or a default ignorable IDNA removes (soft hyphen, variation selectors; ZWJ/ZWNJ excepted). `https://ｐａｙｐａｌ.com` reaches paypal.com but no real link is written that way: caution (`PortableText.disguisedCodePoints`, *added 2026-09-27; Station to port*) |
+| `disguised_host` | 45 | checked **before** the known-good return, so also on a known domain: the host as written (or a decoded `xn--` label) has a stand-in character, i.e. a compatibility character (NFKD ≠ NFD: full-width, mathematical, enclosed, ligatures, superscripts) or a default ignorable IDNA removes (soft hyphen, variation selectors; ZWJ/ZWNJ excepted). `https://ｐａｙｐａｌ.com` reaches paypal.com but no real link is written that way: caution, and an impostor code (with a password field, danger). The full-width and halfwidth full stops (`．` `｡`) and a percent-encoded host (`%70aypal.com`) are stand-ins too; the ideographic full stop `。` is not, as the host (`paypal。com` is paypal.com in every browser), but is in a mail address (§6.2) (`PortableText.disguisedCodePoints`, *added 2026-09-27, 45 and impostor since fix loop 3 to stay at origin/main's score; Station to port*) |
 | `deviation_host` | 10 | the host contains `ß`, `ς`, ZWJ or ZWNJ, so IDNA 2003 (transitional) software reads another name than browsers (UTS #46 non-transitional, which every host decision uses). A note: real German, Greek and Persian names have them (*2026-09-27; Station to port*) |
 | `deviation_known_host` | 45 | as `deviation_host`, and the transitional reading is a known-good, brand or configured domain (`americanexpreß.com`, `faß.de` when fass.de is known): an impostor code (*2026-09-27; Station to port*) |
 | `unicode_drift_host` | 30 | checked before the known-good return too: the host as written (before lower-casing), or a decoded `xn--` label, has a character whose IDNA mapping differs between Unicode 3.2 nameprep (RFC 3491, IDNA 2003; a character unassigned in 3.2 passes through unchanged) and the pinned Unicode 16.0 mapping (B.1, then NFKC_Casefold), other than a `disguised_host` character (one character counts once). About 5,600 code points; new scripts and emoji that map to themselves are not drift. One written name can reach two websites on old and new software. Not an impostor code (`PortableText.unicode32Drift`, *added 2026-09-27; Station to port*) |
@@ -166,7 +173,7 @@ order; each code counts once.
 | `brand_mismatch` | 15 | the same without such a field |
 | `shared_hosting` | 10 | rule 5, the twelve |
 | `shared_hosting_login` | 15 | rule 5, any shared host, with a password/card field |
-| `impostor_login` | 20 | added when a password/card field is on a page with an impostor code (`homograph_brand`, `lookalike_brand`, `brand_domain_in_subdomain`, `brand_in_subdomain`, `brand_in_domain_bait`, `brand_other_tld`, `mixed_script`, `userinfo_in_url`) |
+| `impostor_login` | 20 | added when a password/card field is on a page with an impostor code (`homograph_brand`, `lookalike_brand`, `brand_domain_in_subdomain`, `brand_in_subdomain`, `brand_in_domain_bait`, `brand_other_tld`, `mixed_script`, `userinfo_in_url`, `deviation_known_host`, `disguised_host`) |
 
 Hosts are read as a browser reads them: WHATWG URL parsing for http(s) (a backslash is a slash, the
 host is percent-decoded, `。．｡` separate labels) and UTS #46 **non-transitional** mapping; never the
@@ -344,13 +351,16 @@ Sender domain → the host signals of §4 renamed `sender_*` (`homograph_brand` 
 is a trusted sender), read on the domain as written and, for look-alikes, on its literal Punycode
 (nothing folded); none for free-mail). A sender domain
 written with any non-ASCII character is never known, trusted or free-mail and never owns the brand
-its display name claims (`"PayPal" <service@ｐａｙｐａｌ.com>`: danger 85);
+its display name claims (`"PayPal" <service@ｐａｙｐａｌ.com>`: danger 85); a sender or reply address
+written with an ideographic, full-width or halfwidth full stop (`service@paypal。com`,
+`service@paypal.com。`) is `sender_disguised_domain` / `reply_to_impostor`, never trusted (fix loop 3);
 display name (`display_brand_freemail` 50, `display_brand_mismatch` 40, `display_address_mismatch`
 40); reply-to (`reply_to_impostor` 40, `reply_to_freemail` 25, `reply_to_mismatch` 15); the
 receiving server (`spoofed_known_sender` 60, `auth_dmarc_fail` 45, `auth_spf_dkim_fail` 25); links
 (`link_homograph_brand` 60, `link_lookalike_brand` 45, `link_brand_domain_in_subdomain` 45,
 `link_brand_in_subdomain` 30, `link_brand_in_domain_bait` 35, `link_mixed_script` 35, `link_unicode_drift` 30,
-`link_disguised` 30 (both also on links to known domains, trackers and the sender's own),
+`link_disguised` 45 (both also on links to known domains, trackers and the sender's own),
+`link_unreadable` 30 (a link no browser opens, `unreadable_url`; `link_text_mismatch` still applies when its text names a domain),
 `link_text_mismatch` 40, `link_brand_text` 30, `link_data` 40, `link_userinfo` 30, `link_ip` 25,
 `link_suspicious_tld` 8, `link_shortener` 5); contacts (rule 6, below); online (§5); self-vouching
 (v1.3, below) `self_vouching` 15; the decision model's text reading (calibrated `is_phishing` ≥ 0.8 / ≥ 0.5)

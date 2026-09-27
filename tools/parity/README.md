@@ -77,7 +77,8 @@ other script's digits are. "Letter or number" is general category L, Nd, Nl or N
 | `page.check` | as `link.check` for a page; `args.password` adds a password form, `args.knownGood` known-good domains |
 | `link.host_signals` | the codes of the phishing formula's host checks (docs/PHISHING-FORMULA.md §4), in order |
 | `link.check` | `{level, codes}`: the site check's level and the codes that carry weight, sorted |
-| `mail.check` | `{level, codes}` of the mail phishing check for a From header (input), `args.body`, `args.replyTo`, `args.trusted`; codes include the zero-weight `known_sender` / `trusted_sender` |
+| `mail.check` | `{level, codes}` of the mail phishing check for a From header (input), `args.body`, `args.replyTo`, `args.trusted`, `args.links` (`[[href, visible text], ...]`, the message's anchors); codes include the zero-weight `known_sender` / `trusted_sender` |
+| `mail.link_targets` | the links of a message worth an online check (`Phishing.linkTargets`): input is the sender's registrable domain (`""` for none), `args.body`, `args.links` |
 | `unicode.disguised` | the stand-in code points of a label (`U+XXXX`): NFKC is not itself, a default ignorable, or a joiner CONTEXTJ rejects |
 
 ## Adding a case

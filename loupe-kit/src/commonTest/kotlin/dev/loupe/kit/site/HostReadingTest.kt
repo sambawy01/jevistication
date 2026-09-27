@@ -99,6 +99,91 @@ class HostReadingTest {
         assertTrue(Phishing.assess("\"American Express\" <service@americanexpreß.com>", body).score >= 85)
     }
 
+    /**
+     * Fix loop 3 (B5): an ideographic, full-width or halfwidth full stop in a sender or reply address.
+     * Scores on origin/main measured with the round-3 probe (the same messages and body,
+     * loupe-android-evidence/parity-fix3/m-*.base).
+     */
+    @Test
+    fun `stand-in full stops in an address never score lower than before the branch`() {
+        val probeBody = "Please verify your account now to avoid suspension."
+        val baseline = listOf(
+            Triple("PayPal <service@paypal。com>", "", 40), Triple("PayPal <service@paypal．com>", "", 40),
+            Triple("PayPal <service@paypal｡com>", "", 40), Triple("PayPal <service@paypal.com。>", "", 60),
+            Triple("PayPal <service@paypal.com．>", "", 70), Triple("PayPal <service@paypal.com｡>", "", 60),
+            Triple("Account Team <service@paypal。com>", "", 0), Triple("Account Team <service@paypal．com>", "", 0),
+            Triple("Account Team <service@paypal｡com>", "", 0), Triple("Account Team <service@paypal.com。>", "", 20),
+            Triple("Account Team <service@paypal.com．>", "", 30), Triple("service@paypal．com <x@evil.xyz>", "", 48),
+            Triple("Shop <a@shop-example.com>", "support@paypal。com", 15), Triple("Shop <a@shop-example.com>", "support@paypal．com", 15),
+            Triple("Shop <a@shop-example.com>", "support@paypal｡com", 15), Triple("Shop <a@shop-example.com>", "support@paypal.com。", 40),
+        )
+        for ((sender, reply, before) in baseline) {
+            val v = Phishing.assess(sender, probeBody, replyTo = reply)
+            assertTrue(v.score >= before, "$sender / $reply: ${v.score} < $before ${v.reasons.map { it.code }}")
+            if ('<' in sender && sender.substringAfter('<').any { it in "。．｡" }) {
+                assertTrue("sender_disguised_domain" in v.reasons.map { it.code }, "$sender: ${v.reasons.map { it.code }}")
+            }
+        }
+        assertTrue(Phishing.assess("PayPal <service@paypal.com。>", probeBody).score >= 60)
+        assertTrue(Phishing.assess("Account Team <service@paypal.com。>", probeBody).score >= 20)
+        for (bank in listOf("Bank <info@mybank。com>", "Bank <info@mybank.com。>", "Bank <info@mybank．com>", "Bank <info@mybank｡com>")) {
+            val v = Phishing.assess(bank, probeBody, trusted = listOf("mybank.com"))
+            assertFalse(v.trusted, bank)
+            assertTrue("sender_disguised_domain" in v.reasons.map { it.code }, "$bank: ${v.reasons.map { it.code }}")
+        }
+    }
+
+    /** Fix loop 3 (B1): an href with a special scheme but no `//` is read the way browsers read it. */
+    @Test
+    fun `mail links with a special scheme and no double slash are read as browsers do`() {
+        val config = Phishing.DEFAULT_CONFIG
+        for (href in listOf("https:\\\\paypa1-secure.xyz/login", "https:\\paypa1-secure.xyz/login", "https:/paypa1-secure.xyz/login",
+            "https:paypa1-secure.xyz/login", "HTTPS:paypa1-secure.xyz/login", "\u0001https://paypa1-secure.xyz/login")) {
+            assertEquals("paypa1-secure.xyz", ParsedUrl.parse(Hosts.linkUrl(href))?.host, href)
+            assertEquals(listOf(href.trim { it.code <= 0x20 }), Phishing.linkTargets("", listOf(href to "Sign in"), "gmail.com", config), href)
+            val v = Phishing.assess("\"Friend\" <a@gmail.com>", "", links = listOf(href to "www.paypal.com"))
+            val codes = v.reasons.map { it.code }
+            assertTrue("link_text_mismatch" in codes && "link_lookalike_brand" in codes, "$href: $codes")
+            assertEquals("danger", v.level, href)
+        }
+        // a javascript: or mailto: href behind a C0 control or a tab is still that scheme
+        for (href in listOf("\u0001javascript:alert(1)", "java\tscript:alert(1)", " JAVASCRIPT:alert(1)")) {
+            assertEquals(listOf("link_data"), Phishing.assess("\"Friend\" <a@gmail.com>", "", links = listOf(href to "Open")).reasons.map { it.code }, href)
+        }
+        assertTrue(Phishing.assess("\"Friend\" <a@gmail.com>", "", links = listOf("\u0001mailto:a@paypa1-secure.xyz" to "Mail us")).reasons.isEmpty())
+        // a bare host is still read as http://
+        assertEquals("http://paypa1-secure.xyz/login", Hosts.linkUrl("paypa1-secure.xyz/login"))
+    }
+
+    /** Fix loop 3 (B2, S1): WHATWG userinfo, C0 stripping, and a host no browser can open. */
+    @Test
+    fun `userinfo ends at the last at sign and an unreadable URL is never safe`() {
+        for (u in listOf("https://www.paypal.com[@paypa1-secure.xyz/login", "https://x]@paypa1-secure.xyz/login",
+            "https://[www.paypal.com]@paypa1-secure.xyz/login", "https://user:[x@paypa1-secure.xyz/login")) {
+            val p = ParsedUrl.parse(u)
+            assertEquals("paypa1-secure.xyz", p?.host, u)
+            assertTrue(p!!.userinfo, u)
+            assertEquals("danger", SiteCheck.checkUrl(u).verdict.level, u)
+        }
+        for (u in listOf("\u0001https://evil.com/login", "\u0000https://evil.com/", "  https://evil.com/  ")) {
+            assertEquals("evil.com", ParsedUrl.parse(u)?.host, u)
+        }
+        for (u in listOf("https://paypal.com%40evil.com/login", "https://paypal.com%00.evil.com/", "https://paypal.com%09evil.com/")) {
+            val v = SiteCheck.checkUrl(u).verdict
+            assertTrue("unreadable_url" in v.reasons.map { it.code }, "$u: ${v.reasons.map { it.code }}")
+            assertFalse(v.level == "safe", u)
+        }
+        // S1: a backslash before @ is a path separator, but the URL still reads as a disguise (origin/main: 30 / PW 50)
+        val s1 = "https://evil.com\\@paypal.com"
+        assertEquals("evil.com", ParsedUrl.parse(s1)?.host)
+        val site = SiteCheck.checkUrl(s1).verdict
+        assertTrue("userinfo_in_url" in site.reasons.map { it.code }, site.reasons.map { it.code }.toString())
+        assertTrue(site.score >= 30)
+        assertTrue(withPassword(s1).score >= 50)
+        val mail = Phishing.assess("\"Friend\" <a@gmail.com>", "", links = listOf(s1 to "paypal.com"))
+        assertTrue("link_userinfo" in mail.reasons.map { it.code }, mail.reasons.map { it.code }.toString())
+    }
+
     @Test
     fun `small capitals and sharp s are homographs of the brand`() {
         assertTrue("homograph_brand" in withPassword("https://ᴘᴀʏᴘᴀʟ.com/login").reasons.map { it.code })

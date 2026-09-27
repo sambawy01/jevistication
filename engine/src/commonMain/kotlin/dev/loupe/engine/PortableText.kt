@@ -356,6 +356,9 @@ object PortableText {
      */
     fun disguisedCodePoints(text: String): List<Int> {
         val out = LinkedHashSet<Int>()
+        // The full-width and halfwidth full stops are compatibility characters (NFKC: `.`) and so
+        // stand-ins; the ideographic full stop U+3002 is what Chinese and Japanese keyboards type.
+        for (cp in codePoints(text)) if (cp == 0xFF0E || cp == 0xFF61) out += cp
         for (label in text.split('.', '\u3002', '\uFF0E', '\uFF61')) {
             val cps = codePoints(label)
             for (i in cps.indices) {

@@ -101,9 +101,14 @@ class UnicodeDriftSignalTest {
     }
 
     @Test
-    fun `drift is not an impostor code`() {
+    fun `drift is not an impostor code but a stand-in is`() {
         assertFalse("unicode_drift_host" in SiteScoring.IMPOSTOR_CODES)
-        assertFalse("disguised_host" in SiteScoring.IMPOSTOR_CODES)
+        // fix loop 3: a stand-in (ｐａｙｐａｌ.com, pay­pal.com, %70aypal.com) is written to pass for
+        // another name, so a password form on it is an impostor login (origin/main scored it so)
+        assertTrue("disguised_host" in SiteScoring.IMPOSTOR_CODES)
+        val standIn = SiteCheck.check(PageFacts("https://ｐａｙｐａｌ.com/login", passwordFields = 1, forms = listOf(PageForm(password = true)))).verdict
+        assertEquals("danger", standIn.level, standIn.reasons.map { it.code }.toString())
+        assertTrue("impostor_login" in standIn.reasons.map { it.code })
         val page = PageFacts("https://မြန်မာ.com/login", passwordFields = 1, forms = listOf(PageForm(password = true)))
         val v = SiteCheck.check(page).verdict
         assertFalse("impostor_login" in v.reasons.map { it.code }, v.reasons.map { it.code }.toString())

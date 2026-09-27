@@ -2038,12 +2038,28 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
   deviation look-alike is still a brand look-alike. None scores lower than on origin/main before the
   branch (HostReadingTest pins the measured scores).
 - **New phishing signals** (docs/PHISHING-FORMULA.md §4, §6.2):
-  - `disguised_host` (30, risk; mail `sender_disguised_domain` 45, `link_disguised` 30): a host written
+  - `disguised_host` (45, risk and impostor since fix loop 3; mail `sender_disguised_domain` 45, `link_disguised` 45): a host written
     with stand-in letters (compatibility characters: full-width, mathematical, enclosed, ligatures,
     superscripts) or invisible characters IDNA removes (soft hyphen, variation selectors; not ZWJ/ZWNJ).
     Checked before the known-good short-circuit, so `https://ｐａｙｐａｌ.com` (which reaches paypal.com)
-    is *caution*. A stand-in is any code point whose NFKC is not itself (so the Kelvin, Ångström and
-    Ohm signs and CJK compatibility ideographs too), an ignorable, or a joiner CONTEXTJ rejects.
+    is *caution*, and with a password field *danger*. A stand-in is any code point whose NFKC is not itself (so the Kelvin, Ångström and
+    Ohm signs and CJK compatibility ideographs too), an ignorable, or a joiner CONTEXTJ rejects; the
+    full-width and halfwidth full stops and a percent-encoded host (`%70aypal.com`) count too.
+  - `unreadable_url` (30, risk; mail `link_unreadable` 30): a web URL whose host no browser opens
+    (`https://paypal.com%40evil.com`, `%00`, `%09`, `%20`) or that does not parse: never safe-empty.
+- **URLs are split as browsers split them** (fix loop 3; hosts checked against Chrome 153,
+  r3/chrome1.out): C0 controls and spaces at both ends are stripped; for http, https, ws, wss, ftp and
+  file the host follows the scheme however many `/` or `\` come first, so a mail link
+  `https:\\paypa1-secure.xyz`, `https:/…`, `https:…` or `HTTPS:…` is judged (and offered for the
+  online check) as paypa1-secure.xyz; before, it was read as a path and scored nothing. Only a bare host
+  gets `http://`. The userinfo ends at the last `@` (`https://www.paypal.com[@paypa1-secure.xyz` is
+  paypa1-secure.xyz, `userinfo_in_url`), and `https://evil.com\@paypal.com` (host evil.com) keeps
+  `userinfo_in_url`.
+- **Mail addresses with a stand-in full stop** (`service@paypal。com`, `service@paypal.com。`, `．`, `｡`;
+  fix loop 3): `sender_disguised_domain` (45), never trusted even when the mapped domain is
+  (`info@mybank。com` with mybank.com trusted: caution 45, it was safe 0); in a reply address
+  `reply_to_impostor` (40). None of the round-3 probe rows (308 site, host, mail and HTML rows) scores
+  lower than on origin/main.
   - `deviation_host` (10, a note; mail `sender_deviation_domain` / `link_deviation` 10): `ß`, `ς` or a
     joiner, which IDNA 2003 software reads as another name (`straße.de`, `ελλάς.gr`, Persian ZWNJ
     names get only this). `deviation_known_host` (45, risk and impostor; mail `sender_deviation_known`
