@@ -292,6 +292,33 @@ The merged manifest (`aapt2 dump xmltree`, debug and release) keeps `androidx.st
 and profile-installer initializers and no longer has `EmojiCompatInitializer`, so nothing asks Google
 Play services' font provider for an emoji font; emoji use the phone's system font.
 
+## Parity record (2026-09-27, branch `parity`)
+
+Evidence: `/Volumes/Sambawy/loupe-android-evidence/parity/`. Before = 79e79c7 (the A0 fix), measured the same way.
+
+| Gate | Result |
+|---|---|
+| `./gradlew clean check --no-build-cache`, with the SDK | green, 2 min 50 s; 2,962 tests, 0 failed, 24 skipped (no model) |
+| the same in a clone with no SDK | green, 3 min 10 s; the warning printed; 1,534 JVM and iOS-simulator tests (1,476 before), 0 failed; with `LOUPE_REQUIRE_ANDROID=1` it fails at settings |
+| `:loupe-kit:assembleLoupeKitDebugXCFramework`, release XCFramework, `:android-app:assembleRelease` | green |
+| `tools/parity/run-device.sh`, API 29 and API 35 emulators | 182 cases, 0 differ, on both (a planted wrong answer: `1 differ`) |
+| `tools/android-regex-check/check.sh`, API 29 and API 35 | 126 compiled, 0 rejected, on both (138 before: splits, keyword and word regexes became code) |
+| `tools/android-regex-check/lint.py` (in `check`) | 0 findings; a planted `Regex("""\d+""", IGNORE_CASE)` fails `:engine:portableRegexLint` with both findings |
+| `tools/android-api-check/check.py` | 681 classes, 0 problems at minSdk 29 |
+
+| Tests | JVM | iOS simulator | Android debug unit |
+|---|---|---|---|
+| engine | 294 → 317 | 289 → 306 | 294 → 311 |
+| loupe-kit | 212 → 221 | 212 → 221 | 212 → 221 |
+| all KMP modules | 702 → 734 | 676 → 702 | 681 → 707 (+ 7 app) |
+
+**Size.** Release APK 1,871,827 → 1,953,747 bytes (+80 KB; `classes.dex` +77 KB, of which the
+Unicode table's strings are about 70 KB; the APK stores dex uncompressed, the table deflates to
+21 KB). LoupeKit arm64 (release): +257 KB of code and data per slice (the table's strings, UTF-16 in
+Kotlin/Native: +155 KB `__DATA,__const`; code +87 KB), +96 KB DWARF (not shipped in an App Store
+binary). The table covers NFC/NFD/NFKC/NFKD, NFKC_Casefold, simple case folding and lowercase,
+general-category groups and the Unicode 3.2 drift set.
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).
