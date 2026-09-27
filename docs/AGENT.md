@@ -144,7 +144,8 @@ anyone who first got Loupe before a cutoff keeps them free, on every device, wit
   in the sandbox it is always `"1.0"`, so a version cutoff could not be tested before release. It
   can be logged for support. A date means the same thing on both platforms.
 - **Android.** Play has no equivalent of `AppTransaction`. The first-run day is recorded on the
-  device, or stored against an account, and becomes `FirstInstall.Recorded`. See ANDROID-PLAN.md.
+  device and becomes `FirstInstall.Recorded`; it is never stored against an account, because
+  grandfathering stays account-free (§4d). See ANDROID-PLAN.md.
 - **Scope.** Early status covers the local features only. The assistant is paid for everyone, early
   or not, because every call costs money.
 
@@ -178,14 +179,36 @@ The assistant only sells if it works without the person signing up with a provid
    key, so it is not a revenue line on its own. Keep it as an option. *Open question for the owner:*
    whether BYOK needs the paid tier. The code today says yes (`ASK_PROVIDER` is paid either way).
 2. **A shared key built into the app.** Rejected: anyone can extract it, and the bill has no ceiling.
-3. **A short-lived, spend-capped key per person, issued after a store receipt is checked.** The
-   device then calls the provider directly with it. The service that issues keys sees a receipt and
-   a credit balance, never mail, prompts or drafts, so it is not a relay (§6). It needs a provider
-   that can mint scoped keys with a spending limit (to verify per provider).
+3. **A short-lived, spend-capped key per person, issued after the account and the store receipt
+   are checked.** The key-issuing service authenticates by **account + receipt** (§4d): the person
+   is signed in to a Loupe account, and the Apple or Play receipt tied to that account is checked
+   before any key is issued. The device then calls the provider directly with the key. The service
+   sees the account, the receipt and a credit balance, never mail, prompts or drafts, so it is not a
+   relay (§6). It needs a provider that can mint scoped keys with a spending limit (to verify per
+   provider).
 
 Option 3 is the one to build for launch, with BYOK beside it. It is still a Loupe server, so the
 privacy page must say what it holds, and the Gmail verification wording must be checked against it
 before it ships.
+
+### 4d. Accounts exist only for the paid tier
+
+*Owner decision, 2026-09-27; planned, not built. Recorded on main in PRODUCT.md §4, "Accounts
+(paid features only)".*
+
+- **The free tier has no account.** It stays account-free and on-device; a free user never sees a
+  sign-in prompt. Sign-in appears only when the person starts the paid assistant (or BOND, the
+  separate kids' protection product). Early-user grandfathering (§4a) stays on-device and
+  account-free.
+- **Sign-in:** Sign in with Google, plus Sign in with Apple on iOS (App Store guideline 4.8 requires
+  Apple's option whenever a third-party login is offered). Scopes `openid`, `email` and `profile`
+  only: non-sensitive, and separate from the Gmail scopes.
+- **What the account is for:** tying the purchase (the Apple or Play receipt) to a person across
+  devices; authenticating to the key-issuing service (§4c, option 3); restoring the subscription on
+  a new device; BOND parents managing children from several devices.
+- **What the server holds:** the account id, email, name (if given), subscription status and credit
+  balances. **Never** mail, files, judgments or locations.
+- **Privacy policy:** a new "Accounts (paid features)" section when this ships.
 
 ## 5. The privacy claim changes character, and is restated rather than softened
 
