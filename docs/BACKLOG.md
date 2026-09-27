@@ -360,10 +360,11 @@ it, set screen-time limits, and see the child's battery (below). Full plan in
       per category; schedules (bedtime, school hours); block an app; the child can ask for more
       time and the parent approves in one tap. Usage from `UsageStatsManager` (`PACKAGE_USAGE_STATS`
       special access); enforced with the existing accessibility service and/or a full-screen
-      overlay; **never blocks phone calls, SOS or BOND itself.** **Needs an owner decision:**
-      blocking acts on another app's use, which the recorded accessibility exception does not
-      cover today ("it only reads; it never acts in another app", PRODUCT.md §7). Either that
-      exception is updated explicitly, or blocking is enforced another way.
+      overlay; **never blocks phone calls, SOS or BOND itself.** **Enforcement DECIDED (owner,
+      2026-09-27):** the kids'-mode accessibility exception in PRODUCT.md §7 is widened: BOND may
+      block, or cover with a full-screen screen, only the apps and schedules the parent set, and
+      nothing else. It never types, taps, sends or reads beyond the configured chat apps, and never
+      blocks calls, SOS or BOND itself. Outside kids' mode, §7's exclusion is unchanged.
    2. **The child's battery in the Parent app:** level and charging state, sent with the heartbeat
       and with each location or alert event, plus a low-battery alert (for example, at 15% or
       below). `BatteryManager`; no extra wake-ups; end-to-end encrypted like the rest.
@@ -390,7 +391,6 @@ plan.
 5. **A measured false-positive rate** before any launch claim.
 6. **Battery measured on a mid-range phone** for both the chat screening budget and live location
    sessions, before launch.
-7. **App blocking only:** the owner has decided how blocking is enforced (decision 6.1).
 
 **Builds on.** BL-1's message reading and judging path; the `Noul` pass and the review queue; the
 shared engine and KMP modules (BOND reuses them under its own brand). Reference designs (MIT; both
@@ -401,21 +401,24 @@ hostile messages blocked and 0 of 49 false positives on its own set).
 **Feasibility.** Android: notification previews (Play) or the visible chat through accessibility,
 **allowed in the Play build for this feature only (owner decision, 2026-09-26)**, as a scoped
 exception in PRODUCT.md §7, declared to Google as parental control. Conditions: on only in kids'
-mode on the child's device; a persistent, non-dismissible "protection is on" notification while it
-runs (PRODUCT.md §7 currently words it "Loupe protection is on"; under the BOND brand it names
-BOND); the `isMonitoringTool` / parental-control and accessibility-use declarations, with a
+mode on the child's device; a persistent, non-dismissible "BOND protection is on" notification
+while it runs; the `isMonitoringTool` / parental-control and accessibility-use declarations, with a
 prominent in-app disclosure and consent screen before it is turned on; it reads only the configured
 chat and game apps, stores no text, and sends only content-free alerts through the encrypted relay
-below. Outside kids' mode, §7's exclusion is unchanged. iOS: the Child app is probably not possible
+below; it may block, or cover with a full-screen screen, only the apps and schedules the parent set,
+never types, taps or sends, and never blocks calls, SOS or BOND itself (widened 2026-09-27). Outside kids' mode, §7's exclusion is unchanged. iOS: the Child app is probably not possible
 beyond Screen Time controls.
 
-### The encrypted relay (decided, owner, 2026-09-26; scope widened 2026-09-27)
+### The encrypted relay (decided, owner, 2026-09-26; scope widened and decided 2026-09-27)
 
 Recorded as a scoped exception in PRODUCT.md §4: for this feature only, the promise is *"no server
 can read anything"* instead of *"no Loupe server"*. The cloud helper does only relay work: parent
 alerts, pairing and billing, and now also **live location sessions** (plus safe-place notices,
-SOS, battery status, and screen-time requests and approvals). The promise has to hold for all of
-it, location included.
+SOS, battery status, and screen-time requests and approvals). **Decided (owner, 2026-09-27):** the
+PRODUCT.md §4 exception, retitled for BOND, covers all of these: every BOND message is end-to-end
+encrypted to the paired parent device; the relay stores no location or content (only short-lived
+delivery queues); history lives only on the parent's phone; and the relay can see session metadata
+(start, length, update rhythm, device tokens).
 
 - The child's device encrypts each alert, and each location update, to the paired parent device's
   public key; pairing is in person (for example, a QR code carrying a key exchange).
@@ -432,9 +435,7 @@ it, location included.
   sessions their start, length and update rhythm), which is stated.
 
 **Open questions.** The price and the free-trial shape (Phase 0's pricing test answers these).
-Where a labelled grooming set comes from, ethically. Whether PRODUCT.md §4's scoped exception text
-gets a line for location (owner to decide). How app blocking is enforced, given §7's "never acts
-in another app" (owner to decide).
+Where a labelled grooming set comes from, ethically.
 
 ---
 

@@ -222,21 +222,26 @@ This is the spine. Each line is a promise, not a default.
 The last two claims are distinct and we never blur them: *"never leaves your device"* is true of
 photos, files and SMS. *"We never see it"* is what is true of Gmail and Sheets.
 
-**Scoped exception: kids' chat protection parent alerts** *(owner decision, 2026-09-26;
-BACKLOG.md BL-16; planned, not built).* For this one feature, and only this one, the promise changes
-from *"no Loupe server"* to ***"no server can read anything"***. Everything else is unchanged: the free
-tier, mail and file paths keep *"nothing leaves the device"*, and connected accounts keep *"we never
-see it"*.
+**Scoped exception: BOND (kids' protection)** *(owner decisions, 2026-09-26 and 2026-09-27;
+BACKLOG.md BL-16; planned, not built).* For BOND, and only BOND, the promise changes from *"no
+Loupe server"* to ***"no server can read anything"***. Everything else is unchanged: the free tier,
+mail and file paths keep *"nothing leaves the device"*, and connected accounts keep *"we never see
+it"*.
 
-- **End-to-end encrypted.** The child's device encrypts each alert to the paired parent device's
-  public key. Pairing is in person (for example, a QR code carrying a key exchange).
-- **Content-free.** An alert carries the category, the confidence, the time and at most the app
-  name. Never message text.
-- **The relay reads nothing.** A push service (FCM and/or APNs, or a minimal Loupe relay) carries
-  only ciphertext it cannot decrypt, and stores nothing beyond short-lived delivery queues.
+- **What it covers: every BOND message.** Chat alerts, live location sessions, SOS, safe-place
+  (arrive / leave) notices, battery status, and screen-time requests and approvals.
+- **End-to-end encrypted.** The child's device encrypts every BOND message to the paired parent
+  device's public key. Pairing is in person (for example, a QR code carrying a key exchange).
+- **Content-free chat alerts.** A chat alert carries the category, the confidence, the time and at
+  most the app name. Never message text; no chat text ever leaves the child's device.
+- **The relay reads and keeps nothing.** A push service (FCM and/or APNs, or a minimal relay) and,
+  for a live location session, a live channel through the relay carry only ciphertext they cannot
+  decrypt. The relay stores no location and no content, only short-lived delivery queues.
+- **History lives only on the parent's phone.**
 - **Obligations that come with it:** the privacy policy discloses the relay; key rotation and
-  unpairing are supported; alerts are protected against replay; and it is stated plainly that the
-  relay necessarily sees metadata (timing and device tokens), even though it cannot read content.
+  unpairing are supported; messages are protected against replay; and it is stated plainly that the
+  relay can see session metadata (when a session starts, how long it lasts, its update rhythm, and
+  device tokens), even though it cannot read content.
 
 ---
 
@@ -432,17 +437,19 @@ on a discretionary policy review. Note also that full UI control hands a model t
 37% accurate on hard decisions the ability to act on live accounts — the cooperative path's
 worst case is a wrong deep link.
 
-**Scoped exception: kids' chat protection** *(owner decision, 2026-09-26; BACKLOG.md BL-16; planned,
-not built).* The Play build may use an `AccessibilityService` for this one feature, declared to Google
-as parental control, and for nothing else. Its conditions:
+**Scoped exception: BOND (kids' protection)** *(owner decisions, 2026-09-26 and 2026-09-27;
+BACKLOG.md BL-16; planned, not built).* The Play build may use an `AccessibilityService` for BOND's
+kids' mode, declared to Google as parental control, and for nothing else. Its conditions:
 
 - enabled only in kids' mode, on the child's device;
-- a persistent, non-dismissible "Loupe protection is on" notification while it runs;
+- a persistent, non-dismissible "BOND protection is on" notification while it runs;
 - Play's `isMonitoringTool` / parental-control declaration and the accessibility-use declaration,
   with a prominent in-app disclosure and a consent screen before it is turned on;
 - it reads only the chat and game apps configured in kids' mode, stores no text, and sends only
   content-free alerts through the end-to-end encrypted relay (§4);
-- it only reads; it never acts in another app.
+- BOND may block, or cover with a full-screen screen, only the apps and schedules the parent set,
+  and nothing else. It never types, taps, sends or reads beyond the configured chat apps, and never
+  blocks calls, SOS or BOND itself.
 
 Everywhere outside kids' mode, the exclusion above stands exactly as written: the Play build is
 cooperative-only.
