@@ -25,7 +25,7 @@ question types, used here as technical terms only.
 | BL-13 | Egypt / MENA "official channel" trust pack | all | Free | Brand list, pack format; ongoing curation | approved, not started | Station research |
 | BL-14 | QR "look before you scan", plus a venue self-audit | iOS, Android | Free | BL-13 helps; phishing formula | approved, not started | Station research |
 | BL-15 | Remote-access app warning | Android | Free | Android A0–A4; BL-1 | approved, not started | Station research |
-| BL-16 | Kids' chat protection | Android first | To decide | Android A4b; legal review; measured false-positive rate | approved, not started | Station research |
+| BL-16 | Kids' protection as a separate product, **BOND** (chat protection, parent-requested location, screen time) | Child app: Android first; Parent app: iOS and Android | Paid | **Phase 0 validation first**; Android A4b; legal review; measured false-positive rate | approved; Phase 0 (validate) first, **no BOND code yet** | Station research |
 
 ---
 
@@ -307,56 +307,134 @@ queue for "look at this app" findings (Loupe never uninstalls or changes anythin
 **Open questions.** Play's `QUERY_ALL_PACKAGES` / package-visibility policy (see ANDROID-PLAN.md).
 Where the store description comes from without a network call.
 
-## BL-16 — Kids' chat protection
+## BL-16 — Kids' protection: BOND
 
-**What.** Size M; tier to decide. The owner calls it "a huge differentiator". On the child's Android
-phone, screen game, Discord and messaging chats for grooming and gift-card lures, with `Noul`s for
-*asks to move to a private chat*, *offers in-game currency or a gift card*, *asks for photos or
-location*, and *says to keep it secret*. Alerts to the parent carry **no content**: the category, the
-confidence and the time only. Full plan in [`ANDROID-PLAN.md`](ANDROID-PLAN.md), *Kids' chat
-protection*.
+**What.** Paid. Size: was M for chat protection alone; to be re-estimated after Phase 0 now that it
+includes location, screen time and a Parent app. The owner calls it "a huge differentiator". On the
+child's Android phone, screen game, Discord and messaging chats for grooming and gift-card lures, with `Noul`s for *asks
+to move to a private chat*, *offers in-game currency or a gift card*, *asks for photos or
+location*, and *says to keep it secret*. Alerts to the parent carry **no content**: the category,
+the confidence and the time only. The parent can also see the child's location when they ask for
+it, set screen-time limits, and see the child's battery (below). Full plan in
+[`ANDROID-PLAN.md`](ANDROID-PLAN.md), *Kids' protection: BOND*.
 
-**Hard requirements, before any build.**
+### Owner decisions (2026-09-26/27, relayed from the Loupe Station session)
 
-1. **Consent and transparency:** the child knows it is on, in age-appropriate words.
+1. **DECIDED: a standalone product named BOND.** A separate brand from Loupe, built on the same
+   engine and the same KMP code. Two apps: a **Child app** (Android first) and a **Parent app**
+   (iOS **and** Android).
+2. **DECIDED: validate first (Phase 0), before any MVP build.** A landing page and waitlist, parent
+   interviews, a pricing test, and school and carrier partnership talks. **No BOND code is written
+   until Phase 0 reports** to the owner (the gate is in ANDROID-PLAN.md, A10).
+3. **DECIDED: paid.** BOND is a paid product / tier. **The cloud is a relay only:** the child's
+   phone judges chats on the device; the cloud helper carries only end-to-end encrypted,
+   content-free alerts, plus pairing and billing. **No chat text ever leaves the child's device.**
+   The promise stays *"no server can read anything"* (the PRODUCT.md §4 scoped exception below).
+4. **DECIDED: a compute budget on the child's phone.** At most **1 model pass per incoming
+   message** and at most **30 passes a minute**; only the configured apps; only while the screen is
+   on; a **keyword prefilter first**, so most messages never reach the model; battery **measured on
+   a mid-range phone before launch**.
+5. **DECIDED: location, only when the parent asks.** When the parent opens the map, the child's
+   phone sends its location **every 5 s until the map closes**. The session design is
+   **CONFIRMED**:
+   1. **Start.** The parent's request goes through the relay as a high-priority push; the child's
+      phone starts a foreground service of type `location` (Android 14
+      `FOREGROUND_SERVICE_LOCATION`) for that session only.
+   2. **During the session.** A live end-to-end encrypted channel through the relay (for example, a
+      WebSocket), not one push per update.
+   3. **Auto-stop** on any of: the map closing; the Parent app going to the background or the
+      parent's screen locking; a missed parent heartbeat (about 20 s); a **10-minute cap** with a
+      "keep watching?" prompt.
+   4. **On the child's phone**, while a session runs: "Your parent is viewing your location".
+   5. **Child's phone off or offline:** the parent sees the last known location and its time.
+
+   Also decided with it: automatic **safe-place arrive / leave notices** (geofences) and **SOS**
+   (immediate, then frequent updates until the parent stops it). All location is end-to-end
+   encrypted; **no location is stored on Loupe servers**; location history exists only on the
+   parent's phone. It needs "Allow all the time" location (Play's background-location declaration;
+   family safety is an accepted use) and a battery test on a mid-range phone.
+
+6. **DECIDED as features: screen time, app blocking and the child's battery** (owner,
+   2026-09-27). Mechanical, no model, so the compute budget (decision 4) is unchanged.
+   1. **Screen-time limits and app blocking** on the child's Android phone: daily limits per app or
+      per category; schedules (bedtime, school hours); block an app; the child can ask for more
+      time and the parent approves in one tap. Usage from `UsageStatsManager` (`PACKAGE_USAGE_STATS`
+      special access); enforced with the existing accessibility service and/or a full-screen
+      overlay; **never blocks phone calls, SOS or BOND itself.** **Needs an owner decision:**
+      blocking acts on another app's use, which the recorded accessibility exception does not
+      cover today ("it only reads; it never acts in another app", PRODUCT.md §7). Either that
+      exception is updated explicitly, or blocking is enforced another way.
+   2. **The child's battery in the Parent app:** level and charging state, sent with the heartbeat
+      and with each location or alert event, plus a low-battery alert (for example, at 15% or
+      below). `BatteryManager`; no extra wake-ups; end-to-end encrypted like the rest.
+
+**UNDER CONSIDERATION (not decided):** a child SOS button; a teen scam / sextortion pack reusing the
+scam engine; "what to say" guides per alert, in Arabic and English; a weekly calm summary; a family
+plan.
+
+### Hard requirements, before any build
+
+0. **Phase 0 has reported** (decision 2 above).
+1. **Consent and transparency:** the child knows it is on, in age-appropriate words; no hidden
+   mode. This covers location too (the "Your parent is viewing your location" notice).
 2. **Google Play:** the stalkerware / `isMonitoringTool` policy (a persistent notification,
-   disclosure, the parental-control declaration) and the AccessibilityService declaration.
-3. **iOS is heavily limited:** check Apple's Screen Time APIs (FamilyControls, ManagedSettings,
-   DeviceActivity) for anything usable; they are not known to expose message content. Android first.
-4. **Legal review:** children's data, Egypt's Personal Data Protection Law (151/2020), and COPPA /
-   GDPR-K if sold abroad.
+   disclosure, the parental-control declaration), the AccessibilityService declaration, and the
+   background-location declaration (`ACCESS_BACKGROUND_LOCATION`, family safety) with the
+   `FOREGROUND_SERVICE_LOCATION` foreground-service type, and the usage-access
+   (`PACKAGE_USAGE_STATS`) disclosure for screen time.
+3. **iOS is heavily limited for the Child app:** check Apple's Screen Time APIs (FamilyControls,
+   ManagedSettings, DeviceActivity) for anything usable; they are not known to expose message
+   content. Child app Android first; the Parent app ships on iOS and Android.
+4. **Legal review:** children's data (now including precise location), Egypt's Personal Data
+   Protection Law (151/2020), and COPPA / GDPR-K if sold abroad.
 5. **A measured false-positive rate** before any launch claim.
+6. **Battery measured on a mid-range phone** for both the chat screening budget and live location
+   sessions, before launch.
+7. **App blocking only:** the owner has decided how blocking is enforced (decision 6.1).
 
-**Builds on.** BL-1's message reading and judging path; the `Noul` pass and the review queue.
-Reference designs (MIT; both call hosted Jev, so reuse the question design only, not the code path):
+**Builds on.** BL-1's message reading and judging path; the `Noul` pass and the review queue; the
+shared engine and KMP modules (BOND reuses them under its own brand). Reference designs (MIT; both
+call hosted Jev, so reuse the question design only, not the code path):
 `brainstormity/Jev-Moderation-Bot` and `CodeAlive-AI/mastra-jev-moderation` (which reports 9 of 9
 hostile messages blocked and 0 of 49 false positives on its own set).
 
 **Feasibility.** Android: notification previews (Play) or the visible chat through accessibility,
 **allowed in the Play build for this feature only (owner decision, 2026-09-26)**, as a scoped
 exception in PRODUCT.md §7, declared to Google as parental control. Conditions: on only in kids'
-mode on the child's device; a persistent, non-dismissible "Loupe protection is on" notification
-while it runs; the `isMonitoringTool` / parental-control and accessibility-use declarations, with a
+mode on the child's device; a persistent, non-dismissible "protection is on" notification while it
+runs (PRODUCT.md §7 currently words it "Loupe protection is on"; under the BOND brand it names
+BOND); the `isMonitoringTool` / parental-control and accessibility-use declarations, with a
 prominent in-app disclosure and consent screen before it is turned on; it reads only the configured
 chat and game apps, stores no text, and sends only content-free alerts through the encrypted relay
-below. Outside kids' mode, §7's exclusion is unchanged. iOS: probably not possible beyond Screen
-Time controls.
+below. Outside kids' mode, §7's exclusion is unchanged. iOS: the Child app is probably not possible
+beyond Screen Time controls.
 
-**Parent alerts: decided (owner, 2026-09-26) — an end-to-end encrypted relay.** Recorded as a
-scoped exception in PRODUCT.md §4: for this feature only, the promise is "no server can read
-anything" instead of "no Loupe server".
+### The encrypted relay (decided, owner, 2026-09-26; scope widened 2026-09-27)
 
-- The child's device encrypts each alert to the paired parent device's public key; pairing is in
-  person (for example, a QR code carrying a key exchange).
-- The payload is content-free: category, confidence, timestamp and at most the app name. Never
-  message text.
-- Transport: a push service (FCM and/or APNs, or a minimal Loupe relay) that carries only ciphertext
-  it cannot read and stores nothing beyond short-lived delivery queues.
+Recorded as a scoped exception in PRODUCT.md §4: for this feature only, the promise is *"no server
+can read anything"* instead of *"no Loupe server"*. The cloud helper does only relay work: parent
+alerts, pairing and billing, and now also **live location sessions** (plus safe-place notices,
+SOS, battery status, and screen-time requests and approvals). The promise has to hold for all of
+it, location included.
+
+- The child's device encrypts each alert, and each location update, to the paired parent device's
+  public key; pairing is in person (for example, a QR code carrying a key exchange).
+- The alert payload is content-free: category, confidence, timestamp and at most the app name.
+  Never message text.
+- Location travels only as ciphertext over the live session channel (or the SOS / safe-place
+  message); the relay stores none of it, and history is kept only on the parent's phone.
+- Transport: a push service (FCM and/or APNs, or a minimal relay) for alerts and session start;
+  a live channel (for example, a WebSocket) through the relay for a location session. Either way
+  the relay carries only ciphertext it cannot read and stores nothing beyond short-lived delivery
+  queues.
 - Obligations: the privacy policy discloses the relay; key rotation and unpairing; replay
-  protection; and the relay necessarily sees metadata (timing and device tokens), which is stated.
+  protection; and the relay necessarily sees metadata (timing and device tokens, and for location
+  sessions their start, length and update rhythm), which is stated.
 
-**Open questions.** Free or paid? Where a labelled
-grooming set comes from, ethically.
+**Open questions.** The price and the free-trial shape (Phase 0's pricing test answers these).
+Where a labelled grooming set comes from, ethically. Whether PRODUCT.md §4's scoped exception text
+gets a line for location (owner to decide). How app blocking is enforced, given §7's "never acts
+in another app" (owner to decide).
 
 ---
 
