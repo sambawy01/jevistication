@@ -119,6 +119,15 @@ internal object UnicodeData {
     private val excluded by lazy { Flags(UnicodeDataTable.EXCLUDED) }
     private val ignorable by lazy { Flags(UnicodeDataTable.IGNORABLE) }
     private val stable32 by lazy { Flags(UnicodeDataTable.STABLE32) }
+    private val uts46Disallowed by lazy { Flags(UnicodeDataTable.UTS46_DISALLOWED) }
+    private val joining by lazy { Runs(UnicodeDataTable.JOINING) }
+
+    /** UTS #46 mappings that differ from NFKC_Casefold (an empty array: mapped to nothing). */
+    private val uts46Mapping: HashMap<Int, IntArray> by lazy {
+        val out = HashMap<Int, IntArray>()
+        readSequences(UnicodeDataTable.UTS46_MAPPING) { cp, tag, seq -> out[cp] = if (tag == 'e') IntArray(0) else seq }
+        out
+    }
 
     /** A `gap:count:step:delta` field as sorted entries of four: start, count, step, delta. */
     private fun deltaEntries(field: String): IntArray {
@@ -193,6 +202,15 @@ internal object UnicodeData {
     fun category(cp: Int): Int = category[cp]
 
     fun combiningClass(cp: Int): Int = ccc[cp]
+
+    /** UTS #46 status `disallowed` (IdnaMappingTable.txt of the pinned version). */
+    fun uts46Disallowed(cp: Int): Boolean = cp in uts46Disallowed
+
+    /** The UTS #46 mapping of a code point that is not disallowed and not a deviation. */
+    fun uts46Map(cp: Int): IntArray = uts46Mapping[cp] ?: nfkcCasefoldChar(cp)
+
+    /** Joining_Type: 0 U (non-joining, the default), 1 L, 2 D, 3 R, 4 T (transparent). */
+    fun joiningType(cp: Int): Int = joining[cp]
 
     /** Assigned in Unicode 3.2 and mapped the same by 3.2 nameprep and by the pinned NFKC_Casefold. */
     fun stableSince32(cp: Int): Boolean = cp in stable32

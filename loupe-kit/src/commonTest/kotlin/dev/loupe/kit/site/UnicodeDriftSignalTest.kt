@@ -35,11 +35,13 @@ class UnicodeDriftSignalTest {
             val v = mail("\"PayPal\" <service@$label.com>")
             assertEquals("danger", v.level, label)
             assertTrue(v.score >= 85, "$label: ${v.score}")
-            assertEquals(setOf("sender_disguised_domain", "display_brand_mismatch"), v.reasons.map { it.code }.toSet(), label)
+            val codes = v.reasons.map { it.code }.toSet()
+            assertTrue("sender_disguised_domain" in codes && "display_brand_mismatch" in codes, "$label: $codes")
         }
+        // without a name it is still a look-alike of the brand, read literally (and written with stand-ins)
         val upper = mail("x@ＰＡＹＰＡＬ.ＣＯＭ")
-        assertEquals("caution", upper.level)
-        assertEquals(listOf("sender_disguised_domain"), upper.reasons.map { it.code })
+        assertEquals("danger", upper.level)
+        assertTrue("sender_disguised_domain" in upper.reasons.map { it.code })
         // a trusted domain does not cover the same name written with stand-ins
         val trusted = mail("\"PayPal\" <service@$fullwidth.com>", trusted = listOf("paypal.com"))
         assertEquals("danger", trusted.level)

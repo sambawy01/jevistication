@@ -345,20 +345,33 @@ object PortableText {
     fun stableSinceUnicode32(codePoint: Int): Boolean = UnicodeData.stableSince32(codePoint)
 
     /**
-     * The code points of [label] that stand in for other characters: compatibility variants (NFKC
-     * changes them: full-width `ｐ`, mathematical `𝗽`, enclosed `🄰`, ligatures, superscripts) and
-     * invisible default ignorables that IDNA removes (soft hyphen, variation selectors), except the
-     * zero-width joiner and non-joiner, which Persian and Indic names use. No real name is written
-     * with them: IDNA maps them away, so the written name hides the one it reaches. In order,
-     * without repeats.
+     * The code points of [text] (a label or a whole host) that stand in for other characters: any
+     * whose NFKC is not itself (compatibility variants: full-width `ｐ`, mathematical `𝗽`, enclosed
+     * `🄰`, ligatures, superscripts; and canonical singletons: the Kelvin sign `K`, the Ångström sign,
+     * the Ohm sign, CJK compatibility ideographs, Greek oxia), the invisible default ignorables IDNA
+     * removes (soft hyphen, variation selectors, ZWSP), and a zero-width joiner or non-joiner that
+     * CONTEXTJ does not allow where it stands (Persian and Indic names keep theirs). No real name is
+     * written with them: IDNA maps them away, so the written name hides the one it reaches. `é`,
+     * Hangul and every other character that NFKC keeps are not stand-ins. In order, without repeats.
      */
-    fun disguisedCodePoints(label: String): List<Int> =
-        codePoints(label).filter { cp ->
-            cp >= 0x80 && cp != 0x200C && cp != 0x200D && (
-                !UnicodeData.decompose(intArrayOf(cp), compat = true).contentEquals(UnicodeData.decompose(intArrayOf(cp), compat = false)) ||
-                    UnicodeData.nfkcCasefoldChar(cp).isEmpty()
-                )
-        }.distinct()
+    fun disguisedCodePoints(text: String): List<Int> {
+        val out = LinkedHashSet<Int>()
+        for (label in text.split('.', '\u3002', '\uFF0E', '\uFF61')) {
+            val cps = codePoints(label)
+            for (i in cps.indices) {
+                val cp = cps[i]
+                if (cp < 0x80) continue
+                val stand = if (cp == 0x200C || cp == 0x200D) {
+                    !Uts46.contextJ(cps, i)
+                } else {
+                    val k = UnicodeData.compose(UnicodeData.decompose(intArrayOf(cp), compat = true))
+                    !(k.size == 1 && k[0] == cp) || UnicodeData.nfkcCasefoldChar(cp).isEmpty()
+                }
+                if (stand) out += cp
+            }
+        }
+        return out.toList()
+    }
 
     /** The code points of [label] that are not [stableSinceUnicode32], in order, without repeats. */
     fun unicode32Drift(label: String): List<Int> =
@@ -530,6 +543,7 @@ object PortableRegex {
     private const val META_OUTSIDE = "\\^$.|?*+()[]{}"
     private const val META_INSIDE = "\\^-[]&"
     private val QUANTIFIED_GROUP = Regex("""\)[*+?{]""")
+    private val BACK_REFERENCE = Regex("""\\[1-9]|\\k<""")
 
     private fun fail(what: String): Nothing =
         throw IllegalArgumentException("$what is not supported in a baseline pattern (it matches differently on each phone)")
@@ -568,8 +582,10 @@ object PortableRegex {
                 hex(pattern.substring(i + 2, minOf(pattern.length, i + 4)).also { if (it.length < 2) fail("a bad escape \\x") }) to 4
             }
             '0' -> {
+                // as java.util.regex: \0n, \0nn, or \0mnn with m <= 3 (\0777 is \077 then 7)
                 var j = i + 2
-                while (j < pattern.length && j < i + 5 && pattern[j] in '0'..'7') j++
+                val max = if (pattern.getOrNull(i + 2)?.let { it in '0'..'3' } == true) i + 5 else i + 4
+                while (j < pattern.length && j < max && pattern[j] in '0'..'7') j++
                 val digits = pattern.substring(i + 2, j)
                 if (digits.isEmpty()) fail("a bad escape \\0")
                 digits.toInt(8) to j - i
@@ -580,7 +596,9 @@ object PortableRegex {
             'f' -> 0x0C to 2
             'a' -> 0x07 to 2
             'e' -> 0x1B to 2
-            else -> if (e.isLetterOrDigit()) null else e.code to 2
+            // an escaped ASCII letter or digit is a class, an anchor or a back reference; any other
+            // escaped character (punctuation, `\É`) is that character, as in java.util.regex
+            else -> if (e.code < 0x80 && e.isLetterOrDigit()) null else e.code to 2
         }
     }
 
@@ -588,7 +606,7 @@ object PortableRegex {
         val out = StringBuilder(pattern.length + 16)
         // The consumed-start `\b` changes what a match covers, so it is only used when no group is
         // repeated (a repeated group would need the separator each time round).
-        val consumedStart = !QUANTIFIED_GROUP.containsMatchIn(pattern)
+        val consumedStart = !QUANTIFIED_GROUP.containsMatchIn(pattern) && !BACK_REFERENCE.containsMatchIn(pattern)
         // Whether nothing can have been matched yet on this path: at the pattern's start, or right
         // after `(` or `|` of groups that are themselves leading.
         val groupLeading = ArrayList<Boolean>()
@@ -666,6 +684,7 @@ object PortableRegex {
                         // inline flags, (?imsx-imsx) or (?imsx-imsx:...): case flags are dropped
                         var j = i + 2
                         while (j < pattern.length && (pattern[j].isLetter() || pattern[j] == '-')) j++
+                        if ('x' in pattern.substring(i + 2, j)) fail("the comments flag (?x)")
                         val flags = pattern.substring(i + 2, j).filter { it != 'i' && it != 'u' && it != 'U' }
                         val kept = flags.trimEnd('-').let { if (it == "-") "" else it }
                         when (pattern.getOrNull(j)) {
@@ -719,6 +738,15 @@ object PortableRegex {
             }
         }
         return out.toString()
+    }
+
+    /** [cps] as sorted runs of consecutive code points (first, last). */
+    private fun runsOf(cps: Set<Int>): List<Pair<Int, Int>> {
+        val out = ArrayList<Pair<Int, Int>>()
+        for (c in cps.sorted()) {
+            if (out.isNotEmpty() && out.last().second == c - 1) out[out.size - 1] = out.last().first to c else out += c to c
+        }
+        return out
     }
 
     /** Translates the class starting at pattern[start] (`[`) into [out]; returns the index after `]`. */
@@ -778,9 +806,15 @@ object PortableRegex {
                 val hi = hiAtom.first
                 if (hi < lo) fail("a reversed range")
                 out.append(member(lo)).append('-').append(member(hi))
-                val flo = folded(lo)
-                val fhi = folded(hi)
-                if ((flo != lo || fhi != hi) && flo <= fhi) out.append(member(flo)).append('-').append(member(fhi))
+                if (hi - lo <= 1024) {
+                    // every member's match form that the range does not hold already (`[Z-a]` gains `z`)
+                    val extra = runsOf((lo..hi).map(::folded).filter { it < lo || it > hi }.toSet())
+                    for ((a, b) in extra) out.append(member(a)).also { if (b > a) out.append('-').append(member(b)) }
+                } else {
+                    val flo = folded(lo)
+                    val fhi = folded(hi)
+                    if ((flo != lo || fhi != hi) && flo <= fhi) out.append(member(flo)).append('-').append(member(fhi))
+                }
                 i = hiAtom.second
                 continue
             }

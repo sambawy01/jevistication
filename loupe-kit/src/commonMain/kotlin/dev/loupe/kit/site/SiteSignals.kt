@@ -85,7 +85,8 @@ class SiteConfig(
     val suspiciousTlds: Set<String> = suspiciousTlds.map { it.lowercase().trimStart('.') }.toSet()
     val shorteners: Set<String> = shorteners.map { it.lowercase() }.toSet()
     val brandDomains: Set<String> = brands.flatMap { b -> b.domains.map { it.lowercase() } }.toSet()
-    val knownGood: Set<String> = knownGood.map { it.lowercase() }.toSet() + brandDomains
+    /** Known-good domains in the ASCII form a browser resolves (a Unicode entry is mapped as a host is). */
+    val knownGood: Set<String> = knownGood.map { Hosts.toAsciiDomain(it.trim().trimEnd('.')) ?: it.lowercase() }.toSet() + brandDomains
     val tokenToBrand: Map<String, Brand> = LinkedHashMap<String, Brand>().also { m ->
         for (b in brands) for (t in b.tokens) m.getOrPut(t.lowercase()) { b }
     }
@@ -131,6 +132,8 @@ object SiteSignals {
         "ip_host" to (25 to "The address is a bare IP number instead of a website name."),
         "mixed_script" to (35 to "The website name mixes letters from different alphabets, a trick to imitate another name."),
         "disguised_host" to (30 to "The website name is written with stand-in letters (such as full-width or mathematical letters) for {host}; real links are not written this way."),
+        "deviation_host" to (10 to "The website name contains ß, ς or an invisible joiner, which older software reads as a different name ({target})."),
+        "deviation_known_host" to (45 to "The website name contains ß, ς or an invisible joiner: older software reads it as {target}, a known site, but browsers open a different website."),
         "unicode_drift_host" to (30 to "The website name uses characters that older and newer software read differently, so the name you see may not be the website you reach."),
         "homograph_brand" to (60 to "The website name imitates {brand} with look-alike letters from another alphabet."),
         "lookalike_brand" to (45 to "The website name looks like {brand} but is not {brand}'s website."),
@@ -179,6 +182,11 @@ object SiteSignals {
         // Greek
         'α' to 'a', 'β' to 'b', 'ε' to 'e', 'η' to 'n', 'ι' to 'l', 'κ' to 'k', 'ν' to 'v', 'ο' to 'o', 'ρ' to 'p', 'τ' to 't',
         'υ' to 'u', 'χ' to 'x', 'γ' to 'y', 'ω' to 'w',
+        // Latin small capitals (not compatibility characters: NFKC keeps them), e.g. ᴘᴀʏᴘᴀʟ
+        '\u0262' to 'g', '\u026A' to 'i', '\u0274' to 'n', '\u0280' to 'r', '\u028F' to 'y', '\u0299' to 'b', '\u029C' to 'h',
+        '\u029F' to 'l', '\u1D00' to 'a', '\u1D04' to 'c', '\u1D05' to 'd', '\u1D07' to 'e', '\u1D0A' to 'j', '\u1D0B' to 'k',
+        '\u1D0D' to 'm', '\u1D0F' to 'o', '\u1D18' to 'p', '\u1D1B' to 't', '\u1D1C' to 'u', '\u1D20' to 'v', '\u1D21' to 'w',
+        '\u1D22' to 'z', '\uA730' to 'f', '\uA731' to 's', '\uA7AF' to 'q',
         // Latin look-alikes, digits and symbols
         'i' to 'l', 'ı' to 'l', 'ł' to 'l', 'ⅼ' to 'l', 'ℓ' to 'l', '0' to 'o', '1' to 'l', '3' to 'e', '4' to 'a', '5' to 's', '7' to 't',
         '8' to 'b', '$' to 's', '@' to 'a', '!' to 'l', '|' to 'l',
@@ -186,9 +194,13 @@ object SiteSignals {
     private val MULTI = listOf("rn" to "m", "vv" to "w", "cl" to "d", "nn" to "m")
 
     // ------------------------------------------------------------------------ helpers
-    /** Lowercase, confusables folded to ASCII, hyphens dropped: "pаypa1" -> "paypal". */
+    /**
+     * Lowercase, confusables folded to ASCII (small capitals too), `ß` as `ss`, invisible characters
+     * (joiners, default ignorables) and hyphens dropped: "pаypa1" -> "paypal", "meßenger" ->
+     * "messenger", "pay\u200Dpal" -> "paypal".
+     */
     fun skeleton(s: String): String {
-        var t = PortableText.lowercase(nfkc(s)).map { CONFUSABLE[it] ?: it }.joinToString("")
+        var t = PortableText.lowercase(nfkc(s)).replace("ß", "ss").map { CONFUSABLE[it] ?: it }.joinToString("")
         t = withoutMarks(nfkd(t))
         for ((a, b) in MULTI) t = t.replace(a, b)
         return t.replace("-", "").replace("_", "")
@@ -205,6 +217,11 @@ object SiteSignals {
             .flatMap { PortableText.unicode32Drift(Hosts.decodeLabel(it)) }).distinct().filter { it !in stand }
     }
 
+    /** True when IDNA 2003 / transitional software reads [u]'s host as a different name than browsers do. */
+    fun deviation(u: ParsedUrl): Boolean =
+        u.host.isNotEmpty() && !Hosts.isIp(u.host) &&
+            Hosts.transitionalAscii(u.unicodeHost) != (Hosts.toAsciiDomain(u.unicodeHost) ?: u.host)
+
     /**
      * The stand-in characters of [u]'s host, as typed and in its decoded `xn--` labels
      * ([PortableText.disguisedCodePoints]).
@@ -220,7 +237,8 @@ object SiteSignals {
         while (i < s.length) {
             val cp = PortableText.codePointAt(s, i)
             val n = if (cp >= 0x10000) 2 else 1
-            if (!PortableText.isNonspacingOrEnclosingMark(cp)) out.append(s, i, i + n)
+            val invisible = cp == 0x200C || cp == 0x200D || (cp >= 0x80 && PortableText.nfkcCasefold(s.substring(i, i + n)).isEmpty())
+            if (!PortableText.isNonspacingOrEnclosingMark(cp) && !invisible) out.append(s, i, i + n)
             i += n
         }
         return out.toString()
@@ -291,6 +309,15 @@ object SiteSignals {
         // differently make one written name two possible websites.
         if (disguise(u).isNotEmpty()) out += SiteSignal("disguised_host", mapOf("host" to u.unicodeHost))
         if (unicodeDrift(u).isNotEmpty()) out += SiteSignal("unicode_drift_host", mapOf("host" to u.unicodeHost))
+        // `ß`, `ς` or a joiner: browsers (UTS #46 non-transitional) reach one name, IDNA 2003 software
+        // another (`faß.de` is xn--fa-hia.de, not fass.de). The host above is the browser's.
+        // Alone that is common and harmless (straße.de, ελλάς.gr, Persian names with ZWNJ): a small
+        // note. When the other reading is a known or trusted site, the name imitates it: an impostor.
+        if (deviation(u)) {
+            val other = Hosts.transitionalAscii(u.unicodeHost)
+            val otherKnown = config.known(Hosts.registrableDomain(other), Hosts.publicSuffix(other))
+            out += SiteSignal(if (otherKnown) "deviation_known_host" else "deviation_host", mapOf("host" to u.unicodeHost, "target" to other))
+        }
         if (config.known(reg, suffix)) return out
         // IDN: punycode labels, mixed scripts, homographs of a brand
         val regLabel = if (reg != null && suffix != null) reg.dropLast(suffix.length + 1) else ""

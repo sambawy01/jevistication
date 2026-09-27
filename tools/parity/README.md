@@ -73,9 +73,12 @@ other script's digits are. "Letter or number" is general category L, Nd, Nl or N
 | `regex.translate` | a user's baseline regex made portable (`{"pattern": ...}`), or `{"error": true}` when it uses `\p{..}`, `\X`, `\R`, `\h`, `\v`, `\N`, or `\D \S \W \b \B` inside `[...]` |
 | `baseline.pattern` | the translated pattern (input) finds a match in `match.form(args.text)` |
 | `baseline.keyword` | any of `args.keywords` is found as `keyword.contains` finds it |
-| `link.host` | the site check's host of a URL: labels NFKC + `case.lower`, Punycode when not ASCII (`ß` kept, unlike `idna.label`) |
+| `link.host` | the host a browser opens: WHATWG URL parsing for http(s) (`\\` is `/`, percent-decoded host, `。．｡` are dots) and UTS #46 **non-transitional** ToASCII (`ß`, `ς`, ZWJ, ZWNJ kept). Every expected host was checked in Chrome 153 (`new URL(u).host`). Python's `idna` codec is IDNA 2003 / transitional and must not be used for this |
+| `page.check` | as `link.check` for a page; `args.password` adds a password form, `args.knownGood` known-good domains |
 | `link.host_signals` | the codes of the phishing formula's host checks (docs/PHISHING-FORMULA.md §4), in order |
 | `link.check` | `{level, codes}`: the site check's level and the codes that carry weight, sorted |
+| `mail.check` | `{level, codes}` of the mail phishing check for a From header (input), `args.body`, `args.replyTo`, `args.trusted`; codes include the zero-weight `known_sender` / `trusted_sender` |
+| `unicode.disguised` | the stand-in code points of a label (`U+XXXX`): NFKC is not itself, a default ignorable, or a joiner CONTEXTJ rejects |
 
 ## Adding a case
 

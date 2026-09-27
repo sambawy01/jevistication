@@ -40,6 +40,12 @@ class LintTest(unittest.TestCase):
         # a second literal argument is ordinary text
         self.assertEqual(len(whats('val p = Pattern("x", """\\d""", "no", "q")')), 1)
 
+    def test_platform_data_calls_are_found_in_every_spelling(self):
+        src = 'val a = s.count { it.isDigit() }\nval b = s.all(Char::isLetter)\nval c = Character.isLetter(x)\nval d = PortableText.isLetter(1)\n'
+        is_code, _ = lint.extract.code_mask(src)
+        found = [m.group(1) for m in lint.PLATFORM_DATA.finditer(src) if is_code[m.start()]]
+        self.assertEqual(found, ["isDigit", "isLetter", "isLetter"])
+
     def test_the_repository_is_clean(self):
         self.assertEqual(lint.main([]), 0)
 

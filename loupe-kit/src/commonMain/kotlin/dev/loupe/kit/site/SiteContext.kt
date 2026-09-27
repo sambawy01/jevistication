@@ -57,11 +57,11 @@ object SiteContext {
 
     val IMPOSTOR_CODES: Set<String> = setOf(
         "homograph_brand", "lookalike_brand", "brand_domain_in_subdomain", "brand_in_subdomain",
-        "brand_in_domain_bait", "brand_other_tld", "mixed_script", "userinfo_in_url",
+        "brand_in_domain_bait", "brand_other_tld", "mixed_script", "userinfo_in_url", "deviation_known_host",
     )
     val DISQUALIFY_CODES: Set<String> = IMPOSTOR_CODES + setOf(
         "brand_mismatch", "brand_mismatch_login", "brand_in_domain", "brand_in_path", "impostor_login",
-        "shared_hosting", "shared_hosting_login", "data_url", "ip_host", "disguised_host", "unicode_drift_host",
+        "shared_hosting", "shared_hosting_login", "data_url", "ip_host", "disguised_host", "unicode_drift_host", "deviation_host", "deviation_known_host",
         "http_password", "http_card", "password_posts_elsewhere", "password_posts_http",
         "online_cert_new", "online_domain_new_week", "online_domain_new_month",
         "online_phish_list_url", "online_phish_list_host", "online_phish_list_domain", "online_safe_browsing",

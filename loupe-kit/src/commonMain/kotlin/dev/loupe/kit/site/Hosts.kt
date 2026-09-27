@@ -2,6 +2,7 @@ package dev.loupe.kit.site
 
 import dev.loupe.engine.OriginFacts
 import dev.loupe.engine.PortableText
+import dev.loupe.engine.Uts46
 
 /*
  * Host and URL helpers for site protection and mail phishing checks.
@@ -141,18 +142,19 @@ object Hosts {
 
     // ------------------------------------------------------------------------ IDNA
     /**
-     * One label to its IDNA ASCII form: the engine's one mapping ([OriginFacts.asciiLabel]: RFC 3454
-     * B.1 removed, NFKC_Casefold from the pinned Unicode data, Punycode), the same the registrable
-     * domain lookup uses. ASCII labels are only lowercased; a label the mapping makes ASCII
-     * (`ｅｘａｍｐｌｅ`, `ex🄰mple`) is that ASCII, as a browser sends it. Like IDNA 2003 (and
-     * `java.net.IDN`, and Python's `idna` codec) it is transitional: `ß` is `ss` and `ς` is `σ`, where
-     * current browsers keep them (`faß.de` is `xn--fa-hia.de` in Chrome); the site check then reads
-     * `fass.de`. Null when the label cannot be encoded.
+     * One label to the ASCII form a browser resolves: UTS #46 non-transitional ([Uts46], the WHATWG
+     * URL mapping Chrome and Safari use), so `ß`, `ς`, ZWJ and ZWNJ are kept (`faß` is `xn--fa-hia`,
+     * never `fass`). ASCII labels are only lowercased; a label the mapping makes ASCII (`ｅｘａｍｐｌｅ`)
+     * is that ASCII. Every host-keyed decision (known, trusted, owns, online lookups) reads this form;
+     * the transitional (IDNA 2003) reading is only compared with it ([transitionalAscii]).
      */
     fun toAsciiLabel(label: String): String? {
         if (label.all { it.code < 128 }) return label.lowercase()
-        return OriginFacts.asciiLabel(label)
+        return Uts46.toAscii(label).ascii
     }
+
+    /** [domain] as IDNA 2003 / transitional software reads it (`faß.de` -> `fass.de`). For comparison only. */
+    fun transitionalAscii(domain: String): String = Uts46.toAscii(domain, transitional = true).ascii
 
     /** An `xn--` label decoded to Unicode, or the label unchanged when it is not valid punycode. */
     fun decodeLabel(label: String): String {
@@ -163,14 +165,63 @@ object Hosts {
     /** A domain with every `xn--` label decoded to Unicode. */
     fun decodeDomain(domain: String): String = domain.split('.').joinToString(".") { decodeLabel(it) }
 
-    /** A domain to ASCII, label by label, or null when a label cannot be encoded. */
+    /**
+     * A domain to the ASCII form a browser resolves (UTS #46 non-transitional; the ideographic,
+     * full-width and halfwidth full stops separate labels as `.` does).
+     */
     fun toAsciiDomain(domain: String): String? {
-        if (domain.all { it.code < 128 }) return domain
-        return domain.split('.').map { if (it.isEmpty()) it else toAsciiLabel(it) ?: return null }.joinToString(".")
+        if (domain.all { it.code < 128 }) return domain.lowercase()
+        return Uts46.toAscii(domain).ascii
     }
+
+    /** The URL schemes WHATWG calls special: a backslash in them is a slash. */
+    private val SPECIAL = setOf("http", "https", "ws", "wss", "ftp", "file")
+
+    /**
+     * (scheme, authority, rest) of [url], split as a browser splits it for a special scheme: tabs and
+     * newlines dropped, `\` read as `/`, any number of slashes before the authority (`https:\\evil.com`,
+     * `https:///evil.com`); otherwise as Python's `urlsplit` (`//` starts the authority).
+     */
+    internal fun splitUrl(url: String): Triple<String, String?, String> {
+        var rest = url.trim().filter { it != '\t' && it != '\r' && it != '\n' }
+        var scheme = ""
+        val colon = rest.indexOf(':')
+        if (colon > 0 && SCHEME.matches(rest.substring(0, colon))) {
+            scheme = rest.substring(0, colon).lowercase()
+            rest = rest.substring(colon + 1)
+        }
+        if (scheme in SPECIAL) {
+            rest = rest.replace('\\', '/')
+            if (rest.startsWith("/")) rest = "//" + rest.trimStart('/')
+        }
+        if (!rest.startsWith("//")) return Triple(scheme, null, rest)
+        val after = rest.substring(2)
+        val end = after.indexOfFirst { it == '/' || it == '?' || it == '#' }.let { if (it < 0) after.length else it }
+        return Triple(scheme, after.substring(0, end), after.substring(end))
+    }
+
+    /** The host in an authority (`user@host:port`, `[v6]`), as written, or null when brackets do not pair. */
+    internal fun hostOfAuthority(netloc: String): String? {
+        if (('[' in netloc) != (']' in netloc)) return null
+        val hostPort = netloc.substringAfterLast('@')
+        return if (hostPort.startsWith("[")) hostPort.substring(1).substringBefore(']') else hostPort.substringBefore(':')
+    }
+
+    /** The host of [url] as written: percent-decoded (WHATWG), before IDNA mapping and lower-casing. */
+    fun writtenHost(url: String): String {
+        val netloc = splitUrl(url).second ?: return ""
+        val host = hostOfAuthority(netloc) ?: return ""
+        return SiteSignals.percentDecode(host).trimEnd('.', '\u3002', '\uFF0E', '\uFF61')
+    }
+
+    private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.\\-]*$")
 }
 
-/** A URL split the way Station's `signals.parse` splits it (Python `urlsplit` + the PSL facts). */
+/**
+ * A URL split the way a browser reaches it: Station's `signals.parse` fields (Python `urlsplit` +
+ * the PSL facts), with WHATWG's host handling for http(s) (a backslash is a slash, the host is
+ * percent-decoded) and the host in the ASCII form a browser resolves (UTS #46 non-transitional).
+ */
 data class ParsedUrl(
     val scheme: String,
     val host: String,
@@ -185,60 +236,40 @@ data class ParsedUrl(
     val raw: String,
 ) {
     /**
-     * The host as it was written, before IDNA mapping and before lower-casing (lower-casing new
-     * capitals with current data is itself one of the differences `unicode_drift_host` looks for);
-     * "" when the URL has none, or on a copy. The mapping erases what [SiteSignals]' `unicode_drift_host` and `disguised_host` look for
-     * (`ｐａｙｐａｌ` and `p🄰yp🄰l` map to `paypal`, U+1E030 to a plain Cyrillic letter), so those
-     * checks read this form too. Outside the constructor on purpose: the constructor and `copy` keep
-     * their eleven parameters for Swift, which does not see Kotlin's default arguments.
+     * The host as it was written in [raw]: percent-decoded, before IDNA mapping and lower-casing
+     * ([Hosts.writtenHost]). The mapping erases what [SiteSignals]' `disguised_host`,
+     * `unicode_drift_host` and `deviation_host` look for (`ｐａｙｐａｌ` maps to `paypal`), so they read
+     * this form. Derived from [raw], so a copied or hand-built value carries it too. Not a
+     * constructor parameter: the constructor and `copy` keep their eleven parameters for Swift.
      */
-    var typedHost: String = ""
-        internal set
+    val typedHost: String get() = Hosts.writtenHost(raw)
 
     companion object {
-        private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.\\-]*$")
-
-        /** Python `urlsplit` semantics for the parts the checks read; null where urlsplit raises. */
+        /** A URL's parts; null where the authority's brackets do not pair (where urlsplit raises). */
         fun parse(url: String): ParsedUrl? {
-            val raw = url.trim()
-            var rest = raw.filter { it != '\t' && it != '\r' && it != '\n' }
-            var scheme = ""
-            val colon = rest.indexOf(':')
-            if (colon > 0 && SCHEME.matches(rest.substring(0, colon))) {
-                scheme = rest.substring(0, colon).lowercase()
-                rest = rest.substring(colon + 1)
-            }
-            var netloc = ""
-            if (rest.startsWith("//")) {
-                val after = rest.substring(2)
-                val end = after.indexOfFirst { it == '/' || it == '?' || it == '#' }.let { if (it < 0) after.length else it }
-                netloc = after.substring(0, end)
-                rest = after.substring(end)
-            }
-            rest = rest.substringBefore('#')
+            val (scheme, netloc, afterAuthority) = Hosts.splitUrl(url)
+            val rest = afterAuthority.substringBefore('#')
             val query = if ('?' in rest) rest.substringAfter('?') else ""
             val path = rest.substringBefore('?')
-            if (('[' in netloc) != (']' in netloc)) return null
-            val hostPort = netloc.substringAfterLast('@')
-            val hostname = if (hostPort.startsWith("[")) hostPort.substring(1).substringBefore(']')
-            else hostPort.substringBefore(':')
-            // A host typed in Unicode (pаypal.com) is read in its IDNA ASCII form, as a browser sends it.
-            val typed = hostname.trimEnd('.')
-            val host = PortableText.lowercase(typed).let { h -> if (h.all { it.code < 128 }) h else Hosts.toAsciiDomain(h) ?: h }
+            val authority = netloc ?: ""
+            val hostname = Hosts.hostOfAuthority(authority) ?: return null
+            // The host as a browser resolves it: percent-decoded, then UTS #46 non-transitional.
+            val written = SiteSignals.percentDecode(hostname)
+            val host = (Hosts.toAsciiDomain(written) ?: written).trimEnd('.')
             val labels = if (host.isNotEmpty()) host.split(".") else emptyList()
             return ParsedUrl(
                 scheme = scheme,
                 host = host,
                 unicodeHost = labels.joinToString(".") { Hosts.decodeLabel(it) },
                 labels = labels,
-                userinfo = '@' in netloc,
+                userinfo = '@' in authority,
                 path = path.ifEmpty { "/" },
                 query = query,
                 suffix = Hosts.publicSuffix(host),
                 registrable = Hosts.registrableDomain(host),
                 subdomain = Hosts.subdomainPart(host),
                 raw = url,
-            ).also { it.typedHost = typed }
+            )
         }
     }
 }

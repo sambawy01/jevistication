@@ -19,10 +19,12 @@ import kotlin.time.TimeSource
  * 48,000 characters with a card every 1,000 took 6.6 s in the card-cue search); the leading `\b` is now
  * BoundedRegex's, and the cue search reads a short window.
  *
- * Each case runs on a text of n and of 4n characters: linear work takes about 4 times as long,
- * quadratic about 16. The check is `t(4n) < 8 t(n) + 250 ms` (the 250 ms absorbs timer noise on the
- * short cases), so it fails on a blow-up however fast or slow the machine is, and not on a slow
- * machine that is merely slow; an absolute ceiling of 20 s on 4n catches a hang.
+ * Each case grows its text until one run takes at least 100 ms (or the text reaches about 800,000
+ * characters: then it is fast enough at any size that matters), then times the text of n and of 4n
+ * characters, the median of three runs each. Linear work takes about 4 times as long, quadratic
+ * about 16; the check is `t(4n) < 8 t(n) + 100 ms`, which does not depend on the machine's speed,
+ * and timer noise is small against t(n) of about 100 ms. A ceiling of 20 s on t(4n) catches a
+ * hang.
  */
 class PortableRegexPerformanceTest {
     private fun ms(block: () -> Unit): Long {
@@ -31,14 +33,23 @@ class PortableRegexPerformanceTest {
         return t0.elapsedNow().inWholeMilliseconds
     }
 
+    private fun median3(block: () -> Unit): Long = listOf(ms(block), ms(block), ms(block)).sorted()[1]
+
     private fun linear(name: String, text: (Int) -> String, run: (String) -> Unit) {
-        val small = text(1)
-        val big = text(4)
-        run(small) // warm up
-        val t1 = ms { run(small) }
-        val t4 = ms { run(big) }
+        var k = 1
+        run(text(1)) // warm up
+        var t1 = ms { run(text(k)) }
+        while (t1 < 100 && text(k).length < 800_000) {
+            k *= 2
+            t1 = ms { run(text(k)) }
+        }
+        val small = text(k)
+        val big = text(4 * k)
+        t1 = median3 { run(small) }
+        val t4 = median3 { run(big) }
         println("portable regex performance: $name ${small.length} chars $t1 ms, ${big.length} chars $t4 ms")
-        assertTrue(t4 < 8 * t1 + 250, "$name: ${small.length} chars $t1 ms, ${big.length} chars $t4 ms (not linear)")
+        // (+100 ms: when the text hit the size cap first, t(n) can be short; a quadratic case is not)
+        assertTrue(t4 < 8 * t1 + 100, "$name: ${small.length} chars $t1 ms, ${big.length} chars $t4 ms (not linear)")
         assertTrue(t4 < 20_000, "$name: $t4 ms")
     }
 

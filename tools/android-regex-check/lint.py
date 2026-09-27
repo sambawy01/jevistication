@@ -47,7 +47,7 @@ ALLOWLIST = pathlib.Path(__file__).resolve().parent / "lint-allowlist.txt"
 ESCAPE = re.compile(r"(?<!\\)(?:\\\\)*\\([dwsbDWSB]|[pP]\{)")
 INLINE_CASE = re.compile(r"\(\?[a-zA-Z-]*[iuU]")
 BASELINE_REFUSED = re.compile(r"(?<!\\)(?:\\\\)*\\([pPXRhHvVN])")
-PLATFORM_DATA = re.compile(r"(?<!PortableText)\.(isDigit|isLetter|isLetterOrDigit|isWhitespace|isUpperCase|isLowerCase|digitToInt|digitToIntOrNull)\(")
+PLATFORM_DATA = re.compile(r"(?:(?<!PortableText)\.|::|\bCharacter\.)(isDigit|isLetter|isLetterOrDigit|isWhitespace|isUpperCase|isLowerCase|isSpaceChar|digitToInt|digitToIntOrNull)\b")
 FLAG_NAMES = re.compile(r"\b(IGNORE_CASE|UNICODE_CASE|CASE_INSENSITIVE|UNICODE_CHARACTER_CLASS)\b")
 
 

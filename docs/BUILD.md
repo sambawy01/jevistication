@@ -2014,21 +2014,41 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
   mapping changed follow 16.0 (Georgian capitals lowercase, Cherokee, bidi and other default-ignorable
   controls are dropped where the JDK rejected the label). Host names are lower-cased with the pinned
   table (no final sigma: `ΟΔΟΣ.gr` → `οδοσ.gr`, it was `οδος.gr`).
-- **Site-check hosts: one IDNA mapping.** `Hosts.toAsciiLabel` is now the engine's mapping
-  (`OriginFacts.asciiLabel`), so the site check and the registrable-domain lookup agree: `faß.de` is
-  read as `fass.de` (it was `xn--fa-hia.de`; current browsers keep `ß`, IDNA 2003, `java.net.IDN` and
-  Python's `idna` codec make `ss`), soft hyphen and other B.1 characters are removed (they were kept),
-  and a label the mapping makes ASCII is that ASCII (`ｅｘａｍｐｌｅ.com` → `example.com`; it was
-  `xn--example-.com`). The skeleton (look-alike) check reads NFKC/NFKD and marks from the pinned data.
-- **Mail senders written with anything but ASCII** (`"PayPal" <service@ｐａｙｐａｌ.com>`, `𝗽𝗮𝘆𝗽𝗮𝗹.com`,
-  `p🄰yp🄰l.com`) are never known, trusted or free-mail and never own the brand they name, whatever
-  domain the IDNA form is: a mail provider's DMARC result is for the literal domain.
+- **Site-check hosts are the hosts the browser opens** (fix loop 2; checked against Chrome 153's
+  `new URL(u).host` on 37 URLs, all equal). `ParsedUrl.host`, the registrable domain, known / trusted
+  / owns matching and online lookups read the **UTS #46 non-transitional** form (new engine `Uts46`,
+  verified on the 1,214 error-free answers of Unicode's IdnaTestV2.txt): `ß`, `ς`, ZWJ and ZWNJ are
+  kept (`faß.de` → `xn--fa-hia.de`, `americanexpreß.com` → `xn--americanexpre-ndb.com`, the Persian
+  `نمونه‌ای.ایران` → `xn--mgb3dcbfe14gp19l…`), ignored characters (soft hyphen, variation selectors)
+  are dropped, and a label the mapping makes ASCII is that ASCII (`ｅｘａｍｐｌｅ.com` → `example.com`). For
+  http(s) a backslash is a slash (`https://evil.com\.paypal.com` is evil.com), the host is
+  percent-decoded (`p%D0%B0ypal.com` is the Cyrillic homograph) and `。．｡` separate labels. Before the
+  parity branch `faß.de` was already `xn--fa-hia.de` here; the first fix loop's transitional mapping
+  (`fass.de`) was a regression and is gone. The engine's own IDNA (`Idna`, `OriginFacts.asciiLabel`)
+  stays IDNA 2003-compatible, for the Public Suffix List match only.
+  **Loupe Station:** Python's `idna` codec (and `str.encode("idna")`) is IDNA 2003, transitional: it
+  must not be used to match a host against known, trusted or brand domains; Station will move to
+  UTS #46 non-transitional (tools/parity/corpus.json `link.host` cases are the target).
+- **Look-alikes**: the skeleton maps Latin small capitals (`ᴘᴀʏᴘᴀʟ`), `ß` to `ss` (`meßenger`) and
+  drops joiners and default ignorables (`pay‍pal`), so these are `homograph_brand`.
+- **Mail senders and reply addresses written with anything but ASCII** (`"PayPal" <service@ｐａｙｐａｌ.com>`,
+  `security@facebooK.com` with the Kelvin sign, `service@americanexpreß.com`) are never known,
+  trusted or free-mail and never own the brand they name; their host checks read both the mapped
+  domain and the literal one (Punycode of the written labels, nothing folded), so a stand-in or
+  deviation look-alike is still a brand look-alike. None scores lower than on origin/main before the
+  branch (HostReadingTest pins the measured scores).
 - **New phishing signals** (docs/PHISHING-FORMULA.md §4, §6.2):
   - `disguised_host` (30, risk; mail `sender_disguised_domain` 45, `link_disguised` 30): a host written
     with stand-in letters (compatibility characters: full-width, mathematical, enclosed, ligatures,
     superscripts) or invisible characters IDNA removes (soft hyphen, variation selectors; not ZWJ/ZWNJ).
     Checked before the known-good short-circuit, so `https://ｐａｙｐａｌ.com` (which reaches paypal.com)
-    is *caution*, and the spoofed senders above are *danger* 85 with the display name (caution 45 without).
+    is *caution*. A stand-in is any code point whose NFKC is not itself (so the Kelvin, Ångström and
+    Ohm signs and CJK compatibility ideographs too), an ignorable, or a joiner CONTEXTJ rejects.
+  - `deviation_host` (10, a note; mail `sender_deviation_domain` / `link_deviation` 10): `ß`, `ς` or a
+    joiner, which IDNA 2003 software reads as another name (`straße.de`, `ελλάς.gr`, Persian ZWNJ
+    names get only this). `deviation_known_host` (45, risk and impostor; mail `sender_deviation_known`
+    / `link_deviation_known` 45): that other reading is a known, brand or trusted domain
+    (`americanexpreß.com`, `faß.de` when you trust fass.de).
   - `unicode_drift_host` (30, risk, **not** an impostor code; mail `sender_unicode_drift` /
     `link_unicode_drift` 30): a character that Unicode 3.2 nameprep (unassigned ones pass through
     unchanged) and the pinned mapping map differently: about 5,600 code points (Georgian and Cherokee

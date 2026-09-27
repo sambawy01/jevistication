@@ -37,6 +37,11 @@ What the table holds (all run- or delta-coded, base 36, see the Kotlin reader Un
   CASEFOLD_NFKC  NFKC_CF where it differs otherwise from what the rule `NFKC(full case fold(NFKC(c)))`
                gives (none in 16.0). NFKC_CF is the IDNA mapping step (lower-casing, NFKC, dropping
                default ignorables) in one property
+  UTS46_DISALLOWED  UTS #46 status `disallowed` (IdnaMappingTable.txt)
+  UTS46_MAPPING     UTS #46 mappings (valid = itself, ignored = nothing, mapped) where they differ from
+               NFKC_Casefold, which gives every other one; tag `e` = mapped to nothing. The four
+               deviations (ß, ς, ZWNJ, ZWJ) are in the Kotlin code
+  JOINING      Joining_Type (0 U, 1 L, 2 D, 3 R, 4 T), for the CONTEXTJ rule on ZWNJ (RFC 5892 A.1)
   STABLE32     code points whose IDNA mapping is the same under Unicode 3.2 nameprep (RFC 3491:
                table B.1 removed, table B.2 case map, NFKC on Unicode 3.2 data; what java.net.IDN
                and older resolvers use; a code point unassigned in 3.2 passes through unchanged, as
@@ -72,6 +77,10 @@ SOURCES = {
     "UnicodeData-3.2.0.txt": ("https://www.unicode.org/Public/3.2-Update/UnicodeData-3.2.0.txt", "5e444028b6e76d96f9dc509609c5e3222bf609056f35e5fcde7e6fb8a58cd446"),
     "CompositionExclusions-3.2.0.txt": ("https://www.unicode.org/Public/3.2-Update/CompositionExclusions-3.2.0.txt", "1d3a450d0f39902710df4972ac4a60ec31fbcb54ffd4d53cd812fc1200c732cb"),
     "rfc3454.txt": ("https://www.rfc-editor.org/rfc/rfc3454.txt", "eb722fa698fb7e8823b835d9fd263e4cdb8f1c7b0d234edf7f0e3bd2ccbb2c79"),
+    # UTS #46 (what browsers resolve: WHATWG URL, non-transitional) and the joining types CONTEXTJ reads.
+    "IdnaMappingTable.txt": (f"https://www.unicode.org/Public/idna/{UNICODE_VERSION}/IdnaMappingTable.txt", "6db2ef4ed35f3b3de74ebc2e00404a9607f76d499f576b8d4043cf14f1ed175c"),
+    "IdnaTestV2.txt": (f"https://www.unicode.org/Public/idna/{UNICODE_VERSION}/IdnaTestV2.txt", "ffcf59f6e97d765caa5ac8315e9511ba3b42955a554cbc431e4c016f20d25ca9"),
+    "DerivedJoiningType.txt": (UCD + "extracted/DerivedJoiningType.txt", "6bd08b97da66b70ccfdab105a352de2984e02625239ec5695422c99b33d854f0"),
 }
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -343,6 +352,190 @@ class Nameprep32:
         return nfkc(self.d, out)
 
 
+# ------------------------------------------------------------------------------------------ UTS #46
+DEVIATIONS = {0x00DF: [0x73, 0x73], 0x03C2: [0x03C3], 0x200C: [], 0x200D: []}
+JT = {"U": 0, "L": 1, "D": 2, "R": 3, "T": 4}
+
+
+class Uts46:
+    """UTS #46 IDNA processing as WHATWG's `domain to ASCII` does it (UseSTD3ASCIIRules false,
+    CheckHyphens false, CheckJoiners true; CheckBidi and DNS length are not checked here), over the
+    table data, plus the reference implementation the Kotlin Uts46 object ports."""
+
+    def __init__(self, texts: dict, d: Data, exceptions: dict):
+        self.d = d
+        self.status = {}
+        self.mapping = {}
+        for line in texts["IdnaMappingTable.txt"].splitlines():
+            body = line.split("#")[0].strip()
+            if not body:
+                continue
+            f = [x.strip() for x in body.split(";")]
+            for c in ranges(f[0]):
+                self.status[c] = f[1]
+                if f[1] in ("mapped", "deviation") and len(f) > 2:
+                    self.mapping[c] = [int(x, 16) for x in f[2].split()] if f[2] else []
+        self.joining = bytearray(MAX + 1)
+        for line in texts["DerivedJoiningType.txt"].splitlines():
+            body = line.split("#")[0].strip()
+            if not body:
+                continue
+            f = [x.strip() for x in body.split(";")]
+            if f[1] in JT:
+                for c in ranges(f[0]):
+                    self.joining[c] = JT[f[1]]
+        # The table's mapping of a code point, derived as the Kotlin side derives it (NFKC_Casefold)
+        # unless listed: every difference is stored.
+        self.differs = {}
+        for c in range(MAX + 1):
+            if 0xD800 <= c <= 0xDFFF:
+                continue
+            st = self.status.get(c, "disallowed")
+            if st in ("disallowed", "deviation"):
+                continue
+            want = [c] if st == "valid" else ([] if st == "ignored" else self.mapping[c])
+            if nfkc_casefold_char(d, c, exceptions) != want:
+                self.differs[c] = want
+        self.exceptions = exceptions
+        for c, m in DEVIATIONS.items():
+            assert self.status[c] == "deviation" and self.mapping.get(c, []) == m, f"U+{c:04X} deviation"
+
+    def map_cp(self, c: int, transitional: bool):
+        st = self.status.get(c, "disallowed")
+        if st == "deviation":
+            return (DEVIATIONS[c] if transitional else [c]), False
+        if st == "disallowed":
+            return [c], True
+        if c in self.differs:
+            return self.differs[c], False
+        return nfkc_casefold_char(self.d, c, self.exceptions), False
+
+    def contextj_ok(self, label: list, i: int) -> bool:
+        c = label[i]
+        if i > 0 and self.d.ccc[label[i - 1]] == 9:
+            return True
+        if c == 0x200D:
+            return False
+        j = i - 1
+        while j >= 0 and self.joining[label[j]] == JT["T"]:
+            j -= 1
+        if j < 0 or self.joining[label[j]] not in (JT["L"], JT["D"]):
+            return False
+        k = i + 1
+        while k < len(label) and self.joining[label[k]] == JT["T"]:
+            k += 1
+        return k < len(label) and self.joining[label[k]] in (JT["R"], JT["D"])
+
+    def to_ascii(self, host: str, transitional: bool):
+        """(ASCII host, errors)."""
+        errors = set()
+        mapped = []
+        for ch in host:
+            m, bad = self.map_cp(ord(ch), transitional)
+            if bad:
+                errors.add("P1")
+            for x in m:
+                # transitional: a deviation the mapping produced (U+1E9E -> ß) is mapped too
+                mapped.extend(DEVIATIONS[x] if transitional and x in DEVIATIONS else [x])
+        mapped = nfc(self.d, mapped)
+        out = []
+        label = []
+        for c in mapped + [0x2E]:
+            if c != 0x2E:
+                label.append(c)
+                continue
+            text = "".join(chr(x) for x in label)
+            uni = label
+            if text.startswith("xn--"):
+                try:
+                    uni = [ord(x) for x in text[4:].encode("ascii").decode("punycode")]
+                except Exception:
+                    errors.add("P4")
+            for i, x in enumerate(uni):
+                if x in (0x200C, 0x200D) and not self.contextj_ok(uni, i):
+                    errors.add("C")
+                # (a decoded xn-- label is validated non-transitionally in either mode, as UTS #46 15.1+ says)
+                if self.status.get(x, "disallowed") == "disallowed":
+                    errors.add("V6")
+            if all(x < 0x80 for x in label):
+                out.append(text)
+            else:
+                out.append("xn--" + text.encode("punycode").decode("ascii"))
+            label = []
+        return ".".join(out), errors
+
+
+UTS46_VECTORS_OUT = ROOT / "engine/src/commonTest/kotlin/dev/loupe/engine/Uts46TestVectors.kt"
+
+
+def kotlin_escape(t: str) -> str:
+    out = []
+    for ch in t:
+        c = ord(ch)
+        if ch in '\\"$':
+            out.append("\\" + ch)
+        elif 0x20 <= c < 0x7F:
+            out.append(ch)
+        elif c > 0xFFFF:
+            v = c - 0x10000
+            out.append("\\u%04x\\u%04x" % (0xD800 + (v >> 10), 0xDC00 + (v & 0x3FF)))
+        else:
+            out.append("\\u%04x" % c)
+    return "".join(out)
+
+
+def uts46_vectors_source(rows: list) -> str:
+    """The verified IdnaTestV2 rows as a commonTest constant, so the Kotlin port is held to them on
+    every platform (JVM, iOS simulator, Android unit tests)."""
+    lines = [
+        "// GENERATED by tools/unicode/gen_unicode_tables.py from IdnaTestV2.txt " + UNICODE_VERSION + ". Do not edit.",
+        "package dev.loupe.engine",
+        "",
+        "/** (source, non-transitional ToASCII or null when it has errors, transitional ToASCII or null). */",
+        "internal val UTS46_TEST_VECTORS: List<Triple<String, String?, String?>> = listOf(",
+    ]
+    for src, n, t in rows:
+        q = lambda x: "null" if x is None else '"' + kotlin_escape(x) + '"'
+        lines.append(f"    Triple({q(src)}, {q(n)}, {q(t)}),")
+    lines.append(")")
+    return "\n".join(lines) + "\n"
+
+
+def verify_uts46(u: Uts46, texts: dict) -> int:
+    """Every IdnaTestV2.txt line whose expected ToASCII (non-transitional and transitional) has no
+    error must give that answer."""
+    import re as _re
+
+    def unesc(t):
+        return _re.sub(r"\\u([0-9A-Fa-f]{4})|\\x\{([0-9A-Fa-f]+)\}", lambda m: chr(int(m.group(1) or m.group(2), 16)), t)
+    n = 0
+    rows = []
+    for line in texts["IdnaTestV2.txt"].splitlines():
+        body = line.split("#")[0].rstrip()
+        if not body.strip():
+            continue
+        f = [x.strip() for x in body.split(";")]
+        src = unesc(f[0])
+        to_uni = unesc(f[1]) if f[1] else src
+        uni_status = f[2] or "[]"
+        ascii_n = unesc(f[3]) if f[3] else to_uni
+        n_status = f[4] or uni_status
+        ascii_t = unesc(f[5]) if f[5] else ascii_n
+        t_status = f[6] or n_status
+        rows.append((src, ascii_n if n_status == "[]" else None, ascii_t if t_status == "[]" else None))
+        for transitional, want, status in ((False, ascii_n, n_status), (True, ascii_t, t_status)):
+            if status != "[]":
+                continue
+            got, errs = u.to_ascii(src, transitional)
+            if got != want:
+                sys.exit(f"IdnaTestV2 {'T' if transitional else 'N'}: {f[0]!r} -> {got!r}, expected {want!r}")
+            if errs:
+                sys.exit(f"IdnaTestV2 {'T' if transitional else 'N'}: {f[0]!r} reported {errs}, expected none")
+            n += 1
+    u.vectors = [r for r in rows if r[1] is not None or r[2] is not None]
+    return n
+
+
 # ---------------------------------------------------------------------------------- verification
 def verify(d: Data, exceptions: dict, texts: dict):
     lines = 0
@@ -508,6 +701,14 @@ def generate(texts: dict) -> str:
         else:
             ignorable[c] = 1
     excluded = [1 if c in d.excluded else 0 for c in range(MAX + 1)]
+    u46 = Uts46(texts, d, exceptions)
+    uts46_lines = verify_uts46(u46, texts)
+    disallowed = bytearray(MAX + 1)
+    for c in range(MAX + 1):
+        if 0xD800 <= c <= 0xDFFF or u46.status.get(c, "disallowed") == "disallowed":
+            disallowed[c] = 1
+    u46_differs = {c: (("e", [0]) if not m else ("m", m)) for c, m in u46.differs.items()}
+    generate.vectors = uts46_vectors_source(u46.vectors)
     fields = [
         ("CATEGORY", runs(d.cat)),
         ("FOLD", delta_runs(fold)),
@@ -519,6 +720,9 @@ def generate(texts: dict) -> str:
         ("IGNORABLE", flag_runs(ignorable)),
         ("CASEFOLD_NFKC", seq_runs(exc)),
         ("STABLE32", flag_runs(stable)),
+        ("UTS46_DISALLOWED", flag_runs(disallowed)),
+        ("UTS46_MAPPING", seq_runs(u46_differs)),
+        ("JOINING", runs(u46.joining)),
     ]
     src_lines = "\n".join(f" *   {n}  sha256 {h}" for n, (u, h) in SOURCES.items() if u.startswith(UCD))
     out = [
@@ -536,6 +740,8 @@ def generate(texts: dict) -> str:
         f" * {int(sum(ignorable))} default ignorables, {len(exc)} other NFKC_CF exceptions to the derived rule,",
         f" * drift: {drift_assigned} code points assigned in 3.2 whose IDNA mapping changed since, and",
         f" * {drift_new} added later that the pinned mapping changes (3.2 passes them through unchanged).",
+        f" * UTS #46 ({UNICODE_VERSION}): {int(sum(disallowed))} disallowed code points, {len(u46.differs)} mappings that differ from",
+        f" * NFKC_Casefold; verified on {uts46_lines} error-free IdnaTestV2.txt answers (non-transitional and transitional).",
         " * Format: see tools/unicode/gen_unicode_tables.py and UnicodeData.kt.",
         " */",
         "internal object UnicodeDataTable {",
@@ -561,13 +767,15 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="fail when the committed table differs")
     args = ap.parse_args()
     text = generate(load(pathlib.Path(args.ucd)))
+    vectors = generate.vectors
     if args.check:
-        if OUT.read_text(encoding="utf-8") != text:
+        if OUT.read_text(encoding="utf-8") != text or UTS46_VECTORS_OUT.read_text(encoding="utf-8") != vectors:
             print(f"{OUT.relative_to(ROOT)} is stale: rerun tools/unicode/gen_unicode_tables.py", file=sys.stderr)
             return 1
         print("unicode table up to date")
         return 0
     OUT.write_text(text, encoding="utf-8")
+    UTS46_VECTORS_OUT.write_text(vectors, encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}: {len(text.encode())} bytes", file=sys.stderr)
     return 0
 

@@ -147,6 +147,8 @@ order; each code counts once.
 | `homograph_brand` | 60 | rule 2 (i), on any `xn--` label (brand checks on the registrable label are then skipped) |
 | `mixed_script` | 35 | rule 2 (ii) / rule 3 |
 | `disguised_host` | 30 | checked **before** the known-good return, so also on a known domain: the host as written (or a decoded `xn--` label) has a stand-in character, i.e. a compatibility character (NFKD ≠ NFD: full-width, mathematical, enclosed, ligatures, superscripts) or a default ignorable IDNA removes (soft hyphen, variation selectors; ZWJ/ZWNJ excepted). `https://ｐａｙｐａｌ.com` reaches paypal.com but no real link is written that way: caution (`PortableText.disguisedCodePoints`, *added 2026-09-27; Station to port*) |
+| `deviation_host` | 10 | the host contains `ß`, `ς`, ZWJ or ZWNJ, so IDNA 2003 (transitional) software reads another name than browsers (UTS #46 non-transitional, which every host decision uses). A note: real German, Greek and Persian names have them (*2026-09-27; Station to port*) |
+| `deviation_known_host` | 45 | as `deviation_host`, and the transitional reading is a known-good, brand or configured domain (`americanexpreß.com`, `faß.de` when fass.de is known): an impostor code (*2026-09-27; Station to port*) |
 | `unicode_drift_host` | 30 | checked before the known-good return too: the host as written (before lower-casing), or a decoded `xn--` label, has a character whose IDNA mapping differs between Unicode 3.2 nameprep (RFC 3491, IDNA 2003; a character unassigned in 3.2 passes through unchanged) and the pinned Unicode 16.0 mapping (B.1, then NFKC_Casefold), other than a `disguised_host` character (one character counts once). About 5,600 code points; new scripts and emoji that map to themselves are not drift. One written name can reach two websites on old and new software. Not an impostor code (`PortableText.unicode32Drift`, *added 2026-09-27; Station to port*) |
 | `lookalike_brand` | 45 | registrable label (decoded) skeleton equals a token's, or a near miss: tokens ≤ 4 letters never; 5–7 letters one insertion, deletion or adjacent swap; ≥ 8 letters OSA distance 1, ≥ 10 letters 2 (whole label or any hyphen/dot token) |
 | `brand_other_tld` | 20 | the registrable label **is** a token on a domain the brand does not own (`google.xyz`, `paypal.github.io`) |
@@ -166,6 +168,10 @@ order; each code counts once.
 | `shared_hosting_login` | 15 | rule 5, any shared host, with a password/card field |
 | `impostor_login` | 20 | added when a password/card field is on a page with an impostor code (`homograph_brand`, `lookalike_brand`, `brand_domain_in_subdomain`, `brand_in_subdomain`, `brand_in_domain_bait`, `brand_other_tld`, `mixed_script`, `userinfo_in_url`) |
 
+Hosts are read as a browser reads them: WHATWG URL parsing for http(s) (a backslash is a slash, the
+host is percent-decoded, `。．｡` separate labels) and UTS #46 **non-transitional** mapping; never the
+transitional (IDNA 2003) form, which is only compared (`deviation_*`). The skeleton folds Latin small
+capitals, maps `ß` to `ss` and drops joiners and default ignorables.
 The host checks return nothing for a **known** domain (and the page claim is ignored there), except
 `disguised_host` and `unicode_drift_host`, which are about how the name is written, not whose it is.
 Laya's optional page answers (Station's `LAYA_POINTS`, `pressure_login` 10, caps 40 / 25) are
@@ -334,7 +340,9 @@ noticed (not counted)" with the why text.
 Sender domain → the host signals of §4 renamed `sender_*` (`homograph_brand` 60, `mixed_script` 35,
 `lookalike_brand` 45, `brand_domain_in_subdomain` 45, `brand_in_subdomain` 30, `brand_in_domain_bait`
 40, `brand_other_tld` 20, `brand_in_domain` 10, `suspicious_tld` 8, `ip` 25, `unicode_drift` 30,
-`disguised_domain` 45, both read on the domain as written; none for free-mail). A sender domain
+`disguised_domain` 45, `deviation_domain` 10, `deviation_known` 45 (also when the transitional reading
+is a trusted sender), read on the domain as written and, for look-alikes, on its literal Punycode
+(nothing folded); none for free-mail). A sender domain
 written with any non-ASCII character is never known, trusted or free-mail and never owns the brand
 its display name claims (`"PayPal" <service@ｐａｙｐａｌ.com>`: danger 85);
 display name (`display_brand_freemail` 50, `display_brand_mismatch` 40, `display_address_mismatch`

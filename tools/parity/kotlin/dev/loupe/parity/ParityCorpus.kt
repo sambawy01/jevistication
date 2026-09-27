@@ -6,8 +6,12 @@ import dev.loupe.engine.PortableRegex
 import dev.loupe.engine.PortableText
 import dev.loupe.engine.TermChangeDetector
 import dev.loupe.kit.mail.Phishing
+import dev.loupe.kit.site.Brands
+import dev.loupe.kit.site.PageFacts
+import dev.loupe.kit.site.PageForm
 import dev.loupe.kit.site.ParsedUrl
 import dev.loupe.kit.site.SiteCheck
+import dev.loupe.kit.site.SiteConfig
 import dev.loupe.kit.site.SiteSignals
 import dev.loupe.persistence.JsonValue
 import dev.loupe.sources.common.CsvRows
@@ -123,11 +127,21 @@ object ParityCorpus {
             "link.host" -> str(ParsedUrl.parse(s)?.host)
             "link.host_signals" -> {
                 val u = ParsedUrl.parse(s)
-                if (u == null) "null" else list(SiteSignals.hostSignals(u, dev.loupe.kit.site.SiteConfig.DEFAULT).map { it.code })
+                if (u == null) "null" else list(SiteSignals.hostSignals(u, SiteConfig.DEFAULT).map { it.code })
             }
             "unicode.disguised" -> list(PortableText.disguisedCodePoints(s).map(::hex))
+            "page.check" -> {
+                val known = args?.get("knownGood")?.asArr?.items?.map { it.asString } ?: emptyList()
+                val config = SiteConfig(Brands.BRANDS, known, Brands.SUSPICIOUS_TLDS, Brands.SHORTENERS)
+                val pw = args?.get("password")?.asBoolean ?: false
+                val page = if (pw) PageFacts(s, passwordFields = 1, forms = listOf(PageForm(password = true))) else PageFacts(s)
+                SiteCheck.check(page, config).verdict.let { v ->
+                    "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.filter { it.weight > 0 }.map { it.code }.sorted())}}"
+                }
+            }
             "mail.check" -> Phishing.assess(
                 s, args?.get("body")?.asString ?: "",
+                replyTo = args?.get("replyTo")?.asString ?: "",
                 trusted = args?.get("trusted")?.asArr?.items?.map { it.asString } ?: emptyList(),
             ).let { v -> "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.map { it.code }.sorted())}}" }
             "link.check" -> SiteCheck.checkUrl(s).verdict.let { v ->

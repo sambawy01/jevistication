@@ -73,7 +73,7 @@ object SiteScoring {
     val CREDENTIAL_ASKS = setOf("laya_asks_sign_in", "laya_asks_payment")
     val IMPOSTOR_CODES = setOf(
         "homograph_brand", "lookalike_brand", "brand_domain_in_subdomain", "brand_in_subdomain",
-        "brand_in_domain_bait", "brand_other_tld", "mixed_script", "userinfo_in_url",
+        "brand_in_domain_bait", "brand_other_tld", "mixed_script", "userinfo_in_url", "deviation_known_host",
     )
     val IMPOSTOR_LOGIN = Triple("impostor_login", 20, "It asks for a password or card details on that look-alike address.")
     val PRESSURE_LOGIN = Triple("pressure_login", 10, "It asks for a password or card details while pressuring you to act fast.")

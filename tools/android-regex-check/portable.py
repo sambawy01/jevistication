@@ -108,7 +108,8 @@ def _char_escape(p: str, i: int):
         return chr(hexval(t)), 4
     if e == "0":
         j = i + 2
-        while j < len(p) and j < i + 5 and p[j] in "01234567":
+        mx = i + 5 if i + 2 < len(p) and p[i + 2] in "0123" else i + 4
+        while j < len(p) and j < mx and p[j] in "01234567":
             j += 1
         if j == i + 2:
             _fail("a bad escape \\0")
@@ -116,7 +117,7 @@ def _char_escape(p: str, i: int):
     simple = {"t": "\t", "n": "\n", "r": "\r", "f": "\f", "a": "\x07", "e": "\x1b"}
     if e in simple:
         return simple[e], 2
-    if e.isalnum():
+    if e.isascii() and e.isalnum():
         return None
     return e, 2
 
@@ -175,9 +176,20 @@ def _translate_class(p: str, start: int, out: list, rx: dict) -> int:
             if ord(hi) < ord(lo):
                 _fail("a reversed range")
             out.append(_member(lo) + "-" + _member(hi))
-            flo, fhi = _match_form(lo), _match_form(hi)
-            if (flo != lo or fhi != hi) and ord(flo) <= ord(fhi):
-                out.append(_member(flo) + "-" + _member(fhi))
+            if ord(hi) - ord(lo) <= 1024:
+                extra = sorted({ord(_match_form(chr(c))) for c in range(ord(lo), ord(hi) + 1)} - set(range(ord(lo), ord(hi) + 1)))
+                runs = []
+                for c in extra:
+                    if runs and runs[-1][1] == c - 1:
+                        runs[-1][1] = c
+                    else:
+                        runs.append([c, c])
+                for a, b in runs:
+                    out.append(_member(chr(a)) + ("-" + _member(chr(b)) if b > a else ""))
+            else:
+                flo, fhi = _match_form(lo), _match_form(hi)
+                if (flo != lo or fhi != hi) and ord(flo) <= ord(fhi):
+                    out.append(_member(flo) + "-" + _member(fhi))
             i = hi_atom[1]
             continue
         out.append(_member(lo))
@@ -192,7 +204,7 @@ def translate(pattern: str, rx: dict) -> str:
     """PortableRegex.translate, line for line (its fold is ASCII-only here: see the module doc)."""
     p = pattern
     out = []
-    consumed_start = re.search(r"\)[*+?{]", p) is None
+    consumed_start = re.search(r"\)[*+?{]", p) is None and re.search(r"\\[1-9]|\\k<", p) is None
     group_leading = []
     leading = True
     i = 0
@@ -263,6 +275,8 @@ def translate(pattern: str, rx: dict) -> str:
                 j = i + 2
                 while j < n and (p[j].isalpha() or p[j] == "-"):
                     j += 1
+                if "x" in p[i + 2:j]:
+                    _fail("the comments flag (?x)")
                 flags = "".join(f for f in p[i + 2:j] if f not in "iuU")
                 kept = flags.rstrip("-")
                 if kept == "-":

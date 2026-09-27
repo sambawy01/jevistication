@@ -217,7 +217,17 @@ class PortableTextTest {
         // character escapes are decoded and put in match form, like literal characters (S-1)
         assertEquals("ab", PortableRegex.translate("\\x41\\u0042"))
         assertEquals("a\\.", PortableRegex.translate("\\0101\\x2E"))
-        assertEquals("[A-za-z]", PortableRegex.translate("[A-z]"))
+        // a range keeps its members and gains the match form of those it does not hold already
+        assertEquals("[A-Za-z]", PortableRegex.translate("[A-Z]"))
+        assertEquals("[A-z]", PortableRegex.translate("[A-z]"))
+        assertEquals("[Z-az]", PortableRegex.translate("[Z-a]"))
+        // \0777 is \077 ("?") then "7", as in java.util.regex
+        assertEquals("\\?7", PortableRegex.translate("\\0777"))
+        assertFailsWith<IllegalArgumentException> { PortableRegex.translate("(?x) a b # comment") }
+        // with a back reference the leading \b keeps the lookaround form (a consumed start would shift \1)
+        assertTrue(Regex(PortableRegex.translate("(\\bab) \\1")).containsMatchIn(PortableText.matchForm("x ab ab")))
+        assertTrue(Regex(PortableRegex.translate("(\\bab) \\1")).containsMatchIn("ab ab"))
+        assertTrue(Regex(PortableRegex.translate("[Z-a]")).containsMatchIn(PortableText.matchForm("Z")))
         assertEquals("(?m:a)", PortableRegex.translate("(?mi:A)"))
         for (bad in listOf("\\p{L}", "\\P{Lu}", "[\\D]", "[\\b]", "\\X", "\\R")) {
             assertFailsWith<IllegalArgumentException>(bad) { PortableRegex.translate(bad) }
