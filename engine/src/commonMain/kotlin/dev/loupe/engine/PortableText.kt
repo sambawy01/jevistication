@@ -379,19 +379,36 @@ object Rx {
     /** One digit of any of the three scripts, on text that was not digit-folded. */
     const val DIGIT: String = "[$DIGITS]"
 
+    /**
+     * One character that is not a line terminator: `.` without DOTALL, spelled out, because the
+     * engines disagree on which characters end a line (ICU counts VT and FF, the JDK does not).
+     */
+    const val IN_LINE: String = "[^\n\u000B\u000C\r\u0085\u2028\u2029]"
+
     /** Inside a class: the ASCII word characters. */
     const val WORDS: String = "A-Za-z0-9_"
 
     /** One ASCII word character (the JDK's `\w`). */
     const val W: String = "[$WORDS]"
 
-    /** Not preceded by an ASCII word character: `\b` before a word. */
+    /**
+     * Not preceded by an ASCII word character: `\b` before a word. A lookbehind: Kotlin/Native
+     * evaluates one in O(position), so never lead a pattern with it (every start position pays);
+     * use [BoundedRegex] for a word that must start at a boundary.
+     */
     const val WB_START: String = "(?<![$WORDS])"
 
     /** Not followed by an ASCII word character: `\b` after a word. */
     const val WB_END: String = "(?![$WORDS])"
 
-    /** `\b` where either side may be the word: the JDK's ASCII `\b`. */
+    /**
+     * At the start of a match only: the start of the text or one non-word character, consumed.
+     * For a pattern answered with `containsMatchIn` only, `(?:^|[^A-Za-z0-9_])word` is `\bword`
+     * without a lookbehind (see [WB_START]); the match then includes that one character.
+     */
+    const val WORD_START_CONSUMED: String = "(?:^|[^$WORDS])"
+
+    /** `\b` where either side may be the word: the JDK's ASCII `\b` (lookarounds; see [WB_START]). */
     const val WB: String = "(?:(?<=[$WORDS])(?![$WORDS])|(?<![$WORDS])(?=[$WORDS]))"
 
     /** `\B`: not a word boundary. */
@@ -411,8 +428,63 @@ object Rx {
 }
 
 /**
+ * `(?<![A-Za-z0-9_])` + [pattern], with the lookbehind checked in code: a match must not start right
+ * after an ASCII word character (the JDK's `\b` before a word). Kotlin/Native evaluates a lookbehind in
+ * O(position), so a leading one made a search quadratic (a 24,000-character text took 45 s on the iOS
+ * simulator); this finds the leftmost match of [pattern] from a position and, when the character
+ * before it is a word character, searches again one character later: the same matches, in the same
+ * order, as the lookbehind would give. With [bounded] false it is the plain regex.
+ */
+class BoundedRegex(
+    pattern: String,
+    private val bounded: Boolean = true,
+    /** The characters a match may not follow; ASCII word characters unless given. */
+    private val notAfter: (Char) -> Boolean = { c -> c in 'a'..'z' || c in 'A'..'Z' || c in '0'..'9' || c == '_' },
+) {
+    val regex: Regex = Regex(pattern)
+
+    private fun allowed(input: CharSequence, at: Int): Boolean {
+        if (!bounded || at == 0) return true
+        return !notAfter(input[at - 1])
+    }
+
+    fun find(input: CharSequence, startIndex: Int = 0): MatchResult? {
+        var from = startIndex
+        while (from <= input.length) {
+            val m = regex.find(input, from) ?: return null
+            if (allowed(input, m.range.first)) return m
+            from = m.range.first + 1
+        }
+        return null
+    }
+
+    fun findAll(input: CharSequence, startIndex: Int = 0): Sequence<MatchResult> = sequence {
+        var from = startIndex
+        while (from <= input.length) {
+            val m = find(input, from) ?: break
+            yield(m)
+            from = if (m.value.isEmpty()) m.range.first + 1 else m.range.last + 1
+        }
+    }
+
+    fun containsMatchIn(input: CharSequence): Boolean = find(input) != null
+
+    fun replace(input: CharSequence, transform: (MatchResult) -> CharSequence): String {
+        val out = StringBuilder(input.length)
+        var last = 0
+        for (m in findAll(input)) {
+            out.append(input, last, m.range.first).append(transform(m))
+            last = m.range.last + 1
+        }
+        return out.append(input, last, input.length).toString()
+    }
+}
+
+/**
  * Makes a regex that came from outside the code (a user's baseline pattern in judgments.json) mean
- * the same on every engine: `\d \s \w \b` and their negations become the [Rx] classes, literal
+ * the same on every engine, for `containsMatchIn` (a `\b` that starts the pattern consumes the
+ * character before it, so match ranges are not the original's): `\d \s \w \b` and their negations
+ * become the [Rx] classes, literal
  * letters and digits are put in [PortableText.matchForm] (the text is matched in that form too), and
  * case-insensitivity flags are dropped because the fold already did their work. Constructs whose
  * meaning is engine-defined and cannot be spelled out (`\p{..}`, `\X`, `\R`, `\h`, `\v`, a negated
@@ -420,10 +492,24 @@ object Rx {
  */
 object PortableRegex {
 
+    /** `\b` where nothing precedes it in the pattern: a consumed start, no lookbehind. */
+    private const val LEADING_WB: String =
+        "(?:(?:^|[^${Rx.WORDS}])(?=[${Rx.WORDS}])|[${Rx.WORDS}](?![${Rx.WORDS}]))"
+
+    /** `\B` where nothing precedes it in the pattern. */
+    private const val LEADING_NWB: String =
+        "(?:(?:^|[^${Rx.WORDS}])(?![${Rx.WORDS}])|[${Rx.WORDS}](?=[${Rx.WORDS}]))"
+
     fun translate(pattern: String): String {
         val out = StringBuilder(pattern.length + 16)
         var i = 0
         var classDepth = 0
+        // Whether nothing can have been matched yet on this path: at the pattern's start, or right
+        // after `(` or `|` of groups that are themselves leading. A `\b` there becomes a consumed
+        // start (no lookbehind, which Kotlin/Native evaluates in O(position)); the translated pattern
+        // is only ever used to ask whether the text contains a match.
+        val groupLeading = ArrayList<Boolean>()
+        var leading = true
         fun fail(what: String): Nothing = throw IllegalArgumentException("$what is not supported in a baseline pattern (it matches differently on each phone)")
         while (i < pattern.length) {
             val c = pattern[i]
@@ -431,6 +517,8 @@ object PortableRegex {
                 c == '\\' && i + 1 < pattern.length -> {
                     val e = pattern[i + 1]
                     val inClass = classDepth > 0
+                    val wasLeading = leading
+                    if (!inClass) leading = false
                     when (e) {
                         'd' -> out.append(if (inClass) Rx.DIGITS else Rx.DIGIT)
                         's' -> out.append(if (inClass) Rx.SPACE else Rx.SP)
@@ -447,7 +535,16 @@ object PortableRegex {
                         }
                         'b', 'B' -> {
                             if (inClass) fail("\\$e inside [...]")
-                            out.append(if (e == 'b') Rx.WB else Rx.NWB)
+                            out.append(
+                                when {
+                                    wasLeading && e == 'b' -> LEADING_WB
+                                    wasLeading -> LEADING_NWB
+                                    e == 'b' -> Rx.WB
+                                    else -> Rx.NWB
+                                },
+                            )
+                            i += 2
+                            continue
                         }
                         'p', 'P', 'X', 'R', 'h', 'H', 'v', 'V', 'N' -> fail("\\$e")
                         'Q' -> {
@@ -484,6 +581,7 @@ object PortableRegex {
                     i += 2
                 }
                 c == '[' -> {
+                    leading = false
                     classDepth++
                     out.append(c)
                     i++
@@ -504,6 +602,7 @@ object PortableRegex {
                         if (close < 0) fail("an unterminated group name")
                         out.append(pattern, i, close + 1)
                         i = close + 1
+                        groupLeading += leading
                     } else if (next != null && (next.isLetter() || next == '-')) {
                         // inline flags, (?imsx-imsx) or (?imsx-imsx:...): case flags are dropped
                         var j = i + 2
@@ -512,16 +611,45 @@ object PortableRegex {
                         val kept = flags.trimEnd('-').let { if (it == "-") "" else it }
                         when (pattern.getOrNull(j)) {
                             ')' -> if (kept.isNotEmpty()) out.append("(?").append(kept).append(')')
-                            ':' -> out.append("(?").append(kept).append(':')
+                            ':' -> {
+                                out.append("(?").append(kept).append(':')
+                                groupLeading += leading
+                            }
                             else -> fail("a malformed flag group")
                         }
                         i = j + 1
                     } else {
+                        // (?: (?= (?! (?<= (?<!: a lookaround is not a match start of its own
+                        val look = next == '=' || next == '!' || next == '<'
                         out.append("(?")
                         i += 2
+                        groupLeading += leading && !look
+                        if (look) leading = false
                     }
                 }
+                c == '(' && classDepth == 0 -> {
+                    out.append(c)
+                    i++
+                    groupLeading += leading
+                }
+                c == '|' && classDepth == 0 -> {
+                    out.append(c)
+                    i++
+                    leading = groupLeading.lastOrNull() ?: true
+                }
+                c == ')' && classDepth == 0 -> {
+                    out.append(c)
+                    i++
+                    if (groupLeading.isNotEmpty()) groupLeading.removeAt(groupLeading.size - 1)
+                    leading = false
+                }
+                classDepth == 0 && (c == '^' || c == '$') -> {
+                    // anchors match nothing: a `\b` after `^` is still at the start
+                    out.append(c)
+                    i++
+                }
                 else -> {
+                    if (classDepth == 0) leading = false
                     // literal text (and class members) in match form: lower case, ASCII digits
                     if (c.isHighSurrogate() && i + 1 < pattern.length && pattern[i + 1].isLowSurrogate()) {
                         out.append(PortableText.matchForm(pattern.substring(i, i + 2)))

@@ -53,12 +53,22 @@ class TranslateError(ValueError):
     pass
 
 
+def leading_wb(rx: dict, negated: bool) -> str:
+    """PortableRegex's LEADING_WB / LEADING_NWB: a `\\b` / `\\B` that nothing precedes, consumed."""
+    w = rx["Rx.WORDS"]
+    if negated:
+        return f"(?:(?:^|[^{w}])(?![{w}])|[{w}](?=[{w}]))"
+    return f"(?:(?:^|[^{w}])(?=[{w}])|[{w}](?![{w}]))"
+
+
 def translate(pattern: str, rx: dict) -> str:
     """PortableRegex.translate, line for line."""
     out = []
     i = 0
     depth = 0
     n = len(pattern)
+    group_leading = []
+    leading = True
 
     def fail(what):
         raise TranslateError(f"{what} is not supported in a baseline pattern")
@@ -67,6 +77,9 @@ def translate(pattern: str, rx: dict) -> str:
         if c == "\\" and i + 1 < n:
             e = pattern[i + 1]
             in_class = depth > 0
+            was_leading = leading
+            if not in_class:
+                leading = False
             if e == "d":
                 out.append(rx["Rx.DIGITS"] if in_class else rx["Rx.DIGIT"])
             elif e == "s":
@@ -80,7 +93,10 @@ def translate(pattern: str, rx: dict) -> str:
             elif e in "bB":
                 if in_class:
                     fail(f"\\{e} inside [...]")
-                out.append(rx["Rx.WB"] if e == "b" else rx["Rx.NWB"])
+                if was_leading:
+                    out.append(leading_wb(rx, e == "B"))
+                else:
+                    out.append(rx["Rx.WB"] if e == "b" else rx["Rx.NWB"])
             elif e in "pPXRhHvVN":
                 fail("\\" + e)
             elif e == "Q":
@@ -117,6 +133,7 @@ def translate(pattern: str, rx: dict) -> str:
                 out.append(c + e)
             i += 2
         elif c == "[":
+            leading = False
             depth += 1
             out.append(c)
             i += 1
@@ -138,6 +155,7 @@ def translate(pattern: str, rx: dict) -> str:
                     fail("an unterminated group name")
                 out.append(pattern[i:close + 1])
                 i = close + 1
+                group_leading.append(leading)
             elif nxt is not None and (nxt.isalpha() or nxt == "-"):
                 j = i + 2
                 while j < n and (pattern[j].isalpha() or pattern[j] == "-"):
@@ -152,13 +170,37 @@ def translate(pattern: str, rx: dict) -> str:
                         out.append("(?" + kept + ")")
                 elif nx == ":":
                     out.append("(?" + kept + ":")
+                    group_leading.append(leading)
                 else:
                     fail("a malformed flag group")
                 i = j + 1
             else:
+                look = nxt in ("=", "!", "<")
                 out.append("(?")
                 i += 2
+                group_leading.append(leading and not look)
+                if look:
+                    leading = False
+        elif c == "(" and depth == 0:
+            out.append(c)
+            i += 1
+            group_leading.append(leading)
+        elif c == "|" and depth == 0:
+            out.append(c)
+            i += 1
+            leading = group_leading[-1] if group_leading else True
+        elif c == ")" and depth == 0:
+            out.append(c)
+            i += 1
+            if group_leading:
+                group_leading.pop()
+            leading = False
+        elif depth == 0 and c in "^$":
+            out.append(c)
+            i += 1
         else:
+            if depth == 0:
+                leading = False
             out.append(_match_form(c))
             i += 1
     return "".join(out)

@@ -1,6 +1,7 @@
 package dev.loupe.kit.watchers
 
 import dev.loupe.engine.Backend
+import dev.loupe.engine.BoundedRegex
 import dev.loupe.engine.Charge
 import dev.loupe.engine.Contact
 import dev.loupe.engine.DateFacts
@@ -94,8 +95,8 @@ object WatcherRun {
     // EXPIRY_WORDS, CHARGE_WORDS and INSTITUTIONAL_NAME are matched on PortableText.matchForm (case
     // and digits folded) and AMOUNT on digit-folded text, with the classes spelled out (Rx): the same
     // answer on every regex engine, Arabic-Indic and Persian digits read as numbers.
-    private val EXPIRY_WORDS = Regex("""${Rx.WB_START}(expir${Rx.W}*|valid until|valid to|valid thru|renewal date|4b\.)""")
-    private val CHARGE_WORDS = Regex("""${Rx.WB_START}(charged|payment received|paid|receipt for)${Rx.WB_END}""")
+    private val EXPIRY_WORDS = BoundedRegex("""(expir${Rx.W}*|valid until|valid to|valid thru|renewal date|4b\.)""")
+    private val CHARGE_WORDS = BoundedRegex("""(charged|payment received|paid|receipt for)${Rx.WB_END}""")
     private val AMOUNT = Regex("""[£$€]${Rx.SP}?([0-9][0-9,]*(?:\.[0-9]{2})?)""")
     private val INSTITUTIONAL_LOCAL = setOf("service", "security", "support", "noreply", "no-reply", "account", "accounts", "billing", "alerts", "info", "verify")
     /** Domains where anyone can register an address, so the domain says nothing about the sender. */
@@ -103,7 +104,7 @@ object WatcherRun {
         "gmail.com", "googlemail.com", "outlook.com", "hotmail.com", "live.com", "yahoo.com", "icloud.com",
         "me.com", "aol.com", "proton.me", "protonmail.com", "gmx.com", "gmx.net", "mail.com", "yandex.com",
     )
-    private val INSTITUTIONAL_NAME = Regex("""${Rx.WB_START}(security|support|billing|account|team|bank|service)${Rx.WB_END}""")
+    private val INSTITUTIONAL_NAME = BoundedRegex("""(security|support|billing|account|team|bank|service)${Rx.WB_END}""")
 
     fun run(items: List<SourceItem>, today: LocalDate, backend: Backend?, rule: ValidityRule = SIX_MONTHS): WatcherReport =
         run(items, today, backend, rule, RunPolicy.defaults(Features.WATCHERS))

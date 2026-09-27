@@ -14,15 +14,19 @@ data class LintFinding(val rule: String, val message: String)
 object JudgmentLint {
 
     // Matched on PortableText.matchForm (case and digits folded, the same on every platform) instead
-    // of IGNORE_CASE, whose Unicode folding differs between regex engines.
-    private val RATING_SCALE = Regex(
-        """${Rx.WB_START}(rate|rating|score|rank)${Rx.WB_END}.{0,30}${Rx.WB_START}([0-9]+${Rx.SP}*(?:-|–|to)${Rx.SP}*[0-9]+|out of [0-9]+)${Rx.WB_END}|${Rx.WB_START}on a scale${Rx.WB_END}""",
+    // of IGNORE_CASE, whose Unicode folding differs between regex engines; the leading `\b` is
+    // BoundedRegex's (no lookbehind: Kotlin/Native pays O(position) for one). The `\b` before the
+    // number is the last of the up to 30 characters being a non-word character (the word before
+    // them ends at a boundary, so at least one is there): no lookbehind either.
+    private val RATING_SCALE = BoundedRegex(
+        """(rate|rating|score|rank)${Rx.WB_END}${Rx.IN_LINE}{0,29}[^A-Za-z0-9_\n\u000B\u000C\r\u0085\u2028\u2029]""" +
+            """([0-9]+${Rx.SP}*(?:-|–|to)${Rx.SP}*[0-9]+|out of [0-9]+)${Rx.WB_END}|on a scale${Rx.WB_END}""",
     )
-    private val ASKS_FOR_PROSE = Regex(
-        """${Rx.WB_START}(explain|describe|summari[sz]e|elaborate|justify|why)${Rx.WB_END}""",
+    private val ASKS_FOR_PROSE = BoundedRegex(
+        """(explain|describe|summari[sz]e|elaborate|justify|why)${Rx.WB_END}""",
     )
-    private val ASKS_TO_WRITE = Regex(
-        """${Rx.WB_START}(write|draft|compose|generate|reply to|tell me about)${Rx.WB_END}""",
+    private val ASKS_TO_WRITE = BoundedRegex(
+        """(write|draft|compose|generate|reply to|tell me about)${Rx.WB_END}""",
     )
 
     /** Every problem with [question]; empty means it compiles. */

@@ -43,8 +43,10 @@ data class MailMessage(
     companion object {
         // HTML syntax, ASCII case spelled out so the captured href and text keep their case, and
         // ASCII whitespace (the JDK's \s and IGNORE_CASE on this pattern), the same on every engine.
+        // `\bhref` is "after a non-word character" consumed, not a lookbehind (O(position) on
+        // Kotlin/Native); `<a` is followed by a non-word character, so the two read alike.
         private val ANCHOR = Regex(
-            """<[aA]${Rx.WB_END}[^>]*?${Rx.WB_START}[hH][rR][eE][fF]${Rx.ASCII_SP}*=${Rx.ASCII_SP}*(?:"([^"]*)"|'([^']*)'|([^${Rx.ASCII_SPACE}>]+))[^>]*>(.*?)</[aA]${Rx.ASCII_SP}*>""",
+            """<[aA]${Rx.WB_END}(?:[^>]*?[^A-Za-z0-9_>])?[hH][rR][eE][fF]${Rx.ASCII_SP}*=${Rx.ASCII_SP}*(?:"([^"]*)"|'([^']*)'|([^${Rx.ASCII_SPACE}>]+))[^>]*>(.*?)</[aA]${Rx.ASCII_SP}*>""",
             RegexOption.DOT_MATCHES_ALL,
         )
 

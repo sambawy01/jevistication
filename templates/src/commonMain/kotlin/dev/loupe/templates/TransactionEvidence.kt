@@ -1,5 +1,6 @@
 package dev.loupe.templates
 
+import dev.loupe.engine.BoundedRegex
 import dev.loupe.engine.PortableText
 import dev.loupe.engine.Rx
 
@@ -105,11 +106,15 @@ object TransactionEvidence {
 
     // Word-ish boundaries for Latin (with accents) and Arabic. Explicit ranges, not \p{L}: the
     // Kotlin/Native regex engine (the phone) failed to compile Unicode classes inside lookarounds.
+    // The leading boundary is checked by BoundedRegex, not a lookbehind: Kotlin/Native evaluates a
+    // lookbehind in O(position), which made a 12,000-character text take a minute on the simulator.
     private const val WORD = "a-z0-9\u00C0-\u024F\u0600-\u06FF"
-    private fun w(p: String) = Regex("(?<![$WORD])(?:$p)(?![$WORD])")
+    private fun wordChar(c: Char) = c in 'a'..'z' || c in '0'..'9' || c in '\u00C0'..'\u024F' || c in '\u0600'..'\u06FF'
+    private fun w(p: String) = BoundedRegex("(?:$p)(?![$WORD])", notAfter = ::wordChar)
+    private fun plain(p: String) = BoundedRegex(p, bounded = false)
 
     // Arabic patterns are written pre-normalised (ا for أ/إ/آ, ه for ة, ي for ى).
-    private val STRONG: List<Regex> = listOf(
+    private val STRONG: List<BoundedRegex> = listOf(
         // EN wording
         w("receipts?|e-?receipt|tax invoice|invoice|proof of purchase|payment receipt|sales receipt"),
         w("order confirm(?:ation|ed)|thank(?:s| you) for (?:your )?(?:order|purchase|payment|donation)|purchase confirmation"),
@@ -119,22 +124,24 @@ object TransactionEvidence {
         w("refunded|refund (?:of|issued|processed|has been|amount|to your)|reimbursed"),
         w("donation|gift aid"),
         // An order / invoice / receipt number: the word, optional "no"/"#", then a code with a digit.
-        Regex("(?<![a-z\u00C0-\u024F])(?:order|invoice|receipt|transaction|booking|confirmation|inv)${Rx.SP}*(?:no\\.?|number|num|id|#|ref)?${Rx.SP}*[:#]?${Rx.SP}*[a-z0-9-]*[0-9][a-z0-9-]{2,}"),
-        Regex("[*x•]{2,}${Rx.SP}?[0-9]{4}(?![0-9])"),
+        BoundedRegex("(?:order|invoice|receipt|transaction|booking|confirmation|inv)${Rx.SP}*(?:no\\.?|number|num|id|#|ref)?${Rx.SP}*[:#]?${Rx.SP}*[a-z0-9-]*[0-9][a-z0-9-]{2,}",
+            notAfter = { c -> c in 'a'..'z' || c in '\u00C0'..'\u024F' },
+        ),
+        plain("[*x•]{2,}${Rx.SP}?[0-9]{4}(?![0-9])"),
         // AR
-        Regex("فاتور|ايصال|وصل استلام|وصل دفع|سند قبض|اثبات (?:ال)?شراء|تاكيد (?:ال)?طلب|رقم (?:ال)?طلب|رقم (?:ال)?فاتوره|تم (?:ال)?دفع|المبلغ المدفوع|اجمالي المدفوع|تم الخصم|طريقه (?:ال)?دفع|المبلغ المستحق|تاريخ (?:ال)?استحقاق|تم (?:ال)?استرداد|مبلغ مسترد|تبرع"),
+        plain("فاتور|ايصال|وصل استلام|وصل دفع|سند قبض|اثبات (?:ال)?شراء|تاكيد (?:ال)?طلب|رقم (?:ال)?طلب|رقم (?:ال)?فاتوره|تم (?:ال)?دفع|المبلغ المدفوع|اجمالي المدفوع|تم الخصم|طريقه (?:ال)?دفع|المبلغ المستحق|تاريخ (?:ال)?استحقاق|تم (?:ال)?استرداد|مبلغ مسترد|تبرع"),
         // FR / DE / ES core words
         w("reçu|facture|quittung|rechnung|kassenbon|bestellbestätigung|factura|recibo|comprobante"),
     )
 
-    private val WEAK: List<Regex> = listOf(
+    private val WEAK: List<BoundedRegex> = listOf(
         w("paid|payment|total|subtotal|order|purchased?|vat|tax|visa|mastercard|amex|apple pay|google pay|paypal|mada|stc pay|bill|statement|warranty|guarantee|serial|refunds?|returns?"),
-        Regex("اجمالي|المجموع|مدفوع|الدفع|ضريبه|شراء|طلب|فيزا|مدى|ضمان|استرداد"),
+        plain("اجمالي|المجموع|مدفوع|الدفع|ضريبه|شراء|طلب|فيزا|مدى|ضمان|استرداد"),
     )
 
-    private val LISTING: List<Regex> = listOf(
+    private val LISTING: List<BoundedRegex> = listOf(
         w("add to (?:cart|bag|basket|trolley|wish ?list)|buy (?:it )?now|shop now|order now|in stock|out of stock|only [0-9]+ left|free (?:delivery|shipping|returns)|customer reviews|[0-9]+ reviews?|write a review|rated [0-9]|compare (?:at|price)|select (?:size|colou?r)|choose (?:your )?(?:size|colou?r)|you may also like|frequently bought|product (?:details|description)|specifications|sku"),
-        Regex("(?:اضف|اضافه) (?:الي )?(?:ال|لل|ل)سله|اشتر(?:ي)? الان|تسوق الان|متوفر(?: في المخزون)?|غير متوفر|نفذت الكميه|تقييمات|مراجعات|اكتب تقييم|توصيل مجاني|شحن مجاني|مواصفات|تفاصيل المنتج"),
+        plain("(?:اضف|اضافه) (?:الي )?(?:ال|لل|ل)سله|اشتر(?:ي)? الان|تسوق الان|متوفر(?: في المخزون)?|غير متوفر|نفذت الكميه|تقييمات|مراجعات|اكتب تقييم|توصيل مجاني|شحن مجاني|مواصفات|تفاصيل المنتج"),
         w("ajouter au panier|acheter maintenant|en stock|in den warenkorb|jetzt kaufen|auf lager|añadir al carrito|comprar ahora|en existencia"),
     )
 

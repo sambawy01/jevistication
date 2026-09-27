@@ -1,5 +1,6 @@
 package dev.loupe.kit.mail
 
+import dev.loupe.engine.BoundedRegex
 import dev.loupe.engine.PortableText
 import dev.loupe.engine.Rx
 import dev.loupe.kit.site.Brand
@@ -235,7 +236,7 @@ object Phishing {
     private val URL_RE = Regex("""(?:[hH][tT][tT][pP][sS]?://|[wW][wW][wW]\.)[^${Rx.SPACE}<>"'()\[\]{}]{3,2000}""")
     private val DOMAINISH_RE = Regex("""^(?:[hH][tT][tT][pP][sS]?://)?(?:[wW][wW][wW]\.)?((?:[a-zA-Z0-9-]+\.)+[a-zA-Z]{2,24})(?:[/:?#]${Rx.NSP}*)?$""")
     private val ADDR_IN_TEXT_RE = Regex("""[${Rx.LN}_.+-]+@(?:[${Rx.LN}_-]+\.)+[a-zA-Z]{2,24}""")
-    private val AUTH_RE = Regex("""${Rx.WB_START}(spf|dkim|dmarc|compauth)${Rx.SP}*=${Rx.SP}*([a-z]+)""")
+    private val AUTH_RE = BoundedRegex("""(spf|dkim|dmarc|compauth)${Rx.SP}*=${Rx.SP}*([a-z]+)""")
 
     fun isFreemail(reg: String?): Boolean {
         if (reg.isNullOrEmpty()) return false

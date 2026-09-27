@@ -29,7 +29,7 @@ class ExtractTest(unittest.TestCase):
               'val d = Baseline.Pattern(s("pattern"), "a", "b", "c")\n'
         self.assertEqual(found(src), [
             ("[?]" + rx["Rx.SP"] + "*$", None, 0),
-            (rx["Rx.WB"] + "copy" + rx["Rx.WB"], None, 0),
+            (extract.portable.leading_wb(rx, False) + "copy" + rx["Rx.WB"], None, 0),
             (None, "not a literal", 0),
         ])
 
@@ -58,6 +58,23 @@ class ExtractTest(unittest.TestCase):
                 extract.code_mask(src)
         with self.assertRaises(ValueError):
             extract.skip_string('"""abc', 0)
+
+
+class PortableTranslateCorpusTest(unittest.TestCase):
+    def test_the_python_port_gives_the_corpus_answers(self):
+        # tools/parity/corpus.json pins PortableRegex.translate (Kotlin, every platform); the port
+        # extract.py uses must give the same patterns, so the device compiles what the app compiles.
+        import json
+        corpus = json.loads((extract.ROOT / "tools/parity/corpus.json").read_text(encoding="utf-8"))
+        rx = extract.global_consts()
+        cases = [c for c in corpus["cases"] if c["fn"] == "regex.translate"]
+        self.assertGreaterEqual(len(cases), 8)
+        for c in cases:
+            try:
+                got = {"pattern": extract.portable.translate(c["input"], rx)}
+            except extract.portable.TranslateError:
+                got = {"error": True}
+            self.assertEqual(c["expect"], got, c["id"])
 
 
 if __name__ == "__main__":

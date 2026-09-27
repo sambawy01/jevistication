@@ -245,7 +245,7 @@ def patterns_in(src: str):
     consts = {**global_consts(), **file_consts(src)}
     is_code, literal_ends = code_mask(src)
     out = []
-    for m in re.finditer(r"(?<![\w.])(?:Guarded)?Regex\(\s*|\bPattern\.compile\(\s*", src):
+    for m in re.finditer(r"(?<![\w.])(?:Guarded|Bounded)?Regex\(\s*|\bPattern\.compile\(\s*", src):
         if not is_code[m.start()] or re.search(r"\bclass\s+$", src[:m.start()]):
             continue
         parsed = parse_expression(src, m.end(), consts)

@@ -1,5 +1,6 @@
 package dev.loupe.kit.privacy
 
+import dev.loupe.engine.BoundedRegex
 import dev.loupe.engine.ContentHash
 import dev.loupe.engine.PortableText
 import dev.loupe.engine.Rx
@@ -33,29 +34,32 @@ data class SecretFinding(
 )
 
 object SecretRules {
-    /** (type, label, pattern, group holding the secret value). */
-    internal class Detector(val type: String, val label: String, val rx: Regex, val group: Int)
+    /**
+     * (type, label, pattern, group holding the secret value). [rx] is a [BoundedRegex]: a leading `\b`
+     * is checked in code, not by a lookbehind (Kotlin/Native pays O(position) for one).
+     */
+    internal class Detector(val type: String, val label: String, val rx: BoundedRegex, val group: Int)
 
     internal val DETECTORS: List<Detector> = listOf(
         Detector("private_key", "private key (PEM)",
-            Regex("""-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----"""), 0),
-        Detector("anthropic_key", "Anthropic API key", Regex("""${Rx.WB_START}sk-ant-[A-Za-z0-9_\-]{20,}"""), 0),
+            BoundedRegex("""-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED |PGP )?PRIVATE KEY(?: BLOCK)?-----""", bounded = false), 0),
+        Detector("anthropic_key", "Anthropic API key", BoundedRegex("""sk-ant-[A-Za-z0-9_\-]{20,}"""), 0),
         Detector("openai_key", "OpenAI API key",
-            Regex("""${Rx.WB_START}sk-(?!ant-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{20,}"""), 0),
-        Detector("aws_access_key", "AWS access key", Regex("""${Rx.WB_START}(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}${Rx.WB_END}"""), 0),
+            BoundedRegex("""sk-(?!ant-)(?:proj-|svcacct-|admin-)?[A-Za-z0-9_\-]{20,}"""), 0),
+        Detector("aws_access_key", "AWS access key", BoundedRegex("""(?:AKIA|ASIA|ABIA|ACCA)[0-9A-Z]{16}${Rx.WB_END}"""), 0),
         Detector("aws_secret_key", "AWS secret key",
             // (?i) spelled out for these ASCII words (the JDK's ASCII case-insensitivity, on every engine)
-            Regex("""[aA][wW][sS]_?[sS][eE][cC][rR][eE][tT]_?(?:[aA][cC][cC][eE][sS][sS]_?)?[kK][eE][yY]["']?${Rx.SP}*[:=]${Rx.SP}*["']?([A-Za-z0-9/+=]{40})${Rx.WB}"""), 1),
-        Detector("google_api_key", "Google API key", Regex("""${Rx.WB_START}AIza[0-9A-Za-z_\-]{35}"""), 0),
-        Detector("google_oauth_secret", "Google OAuth client secret", Regex("""${Rx.WB_START}GOCSPX-[A-Za-z0-9_\-]{20,}"""), 0),
-        Detector("stripe_key", "Stripe key", Regex("""${Rx.WB_START}(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}"""), 0),
-        Detector("stripe_webhook_secret", "Stripe webhook secret", Regex("""${Rx.WB_START}whsec_[0-9A-Za-z]{20,}"""), 0),
+            BoundedRegex("""[aA][wW][sS]_?[sS][eE][cC][rR][eE][tT]_?(?:[aA][cC][cC][eE][sS][sS]_?)?[kK][eE][yY]["']?${Rx.SP}*[:=]${Rx.SP}*["']?([A-Za-z0-9/+=]{40})${Rx.WB}""", bounded = false), 1),
+        Detector("google_api_key", "Google API key", BoundedRegex("""AIza[0-9A-Za-z_\-]{35}"""), 0),
+        Detector("google_oauth_secret", "Google OAuth client secret", BoundedRegex("""GOCSPX-[A-Za-z0-9_\-]{20,}"""), 0),
+        Detector("stripe_key", "Stripe key", BoundedRegex("""(?:sk|rk)_(?:live|test)_[0-9A-Za-z]{16,}"""), 0),
+        Detector("stripe_webhook_secret", "Stripe webhook secret", BoundedRegex("""whsec_[0-9A-Za-z]{20,}"""), 0),
         Detector("github_token", "GitHub token",
-            Regex("""${Rx.WB_START}(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})"""), 0),
-        Detector("slack_token", "Slack token", Regex("""${Rx.WB_START}xox[abposre]-[A-Za-z0-9\-]{10,}"""), 0),
+            BoundedRegex("""(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,})"""), 0),
+        Detector("slack_token", "Slack token", BoundedRegex("""xox[abposre]-[A-Za-z0-9\-]{10,}"""), 0),
         Detector("slack_webhook", "Slack webhook URL",
-            Regex("""https://hooks\.slack\.com/services/[A-Za-z0-9/_\-]{20,}"""), 0),
-        Detector("jwt", "JSON Web Token", Regex("""${Rx.WB_START}eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"""), 0),
+            BoundedRegex("""https://hooks\.slack\.com/services/[A-Za-z0-9/_\-]{20,}""", bounded = false), 0),
+        Detector("jwt", "JSON Web Token", BoundedRegex("""eyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}"""), 0),
     )
 
     // Possessive `++`: a prefix segment is a whole alphanumeric run, split only at separators, so a

@@ -2023,7 +2023,12 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
 - **Letters and numbers** in template parameter checks, host validation, brand-name matching,
   keyword boundaries, mail label names and the privacy words come from the pinned Unicode 16.0
   categories instead of the platform's (differs only for characters newer than the platform's data).
-- **New public API** (additive, in LoupeKit's headers): `PortableText`, `Rx`, `PortableRegex`,
+- **iOS speed**: Kotlin/Native evaluates a regex lookbehind in O(position), so a pattern led by one
+  is quadratic (measured: 45 s for DateFacts on 24,000 characters, a minute for the transaction gate
+  on 12,000). The portable `\b` is therefore checked in code (`BoundedRegex`) or consumed
+  (`PortableRegex.translate`), never a leading lookbehind; the transaction gate's own leading
+  lookbehinds went the same way. `PortableRegexPerformanceTest` bounds each on 50,000 characters.
+- **New public API** (additive, in LoupeKit's headers): `PortableText`, `Rx`, `PortableRegex`, `BoundedRegex`,
   `OriginFacts.asciiLabel`, `ParsedUrl.typedHost` (a new last constructor parameter with a default),
   `SiteSignals.unicodeDrift`. The engine's `idnaToAscii` is no longer an `expect`; iOS and Android no
   longer have NFKC actuals (`Unicode.ios.kt`, `Unicode.jvm.kt` removed).

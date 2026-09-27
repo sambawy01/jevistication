@@ -1,5 +1,6 @@
 package dev.loupe.kit.watchers
 
+import dev.loupe.engine.BoundedRegex
 import dev.loupe.engine.Cadence
 import dev.loupe.engine.PortableText
 import dev.loupe.engine.Rx
@@ -147,7 +148,7 @@ object WatcherFindings {
     const val CRITERIA = "watcher-v1"
 
     // EXPIRY_LINE on PortableText.matchForm, MONEY on digit-folded text (see WatcherRun).
-    private val EXPIRY_LINE = Regex("""${Rx.WB_START}(expir${Rx.W}*|valid until|valid to|valid thru|renewal date|4b\.)""")
+    private val EXPIRY_LINE = BoundedRegex("""(expir${Rx.W}*|valid until|valid to|valid thru|renewal date|4b\.)""")
     private val MONEY = Regex("""([£$€])${Rx.SP}?([0-9][0-9,]*(?:\.[0-9]{1,2})?)""")
 
     fun summarise(

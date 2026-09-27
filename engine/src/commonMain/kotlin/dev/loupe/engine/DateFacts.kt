@@ -46,13 +46,14 @@ object DateFacts {
     }
 
     // Matched on digit-folded text (Arabic-Indic and Persian digits read as 0-9, the owner's decision),
-    // with the classes spelled out so every regex engine agrees (PortableText, Rx).
-    private val ISO = Regex("""${Rx.WB_START}([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})${Rx.WB_END}""")
-    private val NUMERIC = Regex("""${Rx.WB_START}([0-9]{1,2})[/.\-]([0-9]{1,2})[/.\-]([0-9]{4})${Rx.WB_END}""")
+    // with the classes spelled out so every regex engine agrees (PortableText, Rx). Each starts at an
+    // ASCII word boundary (`\b`), checked by BoundedRegex rather than a lookbehind.
+    private val ISO = BoundedRegex("""([0-9]{4})-([0-9]{1,2})-([0-9]{1,2})${Rx.WB_END}""")
+    private val NUMERIC = BoundedRegex("""([0-9]{1,2})[/.\-]([0-9]{1,2})[/.\-]([0-9]{4})${Rx.WB_END}""")
     private val DAY_MONTH_YEAR =
-        Regex("""${Rx.WB_START}([0-9]{1,2})(?:st|nd|rd|th)?${Rx.SP}+([A-Za-z]{3,9})\.?,?${Rx.SP}+([0-9]{4})${Rx.WB_END}""")
+        BoundedRegex("""([0-9]{1,2})(?:st|nd|rd|th)?${Rx.SP}+([A-Za-z]{3,9})\.?,?${Rx.SP}+([0-9]{4})${Rx.WB_END}""")
     private val MONTH_DAY_YEAR =
-        Regex("""${Rx.WB_START}([A-Za-z]{3,9})\.?${Rx.SP}+([0-9]{1,2})(?:st|nd|rd|th)?,?${Rx.SP}+([0-9]{4})${Rx.WB_END}""")
+        BoundedRegex("""([A-Za-z]{3,9})\.?${Rx.SP}+([0-9]{1,2})(?:st|nd|rd|th)?,?${Rx.SP}+([0-9]{4})${Rx.WB_END}""")
 
     /**
      * Finds every date in [text], in order of appearance.

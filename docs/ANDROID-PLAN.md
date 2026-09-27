@@ -140,7 +140,7 @@ Swift callers need no change. The constructor threw on a bad pattern before too 
 ## Known parity gaps
 
 **B1 and B2 are closed** (2026-09-27, branch `parity`; record below). Android, iOS and the JVM now give
-the same mechanical answers, pinned by a shared corpus (`tools/parity/corpus.json`, 175 cases) that
+the same mechanical answers, pinned by a shared corpus (`tools/parity/corpus.json`, 182 cases) that
 runs in `commonTest` (JVM, iOS simulator, Android unit tests) and on the API 29 and API 35 emulators
 (`tools/parity/run-device.sh`). Loupe Station is to be made to pass the same file (its format:
 `tools/parity/README.md`). Every answer that changed for the iPhone or the desktop is listed in
@@ -179,6 +179,9 @@ comes back (allowlist with a justification per entry). The engine's `Rx` spells 
   value must keep its case. User baselines (`Baseline.Pattern` from judgments.json) are compiled
   through `PortableRegex.translate`, which does the same to a pattern and refuses what it cannot
   make portable (`\p{..}`, `\X`, ...).
+- *No leading lookbehinds:* Kotlin/Native evaluates a lookbehind in O(position), so the portable
+  `\b` before a word is checked in code (`BoundedRegex`) or consumed (translated baselines); a
+  performance test bounds the patterns on 50,000 characters on every target.
 
 **B2, how it was closed.** One Unicode table for every platform, generated from the Unicode **16.0**
 UCD by `tools/unicode/gen_unicode_tables.py` (sources and SHA-256 recorded in the generated
