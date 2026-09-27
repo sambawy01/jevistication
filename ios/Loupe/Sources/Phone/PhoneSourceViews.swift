@@ -200,7 +200,16 @@ struct MailSetupView: View {
     @State private var password = ""
     @State private var saving = false
     @State private var error: String?
+    @State private var confirmRemove = false
     @Environment(\.dismiss) private var dismiss
+
+    /// Providers whose sign-in row shows: every working one; one with no client ID only in DEBUG builds (P1-6).
+    private var shownProviders: [OAuthProvider] {
+        OAuthProvider.allCases.filter { OAuthConfig.showsSignIn(sources.deps.oauth.availability($0)) }
+    }
+
+    /// Providers with no sign-in in this build: the app-password section names them instead.
+    private var hiddenProviders: [OAuthProvider] { OAuthProvider.allCases.filter { !shownProviders.contains($0) } }
 
     var body: some View {
         Form {
@@ -213,8 +222,15 @@ struct MailSetupView: View {
                     LabeledContent("Server", value: account.host)
                     LabeledContent("User", value: account.username)
                     LabeledContent("Sign-in", value: account.auth == .appPassword ? "App password (in the Keychain)" : "OAuth token (in the Keychain)")
-                    Button("Remove mailbox and its messages", role: .destructive) { sources.removeMail(); dismiss() }
+                    // Asks first (audit P2-11): removing takes the password and every message Loupe fetched.
+                    Button("Remove mailbox and its messages", role: .destructive) { confirmRemove = true }
                         .accessibilityIdentifier("mail.remove")
+                        .confirmationDialog("Remove this mailbox?", isPresented: $confirmRemove, titleVisibility: .visible) {
+                            Button("Remove mailbox and its messages", role: .destructive) { sources.removeMail(); dismiss() }
+                                .accessibilityIdentifier("mail.remove.confirm")
+                        } message: {
+                            Text("Loupe forgets the sign-in (from the Keychain) and every message it fetched from \(account.host). Your mail on the server is not touched.")
+                        }
                 }
             }
             NeonSection("App password") {
@@ -231,14 +247,19 @@ struct MailSetupView: View {
                 SecureField("App password", text: $password)
                     .accessibilityIdentifier("mail.password")
                 Text(preset.help).font(.footnote).foregroundStyle(Palette.inkSoft)
+                ForEach(hiddenProviders) { p in
+                    Text("\(p.mailName): use an app password.").font(.footnote).foregroundStyle(Palette.inkSoft)
+                        .accessibilityIdentifier("mail.appPasswordOnly.\(p.id)")
+                }
                 Button(saving ? "Connecting…" : "Save and fetch") {
                     Task { await save() }
                 }
                 .disabled(saving || username.isEmpty || password.isEmpty || host.isEmpty)
                 .accessibilityIdentifier("mail.save")
             }
+            if !shownProviders.isEmpty {
             NeonSection("Sign in with your provider") {
-                ForEach(OAuthProvider.allCases) { provider in
+                ForEach(shownProviders) { provider in
                     switch sources.deps.oauth.availability(provider) {
                     case .ready:
                         VStack(alignment: .leading, spacing: 4) {
@@ -258,6 +279,7 @@ struct MailSetupView: View {
                         .accessibilityIdentifier("mail.oauth.\(provider.id)")
                     }
                 }
+            }
             }
             if let error {
                 NeonSection { Text(error).font(.footnote).foregroundStyle(Palette.dangerText) }

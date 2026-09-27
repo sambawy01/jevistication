@@ -164,11 +164,32 @@ struct NowView: View {
                 LayaOffBanner(feature: Features.shared.WATCHERS)
                 if summary.findings.isEmpty {
                     if summary.itemsChecked == 0 {
-                        HonestEmptyState(
-                            title: "Nothing to watch yet",
-                            message: "The watchers read what your sources hold. No source is on, so there is nothing to check and nothing is shown. Turn on the sample in Sources to see them work.",
-                            symbol: "photo.on.rectangle")
-                            .padding(.horizontal, -16)
+                        // "No source is on" only when none is (audit P0-1: it showed with five on, over a run
+                        // that had read 0 items before the scan landed).
+                        if sources.enabledCount == 0 {
+                            HonestEmptyState(
+                                title: "Nothing to watch yet",
+                                message: "The watchers read what your sources hold. No source is on, so there is nothing to check and nothing is shown. Turn on a source to see them work.",
+                                symbol: "photo.on.rectangle",
+                                actions: [EmptyStateAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus",
+                                                           id: "findings.empty.sources") { router.open(.sources) }])
+                                .padding(.horizontal, -16)
+                                .accessibilityElement(children: .contain)
+                                .accessibilityIdentifier("findings.empty")
+                        } else {
+                            HonestEmptyState(
+                                title: "Nothing read yet",
+                                message: "The watchers' last run read 0 items from your \(sources.enabledCount) source\(sources.enabledCount == 1 ? "" : "s"). Run them again once your sources have been read. A source without permission, or with nothing in it, gives them nothing to check.",
+                                symbol: "photo.on.rectangle",
+                                actions: [EmptyStateAction(title: "Run now", symbol: "arrow.clockwise", id: "findings.empty.runNow") {
+                                              Task { await watchers.run() }
+                                          },
+                                          EmptyStateAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus",
+                                                           id: "findings.empty.sources") { router.open(.sources) }])
+                                .padding(.horizontal, -16)
+                                .accessibilityElement(children: .contain)
+                                .accessibilityIdentifier("findings.notRead")
+                        }
                     } else {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Nothing raised").font(.headline).foregroundStyle(Palette.ink)

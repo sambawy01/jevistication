@@ -64,6 +64,27 @@ final class LedgerService: ObservableObject, @unchecked Sendable {
         }
     }
 
+    /// "Delete all my Loupe data" (audit P1-4): runs `work` (which deletes the files) on the ledger's queue with the
+    /// store closed, then opens a fresh, empty one, so no queued write lands in between.
+    func eraseAndReopen<R>(_ work: () -> R) -> R {
+        let (result, n, failure): (R, Int, String?) = queue.sync {
+            ledger = nil
+            let r = work()
+            do {
+                let l = try Self.open(home)
+                ledger = l
+                return (r, Int(l.count()), nil)
+            } catch {
+                return (r, 0, error.localizedDescription)
+            }
+        }
+        Task { @MainActor in
+            self.count = n
+            self.problem = failure
+        }
+        return result
+    }
+
     /// Waits for every write queued so far (tests; export calls it implicitly by queueing after).
     func flush() { queue.sync {} }
 

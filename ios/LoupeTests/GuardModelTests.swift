@@ -232,4 +232,76 @@ final class GuardModelTests: XCTestCase {
         XCTAssertTrue(s.summary?.expiries.contains { $0.findingKey == finding.key } ?? false, "Undo puts the row back")
         XCTAssertEqual(s.summary?.expiries.map(\.daysRemaining), s.summary?.expiries.map(\.daysRemaining).sorted())
     }
+
+    // MARK: A run asked for during a run (audit P0-1)
+
+    /// A model whose first open is held until the test releases it: the first watcher run stays in flight.
+    @MainActor private final class GatedModel: JudgmentModelProvider {
+        var isInstalled = true
+        var failure: String?
+        private(set) var opens = 0
+        private var gate: CheckedContinuation<Void, Never>?
+        var held: Bool { gate != nil }
+        func backend() async -> Backend? {
+            opens += 1
+            if opens == 1 { await withCheckedContinuation { gate = $0 } }
+            return nil
+        }
+        func release() { gate?.resume(); gate = nil }
+    }
+
+    private final class ItemsBox { var items: [SourceItem] = [] }
+
+    func testARunAskedForDuringARunIsNotLost() async throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("LoupeGuard-\(UUID().uuidString)")
+        let suite = "GuardModelTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { try? FileManager.default.removeItem(at: home); defaults.removePersistentDomain(forName: suite) }
+        let box = ItemsBox()
+        let model = GatedModel()
+        let s = WatchersService(ledger: LedgerService(home: home), items: { box.items }, model: model, seen: defaults,
+                                settings: FakeSettings())
+        let first = Task { await s.run(today: today) }
+        var spins = 0
+        while !model.held && spins < 10_000 { await Task.yield(); spins += 1 }
+        XCTAssertTrue(model.held, "the first run is opening the model")
+        XCTAssertTrue(s.running)
+        // The scan lands while the first run is in flight (it already read 0 items), and asks for a run.
+        box.items = GuardModelTests.sample
+        await s.run(today: today)
+        XCTAssertTrue(s.running, "the second request returns at once: it is queued, not run alongside")
+        model.release()
+        await first.value
+        let deadline = Date().addingTimeInterval(30)
+        while (s.running || (s.summary?.findings.isEmpty ?? true)) && Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertFalse(s.running)
+        XCTAssertEqual(model.opens, 2, "the queued request ran once, after the first")
+        XCTAssertFalse(s.summary?.findings.isEmpty ?? true, "the re-run saw the scanned items")
+        XCTAssertFalse(s.summary?.census.rows.isEmpty ?? true)
+    }
+
+    func testRequestsDuringARunCoalesceIntoOneRerun() async throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("LoupeGuard-\(UUID().uuidString)")
+        let suite = "GuardModelTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { try? FileManager.default.removeItem(at: home); defaults.removePersistentDomain(forName: suite) }
+        let model = GatedModel()
+        let s = WatchersService(ledger: LedgerService(home: home), items: { GuardModelTests.sample }, model: model, seen: defaults,
+                                settings: FakeSettings())
+        let first = Task { await s.run(today: today) }
+        var spins = 0
+        while !model.held && spins < 10_000 { await Task.yield(); spins += 1 }
+        await s.run(today: today)
+        await s.run(today: today)
+        await s.run(today: today)
+        model.release()
+        await first.value
+        let deadline = Date().addingTimeInterval(30)
+        while (s.running || model.opens < 2) && Date() < deadline { try await Task.sleep(nanoseconds: 20_000_000) }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        XCTAssertFalse(s.running)
+        XCTAssertEqual(model.opens, 2, "three requests during a run make one re-run")
+    }
 }

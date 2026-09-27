@@ -124,6 +124,15 @@ final class SortService: ObservableObject {
         }
     }
 
+    /// After "Delete all my Loupe data": the last sort's card goes and the switch is back to its default.
+    func forgetAfterErase() {
+        last = nil
+        notice = nil
+        carried = nil
+        resumeTrigger = nil
+        enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? Self.enabledByDefault
+    }
+
     /// Runs the coordinator once. Safe to call again after any stop: it resumes where it left off.
     @discardableResult
     func run(_ trigger: SortTrigger) async -> Outcome {

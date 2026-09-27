@@ -137,6 +137,16 @@ final class PhoneSourcesTests: XCTestCase {
     private var bookmarks: FakeBookmarks!
     private var keys: [String: MemoryKeyStore] = [:]
     private var transports: [TranscriptTransport] = []
+    /// Signalled (on the sources queue) each time a scan asks where the Send to Loupe inbox is, just before it lists it.
+    private let inboxAsked = DispatchSemaphore(value: 0)
+    /// When armed, a scan that asks for the inbox waits here (on the sources queue) until the test releases it.
+    private final class Hold: @unchecked Sendable {
+        private let lock = NSLock()
+        private var gate: DispatchSemaphore?
+        func arm() -> DispatchSemaphore { lock.lock(); defer { lock.unlock() }; let g = DispatchSemaphore(value: 0); gate = g; return g }
+        func pass() { lock.lock(); let g = gate; gate = nil; lock.unlock(); g?.wait() }
+    }
+    private let inboxHold = Hold()
 
     override func setUpWithError() throws {
         home = FileManager.default.temporaryDirectory.appendingPathComponent("PhoneSources-\(UUID().uuidString)")
@@ -156,7 +166,7 @@ final class PhoneSourcesTests: XCTestCase {
         let deps = PhoneDependencies(
             photos: photos, recognizer: FakeRecognizer(text: [Data("receipt-bytes".utf8): "RECEIPT\nTotal £12.40"]),
             events: events, contacts: contacts, bookmarks: BookmarkStore(home: home, resolver: bookmarks),
-            inbox: { [inbox] in inbox! }, mailAccounts: MailAccountStore(home: home),
+            inbox: { [inbox, inboxAsked, inboxHold] in inboxAsked.signal(); inboxHold.pass(); return inbox! }, mailAccounts: MailAccountStore(home: home),
             mailCache: home.appendingPathComponent("mail"),
             keychain: { [unowned self] a in
                 let k = a.keychain().account
@@ -369,6 +379,14 @@ final class PhoneSourcesTests: XCTestCase {
                        .ready(clientId: "123-abc.apps.googleusercontent.com"))
     }
 
+    /// Audit P1-6 (2026-09-27): a provider with no client ID is a developer's note, shown only in DEBUG builds.
+    func testASignInWithoutAClientIdShowsOnlyInDebug() {
+        let shipped = OAuthConfig.fromBundle(.main)
+        XCTAssertTrue(OAuthConfig.showsSignIn(shipped.availability(.google), debug: false), "Google has a client: always shown")
+        XCTAssertFalse(OAuthConfig.showsSignIn(shipped.availability(.microsoft), debug: false), "no Outlook row in Release")
+        XCTAssertTrue(OAuthConfig.showsSignIn(shipped.availability(.microsoft), debug: true), "DEBUG keeps the gated row")
+    }
+
     @MainActor
     func testSignInRefusesWithoutAClientId() async {
         let s = service()
@@ -561,6 +579,50 @@ final class PhoneSourcesTests: XCTestCase {
 
         await s.removePicked(BookmarkStore.stableId(single))
         XCTAssertEqual(BookmarkStore(home: home, resolver: bookmarks).all().count, 1)
+    }
+
+    /// A request to read Files made while a Files scan is running is not dropped: that scan may have listed the
+    /// Send to Loupe inbox before the change, so one more scan follows and the caller waits for it. (The launch
+    /// scan listed the inbox, then the review demo's two copies landed and its scan request was refused while the
+    /// launch scan was still storing: the duplicate was never read, ReviewPacksUITests' flaky proposal.)
+    @MainActor
+    func testFilesRequestDuringARunningScanIsNotLost() async throws {
+        let s = service()
+        XCTAssertTrue(s.isPhoneEnabled(.files))
+        let first = Task { await s.scanPhone(.files) }
+        while !s.state(.files).scanning { await Task.yield() }
+        // Holding the main actor from here, so the first scan cannot store or end: wait until it has listed the inbox.
+        inboxAsked.wait()
+        s.queue.sync {}
+        for name in ["late-receipt.txt", "late-receipt copy.txt"] {
+            try Data("Fresh Basket receipt\nTotal 12.40\n".utf8).write(to: inbox.appendingPathComponent(name))
+        }
+        XCTAssertTrue(s.state(.files).scanning, "the first scan is still running when the second request comes")
+        await s.scanPhone(.files)   // same actor: runs at once, while the first scan still reads as scanning
+        await first.value
+        XCTAssertEqual(Set(s.items().map(\.name)).intersection(["late-receipt.txt", "late-receipt copy.txt"]).count, 2,
+                       "files that arrived during a scan are read by the scan the request asked for")
+        XCTAssertFalse(s.state(.files).scanning)
+    }
+
+    /// "Delete all my Loupe data" during a scan with a follow-up queued: the waiting caller is released and the
+    /// follow-up never runs (nothing is read into the emptied cache).
+    @MainActor
+    func testEraseCancelsAQueuedFollowUpScan() async throws {
+        let s = service()
+        let gate = inboxHold.arm()
+        let first = Task { await s.scanPhone(.files) }
+        // The first scan is now held on the sources queue, listing the inbox: it cannot end.
+        await Task.detached { [inboxAsked] in inboxAsked.wait() }.value
+        XCTAssertTrue(s.state(.files).scanning)
+        let waiter = Task { await s.scanPhone(.files) }
+        while s.phoneScanWaiters[.files]?.isEmpty ?? true { await Task.yield() }
+        s.reloadAfterErase()
+        await waiter.value          // released at once, not left waiting for a follow-up
+        gate.signal()
+        await first.value
+        XCTAssertTrue(s.phoneScanWaiters.isEmpty)
+        XCTAssertEqual(inboxAsked.wait(timeout: .now() + 0.5), .timedOut, "no follow-up scan after the erase")
     }
 
     @MainActor

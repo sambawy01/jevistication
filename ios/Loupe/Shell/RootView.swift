@@ -88,6 +88,8 @@ struct RootView: View {
         }
         .animation(Motion.reduced(reduceMotion) ? nil : .easeOut(duration: 0.25), value: step)
         .onAppear(perform: start)
+        // "Delete all my Loupe data" (Me): back to the start, as a fresh install.
+        .onReceive(NotificationCenter.default.publisher(for: .loupeDataErased)) { _ in restartAfterErase() }
         .sheet(isPresented: $showOnboarding, onDismiss: {
             // Open the game only once the sheet is gone: two presentations cannot overlap.
             if watchAfterOnboarding { watchAfterOnboarding = false; launcher.open(.watch) }
@@ -132,6 +134,15 @@ struct RootView: View {
         if let answer = LaunchOptions.current.fakePermissions { return FakePermissionAsker(answer: answer) }
         #endif
         return SystemPermissionAsker(deps: sources.deps)
+    }
+
+    /// After "Delete all my Loupe data": the onboarding steps again (Get the model first when it went too), Now as
+    /// the tab, and the sources started again from their fresh-install defaults.
+    private func restartAfterErase() {
+        showOnboarding = false
+        router.open(.now)
+        step = LaunchFlow.first(ready: ModelReadiness.shared.isReady, launch: .current, record: OnboardingRecord())
+        sources.start()
     }
 
     private func start() {

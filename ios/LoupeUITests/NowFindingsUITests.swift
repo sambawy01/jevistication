@@ -15,6 +15,9 @@ final class NowFindingsUITests: XCTestCase {
         XCTAssertTrue(door.exists)
         XCTAssertTrue(app.descendants(matching: .any)["finding.0"].exists)
         XCTAssertFalse(app.descendants(matching: .any)["finding.2"].exists, "Now shows the newest two, Guard the rest")
+        XCTAssertFalse(app.descendants(matching: .any)["findings.empty"].exists, "'No source is on' only when none is (audit P0-1)")
+        let open = app.buttons["finding.open.0"]
+        if open.exists { XCTAssertGreaterThanOrEqual(open.frame.height, 44, "Open item's hit area (audit P2-9)") }
         door.tap()
         let premium = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "Annual premium up 23%")).firstMatch
         for _ in 0..<14 where !(premium.exists && premium.isHittable) { app.swipeUp() }

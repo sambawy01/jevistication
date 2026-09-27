@@ -102,9 +102,14 @@ struct FindingCard: View {
                 verdictButton(.notRelevant, "minus.circle")
                 Spacer(minLength: 0)
                 if !finding.itemId.isEmpty {
-                    Button("Open item", action: onOpen)
-                        .font(.caption.weight(.semibold))
-                        .accessibilityIdentifier("finding.open.\(index)")
+                    // 44 pt hit area on the label (audit P2-9), the same small text.
+                    Button(action: onOpen) {
+                        Text("Open item")
+                            .font(.caption.weight(.semibold))
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .accessibilityIdentifier("finding.open.\(index)")
                 }
             }
         }

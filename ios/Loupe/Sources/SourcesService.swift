@@ -40,10 +40,16 @@ final class SourcesService: ObservableObject {
     @Published private(set) var liveScans: [String: LiveScan] = [:]
 
     var scanning: Bool { progress != nil || phone.values.contains { $0.scanning } }
+    /// Callers that asked for a phone source's scan while one was already reading it: that scan may have listed
+    /// the source before their change, so one more scan runs after it, and they wait for that one.
+    var phoneScanWaiters: [PhoneSource: [CheckedContinuation<Void, Never>]] = [:]
+    /// Bumped by "Delete all my Loupe data": a follow-up scan queued before it does not run after it.
+    private(set) var eraseGeneration = 0
 
-    let library: SourceLibrary?
+    /// Re-opened only by "Delete all my Loupe data" (`reloadAfterErase`).
+    private(set) var library: SourceLibrary?
     /// Imported CSVs, mail files, ZIP archives and shared text (child 15), in LoupeKit.
-    let inbox: Inbox?
+    private(set) var inbox: Inbox?
     let home: URL
     let deps: PhoneDependencies
     private let sampleRoot: URL?
@@ -72,6 +78,36 @@ final class SourcesService: ObservableObject {
             sampleScan = library.cached(sourceId: Self.sampleId)
         }
         loadPhoneStates()
+    }
+
+    /// After "Delete all my Loupe data" (audit P1-4; the button waits while a scan runs): opens the emptied cache
+    /// again and forgets every source's state, as on a fresh install. `start()` then runs again from onboarding.
+    func reloadAfterErase() {
+        // Pending follow-up scans are cancelled: their callers are released, nothing reads into the emptied cache.
+        eraseGeneration += 1
+        let waiters = phoneScanWaiters.values.flatMap { $0 }
+        phoneScanWaiters = [:]
+        waiters.forEach { $0.resume() }
+        progress = nil
+        problem = nil
+        liveScans = [:]
+        inboxBusy = false
+        inboxProblem = nil
+        do {
+            try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+            library = try SourceLibrary(home: home.path)
+        } catch {
+            library = nil
+            problem = "The sources cache could not be opened: \(error.localizedDescription)"
+        }
+        inbox = library == nil ? nil : try? Inbox(home: home.path, extractors: AppleExtractors.live())
+        inboxBatches = inbox?.batches() ?? []
+        sampleEnabled = library?.isEnabled(sourceId: Self.sampleId, default: true) ?? true
+        sampleScan = library?.cached(sourceId: Self.sampleId)
+        phone = [:]
+        loadPhoneStates()
+        started = false
+        revision += 1
     }
 
     /// The synthetic sample shipped in the app bundle (the desktop's sample resources, verbatim).

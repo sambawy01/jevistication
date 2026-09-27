@@ -82,15 +82,25 @@ struct GetLayaView: View {
                     .accessibilityIdentifier("getLaya.progress")
                 Text("It keeps downloading if you leave Loupe. Features that need the decision model unlock when it finishes.")
                     .font(.footnote).foregroundStyle(Palette.inkSoft)
-                Button("Pause") { model.pauseDownload() }
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("getLaya.pause")
+                HStack {
+                    Button("Pause") { model.pauseDownload() }
+                        .frame(minHeight: 44)
+                        .accessibilityIdentifier("getLaya.pause")
+                    Spacer()
+                    // Cancel as on the model page (audit P2-11): stops the background download and drops the partial files.
+                    Button("Cancel", role: .cancel) { model.cancelDownload() }
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityIdentifier("getLaya.cancel")
+                }
             case .paused(let p):
                 ProgressView(value: p) { Text("Paused at \(Int(p * 100))%").foregroundStyle(Palette.ink) }.tint(Palette.inkSoft)
                 Button { model.startDownload() } label: { Text("Resume").frame(maxWidth: .infinity, minHeight: 44) }
                     .buttonStyle(.neonPrimary)
                     .disabled(!readiness.hostConfigured)
                     .accessibilityIdentifier("getLaya.resume")
+                Button("Cancel the download", role: .cancel) { model.cancelDownload() }
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .accessibilityIdentifier("getLaya.cancel")
             case .verifying:
                 ProgressView("Checking the decision model's files…").foregroundStyle(Palette.ink)
             case .failed(let why):

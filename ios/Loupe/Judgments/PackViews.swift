@@ -23,7 +23,7 @@ struct PacksMenu: View {
                 } catch { packs.notice = "Could not export: \(error.localizedDescription)" }
             } label: { Label("Export my judgments as a pack", systemImage: "square.and.arrow.up") }
                 .accessibilityIdentifier("packs.export")
-        } label: { Label("Packs", systemImage: "shippingbox") }
+        } label: { Label("Packs", systemImage: "shippingbox").labelStyle(.titleAndIcon) }
             .accessibilityIdentifier("judgments.packs")
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
                 if case .success(let url) = result { packs.open(url) }

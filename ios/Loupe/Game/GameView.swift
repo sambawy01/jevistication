@@ -59,11 +59,14 @@ struct GameView: View {
 
     private var topBar: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 12) {
+            HStack(spacing: 6) {
                 Button { dismiss() } label: {
                     Image(systemName: "xmark").font(.system(size: 15, weight: .bold))
                         .frame(width: 34, height: 34)
                         .background(Palette.overlayInk.opacity(0.12), in: Circle())
+                        // The 34 pt circle is drawn; the hit area is 44 pt (audit P2-9).
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .foregroundStyle(Palette.overlayInk)
                 .accessibilityLabel("Close game")
@@ -81,6 +84,8 @@ struct GameView: View {
                         .padding(.horizontal, 10).frame(height: 34)
                         .background(game.rush ? Palette.amber.opacity(0.28) : Palette.overlayInk.opacity(0.12), in: Capsule())
                         .overlay(Capsule().stroke(game.rush ? Palette.amber : .clear, lineWidth: 1))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
                 .foregroundStyle(game.rush ? Palette.amber : Palette.overlayInk)
                 .accessibilityLabel("Rush mode")
@@ -92,6 +97,8 @@ struct GameView: View {
                     Image(systemName: game.paused ? "play.fill" : "pause.fill").font(.system(size: 14, weight: .bold))
                         .frame(width: 34, height: 34)
                         .background(Palette.overlayInk.opacity(0.12), in: Circle())
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .foregroundStyle(Palette.overlayInk)
                 .accessibilityLabel(game.paused ? "Resume" : "Pause")

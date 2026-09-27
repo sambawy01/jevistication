@@ -1,7 +1,6 @@
 import SwiftUI
 
 struct MeView: View {
-    @EnvironmentObject private var web: WebModel
     @EnvironmentObject private var launcher: GameLauncher
     @ObservedObject private var laya = LayaModel.shared
     @ObservedObject private var ledger = LedgerService.shared
@@ -12,7 +11,8 @@ struct MeView: View {
     @State private var exporting = false
     @State private var exportError: String?
     @State private var shared: SharedFile?
-    @State private var showWebSettings = false
+    @State private var confirmErase = false
+    @State private var showErase = false
     @AppStorage(MascotKind.storageKey) private var mascotKind = MascotKind.default.rawValue
     private let engine = EngineInfo.load()
 
@@ -59,6 +59,11 @@ struct MeView: View {
                     if let exportError {
                         Text(exportError).font(.footnote).foregroundStyle(Palette.inkSoft)
                     }
+                    // Two steps (audit P1-4): this asks, then the sheet wants DELETE typed.
+                    Button(role: .destructive) { confirmErase = true } label: {
+                        Text("Delete all my Loupe data…").frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityIdentifier("me.erase")
                 }
                 SortSection()
                 NeonSection("Game") {
@@ -94,10 +99,15 @@ struct MeView: View {
                         .accessibilityIdentifier("me.mascot")
                     }
                 }
-                NeonSection("Web") {
-                    Button("Web settings") { showWebSettings = true }
-                }
+                // Web settings live on Judgments → Web questions (its gear); the duplicate here went (audit P2-12).
                 NeonSection("About") {
+                    row("Version", Self.version)
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("me.version")
+                    Link(destination: Self.privacyURL) { linkRow("Privacy policy") }
+                        .accessibilityIdentifier("me.privacy")
+                    Link(destination: Self.termsURL) { linkRow("Terms of use") }
+                        .accessibilityIdentifier("me.terms")
                     NavigationLink("Licences") { LicencesView() }
                         .accessibilityIdentifier("me.licences")
                 }
@@ -110,9 +120,36 @@ struct MeView: View {
             .neonGround()
             .navigationTitle("Me")
             .onAppear { judgments.load(); judgments.refreshLedger() }
-            .sheet(isPresented: $showWebSettings) { WebSettingsSheet().environmentObject(web) }
+            .confirmationDialog("Delete all your Loupe data?", isPresented: $confirmErase, titleVisibility: .visible) {
+                Button("Continue", role: .destructive) { showErase = true }
+                    .accessibilityIdentifier("me.erase.continue")
+            } message: {
+                Text("Your decisions, judgments, corrections, sources' indexes, the Spotted log, settings and saved sign-ins leave this iPhone for good. You can keep the decision model.")
+            }
+            .sheet(isPresented: $showErase) { DeleteDataView() }
             .sheet(item: $shared) { file in ShareSheet(items: [file.url]) }
         }
+    }
+
+    static let privacyURL = URL(string: "https://loupe-ai.com/privacy/")!
+    static let termsURL = URL(string: "https://loupe-ai.com/terms/")!
+
+    /// "0.1.0 (1)": the marketing version and the build.
+    static var version: String {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let v = info["CFBundleShortVersionString"] as? String ?? "?"
+        let b = info["CFBundleVersion"] as? String ?? "?"
+        return "\(v) (\(b))"
+    }
+
+    private func linkRow(_ title: String) -> some View {
+        HStack {
+            Text(title).foregroundStyle(Palette.ink)
+            Spacer()
+            Image(systemName: "arrow.up.right.square").foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
+        }
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 
     /// Honest about where the history lives: nothing here is uploaded anywhere.

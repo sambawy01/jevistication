@@ -238,8 +238,26 @@ extension SourcesService {
         Task { await scanPhone(.files) }
     }
 
-    /// Scans one phone source now. Refuses when it is off (Mail: no request is made).
+    /// Scans one phone source now. Refuses when it is off (Mail: no request is made). Asked while a scan of that
+    /// source is running, it does not return at once: the running scan may have listed the source before the
+    /// caller's change (a file sent to Loupe, a folder picked, a copy removed or put back), so one more scan runs
+    /// when it ends and the caller waits for it. Requests made meanwhile share that one scan. "Delete all my Loupe
+    /// data" (`reloadAfterErase`) releases the waiters and cancels the follow-up: nothing is read into the emptied cache.
     func scanPhone(_ s: PhoneSource) async {
+        if state(s).scanning {
+            guard isPhoneEnabled(s) else { return }
+            await withCheckedContinuation { phoneScanWaiters[s, default: []].append($0) }
+            return
+        }
+        let generation = eraseGeneration
+        await scanPhoneOnce(s)
+        while generation == eraseGeneration, let waiting = phoneScanWaiters.removeValue(forKey: s) {
+            await scanPhoneOnce(s)
+            waiting.forEach { $0.resume() }
+        }
+    }
+
+    private func scanPhoneOnce(_ s: PhoneSource) async {
         guard isPhoneEnabled(s), !state(s).scanning, let library else { return }
         // Files' bookmarks and Mail's account are kept with complete file protection: while the phone is locked
         // (a background launch) they read as empty, and a scan then would store an empty result over the real one.

@@ -60,10 +60,14 @@ struct SafariProtectionCard: View {
                 if setup.canOpenDirectly {
                     Text(SafariCopy.onThePage).font(.caption).foregroundStyle(Palette.inkSoft).fixedSize(horizontal: false, vertical: true)
                 }
-                Button("Show me the steps") { showSteps = true }
-                    .font(.caption.weight(.semibold))
-                    .frame(minHeight: 44)
-                    .accessibilityIdentifier("protect.safari.steps")
+                // The 44 pt frame is on the label, so the whole row is the hit area (audit P2-9: it was the text, 16 pt).
+                Button { showSteps = true } label: {
+                    Text("Show me the steps")
+                        .font(.caption.weight(.semibold))
+                        .frame(minWidth: 44, minHeight: 44, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("protect.safari.steps")
             } else {
                 Toggle(isOn: Binding(get: { store.notifySuspicious }, set: { store.notifySuspicious = $0 })) {
                     VStack(alignment: .leading, spacing: 2) {

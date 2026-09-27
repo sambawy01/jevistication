@@ -46,6 +46,26 @@ final class GuardUITests: XCTestCase {
         XCTAssertTrue(any(app, "guard.header").waitForExistence(timeout: 5))
     }
 
+    /// Audit P1-1 (2026-09-27): Check a link, Check what I copied and Spotted are right under the header, no scrolling;
+    /// the full Protection section stays further down. And (P0-1) the finished run read the sample, not 0 items.
+    func testTheProtectionActionsAreAtTheTop() {
+        let app = launch("guard")
+        XCTAssertTrue(any(app, "guard.header").waitForExistence(timeout: 10))
+        let check = app.buttons["guard.quick.checkLink"]
+        XCTAssertTrue(check.waitForExistence(timeout: 5))
+        XCTAssertTrue(check.isHittable, "visible without scrolling")
+        XCTAssertTrue(app.buttons["guard.quick.checkCopied"].isHittable)
+        XCTAssertTrue(any(app, "guard.quick.spotted").exists)
+        XCTAssertGreaterThanOrEqual(check.frame.height, 44)
+        XCTAssertTrue(any(app, "guard.subscriptions.total").waitForExistence(timeout: 60), "the watchers ran over the sample")
+        let lastRun = any(app, "guard.header.lastRun")
+        XCTAssertTrue(lastRun.exists)
+        XCTAssertFalse(lastRun.label.hasSuffix("· 0 items"), lastRun.label)
+        XCTAssertFalse(any(app, "guard.empty").exists, "no 'read 0 items' card over a run that read the sample")
+        check.tap()
+        XCTAssertTrue(any(app, "protect.link.input").waitForExistence(timeout: 5), "Check a link opens")
+    }
+
     func testGuardShowsTheSamplesWatchersWithEvidence() {
         let app = launch("guard")
         XCTAssertTrue(any(app, "guard.header").waitForExistence(timeout: 10))

@@ -18,8 +18,18 @@ struct JudgmentResultsView: View {
     @State private var changing: Int32?
     @State private var showQueue = false
     @State private var showMeasure = false
+    @State private var editing: EditTarget?
+    @EnvironmentObject private var router: AppRouter
+    @State private var confirmDelete = false
+    @Environment(\.dismiss) private var dismiss
     @ObservedObject private var readiness = ModelReadiness.shared
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+
+    /// The judgment the Edit sheet opens on.
+    struct EditTarget: Identifiable {
+        let judgment: UserJudgment
+        var id: String { judgment.id }
+    }
 
     init(service: JudgmentsService, judgmentId: String, autoRun: Bool = false) {
         self.service = service
@@ -39,6 +49,34 @@ struct JudgmentResultsView: View {
         }
         .navigationTitle(service.judgment(judgmentId)?.title ?? "Results")
         .navigationBarTitleDisplayMode(.inline)
+        // Edit and Delete (audit P1-3, 2026-09-27): a menu on the judgment's own screen, Delete behind a confirmation.
+        .toolbar {
+            if let j = service.judgment(judgmentId) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button { editing = EditTarget(judgment: j) } label: { Label("Edit wording…", systemImage: "pencil") }
+                            .accessibilityIdentifier("results.menu.edit")
+                        Button { showMeasure = true } label: { Label("Measure and threshold…", systemImage: "slider.horizontal.3") }
+                        Button(role: .destructive) { confirmDelete = true } label: { Label("Delete judgment…", systemImage: "trash") }
+                            .accessibilityIdentifier("results.menu.delete")
+                    } label: {
+                        Label("Judgment actions", systemImage: "ellipsis.circle")
+                            .frame(minWidth: 44, minHeight: 44)
+                    }
+                    .disabled(service.running && service.sweep?.judgmentId == j.id)
+                    .accessibilityIdentifier("results.menu")
+                }
+            }
+        }
+        .sheet(item: $editing) { t in EditJudgmentView(service: service, judgment: t.judgment) }
+        .confirmationDialog(deleteTitle, isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete judgment", role: .destructive) {
+                if service.delete(judgmentId) { dismiss() }
+            }
+            .accessibilityIdentifier("results.delete.confirm")
+        } message: {
+            Text("It leaves My judgments. Its decisions and your corrections stay in the ledger.")
+        }
         .task {
             #if DEBUG
             if let n = ResultsFixture.requested {
@@ -60,6 +98,8 @@ struct JudgmentResultsView: View {
         }
         .onChange(of: rebuildStamp) { _, _ in Task { await model.refresh(service) } }
     }
+
+    private var deleteTitle: String { "Delete \"\(service.judgment(judgmentId)?.title ?? "this judgment")\"?" }
 
     /// A run added rows, or the judgment was reworded / re-thresholded: rebuild the index.
     private var rebuildStamp: String {
@@ -293,10 +333,14 @@ struct JudgmentResultsView: View {
                         .frame(minHeight: 44)
                 }
                 .disabled(service.running || items.isEmpty)
-                Text(items.isEmpty ? "No items scanned yet — turn on the sample in Sources."
+                Text(items.isEmpty ? "No items yet: turn on a source."
                      : "\(items.count) items · a run judges the ones with text not yet judged under this wording, on this phone, cancellable.")
                     .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
+                if items.isEmpty {
+                    CardAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan) { router.open(.sources) }
+                        .accessibilityIdentifier("results.openSources")
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading).card()
         }

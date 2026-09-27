@@ -16,6 +16,7 @@ final class MailTriageUITests: XCTestCase {
         waitForExpectations(timeout: 60)
         card.tap()
         XCTAssertTrue(app.descendants(matching: .any)["mail.section.phishing"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["mail.rerun"].exists, "a re-run on the screen itself (audit P2-11)")
         XCTAssertTrue(app.staticTexts["Your account has been limited"].exists)
         XCTAssertTrue(app.descendants(matching: .any)["mail.flag.phishing"].exists)
         let lookalike = app.staticTexts["mail.signal.sender_lookalike_brand"]

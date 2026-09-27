@@ -16,11 +16,22 @@ struct HeroBand<Content: View>: View {
     }
 }
 
-/// Honest empty state: says what is coming, shows no fake data.
+/// A button on an empty state: the way forward.
+struct EmptyStateAction: Identifiable {
+    let title: String
+    let symbol: String
+    let id: String
+    let perform: () -> Void
+}
+
+/// Honest empty state: says what is missing and shows no fake data. Its actions are the way forward (audit P1-2:
+/// no dead ends); the note is an optional pill (the old "Coming with phone sources" was stale and is gone).
 struct HonestEmptyState: View {
     let title: String
     let message: String
     var symbol: String = "iphone.gen3"
+    var note: String? = nil
+    var actions: [EmptyStateAction] = []
 
     var body: some View {
         VStack(spacing: 14) {
@@ -28,15 +39,26 @@ struct HonestEmptyState: View {
             Text(title)
                 .font(Typeface.display(26))
                 .foregroundStyle(Palette.ink)
+                .multilineTextAlignment(.center)
             Text(message)
                 .font(.body)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Palette.inkSoft)
-            Label("Coming with phone sources", systemImage: symbol)
-                .font(Typeface.mono(12, weight: .medium))
-                .foregroundStyle(Palette.blue)
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(Palette.blue.opacity(0.08), in: Capsule())
+            if let note {
+                Label(note, systemImage: symbol)
+                    .font(Typeface.mono(12, weight: .medium))
+                    .foregroundStyle(Palette.blue)
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Palette.blue.opacity(0.08), in: Capsule())
+            }
+            if !actions.isEmpty {
+                HStack(spacing: 10) {
+                    ForEach(actions) { a in
+                        CardAction(title: a.title, symbol: a.symbol, hue: Palette.cyan, action: a.perform)
+                            .accessibilityIdentifier(a.id)
+                    }
+                }
+            }
         }
         .padding(28)
         .frame(maxWidth: .infinity)

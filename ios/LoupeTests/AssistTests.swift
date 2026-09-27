@@ -145,7 +145,9 @@ final class AssistTests: XCTestCase {
         XCTAssertTrue(m[0].content.contains("second opinion"))
         XCTAssertTrue(m[1].content.contains("- id j-tax (choose one option): Is this a tax receipt?"))
         XCTAssertTrue(m[1].content.contains("allowed: receipt; not a receipt"))
-        XCTAssertTrue(m[1].content.contains("Laya's answer: receipt (probability 0.62)"))
+        XCTAssertTrue(m[1].content.contains("The decision model's answer: receipt (probability 0.62)"))
+        // No user-facing "Laya" (owner decision 2026-09-27): the send preview shows these exact messages.
+        XCTAssertFalse(m.contains { $0.content.contains("Laya") }, "the send preview never says Laya")
         XCTAssertTrue(m[1].content.contains("Receipt [text] VAT 14%"))
         XCTAssertNotNil(try? JSONSerialization.jsonObject(with: Data(SecondOpinionWorkflow.schema(questionId: "j-tax", options: ["receipt", "not a receipt"]).utf8)))
     }

@@ -130,10 +130,52 @@ final class JudgmentsService: ObservableObject {
         }
     }
 
+    /// The Edit sheet's Save (audit P1-3, 2026-09-27): a new title, question, options and criteria text, held to the
+    /// same lint as when it was made (`JudgmentBook.reword`). It keeps its id, threshold, baseline mode and history;
+    /// new wording restarts calibration (earlier decisions stay in the ledger, not counted). Refused while it runs.
+    @discardableResult
+    func update(_ id: String, title: String, question: String, optionsText: String?, invariant: String, breaks: String,
+                lookalikes: String) -> Result<Void, Refusal> {
+        guard let j = judgment(id) else { return .failure(Refusal(reasons: ["This judgment was deleted."])) }
+        if running && sweep?.judgmentId == id {
+            return .failure(Refusal(reasons: ["It is running. Wait for the run to finish, or cancel it, then edit."]))
+        }
+        let result = JudgmentBook.shared.reword(judgment: j, title: title, question: question, optionsText: optionsText,
+                                                invariant: invariant, breaks: breaks, lookalikes: lookalikes)
+        if let refused = result as? BookResult.Refused { return .failure(Refusal(reasons: refused.reasons)) }
+        guard let edited = (result as? BookResult.Created)?.judgment else { return .failure(Refusal(reasons: ["could not edit"])) }
+        guard replace(edited) else { return .failure(Refusal(reasons: [notice ?? "could not save"])) }
+        notice = JudgmentBook.shared.editNotice(before: j, edited: edited)
+        return .success(())
+    }
+
+    /// After "Delete all my Loupe data": forgets everything held here and reads the (now empty) store again.
+    func reloadAfterErase() {
+        bridge?.cancel()
+        bridge = nil
+        sweep = nil
+        answered = []
+        batch = []
+        batchStamp = ""
+        judgmentBatches = [:]
+        countsMemo.removeAll()
+        judgments = []
+        notice = nil
+        loaded = false
+        load()
+    }
+
     /// Removes the judgment. Its ledger rows stay: the ledger is append-only.
-    func delete(_ id: String) {
-        guard !running || sweep?.judgmentId != id else { return }
-        _ = save(judgments.filter { $0.id != id })
+    @discardableResult
+    func delete(_ id: String) -> Bool {
+        guard !running || sweep?.judgmentId != id else {
+            notice = "It is running. Cancel the run first, then delete it."
+            return false
+        }
+        guard let j = judgment(id) else { return false }
+        guard save(judgments.filter { $0.id != id }) else { return false }
+        notice = "Deleted \"\(j.title)\". Its decisions stay in the ledger."
+        return true
     }
 
     fileprivate func setCorrection(_ key: CorrectionKey, _ label: String?) {

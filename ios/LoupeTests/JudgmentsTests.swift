@@ -67,6 +67,60 @@ final class JudgmentsTests: XCTestCase {
         XCTAssertEqual(again.judgments.first?.templateId, "tax-receipt")
     }
 
+    /// Edit (audit P1-3, 2026-09-27): same id, saved, and a reworded question restarts calibration.
+    func testEditKeepsTheIdAndSaysWhenCalibrationRestarts() async throws {
+        let (s, _) = service()
+        guard case .success(let id) = s.useTemplate("tax-receipt") else { return XCTFail("refused") }
+        let before = try XCTUnwrap(s.judgment(id))
+        await s.startSweep(id)
+        XCTAssertEqual(s.counts(before).decisions, 2)
+
+        guard case .success = s.update(id, title: "For my accountant", question: before.question,
+                                       optionsText: JudgmentBook.shared.optionsText(judgment: before),
+                                       invariant: before.invariant, breaks: before.breaks, lookalikes: before.lookalikes)
+        else { return XCTFail("a new name should save") }
+        XCTAssertEqual(s.judgment(id)?.title, "For my accountant")
+        XCTAssertEqual(s.judgment(id)?.criteriaHash, before.criteriaHash, "a new name keeps calibration")
+        XCTAssertEqual(s.notice, "Saved \"For my accountant\".")
+
+        guard case .success = s.update(id, title: "For my accountant", question: "Is this a record of a payment I need for my taxes?",
+                                       optionsText: JudgmentBook.shared.optionsText(judgment: before),
+                                       invariant: before.invariant, breaks: before.breaks, lookalikes: before.lookalikes)
+        else { return XCTFail("new wording should save") }
+        let after = try XCTUnwrap(s.judgment(id))
+        XCTAssertEqual(s.judgments.count, 1, "edited in place, not added")
+        XCTAssertNotEqual(after.criteriaHash, before.criteriaHash)
+        XCTAssertTrue(s.notice?.contains("calibration starts again") == true)
+        XCTAssertEqual(s.counts(after).decisions, 0)
+        XCTAssertEqual(s.counts(after).earlierWording, 2, "earlier decisions are kept, not counted")
+
+        s.ledger.flush()
+        let (again, _) = service()
+        XCTAssertEqual(again.judgment(id)?.question, "Is this a record of a payment I need for my taxes?", "the edit is saved")
+    }
+
+    func testEditRefusesWhatTheLintRefuses() throws {
+        let (s, _) = service()
+        guard case .success(let id) = s.useTemplate("tax-receipt") else { return XCTFail("refused") }
+        let before = try XCTUnwrap(s.judgment(id))
+        guard case .failure(let r) = s.update(id, title: before.title, question: before.question, optionsText: "yes\nno",
+                                              invariant: "", breaks: "", lookalikes: "")
+        else { return XCTFail("bare yes/no should be refused") }
+        XCTAssertFalse(r.reasons.isEmpty)
+        XCTAssertEqual(s.judgment(id)?.shape.candidates, before.shape.candidates, "nothing changed")
+    }
+
+    func testDeleteSaysWhatHappenedAndKeepsTheLedger() async throws {
+        let (s, _) = service()
+        guard case .success(let id) = s.useTemplate("tax-receipt") else { return XCTFail("refused") }
+        await s.startSweep(id)
+        XCTAssertTrue(s.delete(id))
+        XCTAssertNil(s.judgment(id))
+        XCTAssertTrue(s.notice?.contains("Its decisions stay in the ledger") == true)
+        XCTAssertEqual(s.ledger.rows(judgmentId: id).count, 2, "the ledger is append-only")
+        XCTAssertFalse(s.delete(id), "already gone")
+    }
+
     func testTemplateWithParametersIsRefusedWithoutValues() {
         let (s, _) = service()
         guard case .failure(let r) = s.useTemplate("about-project") else { return XCTFail("should refuse") }

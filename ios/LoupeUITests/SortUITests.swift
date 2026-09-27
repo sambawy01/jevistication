@@ -13,6 +13,8 @@ final class SortUITests: XCTestCase {
         XCTAssertTrue(toggle.waitForExistence(timeout: 10))
         // On by default since 2026-09-26 (SortTests checks the default; here the simulator's saved choice wins).
         let run = app.buttons["me.sort.run"]
+        // Me → Your data grew a Delete row (2026-09-27): the Sort card may sit just below the fold.
+        for _ in 0..<4 where !(run.exists && run.isHittable) { app.swipeUp() }
         XCTAssertTrue(run.waitForExistence(timeout: 5))
         // The sample scan may still be running on first launch.
         let summary = app.staticTexts["me.sort.summary"]

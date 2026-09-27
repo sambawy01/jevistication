@@ -100,3 +100,69 @@ struct MailLinkChecksSummary: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+/// Right under the Guard header (audit P1-1, 2026-09-27): the two direct safety actions, so nobody has to scroll past
+/// the watchers to reach them, and the Spotted count. The full Protection section stays where it is, further down.
+struct GuardQuickActions: View {
+    @ObservedObject var store: ProtectionStore = .shared
+    @ObservedObject var monitor: ClipboardMonitor = .shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                NavigationLink(value: ProtectionRoute.checkLink) {
+                    Label("Check a link", systemImage: "link.badge.plus")
+                        .font(.footnote.weight(.semibold))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.neonPrimaryCompact)
+                .accessibilityHint("Paste a link: Loupe checks it on this iPhone without opening it")
+                .accessibilityIdentifier("guard.quick.checkLink")
+                Button {
+                    Task { await monitor.checkNow() }
+                } label: {
+                    Label("Check what I copied", systemImage: "doc.on.clipboard")
+                        .font(.footnote.weight(.semibold))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.neonPrimaryCompact)
+                .accessibilityIdentifier("guard.quick.checkCopied")
+            }
+            NavigationLink(value: ProtectionRoute.spotted) {
+                HStack(spacing: 8) {
+                    Image(systemName: "eye.trianglebadge.exclamationmark")
+                        .foregroundStyle(store.summary.sitesThisWeek > 0 ? Palette.warnText : Palette.inkSoft)
+                        .accessibilityHidden(true)
+                    Text(spottedLine).font(.caption).foregroundStyle(Palette.ink)
+                        .lineLimit(1).minimumScaleFactor(0.85)
+                    Spacer(minLength: 4)
+                    if store.unseenCount > 0 {
+                        Text("\(store.unseenCount) new").font(Typeface.mono(11, weight: .bold)).foregroundStyle(Palette.onAccent)
+                            .padding(.horizontal, 8).padding(.vertical, 3).background(Palette.warnText, in: Capsule())
+                    }
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
+                }
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+                .background(Palette.accentSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("guard.quick.spotted")
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("guard.quick")
+    }
+
+    private var spottedLine: String {
+        let n = store.spotted.count
+        let week = Int(store.summary.sitesThisWeek)
+        if n == 0 { return "Spotted: nothing risky yet" }
+        return week > 0 ? "Spotted: \(week) risky site\(week == 1 ? "" : "s") this week" : "Spotted: \(n) in the last 90 days"
+    }
+}

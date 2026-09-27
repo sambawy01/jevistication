@@ -234,8 +234,10 @@ struct ModelConsentView: View {
                             .font(.footnote).foregroundStyle(Palette.amber)
                             .accessibilityIdentifier("consent.notConfigured")
                     }
-                    Button("Not now") { dismiss() }.frame(maxWidth: .infinity)
-                        .accessibilityIdentifier("consent.decline")
+                    Button { dismiss() } label: {
+                        Text("Not now").frame(maxWidth: .infinity, minHeight: 44).contentShape(Rectangle())
+                    }
+                    .accessibilityIdentifier("consent.decline")
                 }
                 .padding(20)
             }

@@ -22,7 +22,8 @@ final class ReviewService: ObservableObject {
     /// The last action applied here that can be undone (the notice's Undo).
     @Published private(set) var lastApplied: ReviewItem?
 
-    private let queue: ReviewQueue
+    private var queue: ReviewQueue
+    private let home: URL
     private let ledger: LedgerService
     private let privacy: () -> PrivacyService
     private let mail: () -> MailTriageService
@@ -33,6 +34,7 @@ final class ReviewService: ObservableObject {
 
     init(home: URL, ledger: LedgerService, privacy: @escaping () -> PrivacyService, mail: @escaping () -> MailTriageService,
          watchers: @escaping () -> WatchersService, judgments: @escaping () -> JudgmentsService) {
+        self.home = home
         self.ledger = ledger
         self.privacy = privacy
         self.mail = mail
@@ -52,6 +54,17 @@ final class ReviewService: ObservableObject {
     private func now() -> String { JudgmentsService.now() }
 
     func refresh() { items = queue.all() }
+
+    /// After "Delete all my Loupe data" (audit P1-4, 2026-09-27): its files are gone, so open the queue again
+    /// (empty) and forget this session's notices and held Undo copies.
+    func reopenAfterErase() {
+        queue = (try? ReviewQueue.companion.open(home: home.path)) ?? ReviewQueue.companion.inMemory()
+        held = [:]
+        notice = nil
+        problem = nil
+        lastApplied = nil
+        refresh()
+    }
 
     /// Pending and failed: what Now's card counts.
     var toReview: Int { items.filter(\.isOpen).count }

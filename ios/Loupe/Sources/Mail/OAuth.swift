@@ -75,6 +75,21 @@ struct OAuthConfig: Equatable {
         case needsClientId(String)
     }
 
+    /// Whether Mail settings shows a provider's sign-in row (audit P1-6, 2026-09-27): a provider with no client ID is a
+    /// developer's note ("built but switched off"), so only DEBUG builds show it; Release shows only working sign-ins.
+    static func showsSignIn(_ a: Availability, debug: Bool = OAuthConfig.isDebugBuild) -> Bool {
+        if case .needsClientId = a { return debug }
+        return true
+    }
+
+    static var isDebugBuild: Bool {
+        #if DEBUG
+        return true
+        #else
+        return false
+        #endif
+    }
+
     func availability(_ p: OAuthProvider) -> Availability {
         let id = clientId(p)
         if id.isEmpty {

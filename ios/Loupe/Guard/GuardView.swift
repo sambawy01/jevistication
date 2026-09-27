@@ -23,6 +23,8 @@ struct GuardView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     GuardHeader(watchers: watchers, sources: sources, coverage: coverage)
+                    // Check a link, Check what I copied and Spotted, up top (audit P1-1); the full section stays below.
+                    GuardQuickActions()
                     notice
                     if let summary = watchers.summary {
                         content(summary)
@@ -60,6 +62,7 @@ struct GuardView: View {
         }
         // Now's "Loupe spotted …" card: push the Spotted list (its destination is registered by the Protection section).
         .onChange(of: router.guardPush) { _, _ in takePush() }
+        .onReceive(NotificationCenter.default.publisher(for: .loupeDataErased)) { _ in path = NavigationPath() }
         // The run's live progress is drawn here (the strip), so the Activity dock leaves the watchers out on this tab.
         .onAppear { ActivityCenter.shared.show("watchers"); takePush() }
         .onDisappear { ActivityCenter.shared.hide("watchers") }
@@ -81,6 +84,9 @@ struct GuardView: View {
 
     @ViewBuilder private func content(_ summary: WatcherSummary) -> some View {
         let findings = summary.findings
+        if summary.itemsChecked == 0 && !(watchers.running || sources.scanning) {
+            nothingRead
+        }
         GuardSectionTitle(title: "Subscriptions", detail: WatcherKind.recurring.title).id("subscriptions")
         SubscriptionsSection(census: summary.census, findings: findings, coverage: coverage,
                              openSources: { router.open(.sources) })
@@ -115,6 +121,43 @@ struct GuardView: View {
         .card(active: true)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("guard.loading")
+    }
+
+    /// The last run read no items (no source on, or it ran before a scan landed): say which, with a way forward
+    /// (audit P1-2) instead of five sections of "nothing raised in 0 items".
+    private var nothingRead: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 12) {
+                NeonIcon(name: coverage.anyOn ? "hourglass" : "externaldrive.badge.plus", color: Palette.blue, size: 20)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(coverage.anyOn ? "The watchers read 0 items" : "No source is on")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(coverage.anyOn
+                         ? "The last run read 0 items. Run the watchers again once your sources have been read. A source without permission, or with nothing in it, gives them nothing to check."
+                         : "The watchers read what your sources hold. Turn on a source to give them something to check.")
+                        .font(.caption).foregroundStyle(Palette.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            HStack(spacing: 10) {
+                CardAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan) { router.open(.sources) }
+                    .accessibilityIdentifier("guard.empty.sources")
+                if coverage.anyOn {
+                    CardAction(title: "Run now", symbol: "arrow.clockwise", hue: Palette.blue) {
+                        Task { await watchers.run() }
+                        Task { await MailTriageService.shared.run() }
+                    }
+                    .accessibilityIdentifier("guard.empty.runNow")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("guard.empty")
     }
 
     @ViewBuilder private var notice: some View {

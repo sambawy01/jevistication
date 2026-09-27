@@ -40,10 +40,13 @@ struct OnboardingView: View {
             }
             .buttonStyle(.neonPrimary)
             .accessibilityIdentifier("onboarding.watch")
-            Button("Not now", action: onSkip)
-                .frame(maxWidth: .infinity)
-                .foregroundStyle(Palette.overlayInk.opacity(0.85))
-                .accessibilityIdentifier("onboarding.skip")
+            Button(action: onSkip) {
+                Text("Not now")
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .contentShape(Rectangle())
+            }
+            .foregroundStyle(Palette.overlayInk.opacity(0.85))
+            .accessibilityIdentifier("onboarding.skip")
         }
         .padding(24)
         .background(LinearGradient(colors: [Palette.navyTop, Palette.navyBottom], startPoint: .top, endPoint: .bottom).ignoresSafeArea())

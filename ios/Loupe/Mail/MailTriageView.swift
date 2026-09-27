@@ -88,6 +88,17 @@ struct MailTriageView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if mail.summary == nil { await mail.run() } }
         .refreshable { await mail.run() }
+        // Re-run here too (audit P2-11), like the Privacy check's.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { Task { await mail.run() } } label: {
+                    Image(systemName: "arrow.clockwise").frame(minWidth: 44, minHeight: 44)
+                }
+                .disabled(mail.running)
+                .accessibilityLabel("Check again")
+                .accessibilityIdentifier("mail.rerun")
+            }
+        }
         .sheet(item: $openItem) { ItemTextView(item: $0) }
         .sheet(item: $replyTo) { ReplyDraftSheet(item: $0, assist: assist, review: ReviewService.shared) }
     }

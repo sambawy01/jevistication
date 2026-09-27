@@ -38,6 +38,9 @@ final class WatchersService: ObservableObject {
     /// What the last set-aside took with it, for Undo: an expiry finding's timeline row, a merchant's "no charge" warning.
     private var removedExpiry: ExpiryRow?
     private var removedQuiet: [WatcherFinding] = []
+    /// A run asked for while one was going: it runs once more when the current one ends.
+    private var rerun = false
+    private var rerunToday: Date?
 
     init(ledger: LedgerService, items: @escaping () -> [SourceItem], model: JudgmentModelProvider, seen: UserDefaults,
          settings: ModelSettingsSource = ModelSettingsService.shared) {
@@ -62,10 +65,22 @@ final class WatchersService: ObservableObject {
     /// Runs the five watchers over every item of every source that is on. The expiry radar's model
     /// half runs only when Laya is installed and opens; otherwise the mechanical half runs alone and
     /// the findings say so.
+    ///
+    /// A run asked for while one is going is not dropped: it runs again once the current run ends (coalesced,
+    /// the same as `PrivacyService`), so a scan that finishes mid-run is never missed (audit P0-1: a slow first
+    /// run that opened the model read 0 items and then ignored the sample scan's "items changed").
     func run(today: Date = Date()) async {
-        guard !running else { return }
+        guard !running else { rerun = true; rerunToday = today; return }
         running = true
-        defer { running = false }
+        defer {
+            running = false
+            if rerun {
+                rerun = false
+                let next = rerunToday ?? Date()
+                rerunToday = nil
+                Task { await run(today: next) }
+            }
+        }
         let all = items()
         let job = ActivityCenter.shared.start("watchers", title: "act.title.watchers", view: "watchers", total: all.count,
                                               stage: "act.stage.starting")
@@ -102,6 +117,22 @@ final class WatchersService: ObservableObject {
         lastRun = Date()
         feed.end()
         summary = result
+    }
+
+    /// After "Delete all my Loupe data": the last run's results, what was seen and the Undo go. The next run
+    /// starts from nothing (a run in flight finishes and is then re-run over the empty sources).
+    func forgetAfterErase() {
+        summary = nil
+        newCount = 0
+        newKeys = []
+        notice = nil
+        lastSetAside = nil
+        lastSetAsideRow = nil
+        lastRun = nil
+        removedExpiry = nil
+        removedQuiet = []
+        seen.removeObject(forKey: Self.seenKey)
+        if running { rerun = true }
     }
 
     /// Confirm, Dismiss or Not relevant: a correction record in the log (never rewritten). Dismissed

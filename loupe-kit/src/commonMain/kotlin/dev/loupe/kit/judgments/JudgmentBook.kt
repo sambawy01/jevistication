@@ -183,6 +183,67 @@ object JudgmentBook {
         return BookResult.Created(judgment.copy(criteriaInPrompt = input.criteriaInPrompt))
     }
 
+    /**
+     * The phone's Edit sheet (audit P1-3, 2026-09-27): [judgment] with a new title, question, options and
+     * criteria text, held to the same lint as when it was made (`UserJudgment.reword`, plus the editor's bare
+     * yes/no rule). It keeps its id, threshold, baseline mode, "criteria in prompt" and history. [optionsText]
+     * is one option per line: a two-option judgment keeps exactly two; a score's bands and a bare yes/no's
+     * options are not edited (ignored). Blank criteria
+     * go back to "(not written yet)". Created carries the edited judgment; nothing is saved here.
+     */
+    fun reword(
+        judgment: UserJudgment,
+        title: String,
+        question: String,
+        optionsText: String?,
+        invariant: String,
+        breaks: String,
+        lookalikes: String,
+    ): BookResult {
+        val options = if (!optionsEditable(judgment)) null else optionsText
+            ?.split('\n')?.map { it.trim() }?.filter { it.isNotEmpty() }
+        if (question.isBlank()) return BookResult.Refused(listOf("write the question"))
+        if (options != null) {
+            if (judgment.shape is Shape.Binary && options.any { it.lowercase() in BARE }) {
+                return BookResult.Refused(listOf("bare yes/no options make the model ignore the question; say what each answer means instead"))
+            }
+            if (options.size < 2) return BookResult.Refused(listOf("a judgment needs at least two options"))
+            if (options.map { it.lowercase() }.distinct().size != options.size) return BookResult.Refused(listOf("two options are the same"))
+        }
+        fun criterion(text: String) = text.trim().ifEmpty { UserJudgment.UNWRITTEN }
+        return when (
+            val r = judgment.reword(
+                newQuestion = question.trim(),
+                options = options,
+                newTitle = title.trim(),
+                newInvariant = criterion(invariant),
+                newBreaks = criterion(breaks),
+                newLookalikes = criterion(lookalikes),
+            )
+        ) {
+            is UserJudgment.EditResult.Rejected -> BookResult.Refused(r.findings.map { it.message })
+            is UserJudgment.EditResult.Edited -> BookResult.Created(r.judgment)
+        }
+    }
+
+    /** A two-option judgment's and a pick's options can be edited; a score's bands and a bare yes/no's cannot. */
+    fun optionsEditable(judgment: UserJudgment): Boolean = judgment.shape is Shape.Binary || judgment.shape is Shape.Pick
+
+    /** The options as the Edit sheet shows them, one per line; null when they are not edited there. */
+    fun optionsText(judgment: UserJudgment): String? =
+        if (optionsEditable(judgment)) judgment.shape.candidates.joinToString("\n") else null
+
+    /** True when [edited] asks the model something different from [before]: calibration starts again. */
+    fun calibrationRestarts(before: UserJudgment, edited: UserJudgment): Boolean = before.criteriaHash != edited.criteriaHash
+
+    /** The notice after an edit. */
+    fun editNotice(before: UserJudgment, edited: UserJudgment): String =
+        if (calibrationRestarts(before, edited)) {
+            "Saved \"${edited.title}\". The wording changed, so its calibration starts again; earlier decisions are kept, not counted."
+        } else {
+            "Saved \"${edited.title}\"."
+        }
+
     /** [judgment] with its criteria shown to the model ([on]) or not. Changes the criteria hash. */
     fun withCriteriaInPrompt(judgment: UserJudgment, on: Boolean): UserJudgment = judgment.copy(criteriaInPrompt = on)
 

@@ -1975,6 +1975,41 @@ their acceptance criteria are met; entries here record increments toward them.
   paths; on softens), `ModelFixesMeasurementTest`, `ModelPriorFitTest`. Gate: `./gradlew check` green
   (1,576 tests, 0 failures, Android targets skipped without an SDK); iOS simulator (LoupeKit rebuilt, xcodegen): 431 unit (2 skipped), 0 failures; 56 UI (5 skipped), **1 failure** — `ReviewPacksUITests.testApproveAPrivacyCheckProposedAction` waits 90 s for the privacy check's "Remove the extra copy" proposal and it never appears (also after uninstalling the app); that path is rules only (PrivacyCheck, ReviewProducers, the review-demo inbox seed) and none of it changed here. Settled: run alone it is **pre-existing and flaky on clean HEAD too** (7e13578 in a worktree: failed after a fresh install, then passed, then failed) and on this tree (passed once, failed after a fresh install and on the next run), so it depends on simulator state, not on this work; left open. The iOS test fakes and the two DEBUG fixtures that stand in for the model (`-LoupeQueueDemo`, `-LoupeResultsFixture`) run with `use_calibration` off: their numbers are not the real graph's. The app bundles `loupe-kit/data/model-prior/`; Me → Model settings describes the calibration.
 
+- **2026-09-27 — iPhone pre-deploy audit fixes: every action has a button, no dead ends (audit of 7e13578; P0, P1
+  and the listed P2 items).** P0: the watchers dropped a run asked for while one was running (`guard !running else
+  { return }`), so a slow first run (it opens the model) read 0 items and then ignored the sample scan's "items
+  changed": Guard showed "0 items" with 5 sources on and Now "Findings 0" / "No source is on". `WatchersService` now
+  queues one coalesced re-run (PrivacyService's pattern); Now says "No source is on" only when none is, otherwise
+  "Nothing read yet" with Run now and Open Sources. The second-opinion prompt and its send preview say "The decision
+  model's answer" (owner decision: no user-facing Laya). P1: Check a link, Check what I copied and the Spotted count
+  sit right under Guard's header (`GuardQuickActions`; the Protection section stays below); Guard and Now's empty
+  states have Open Sources and Run now; a judgment's results screen has a menu with Edit wording… (name, question,
+  a two-option or pick judgment's options, the criteria text, through the new `JudgmentBook.reword` — same id,
+  threshold and history; new wording restarts calibration and says so before saving), Measure, and Delete
+  judgment… behind a confirmation, and the long-press Delete asks too; Me → Your data → Delete all my Loupe data…
+  (a dialog, then DELETE typed; "Keep the decision model" on by default; waits while a scan, run or sort is going):
+  `DataEraser` empties Loupe's home except the model's folders, the App Group's Loupe folders, the app's and the
+  group's settings (keeping `laya.*` with the model) and all four Keychain services, then `LoupeDataReset` reopens
+  the ledger, the sources' cache and the review queue, resets the services in memory and RootView starts onboarding
+  again. The Sources footnote says on-device sources are on by default; the stale "Coming with phone sources" pill
+  went; Release hides a sign-in with no client ID (Outlook) and says "Outlook: use an app password". P2: 44 pt hit
+  areas for Show me the steps, Open item, both Not now and the game's close, pause and RUSH; Packs and Write your own
+  show their text; Mail triage has a re-run button; Remove mailbox asks first; onboarding's download has Cancel; Me
+  → About has the version, Privacy policy and Terms, and the duplicate Web settings entry went. Also folded in the
+  ReviewPacksUITests root cause (a real race): `scanPhone` asked while that source is scanning no longer returns at
+  once — one coalesced follow-up scan runs after and the callers wait for it (an erase releases the waiters and
+  cancels the follow-up). Tests: `JudgmentBookEditTest` (6), `GuardModelTests` (+2: a run asked for mid-run is not
+  lost; requests coalesce), `JudgmentsTests` (+3), `DataEraserTests` (8), `PhoneSourcesTests` (+3: Release hides
+  the gated sign-in, a Files request mid-scan is not lost, an erase cancels a queued follow-up), `AssistTests`
+  (no "Laya" in the messages); UI: `DataEraseUITests`, `GuardUITests.testTheProtectionActionsAreAtTheTop`,
+  `JudgmentsUITests` (+2), assertions in `NowFindingsUITests` and `MailTriageUITests`; `SortUITests` scrolls to Run
+  now (Your data grew a row). Gate: `./gradlew check` green (1,590 tests, 0 failures, Android targets skipped);
+  iOS on an iPhone 17 Pro Max simulator (LoupeKit rebuilt, xcodegen): 507 tests (447 unit, 60 UI), 7 skipped; the
+  one full run had 2 failures, both test-side after controls moved (`DataEraseUITests` needed a scroll to the
+  confirm button on the larger screen, `SortUITests` to Run now), fixed and re-run green; ReviewPacksUITests passed
+  3 of 3 iterations. Not done: the audit's other P2 notes (the Sorted card as a button, onboarding safe-area
+  padding, a Stop for a source scan, Station-only model settings folded away, more App Intents).
+
 ## Where the build stands
 
 As of 2026-09-23. Everything below was built on JVM Kotlin: no iOS or Android build, no device.

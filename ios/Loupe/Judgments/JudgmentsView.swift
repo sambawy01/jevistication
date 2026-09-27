@@ -43,7 +43,8 @@ struct JudgmentsView: View {
                             .accessibilityLabel("Web settings")
                             .accessibilityIdentifier("web.settings")
                     } else {
-                        Button { writing = true } label: { Label("Write your own", systemImage: "square.and.pencil") }
+                        // Visible text, not just the pencil (audit P2-10).
+                        Button { writing = true } label: { Label("Write your own", systemImage: "square.and.pencil").labelStyle(.titleAndIcon) }
                             .accessibilityIdentifier("judgments.write")
                     }
                 }
@@ -87,6 +88,12 @@ struct JudgmentsView: View {
             takeRequestedSection()
         }
         .onChange(of: router.judgmentsSection) { _, _ in takeRequestedSection() }
+        // After "Delete all my Loupe data": nothing pushed is left over from before.
+        .onReceive(NotificationCenter.default.publisher(for: .loupeDataErased)) { _ in
+            path = NavigationPath()
+            section = .mine
+            writing = false
+        }
     }
 
     /// A section asked for from elsewhere (the old Web tab's launch argument, "Open in Loupe" for a pack).
@@ -129,6 +136,8 @@ enum JudgmentRoute: Hashable {
 struct MyJudgmentsList: View {
     @ObservedObject var service: JudgmentsService
     let openLibrary: () -> Void
+    /// The long-press Delete asks first (audit P1-3).
+    @State private var deleting: String?
 
     var body: some View {
         ScrollView {
@@ -153,7 +162,7 @@ struct MyJudgmentsList: View {
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("judgments.mine.\(j.templateId ?? j.id)")
                             .contextMenu {
-                                Button(role: .destructive) { service.delete(j.id) } label: { Label("Delete", systemImage: "trash") }
+                                Button(role: .destructive) { deleting = j.id } label: { Label("Delete…", systemImage: "trash") }
                             }
                     }
                     Text("Decisions stay in the ledger when a judgment is deleted.")
@@ -165,6 +174,20 @@ struct MyJudgmentsList: View {
             }
             .padding(16)
         }
+        .confirmationDialog(deletingTitle, isPresented: Binding(get: { deleting != nil }, set: { if !$0 { deleting = nil } }),
+                            titleVisibility: .visible) {
+            Button("Delete judgment", role: .destructive) {
+                if let id = deleting { service.delete(id) }
+                deleting = nil
+            }
+            .accessibilityIdentifier("judgments.delete.confirm")
+        } message: {
+            Text("It leaves My judgments. Its decisions and your corrections stay in the ledger.")
+        }
+    }
+
+    private var deletingTitle: String {
+        "Delete \"\(deleting.flatMap { service.judgment($0)?.title } ?? "this judgment")\"?"
     }
 }
 

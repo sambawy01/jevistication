@@ -25,7 +25,7 @@ struct SourcesView: View {
                     ForEach(PhoneSource.allCases) { source in
                         PhoneSourceRow(sources: sources, source: source).id(source.id)
                     }
-                    SourcesFootnote(text: "Each source is off until you turn it on. Turning one on is the only time Loupe asks iOS for its permission. Off means its items leave every judgment and watcher.")
+                    SourcesFootnote(text: "On-device sources (Photos, Files, Calendar and Contacts) are on by default, and you can turn any of them off. Off means its items leave every judgment and watcher. Mail waits until you add a mailbox.")
 
                     SourcesSectionTitle(title: "Inbox")
                     NavigationLink {
