@@ -225,13 +225,18 @@ object SiteSignals {
 
     /**
      * The stand-in characters of [u]'s host, as typed and in its decoded `xn--` labels
-     * ([PortableText.disguisedCodePoints]).
+     * ([PortableText.disguisedCodePoints]), plus `%` for a percent-encoded host that decodes to a
+     * known or brand domain under [config] (`https://%70aypal.com` is paypal.com: the escape hides
+     * the name from a reader; `ex%61mple.com` is left alone, as on origin/main). Not when the
+     * decoded host is one no browser opens: that is `unreadable_url`, counted once.
      */
-    fun disguise(u: ParsedUrl): List<Int> =
-        (PortableText.disguisedCodePoints(u.typedHost) + u.labels.filter { it.startsWith("xn--") }
-            .flatMap { PortableText.disguisedCodePoints(Hosts.decodeLabel(it)) } +
-            // a percent-encoded host (`%70aypal.com`): a browser decodes it, no real link writes it so
-            (if ('%' in Hosts.rawHost(u.raw)) listOf('%'.code) else emptyList())).distinct()
+    fun disguise(u: ParsedUrl, config: SiteConfig = SiteConfig.DEFAULT): List<Int> {
+        val written = PortableText.disguisedCodePoints(u.typedHost) + u.labels.filter { it.startsWith("xn--") }
+            .flatMap { PortableText.disguisedCodePoints(Hosts.decodeLabel(it)) }
+        val percent = '%' in Hosts.rawHost(u.raw) && !Hosts.unreadableUrl(u.raw) &&
+            (config.known(u.registrable, u.suffix) || config.brands.any { config.owns(it, u.registrable, u.suffix) })
+        return (written + if (percent) listOf('%'.code) else emptyList()).distinct()
+    }
 
     /** [s] without nonspacing and enclosing marks (Mn, Me), read from the pinned Unicode data. */
     private fun withoutMarks(s: String): String {
@@ -310,7 +315,7 @@ object SiteSignals {
         // name (`ｐａｙｐａｌ.com` is paypal.com): real links are not written that way, even to the real
         // site. And characters that Unicode 3.2 software (IDNA 2003) and current software map
         // differently make one written name two possible websites.
-        if (disguise(u).isNotEmpty()) out += SiteSignal("disguised_host", mapOf("host" to u.unicodeHost))
+        if (disguise(u, config).isNotEmpty()) out += SiteSignal("disguised_host", mapOf("host" to u.unicodeHost))
         if (unicodeDrift(u).isNotEmpty()) out += SiteSignal("unicode_drift_host", mapOf("host" to u.unicodeHost))
         // `ß`, `ς` or a joiner: browsers (UTS #46 non-transitional) reach one name, IDNA 2003 software
         // another (`faß.de` is xn--fa-hia.de, not fass.de). The host above is the browser's.
@@ -482,7 +487,7 @@ object SiteSignals {
         val u = parsed ?: ParsedUrl.parse("")!!
         val signals = urlSignals(u, config).toMutableList()
         // An address a browser cannot parse is not an empty, safe page (WHATWG: a bad host fails).
-        if (Hosts.unreadableHost(parsed) && (parsed == null || u.scheme.isNotEmpty())) signals += SiteSignal("unreadable_url")
+        if (Hosts.unreadableUrl(page.url)) signals += SiteSignal("unreadable_url")
         val dataPage = u.scheme == "data" || u.scheme == "blob"
         if (!dataPage) signals += hostSignals(u, config)
         signals += formSignals(page, u)

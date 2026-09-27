@@ -68,7 +68,13 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
    (`https:\\x`, `https:/x`, `https:x`, `HTTPS:x` are all host `x`), a backslash is a slash, and the
    userinfo ends at the **last** `@` of the authority (brackets there are ordinary characters:
    `https://www.paypal.com[@evil.xyz` is evil.xyz). A mail link with any other scheme and no `//` is
-   read as a bare host (`http://` is added) (*fix loop 3, 2026-09-27; Station to port*).
+   read as a bare host (`http://` is added) only when it starts with a letter or digit; anything else
+   (`/x`, `?utm=1`, `*|UNSUB|*`, a no-break space first) is relative and opens no host. A `file:` URL
+   has a host only after exactly `//` (*fix loops 3–4, 2026-09-27; Station to port*).
+   A URL in running text ends at the first ideographic or full-width punctuation mark (U+3000–303F,
+   U+FF01–FF0F, U+FF1A–FF20, U+FF3B–FF40, U+FF5B–FF65), Arabic `، ؛ ؟`, `|`, or `^` in its host; a
+   `。．｡` in the host is a dot only when the label after it ends with a top-level domain on the Public
+   Suffix List (`日本語。jp`), else it ends the sentence (`详见www.example.com。谢谢`) (*fix loop 4*).
 2. The host is lowercased, one trailing dot removed, and **converted to IDNA ASCII** when it contains
    non-ASCII (NFKC + lowercase + Punycode, IDNA 2003 without STD3). `https://pаypal.com` and
    `https://xn--pypal-4ve.com` are the same input.
@@ -145,7 +151,7 @@ order; each code counts once.
 |---|---|---|
 | `data_url` | 40 | scheme `data:` or `blob:` (then no host checks) |
 | `userinfo_in_url` | 30 | `user@` before the host, or a `\` before an `@` in the authority (`https://evil.com\@paypal.com` opens evil.com but reads as paypal.com) |
-| `unreadable_url` | 30 | a web URL whose host no browser opens: empty, or with a forbidden host code point after percent-decoding (`https://paypal.com%40evil.com`, `%00`, `%09`, `%20`) or a URL that does not parse. Never safe-empty (*fix loop 3; Station to port*) |
+| `unreadable_url` | 30 | a URL with an explicit web scheme (http, https, ws, wss, ftp) whose host is not empty, not only dots, and holds a forbidden host code point after percent-decoding (`https://paypal.com%40evil.com`, `%00`, `%09`, `%20`, DEL, `^`, `\|`) or a bracket that does not pair or does not hold an IPv6 address. Never for a relative or scheme-less href (`/`, `?utm=1`, a template tag such as `*\|UNSUB\|*`, one behind a no-break space) nor an empty or dots-only host (`https://`, `https://./`, `https://%2e/`), which open nothing (`Hosts.unreadableUrl`, *fix loops 3–4; Station to port*) |
 | `url_shortener` | 10 | host or registrable domain on the shorteners list |
 | `long_url` | 5 | whole URL > 200 characters |
 | `encoded_url` | 5 | > 12 `%XX` in path + query |
@@ -153,7 +159,7 @@ order; each code counts once.
 | `ip_host` | 25 | host is an IP (dotted, decimal, hex, short forms, IPv6); private IPs never flagged. Stops the host checks |
 | `homograph_brand` | 60 | rule 2 (i), on any `xn--` label (brand checks on the registrable label are then skipped) |
 | `mixed_script` | 35 | rule 2 (ii) / rule 3 |
-| `disguised_host` | 45 | checked **before** the known-good return, so also on a known domain: the host as written (or a decoded `xn--` label) has a stand-in character, i.e. a compatibility character (NFKD ≠ NFD: full-width, mathematical, enclosed, ligatures, superscripts) or a default ignorable IDNA removes (soft hyphen, variation selectors; ZWJ/ZWNJ excepted). `https://ｐａｙｐａｌ.com` reaches paypal.com but no real link is written that way: caution, and an impostor code (with a password field, danger). The full-width and halfwidth full stops (`．` `｡`) and a percent-encoded host (`%70aypal.com`) are stand-ins too; the ideographic full stop `。` is not, as the host (`paypal。com` is paypal.com in every browser), but is in a mail address (§6.2) (`PortableText.disguisedCodePoints`, *added 2026-09-27, 45 and impostor since fix loop 3 to stay at origin/main's score; Station to port*) |
+| `disguised_host` | 45 | checked **before** the known-good return, so also on a known domain: the host as written (or a decoded `xn--` label) has a stand-in character, i.e. a compatibility character (NFKC ≠ NFC: full-width, mathematical, enclosed, ligatures, superscripts; or the Kelvin, Ohm or Ångström sign) or a default ignorable IDNA removes (soft hyphen, variation selectors; ZWJ/ZWNJ excepted). `https://ｐａｙｐａｌ.com` reaches paypal.com but no real link is written that way: caution, and an impostor code (with a password field, danger). The full-width and halfwidth full stops (`．` `｡`) are stand-ins too, and a percent-encoded host when it decodes to a known or brand domain (`%70aypal.com`; `ex%61mple.com` is not flagged, and a host that is also `unreadable_url` counts once). A character only *canonically* equivalent to another (NFC changes it, NFKC adds nothing: Devanagari U+0958–095F, Bengali U+09DC/09DD/09DF, Gurmukhi U+0A33/0A36/0A59–0A5E, Greek oxia U+1F71) is **not** a stand-in: those scripts' keyboards type them (fix loop 4); the ideographic full stop `。` is not, as the host (`paypal。com` is paypal.com in every browser), but is in a mail address (§6.2) (`PortableText.disguisedCodePoints`, *added 2026-09-27, 45 and impostor since fix loop 3 to stay at origin/main's score; Station to port*) |
 | `deviation_host` | 10 | the host contains `ß`, `ς`, ZWJ or ZWNJ, so IDNA 2003 (transitional) software reads another name than browsers (UTS #46 non-transitional, which every host decision uses). A note: real German, Greek and Persian names have them (*2026-09-27; Station to port*) |
 | `deviation_known_host` | 45 | as `deviation_host`, and the transitional reading is a known-good, brand or configured domain (`americanexpreß.com`, `faß.de` when fass.de is known): an impostor code (*2026-09-27; Station to port*) |
 | `unicode_drift_host` | 30 | checked before the known-good return too: the host as written (before lower-casing), or a decoded `xn--` label, has a character whose IDNA mapping differs between Unicode 3.2 nameprep (RFC 3491, IDNA 2003; a character unassigned in 3.2 passes through unchanged) and the pinned Unicode 16.0 mapping (B.1, then NFKC_Casefold), other than a `disguised_host` character (one character counts once). About 5,600 code points; new scripts and emoji that map to themselves are not drift. One written name can reach two websites on old and new software. Not an impostor code (`PortableText.unicode32Drift`, *added 2026-09-27; Station to port*) |
@@ -360,7 +366,7 @@ receiving server (`spoofed_known_sender` 60, `auth_dmarc_fail` 45, `auth_spf_dki
 (`link_homograph_brand` 60, `link_lookalike_brand` 45, `link_brand_domain_in_subdomain` 45,
 `link_brand_in_subdomain` 30, `link_brand_in_domain_bait` 35, `link_mixed_script` 35, `link_unicode_drift` 30,
 `link_disguised` 45 (both also on links to known domains, trackers and the sender's own),
-`link_unreadable` 30 (a link no browser opens, `unreadable_url`; `link_text_mismatch` still applies when its text names a domain),
+`link_unreadable` 30 (a link no browser opens, `unreadable_url`; `link_text_mismatch` still applies when its text names a known domain, as it does for a relative href whose text names one),
 `link_text_mismatch` 40, `link_brand_text` 30, `link_data` 40, `link_userinfo` 30, `link_ip` 25,
 `link_suspicious_tld` 8, `link_shortener` 5); contacts (rule 6, below); online (§5); self-vouching
 (v1.3, below) `self_vouching` 15; the decision model's text reading (calibrated `is_phishing` ≥ 0.8 / ≥ 0.5)

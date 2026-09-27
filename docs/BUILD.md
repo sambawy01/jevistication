@@ -2044,9 +2044,19 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
     Checked before the known-good short-circuit, so `https://ｐａｙｐａｌ.com` (which reaches paypal.com)
     is *caution*, and with a password field *danger*. A stand-in is any code point whose NFKC is not itself (so the Kelvin, Ångström and
     Ohm signs and CJK compatibility ideographs too), an ignorable, or a joiner CONTEXTJ rejects; the
-    full-width and halfwidth full stops and a percent-encoded host (`%70aypal.com`) count too.
-  - `unreadable_url` (30, risk; mail `link_unreadable` 30): a web URL whose host no browser opens
-    (`https://paypal.com%40evil.com`, `%00`, `%09`, `%20`) or that does not parse: never safe-empty.
+    full-width and halfwidth full stops count too, and a percent-encoded host that decodes to a known
+    or brand domain (`%70aypal.com`). Characters only canonically equivalent to another (Devanagari
+    U+0958–095F, Bengali U+09DC/09DD/09DF, Gurmukhi U+0A33/0A36/0A59–0A5E, Greek oxia) are not
+    stand-ins (fix loop 4): `https://ড়া.বাংলা/`, `ज़ी.भारत` and `άθήνα.gr` are safe again; the Kelvin,
+    Ohm and Ångström signs still are.
+  - `unreadable_url` (30, risk; mail `link_unreadable` 30): an explicit-scheme web URL whose non-empty
+    host no browser opens (`https://paypal.com%40evil.com`, `%00`, `%09`, `%20`, DEL, `[evil.com]`).
+    Relative hrefs, template tags (`*|UNSUB|*`, `%%unsubscribe%%`), empty and dots-only hosts are
+    never flagged (fix loop 4: they flagged ordinary newsletters).
+- **URLs in running text end where the sentence goes on** (fix loop 4): `访问www.example.com，了解更多`,
+  `网址：https://www.example.com；电话` and `（https://www.example.com）。` read example.com and are safe
+  (they scored up to 80 danger at e5a0714 and 35 on origin/main, from `link_mixed_script` on the
+  punctuation); `|`-separated footers (`Visit https://example.com|Unsubscribe`) end at `|`.
 - **URLs are split as browsers split them** (fix loop 3; hosts checked against Chrome 153,
   r3/chrome1.out): C0 controls and spaces at both ends are stripped; for http, https, ws, wss, ftp and
   file the host follows the scheme however many `/` or `\` come first, so a mail link

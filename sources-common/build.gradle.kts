@@ -39,6 +39,12 @@ val generateTestPaths by tasks.registering {
     }
 }
 
+// The tests read the sample by path (SAMPLE_DIR), so it is an input of every test task: an edit to a
+// sample file alone re-runs them instead of leaving them UP-TO-DATE.
+tasks.withType<AbstractTestTask>().configureEach {
+    inputs.dir(sampleDir).withPropertyName("sampleDir").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+
 kotlin {
     compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") }
     jvm {

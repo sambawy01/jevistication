@@ -370,6 +370,25 @@ simulator and the JVM (a planted wrong answer fails on the iOS simulator: `ios-p
 check 126 compiled, 0 rejected on both; API check 688 classes, 0 problems; every performance pattern
 linear. Release APK 1,970,131 bytes (unchanged); LoupeKit arm64 release 30,249,896 bytes (+42 KB).
 
+**Fix loop 4 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix4/`. Legitimate
+mail stays safe. A URL in running text ends at ideographic, full-width or Arabic punctuation and `|`,
+and a `。．｡` in a text URL's host is a dot only before a listed TLD (the CJK rows scored up to 80
+danger); `unreadable_url` / `link_unreadable` need an explicit web scheme and a non-empty, non-dot host
+with a forbidden code point (DEL included; `[name]` too), so relative hrefs, template tags and empty
+hosts are never flagged; a relative href (anything not starting with a letter or digit, a no-break
+space included) opens no host; a stand-in is a code point whose NFKC differs from its NFC (plus the
+Kelvin, Ohm and Ångström signs, ignorables and CONTEXTJ), so canonical-only Indic and Greek letters are
+safe; a percent-encoded host is a stand-in only when it decodes to a known or brand domain, and is not
+counted again on an unreadable host; `file:` hosts follow WHATWG. Every test resource read from disk
+is a test-task input (a planted fault in phishing-vectors.json fails; a sample-dir edit re-runs
+loupe-kit and sources-common). Round-4 legitimate set: 181 rows, none higher than origin/main except
+eight ß/ς/ZWNJ names with the intended deviation note (+10, safe); new LegitimateMailTest pins it.
+Round-3 set: 308 rows, none lower. Gates: `clean check` green, 3,038 tests (3,030), 0 failed; no-SDK
+1,572 (1,568); corpus 518 cases (446), 0 differ on API 29, API 35, the iOS simulator and the JVM
+(planted fault fails on iOS); ICU 127 compiled, 0 rejected on both; API check 688 classes, 0
+problems; performance linear. Release APK 1,970,131 bytes (unchanged); LoupeKit arm64 30,313,336
+bytes (+63 KB).
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).

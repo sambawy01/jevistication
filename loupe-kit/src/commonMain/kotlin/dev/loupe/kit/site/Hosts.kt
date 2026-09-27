@@ -198,7 +198,12 @@ object Hosts {
             rest = rest.substring(colon + 1)
         }
         var backslashAt = false
-        if (scheme in SPECIAL) {
+        if (scheme == "file") {
+            // WHATWG: a file URL has a host only after exactly `//` (or `\\`); `file:///x` has an
+            // empty one and `file:evil.com/x` none (fix loop 4)
+            rest = rest.replace('\\', '/')
+            if (!rest.startsWith("//")) return Split(scheme, null, rest, false)
+        } else if (scheme in SPECIAL) {
             val body = rest.trimStart('/', '\\')
             val end = body.indexOfFirst { it == '/' || it == '\\' || it == '?' || it == '#' }.let { if (it < 0) body.length else it }
             // `https://evil.com\@paypal.com`: the browser opens evil.com, but the text still reads as
@@ -246,21 +251,59 @@ object Hosts {
         val t = stripC0(href)
         val colon = t.indexOf(':')
         val scheme = if (colon > 0 && SCHEME.matches(t.substring(0, colon))) t.substring(0, colon).lowercase() else null
-        return if (scheme != null && (scheme in SPECIAL || t.startsWith("$scheme://", ignoreCase = true))) t else "http://$t"
+        if (scheme != null && (scheme in SPECIAL || t.startsWith("$scheme://", ignoreCase = true))) return t
+        // A relative href (`/x`, `./x`, `?utm=1`, `//host/x`), a template tag (`*|UNSUB|*`,
+        // `%%unsubscribe%%`, `{{url}}`) or one behind a no-break space is relative to the message:
+        // a browser opens no host of its own, so it stays as written (no host). Only what starts like
+        // a host name (a letter or digit: `www.example.com/x`, `例え.jp`) is read as http://.
+        val first = when {
+            t.isEmpty() -> -1
+            t[0].isHighSurrogate() && t.length > 1 && t[1].isLowSurrogate() -> 0x10000 + ((t[0].code - 0xD800) shl 10) + (t[1].code - 0xDC00)
+            else -> t[0].code
+        }
+        return if (first >= 0 && PortableText.isLetterOrNumber(first)) "http://$t" else t
     }
 
     /** True when [url]'s scheme is http or https (after stripping, in any case). */
     fun isWebUrl(url: String): Boolean = splitUrl(url).scheme.let { it == "http" || it == "https" }
 
     /**
-     * WHATWG's forbidden host code points: a host containing one does not parse in a browser. A
-     * link whose host does (or whose URL does not split at all) is not scored as an empty, safe page.
+     * WHATWG's forbidden host code points: a host containing one does not parse in a browser.
      */
     private val WEB_SCHEMES = setOf("http", "https", "ws", "wss", "ftp")
     private const val FORBIDDEN_HOST = " #%/:<>?@[\\]^|"
 
-    fun unreadableHost(u: ParsedUrl?): Boolean =
-        u == null || (u.scheme in WEB_SCHEMES && !isIp(u.host) && (u.host.isEmpty() || u.host.any { it in FORBIDDEN_HOST || it.code < 0x20 }))
+    private fun forbiddenInHost(c: Char): Boolean = c in FORBIDDEN_HOST || c.code <= 0x20 || c.code == 0x7F
+
+    /**
+     * True when [url] names a web page no browser can open: it starts with an explicit web scheme
+     * (http, https, ws, wss, ftp; after C0 stripping) and its host is not empty, not only dots, and
+     * holds a forbidden host code point after percent-decoding (`https://paypal.com%40evil.com`,
+     * `%00`, `%09`, `%20`, DEL, `https://evil|com`), or a bracket that does not pair.
+     *
+     * Never for a relative or scheme-less href (`/`, `?utm=1`, `./x.html`, a template tag such as
+     * `*|UNSUB|*` or `%%unsubscribe%%`, a URL behind a no-break space, which browsers read as
+     * relative), nor for an empty or dots-only host (`https://`, `https:///`, `https://./`,
+     * `https://%2e/`): those open nothing, and scoring them would flag ordinary mail (fix loop 4).
+     */
+    fun unreadableUrl(url: String): Boolean {
+        val split = splitUrl(url)
+        if (split.scheme !in WEB_SCHEMES) return false
+        // the scheme is written out (a browser drops tabs and newlines anywhere in a URL)
+        val t = stripC0(url).filter { it != '\t' && it != '\r' && it != '\n' }
+        if (!t.startsWith(split.scheme, ignoreCase = true)) return false
+        val authority = split.authority ?: return false
+        val hostPort = authority.substringAfterLast('@')
+        // `[...]` holds an IPv6 address or nothing a browser opens (`https://[evil.com]/`)
+        if (hostPort.startsWith("[")) return ']' !in hostPort || !IPV6_CHARS.matches(hostPort.substring(1).substringBefore(']'))
+        val raw = hostPort.substringBefore(':')
+        if ('[' in raw || ']' in raw) return true
+        val host = SiteSignals.percentDecode(raw)
+        if (host.all { it == '.' || it == '\u3002' || it == '\uFF0E' || it == '\uFF61' }) return false
+        return host.any(::forbiddenInHost)
+    }
+
+    private val IPV6_CHARS = Regex("^[0-9A-Fa-f:.]+$")
 
     private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.\\-]*$")
 }

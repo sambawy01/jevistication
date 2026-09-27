@@ -2,6 +2,7 @@ package dev.loupe.kit.mail
 
 import dev.loupe.engine.BoundedRegex
 import dev.loupe.engine.PortableText
+import dev.loupe.engine.PublicSuffix
 import dev.loupe.engine.Rx
 import dev.loupe.kit.site.Brand
 import dev.loupe.kit.site.Brands
@@ -634,15 +635,70 @@ object Phishing {
     }
 
     internal fun urls(text: String): List<String> =
-        URL_RE.findAll(text).map { it.value.trimEnd('.', ',', ';', ':', '!', '?', '\'', '"') }.take(MAX_LINKS).toList()
+        URL_RE.findAll(text).map { textUrlEnd(it.value).trimEnd('.', ',', ';', ':', '!', '?', '\'', '"') }
+            .filter { u -> u.substring(u.indexOf("://").let { if (it < 0) 4 else it + 3 }.coerceAtMost(u.length)).isNotEmpty() }
+            .take(MAX_LINKS).toList()
+
+    /**
+     * Where a URL written in running text ends (fix loop 4). URL_RE takes everything up to a space,
+     * but CJK and Arabic text runs straight on after an address: `访问www.example.com，了解更多`,
+     * `网址：https://www.example.com；电话`, `（https://www.example.com）。`. The URL ends at the first
+     * [textStop]: ideographic and full-width punctuation (U+3000–303F, U+FF01–FF0F, U+FF1A–FF20,
+     * U+FF3B–FF40, U+FF5B–FF65; full-width letters and digits are not punctuation), Arabic ، ؛ ؟,
+     * `|`, and in the host WHATWG's forbidden `^`.
+     *
+     * The ideographic, full-width and halfwidth full stops (`。．｡`) are dots in a host (UTS #46), but
+     * in text usually end a sentence: one is kept as a dot only inside the host and when the host
+     * after it ends with a top-level domain on the Public Suffix List (`日本語。jp`,
+     * `ｐａｙｐａｌ．ｃｏｍ`), so `详见www.example.com。谢谢` ends at `.com` while the stand-in-dot signals
+     * still see a host written with one. In hrefs and addresses (not text) they are always dots.
+     */
+    internal fun textUrlEnd(url: String): String {
+        val schemeEnd = url.indexOf("://").let { if (it < 0) 0 else it + 3 }
+        var hostEnd = url.length
+        for (i in schemeEnd until url.length) if (url[i] == '/' || url[i] == '?' || url[i] == '#') { hostEnd = i; break }
+        for (i in schemeEnd until url.length) {
+            val c = url[i]
+            val inHost = i < hostEnd
+            if (inHost && c in TEXT_DOTS && dotInHost(url, i, hostEnd)) continue
+            if (textStop(c) || (inHost && c == '^')) return url.substring(0, i)
+        }
+        return url
+    }
+
+    private const val TEXT_DOTS = "\u3002\uFF0E\uFF61"
+
+    private fun textStop(c: Char): Boolean {
+        val x = c.code
+        return c == '|' || c == '\u060C' || c == '\u061B' || c == '\u061F' || x in 0x3000..0x303F || x in 0xFF01..0xFF0F ||
+            x in 0xFF1A..0xFF20 || x in 0xFF3B..0xFF40 || x in 0xFF5B..0xFF65
+    }
+
+    /**
+     * Whether the stand-in dot at [i] separates labels: the run after it (up to the port, the end of
+     * the host or the next stop, which is the next stand-in dot, checked in its turn) ends with a
+     * top-level domain on the Public Suffix List.
+     */
+    private fun dotInHost(url: String, i: Int, hostEnd: Int): Boolean {
+        var j = i + 1
+        while (j < hostEnd && url[j] != ':' && !textStop(url[j])) j++
+        val tld = url.substring(i + 1, j).substringAfterLast('.')
+        if (tld.isEmpty()) return false
+        val ascii = Hosts.toAsciiLabel(tld) ?: return false
+        return ascii in PublicSuffix.DEFAULT
+    }
 
     /** (code, params) for the links of one message: anchors from the HTML plus URLs in the text. */
     fun linkSignals(text: String, links: List<Pair<String, String>>, senderReg: String?, config: SiteConfig): List<Pair<String, Map<String, String>>> {
         val pairs = links.take(MAX_LINKS).toMutableList()
         val seen = pairs.map { it.first }.toMutableSet()
         for (url in urls(text)) {
+            // `www.example.com` stays as written (linkUrl reads it as http://): a bare host is
+            // never an explicit-scheme URL for link_unreadable
             val full = if (url.lowercase().startsWith("http")) url else "http://$url"
-            if (seen.add(full)) pairs += full to ""
+            val fresh = seen.add(full)
+            seen.add(url)
+            if (fresh) pairs += url to ""
         }
         val out = mutableListOf<Pair<String, Map<String, String>>>()
         val got = mutableSetOf<String>()
@@ -661,25 +717,34 @@ object Phishing {
             }
             // WHATWG: a special scheme always has an authority (`https:\\evil.com`), never "http://" + it
             val parsed = ParsedUrl.parse(Hosts.linkUrl(href))
-            if (Hosts.unreadableHost(parsed)) {
-                add("link_unreadable")
-                // the text still shows a well-known address this link does not reach
+            // only an href with an explicit web scheme and a host no browser opens (Hosts.unreadableUrl)
+            // the text shows a well-known address this link does not reach
+            fun shownKnownDomain(target: String) {
                 DOMAINISH_RE.matchEntire(visible.trim())?.let { m ->
                     val visDomain = m.groupValues[1].lowercase()
                     val (visReg, visSuffix) = reg(visDomain)
-                    if (visReg != null && config.known(visReg, visSuffix) && !isFreemail(visReg)) add("link_text_mismatch", "shown" to visDomain, "domain" to (parsed?.host ?: href))
+                    if (visReg != null && config.known(visReg, visSuffix) && !isFreemail(visReg)) add("link_text_mismatch", "shown" to visDomain, "domain" to target)
                 }
+            }
+            if (Hosts.unreadableUrl(href)) {
+                add("link_unreadable")
+                shownKnownDomain(parsed?.host ?: href)
                 continue
             }
-            val u = parsed!!
+            val u = parsed ?: continue
             val host = u.host
             val reg = u.registrable ?: u.host
-            if (host.isEmpty()) continue
+            if (host.isEmpty()) {
+                // a relative href (no scheme, no host: `/x`, a template tag, one behind a no-break
+                // space) opens no website of its own; it is not scored, unless its text names one
+                if (u.scheme.isEmpty()) shownKnownDomain(href)
+                continue
+            }
             val tracker = reg in LINK_TRACKERS || LINK_TRACKERS.any { host.endsWith(".$it") }
             val own = !senderReg.isNullOrEmpty() && reg == senderReg
             val known = config.known(u.registrable, u.suffix)
             // How the link is WRITTEN, wherever it goes (a known site, the sender's own, a tracker).
-            if (SiteSignals.disguise(u).isNotEmpty()) add("link_disguised", "domain" to reg)
+            if (SiteSignals.disguise(u, config).isNotEmpty()) add("link_disguised", "domain" to reg)
             if (SiteSignals.unicodeDrift(u).isNotEmpty()) add("link_unicode_drift", "domain" to reg)
             if (SiteSignals.deviation(u)) {
                 val other = Hosts.transitionalAscii(u.unicodeHost)

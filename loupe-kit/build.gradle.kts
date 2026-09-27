@@ -124,11 +124,17 @@ val generateTestPaths by tasks.registering {
     }
 }
 
-// The tests read the parity corpus from disk (PARITY_CORPUS above), so it is an input of every test
-// task: an edit to corpus.json alone re-runs them on the JVM, Android and the iOS simulator instead of
-// leaving them UP-TO-DATE.
+// The tests read these from disk by path (TestPaths.kt above), not from the classpath, so each is an
+// input of every test task: an edit to one of them alone re-runs the tests on the JVM, Android and the
+// iOS simulator instead of leaving them UP-TO-DATE.
 tasks.withType<AbstractTestTask>().configureEach {
     inputs.file(parityCorpus).withPropertyName("parityCorpus").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(phishingVectors).withPropertyName("phishingVectors").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(phishingVectorsV12).withPropertyName("phishingVectorsV12").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(examplePack).withPropertyName("examplePack").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.file(sharedHostsJson).withPropertyName("sharedHostsJson").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(phishingDbFixtures).withPropertyName("phishingDbFixtures").withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.dir(sampleDir).withPropertyName("sampleDir").withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 kotlin {

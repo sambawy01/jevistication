@@ -346,18 +346,23 @@ object PortableText {
 
     /**
      * The code points of [text] (a label or a whole host) that stand in for other characters: any
-     * whose NFKC is not itself (compatibility variants: full-width `ｐ`, mathematical `𝗽`, enclosed
-     * `🄰`, ligatures, superscripts; and canonical singletons: the Kelvin sign `K`, the Ångström sign,
-     * the Ohm sign, CJK compatibility ideographs, Greek oxia), the invisible default ignorables IDNA
-     * removes (soft hyphen, variation selectors, ZWSP), and a zero-width joiner or non-joiner that
-     * CONTEXTJ does not allow where it stands (Persian and Indic names keep theirs). No real name is
-     * written with them: IDNA maps them away, so the written name hides the one it reaches. `é`,
-     * Hangul and every other character that NFKC keeps are not stand-ins. In order, without repeats.
+     * whose NFKC differs from its NFC (compatibility variants: full-width `ｐ`, mathematical `𝗽`,
+     * enclosed `🄰`, ligatures, superscripts, the full-width and halfwidth full stops), the three
+     * letterlike symbols that are canonically a letter (the Kelvin sign `K`, the Ohm sign `Ω`, the
+     * Ångström sign `Å`: symbols, typed by no keyboard in a name), the invisible default ignorables
+     * IDNA removes (soft hyphen, variation selectors, ZWSP), and a zero-width joiner or non-joiner
+     * that CONTEXTJ does not allow where it stands (Persian and Indic names keep theirs).
+     *
+     * A character that is only *canonically* equivalent to another (NFC changes it, NFKC adds
+     * nothing) is not a stand-in: Devanagari U+0958–095F, Bengali U+09DC/09DD/09DF, Gurmukhi
+     * U+0A33/0A36/0A59–0A5E, Greek oxia U+1F71 and the other composition exclusions are what those
+     * scripts' keyboards type, and every browser opens the same name (fix loop 4). `é`, Hangul and
+     * every other character NFKC keeps are not stand-ins either. In order, without repeats.
      */
     fun disguisedCodePoints(text: String): List<Int> {
         val out = LinkedHashSet<Int>()
-        // The full-width and halfwidth full stops are compatibility characters (NFKC: `.`) and so
-        // stand-ins; the ideographic full stop U+3002 is what Chinese and Japanese keyboards type.
+        // The full-width and halfwidth full stops are compatibility characters (NFKC: `.`, `。`) and
+        // so stand-ins; the ideographic full stop U+3002 is what Chinese and Japanese keyboards type.
         for (cp in codePoints(text)) if (cp == 0xFF0E || cp == 0xFF61) out += cp
         for (label in text.split('.', '\u3002', '\uFF0E', '\uFF61')) {
             val cps = codePoints(label)
@@ -367,14 +372,19 @@ object PortableText {
                 val stand = if (cp == 0x200C || cp == 0x200D) {
                     !Uts46.contextJ(cps, i)
                 } else {
-                    val k = UnicodeData.compose(UnicodeData.decompose(intArrayOf(cp), compat = true))
-                    !(k.size == 1 && k[0] == cp) || UnicodeData.nfkcCasefoldChar(cp).isEmpty()
+                    val one = intArrayOf(cp)
+                    val k = UnicodeData.compose(UnicodeData.decompose(one, compat = true))
+                    val c = UnicodeData.compose(UnicodeData.decompose(one, compat = false))
+                    !k.contentEquals(c) || cp in LETTERLIKE_SINGLETONS || UnicodeData.nfkcCasefoldChar(cp).isEmpty()
                 }
                 if (stand) out += cp
             }
         }
         return out.toList()
     }
+
+    /** The Ohm, Kelvin and Ångström signs: canonical singletons for Ω, K and Å (see [disguisedCodePoints]). */
+    private val LETTERLIKE_SINGLETONS = setOf(0x2126, 0x212A, 0x212B)
 
     /** The code points of [label] that are not [stableSinceUnicode32], in order, without repeats. */
     fun unicode32Drift(label: String): List<Int> =
