@@ -6,6 +6,16 @@ import LoupeKit
 // (users.getProfile, users.messages.list, users.history.list, users.messages.get?format=raw).
 // Shapes as documented at developers.google.com/workspace/gmail/api/reference/rest (checked 2026-09-25).
 // Loupe never modifies mail.
+//
+// Quota (developers.google.com/workspace/gmail/api/reference/quota, "Last updated 2026-09-10", checked
+// 2026-09-27): 6,000 quota units per minute per user per project, 1,200,000 per minute per project;
+// messages.get costs 20 units, messages.list 5, history.list 2, getProfile 1. So one user can make at most
+// 300 messages.get a minute (5 a second) across every client of Loupe's Google project — the phone and
+// Loupe Station on the Mac share it. Errors (…/gmail/api/guides/handle-errors, same date): a rate limit is
+// HTTP 429, or a 403 whose `error.errors[].reason` is `rateLimitExceeded` / `userRateLimitExceeded` (domain
+// `usageLimits`), or `dailyLimitExceeded`; retry those and 500/502/503/504 with exponential backoff, "at least
+// one second after the error". Google's newer error model (AIP-193) adds `error.status` ("RESOURCE_EXHAUSTED"
+// for a quota, HTTP 429) and `error.details[]` ErrorInfo `reason`s such as "RATE_LIMIT_EXCEEDED".
 
 /// users.getProfile.
 struct GmailProfile: Decodable, Equatable {
@@ -38,19 +48,97 @@ struct GmailRawMessage: Decodable, Equatable {
     let raw: String
 }
 
+/// The Gmail client's clock, sleep and numbers, injectable so tests neither wait nor read the real clock.
+///
+/// Pacing: one request every 0.4 s (2.5 a second). At messages.get's 20 units that is 50 units a second,
+/// 3,000 a minute — half the 6,000-unit per-user minute, leaving the other half for Loupe Station on the Mac
+/// reading the same account. 200 messages take about 80 s. Sequential, no concurrency.
+/// Retries (rate limits and 5xx only): 6 attempts, waits of min(32 s, 1 s · 2ⁿ + up to 1 s of jitter) —
+/// about 1, 2, 4, 8, 16 s, some 31–36 s in all, so the last try lands in the next quota minute. A
+/// `Retry-After` is honoured instead when present; one longer than 64 s is not waited for in a scan.
+struct GmailTiming {
+    /// Monotonic seconds.
+    var now: () -> TimeInterval
+    /// Waits that long; throws `CancellationError` when the task is cancelled.
+    var sleep: (TimeInterval) async throws -> Void
+    /// In 0..<1, for the jitter.
+    var random: () -> Double
+    var requestInterval: TimeInterval = 0.4
+    var attempts = 6
+    var baseDelay: TimeInterval = 1
+    var maxDelay: TimeInterval = 32
+    var maxRetryAfter: TimeInterval = 64
+    /// After a scan that Gmail slowed down, the one automatic retry (the per-user quota is per minute).
+    var autoRetryDelay: TimeInterval = 60
+
+    static let live = GmailTiming(
+        now: { ProcessInfo.processInfo.systemUptime },
+        sleep: { s in try await Task.sleep(nanoseconds: UInt64(max(0, s) * 1_000_000_000)) },
+        random: { Double.random(in: 0..<1) })
+
+    /// The wait before retry number `retry` (0 for the first retry).
+    func backoff(retry: Int) -> TimeInterval {
+        min(maxDelay, baseDelay * pow(2, Double(min(retry, 30))) + random() * baseDelay)
+    }
+}
+
 final class GmailClient {
     struct Failure: Error, Equatable, LocalizedError {
+        enum Kind: Equatable { case network, unreadable, unauthorized, forbidden, notFound, rateLimited, server, other }
+
         let status: Int
         let detail: String
+        let kind: Kind
         var errorDescription: String? { recovery }
+
+        init(status: Int, detail: String, kind: Kind? = nil) {
+            self.status = status
+            self.detail = detail
+            self.kind = kind ?? Self.kind(status: status)
+        }
+
+        static func kind(status: Int) -> Kind {
+            switch status {
+            case 0: return .network
+            case -1: return .unreadable
+            case 401: return .unauthorized
+            case 403: return .forbidden
+            case 404: return .notFound
+            case 429: return .rateLimited
+            case 500...599: return .server
+            default: return .other
+            }
+        }
+
+        /// `error.errors[].reason` (Gmail's documented shape) and `error.details[].reason` (AIP-193 ErrorInfo)
+        /// values that mean "slow down", not "no access".
+        static let rateLimitReasons: Set<String> = ["rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded",
+                                                    "dailyLimitExceeded", "RATE_LIMIT_EXCEEDED", "RESOURCE_EXHAUSTED"]
+
+        /// A non-2xx reply, classified from its status and Google's JSON error body.
+        static func from(status: Int, body: Data) -> Failure {
+            let error = (try? JSONSerialization.jsonObject(with: body) as? [String: Any]).flatMap { $0["error"] as? [String: Any] }
+            let message = error?["message"] as? String ?? ""
+            let reasons = ((error?["errors"] as? [[String: Any]] ?? []) + (error?["details"] as? [[String: Any]] ?? []))
+                .compactMap { $0["reason"] as? String }
+            let lower = message.lowercased()
+            let limited = status == 429
+                || (error?["status"] as? String) == "RESOURCE_EXHAUSTED"
+                || reasons.contains(where: rateLimitReasons.contains)
+                || (status == 403 && (lower.contains("quota exceeded") || lower.contains("rate limit exceeded")))
+            return Failure(status: status, detail: String(message.prefix(160)), kind: limited ? .rateLimited : nil)
+        }
+
+        /// Worth another try after a wait: rate limits and server errors only. Never 401, a real 403 or 404.
+        var retryable: Bool { kind == .rateLimited || kind == .server }
 
         /// The sentence the Mail row shows.
         var recovery: String {
-            switch status {
-            case 401: return "Google no longer accepts Loupe's sign-in for this Gmail account. Remove the mailbox and sign in with Google again."
-            case 403: return "Google refused read access to this Gmail account (\(detail)). Sign in again and allow \"Read your email\"; if it still fails, the Gmail API may not be enabled for Loupe's Google project yet."
-            case 429: return "Gmail asked Loupe to slow down. Try again in a few minutes."
-            case 0: return "Could not reach Gmail (\(detail)). Check that you are online; Mail is the one source that needs the network."
+            switch kind {
+            case .unauthorized: return "Google no longer accepts Loupe's sign-in for this Gmail account. Remove the mailbox and sign in with Google again."
+            case .forbidden: return "Google refused read access to this Gmail account (\(detail)). Sign in again and allow \"Read your email\"; if it still fails, the Gmail API may not be enabled for Loupe's Google project yet."
+            case .rateLimited: return GmailProducer.slowDown(fetched: nil, autoRetry: false)
+            case .network: return "Could not reach Gmail (\(detail)). Check that you are online; Mail is the one source that needs the network."
             default: return "Gmail answered with an error (HTTP \(status)). Try again later."
             }
         }
@@ -60,10 +148,14 @@ final class GmailClient {
 
     let accessToken: String
     let session: URLSession
+    let timing: GmailTiming
+    private let lock = NSLock()
+    private var nextSlot: TimeInterval?
 
-    init(accessToken: String, session: URLSession = .shared) {
+    init(accessToken: String, session: URLSession = .shared, timing: GmailTiming = .live) {
         self.accessToken = accessToken
         self.session = session
+        self.timing = timing
     }
 
     func request(_ path: String, _ query: [URLQueryItem] = []) -> URLRequest {
@@ -76,19 +168,56 @@ final class GmailClient {
         return r
     }
 
+    /// The limiter: request starts at least `requestInterval` apart (retries included).
+    private func pace() async throws {
+        let wait: TimeInterval = lock.withLock {
+            let now = timing.now()
+            let slot = max(now, nextSlot ?? now)
+            nextSlot = slot + timing.requestInterval
+            return slot - now
+        }
+        if wait > 0 { try await timing.sleep(wait) }
+    }
+
+    /// `Retry-After`: delay-seconds or an HTTP-date (RFC 9110 §10.2.3).
+    static func retryAfter(_ value: String?, now: Date = Date()) -> TimeInterval? {
+        guard let v = value?.trimmingCharacters(in: .whitespaces), !v.isEmpty else { return nil }
+        if let s = TimeInterval(v), s >= 0 { return s }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(identifier: "GMT")
+        f.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return f.date(from: v).map { max(0, $0.timeIntervalSince(now)) }
+    }
+
     private func get<T: Decodable>(_ path: String, _ query: [URLQueryItem] = []) async throws -> T {
-        let data: Data, response: URLResponse
-        do { (data, response) = try await session.data(for: request(path, query)) } catch {
-            throw Failure(status: 0, detail: error.localizedDescription)
-        }
-        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-        guard (200..<300).contains(status) else {
-            let message = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
-                .flatMap { $0["error"] as? [String: Any] }.flatMap { $0["message"] as? String } ?? ""
-            throw Failure(status: status, detail: String(message.prefix(160)))
-        }
-        do { return try JSONDecoder().decode(T.self, from: data) } catch {
-            throw Failure(status: -1, detail: "unreadable reply from Gmail")
+        var retry = 0
+        while true {
+            try Task.checkCancellation()
+            try await pace()
+            let data: Data, response: URLResponse
+            do { (data, response) = try await session.data(for: request(path, query)) } catch {
+                if Task.isCancelled { throw CancellationError() }
+                throw Failure(status: 0, detail: error.localizedDescription)
+            }
+            let http = response as? HTTPURLResponse
+            let status = http?.statusCode ?? 0
+            if (200..<300).contains(status) {
+                do { return try JSONDecoder().decode(T.self, from: data) } catch {
+                    throw Failure(status: -1, detail: "unreadable reply from Gmail")
+                }
+            }
+            let failure = Failure.from(status: status, body: data)
+            guard failure.retryable, retry + 1 < timing.attempts else { throw failure }
+            let wait: TimeInterval
+            if let after = Self.retryAfter(http?.value(forHTTPHeaderField: "Retry-After")) {
+                guard after <= timing.maxRetryAfter else { throw failure }
+                wait = after
+            } else {
+                wait = timing.backoff(retry: retry)
+            }
+            try await timing.sleep(wait)
+            retry += 1
         }
     }
 
@@ -130,9 +259,68 @@ final class GmailClient {
 /// users.history.list from the stored historyId (messageAdded in INBOX) — only new mail. A 404
 /// there (historyId too old) starts a fresh first pass. Each message is kept as a `.eml` under
 /// Application Support and read by the shared scanner and MIME parser, labelled Online (PRODUCT §4a).
+///
+/// Resumable: a message whose `.eml` is already there is not fetched again, and the historyId is saved only
+/// once a pass has fetched everything. When Gmail still says "slow down" after the client's retries, the scan
+/// reads what it has, saves the pass (its ids, its historyId) and throws [Interrupted]; the next scan continues
+/// that pass without listing again. A first pass that completes deletes the cached messages outside its window.
 struct GmailProducer {
     static let historyKey = "gmailHistoryId"
+    /// An unfinished pass: its message ids (comma-separated, in fetch order), the historyId to save when it
+    /// completes, "1" for a first pass, and how many messages were over [maxPerSync].
+    static let passIdsKey = "gmailPassIds"
+    static let passHistoryKey = "gmailPassHistoryId"
+    static let passFreshKey = "gmailPassFresh"
+    static let passMoreKey = "gmailPassMore"
     static let host = "gmail.googleapis.com"
+
+    /// The scan stopped because Gmail asked Loupe to slow down: `output` has what was fetched and the state
+    /// to continue from.
+    struct Interrupted: Error {
+        let output: PhoneScanOutput
+        let fetched: Int
+        let total: Int
+        let failure: GmailClient.Failure
+    }
+
+    /// One pass: the ids to fetch and what to save once they are all here.
+    struct Pass: Equatable {
+        var ids: [String]
+        var historyId: String
+        var fresh: Bool
+        var more: Int
+
+        init(ids: [String], historyId: String, fresh: Bool, more: Int) {
+            self.ids = ids.filter(GmailProducer.validId)
+            self.historyId = historyId
+            self.fresh = fresh
+            self.more = more
+        }
+
+        init?(state: [String: String]) {
+            guard let ids = state[GmailProducer.passIdsKey], let h = state[GmailProducer.passHistoryKey], !h.isEmpty else { return nil }
+            self.init(ids: ids.split(separator: ",").map(String.init), historyId: h,
+                      fresh: state[GmailProducer.passFreshKey] == "1", more: Int(state[GmailProducer.passMoreKey] ?? "") ?? 0)
+        }
+
+        var state: [String: String] {
+            [GmailProducer.passIdsKey: ids.joined(separator: ","), GmailProducer.passHistoryKey: historyId,
+             GmailProducer.passFreshKey: fresh ? "1" : "0", GmailProducer.passMoreKey: String(more)]
+        }
+    }
+
+    /// The Mail row's words when Gmail asked Loupe to slow down. `fetched`: N of M messages of the pass.
+    static func slowDown(fetched: (Int, Int)?, autoRetry: Bool) -> String {
+        let head = "Gmail asked Loupe to slow down."
+        switch (fetched, autoRetry) {
+        case let ((n, m)?, true): return "\(head) Loupe fetched \(n) of \(m) messages and will continue in a minute."
+        case let ((n, m)?, false): return "\(head) Loupe fetched \(n) of \(m) messages; tap Scan again in a few minutes to continue."
+        case (nil, true): return "\(head) Loupe will try again in a minute."
+        case (nil, false): return "\(head) Tap Scan again in a few minutes."
+        }
+    }
+
+    static func validId(_ id: String) -> Bool { id.range(of: #"^[A-Za-z0-9]+$"#, options: .regularExpression) != nil }
 
     let account: MailAccount
     let client: GmailClient
@@ -143,59 +331,105 @@ struct GmailProducer {
 
     var folder: URL { cacheRoot.appendingPathComponent(account.key, isDirectory: true) }
 
-    func scan(state: [String: String], observer: ScanObserver = NullScanObserver(), fetched: () -> Void = {}) async throws -> PhoneScanOutput {
-        let fm = FileManager.default
-        var ids: [String] = []
-        var remaining = 0
-        var newHistory: String
-        var fresh = true
-        if let start = state[Self.historyKey], !start.isEmpty {
-            do {
-                var token: String?
-                var seen = Set<String>()
-                var latest = start
-                repeat {
-                    let page = try await client.history(startHistoryId: start, pageToken: token)
-                    for r in page.history ?? [] {
-                        for a in r.messagesAdded ?? [] where seen.insert(a.message.id).inserted { ids.append(a.message.id) }
-                    }
-                    if let h = page.historyId { latest = h }
-                    token = page.nextPageToken
-                } while token != nil
-                newHistory = latest
-                fresh = false
-                // History is oldest first; keep the newest when capped.
-                ids = ids.filter { !fm.fileExists(atPath: folder.appendingPathComponent("\($0).eml").path) }
-                if ids.count > maxPerSync { remaining = ids.count - maxPerSync; ids = Array(ids.suffix(maxPerSync)) }
-            } catch let f as GmailClient.Failure where f.status == 404 {
-                newHistory = ""
-            }
+    private func file(_ id: String) -> URL { folder.appendingPathComponent("\(id).eml") }
+    private func have(_ id: String) -> Bool { FileManager.default.fileExists(atPath: file(id).path) }
+
+    /// `progress(n, m)`: n of the pass's m messages are here (the fetch is paced, so 200 take about 80 s).
+    func scan(state: [String: String], observer: ScanObserver = NullScanObserver(), fetched: () -> Void = {},
+              progress: (Int, Int) -> Void = { _, _ in }) async throws -> PhoneScanOutput {
+        let pass: Pass
+        if let saved = Pass(state: state) {
+            pass = saved
+        } else if let start = state[Self.historyKey], !start.isEmpty, let incremental = try await historyPass(from: start) {
+            pass = incremental
         } else {
-            newHistory = ""
+            pass = try await firstPass()
         }
-        if fresh {
-            try? fm.removeItem(at: folder)
-            newHistory = try await client.profile().historyId
-            var token: String?
-            repeat {
-                let page = try await client.listMessages(query: firstPassWindow, maxResults: min(500, maxPerSync + 1), pageToken: token)
-                ids += (page.messages ?? []).map(\.id)
-                token = ids.count > maxPerSync ? nil : page.nextPageToken
-            } while token != nil
-            if ids.count > maxPerSync { remaining = ids.count - maxPerSync; ids = Array(ids.prefix(maxPerSync)) }
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        var gone = Set<String>()
+        var interrupted: GmailClient.Failure?
+        var here = pass.ids.filter(have).count
+        progress(here, pass.ids.count)
+        for id in pass.ids where !have(id) {
+            do {
+                let raw = try await client.raw(id: id)
+                try raw.write(to: file(id), options: [.atomic, .completeFileProtection])
+                here += 1
+                progress(here, pass.ids.count)
+            } catch let f as GmailClient.Failure where f.kind == .notFound {
+                gone.insert(id) // deleted since it was listed
+            } catch let f as GmailClient.Failure where f.kind == .rateLimited {
+                interrupted = f
+                break
+            }
         }
-        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
-        for id in ids where id.range(of: #"^[A-Za-z0-9]+$"#, options: .regularExpression) != nil {
-            let raw = try await client.raw(id: id)
-            try raw.write(to: folder.appendingPathComponent("\(id).eml"), options: [.atomic, .completeFileProtection])
-        }
+        if interrupted == nil, pass.fresh { prune(keeping: Set(pass.ids)) }
         fetched()
         let root = SourceRoot(id: PhoneSourceIds.shared.MAIL, type: .mailExport, path: folder.path, idPrefix: "mail:\(account.key)/")
         var result = try SourceScanner(extractors: AppleExtractors.live()).scan(sources: [root], observer: observer)
         result = PhoneItems.companion.labelOnline(result: result, from: Self.host, fetchedIso: ISOStamp.now(now()))
-        if remaining > 0 {
-            result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched: \(remaining) more message\(remaining == 1 ? "" : "s") — Loupe reads \(maxPerSync) at a time")], unavailable: result.unavailable)
+        if let f = interrupted {
+            var left = pass
+            left.ids = pass.ids.filter { !gone.contains($0) }
+            let done = left.ids.filter(have).count
+            let waiting = left.ids.count - done
+            result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched yet: \(waiting) message\(waiting == 1 ? "" : "s") — Gmail asked Loupe to slow down; the next scan continues")], unavailable: result.unavailable)
+            var st = left.state
+            if let h = state[Self.historyKey], !h.isEmpty { st[Self.historyKey] = h }
+            throw Interrupted(output: PhoneScanOutput(result: result, state: st), fetched: done, total: left.ids.count, failure: f)
         }
-        return PhoneScanOutput(result: result, state: [Self.historyKey: newHistory])
+        if pass.more > 0 {
+            result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched: \(pass.more) more message\(pass.more == 1 ? "" : "s") — Loupe reads \(maxPerSync) at a time")], unavailable: result.unavailable)
+        }
+        return PhoneScanOutput(result: result, state: [Self.historyKey: pass.historyId])
+    }
+
+    /// New mail since `start`, newest [maxPerSync] kept; nil when Gmail no longer has that history (404).
+    private func historyPass(from start: String) async throws -> Pass? {
+        var ids: [String] = []
+        var seen = Set<String>()
+        var latest = start
+        var token: String?
+        do {
+            repeat {
+                let page = try await client.history(startHistoryId: start, pageToken: token)
+                for r in page.history ?? [] {
+                    for a in r.messagesAdded ?? [] where seen.insert(a.message.id).inserted { ids.append(a.message.id) }
+                }
+                if let h = page.historyId { latest = h }
+                token = page.nextPageToken
+            } while token != nil
+        } catch let f as GmailClient.Failure where f.kind == .notFound {
+            return nil
+        }
+        // History is oldest first; keep the newest when capped.
+        ids = ids.filter { !have($0) }
+        var more = 0
+        if ids.count > maxPerSync { more = ids.count - maxPerSync; ids = Array(ids.suffix(maxPerSync)) }
+        return Pass(ids: ids, historyId: latest, fresh: false, more: more)
+    }
+
+    /// The window's messages, newest first, at most [maxPerSync]. Cached messages are kept (not re-fetched).
+    private func firstPass() async throws -> Pass {
+        let historyId = try await client.profile().historyId
+        var ids: [String] = []
+        var token: String?
+        repeat {
+            let page = try await client.listMessages(query: firstPassWindow, maxResults: min(500, maxPerSync + 1), pageToken: token)
+            ids += (page.messages ?? []).map(\.id)
+            token = ids.count > maxPerSync ? nil : page.nextPageToken
+        } while token != nil
+        var more = 0
+        if ids.count > maxPerSync { more = ids.count - maxPerSync; ids = Array(ids.prefix(maxPerSync)) }
+        return Pass(ids: ids, historyId: historyId, fresh: true, more: more)
+    }
+
+    /// After a complete first pass: the cached messages outside its window go, so the cache does not grow.
+    private func prune(keeping ids: Set<String>) {
+        let fm = FileManager.default
+        for url in (try? fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil)) ?? []
+        where url.pathExtension == "eml" && !ids.contains(url.deletingPathExtension().lastPathComponent) {
+            try? fm.removeItem(at: url)
+        }
     }
 }

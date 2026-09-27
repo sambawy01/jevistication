@@ -38,6 +38,10 @@ struct PhoneDependencies {
     var state: PhoneStateStore
     /// HTTPS for OAuth and the Gmail API (tests pass a session over a fake URLProtocol).
     var http: URLSession = .shared
+    /// The Gmail client's pacing, backoff and clock (tests pass a fake clock).
+    var gmailTiming: GmailTiming = .live
+    /// The one automatic retry after Gmail asked Loupe to slow down.
+    let gmailRetry = GmailRetry()
 
     static func live(home: URL) -> PhoneDependencies {
         PhoneDependencies(
@@ -64,6 +68,19 @@ private func livePhotos() -> PhotoLibraryReading {
     if let demo = SourcesDemo.photoLibrary() { return demo }
     #endif
     return PhotoKitLibrary()
+}
+
+/// The pending automatic Gmail retry. Held by `PhoneDependencies` (the service's stored properties are in
+/// SourcesService.swift); used on the main actor only.
+final class GmailRetry {
+    var task: Task<Void, Never>?
+    /// True while the automatic retry's scan runs: a retry that is slowed down again does not schedule another.
+    var firing = false
+
+    func cancel() {
+        task?.cancel()
+        task = nil
+    }
 }
 
 /// Forwards the common scanner's progress to the live run and the live display. For Mail the display shows each
@@ -283,6 +300,7 @@ extension SourcesService {
         let live = beginLive(s.rawValue, ScanPipeline.of(s.rawValue, ocr: s == .photos ? OcrPolicy.current().enabled : true,
                                                            mailHost: account?.host, gmail: account?.auth == .gmailAPI))
         let feed = live.feed
+        var gmailPaused: GmailProducer.Interrupted?
         let obs = run.observer
         let both = FeedObserver(run: obs, feed: feed, mailSubjects: s == .mail)
         defer { settle(live) }
@@ -345,10 +363,21 @@ extension SourcesService {
                 }
                 if account.auth == .gmailAPI {
                     let token = try await oauthAccessToken(account)
-                    let producer = GmailProducer(account: account, client: GmailClient(accessToken: token, session: deps.http),
+                    let producer = GmailProducer(account: account, client: GmailClient(accessToken: token, session: deps.http,
+                                                                                       timing: deps.gmailTiming),
                                                  cacheRoot: deps.mailCache)
-                    let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched)
-                    try store(out, as: PhoneSourceIds.shared.MAIL, for: s)
+                    do {
+                        let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched) { n, m in
+                            if m > 0 { feed.status("Fetching mail: \(n) of \(m)") }
+                        }
+                        try store(out, as: PhoneSourceIds.shared.MAIL, for: s)
+                        deps.gmailRetry.cancel()
+                    } catch let paused as GmailProducer.Interrupted {
+                        // Gmail asked Loupe to slow down mid-pass: what was fetched is read and shown, and the
+                        // saved pass makes the next scan continue rather than start over.
+                        try store(paused.output, as: PhoneSourceIds.shared.MAIL, for: s)
+                        gmailPaused = paused
+                    }
                     break
                 }
                 let credential = try await mailCredential(account)
@@ -360,6 +389,10 @@ extension SourcesService {
             let st = state(s)
             run.finish(items: st.itemCount, skipped: st.skippedCount)
             feed.finish(saved: st.itemCount)
+            if let paused = gmailPaused {
+                phone[s, default: .init()].problem = GmailProducer.slowDown(fetched: (paused.fetched, paused.total), autoRetry: scheduleGmailRetry())
+                Log.mail.error("gmail scan paused: status=\(paused.failure.status, privacy: .public) fetched=\(paused.fetched, privacy: .public)/\(paused.total, privacy: .public)")
+            }
         } catch let failure as IMAPClient.Failure {
             let host = deps.mailAccounts.load()?.host ?? ""
             phone[s, default: .init()].problem = failure.recovery(host: host)
@@ -367,7 +400,8 @@ extension SourcesService {
             run.fail()
             feed.fail()
         } catch let failure as GmailClient.Failure {
-            phone[s, default: .init()].problem = failure.recovery
+            phone[s, default: .init()].problem = failure.kind == .rateLimited
+                ? GmailProducer.slowDown(fetched: nil, autoRetry: scheduleGmailRetry()) : failure.recovery
             Log.mail.error("gmail scan failed: status=\(failure.status, privacy: .public)")
             run.fail()
             feed.fail()
@@ -376,6 +410,25 @@ extension SourcesService {
             run.fail()
             feed.fail()
         }
+    }
+
+    /// Schedules the one automatic scan after Gmail asked Loupe to slow down (its per-user quota is per minute);
+    /// false when this scan was that retry, so it is not chained — Scan again still works. A later successful Gmail
+    /// scan or removing the mailbox cancels it.
+    private func scheduleGmailRetry() -> Bool {
+        let retry = deps.gmailRetry
+        retry.cancel()
+        guard !retry.firing else { return false }
+        let timing = deps.gmailTiming
+        retry.task = Task { [weak self] in
+            do { try await timing.sleep(timing.autoRetryDelay) } catch { return }
+            guard let self, !Task.isCancelled, self.mailAccount?.auth == .gmailAPI else { return }
+            retry.task = nil
+            retry.firing = true
+            defer { retry.firing = false }
+            await self.scanPhone(.mail)
+        }
+        return true
     }
 
     /// Items read in one go (Calendar, Contacts) pass through the live display one by one, as read.
@@ -455,6 +508,7 @@ extension SourcesService {
     }
 
     private func removeMailData(_ account: MailAccount) {
+        deps.gmailRetry.cancel()
         try? deps.keychain(account).delete()
         MailProducer.forget(account, cacheRoot: deps.mailCache)
         deps.state.set(PhoneSource.mail.rawValue, [:])
