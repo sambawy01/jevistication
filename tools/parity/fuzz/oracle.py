@@ -6,14 +6,15 @@ decodes it as the browser does (HTML parsing: entity references, attribute rules
 with WHATWG URL parsing against the two kinds of base a mail client gives a message:
   https://mail.example.com/inbox/   a web client (special scheme: `https:x` is then relative), and
   x-msg://base.invalid/             Apple Mail's kind (non-special: `https:x` is host x).
-"chrome" holds the two hostnames. A relative href resolves to the base's own host: "no host of its own".
+"chrome" holds the two hostnames, and "own" the hostname of the href on its own (new URL(v), no
+base: null when the href has no scheme of its own). A relative href resolves to the base's own host: "no host of its own".
 text cases: linkify-it (Node) and NSDataDetector (macOS, via swift) find the links in each line;
 the http(s) ones are canonicalised by Chrome (new URL(u).hostname).
 
 Needs: Google Chrome, node with linkify-it (LINKIFY_IT=<path to the linkify-it package>), swift.
 Usage: gen.py | oracle.py > pinned.json      (tools/parity/fuzz/README.md)
 """
-import html, json, os, subprocess, sys, tempfile
+import html, json, os, shutil, subprocess, sys, tempfile
 
 CHROME = os.environ.get("CHROME", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
 LINKIFY = os.environ.get("LINKIFY_IT", "linkify-it")
@@ -55,7 +56,8 @@ to_canon = sorted(set(u for l in linked for u in l))
 anchors = "".join('<a id="h%d" href="%s">x</a>\n' % (i, c["input"]) for i, c in enumerate(hrefs))
 script = """function H(v,b){try{return new URL(v,b).hostname}catch(x){return ''}}
 var r={a:[],u:{}};for(var i=0;i<%d;i++){var e=document.getElementById('h'+i);var v=e.getAttribute('href');
-r.a.push([H(v,%s),H(v,%s),e.href]);}
+var o=null;try{var u=new URL(v);o=u.hostname}catch(x){}
+r.a.push([H(v,%s),H(v,%s),e.href,o]);}
 var U=%s;for(var j=0;j<U.length;j++){try{r.u[U[j]]=new URL(U[j]).hostname}catch(x){r.u[U[j]]=null}}
 document.getElementById('o').textContent=JSON.stringify(r);""" % (len(hrefs), json.dumps(BASE), json.dumps(BASE2), json.dumps(to_canon).replace("</", "<\\/"))
 page = os.path.join(work, "page.html")
@@ -83,8 +85,8 @@ chrome_version = subprocess.run([CHROME, "--version"], capture_output=True, text
 
 out = []
 for i, c in enumerate(hrefs):
-    h1, h2, href = res["a"][i]
-    out.append({"id": c["id"], "kind": "href", "input": c["input"], "chrome": [h1, h2], "href": href})
+    h1, h2, href, own = res["a"][i]
+    out.append({"id": c["id"], "kind": "href", "input": c["input"], "chrome": [h1, h2], "own": own, "href": href})
 for c, l in zip(texts, linked):
     out.append({"id": c["id"], "kind": "text", "input": c["input"], "linked": sorted(set(h for h in (res["u"].get(u) for u in l) if h))})
 doc = {"format": "loupe-host-parity-fuzz", "version": 1, "base": [BASE, BASE2], "oracles": {"chrome": chrome_version, "linkify-it": lk_version,
@@ -92,3 +94,4 @@ doc = {"format": "loupe-host-parity-fuzz", "version": 1, "base": [BASE, BASE2], 
 s = '{\n  "format": "loupe-host-parity-fuzz",\n  "version": 1,\n  "base": %s,\n  "oracles": %s,\n  "cases": [\n' % (json.dumps([BASE, BASE2]), json.dumps(doc["oracles"], ensure_ascii=True))
 s += ",\n".join("    " + json.dumps(o, ensure_ascii=True) for o in out) + "\n  ]\n}\n"
 sys.stdout.write(s)
+shutil.rmtree(work, ignore_errors=True)  # the Chrome profile and pages

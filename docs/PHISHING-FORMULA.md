@@ -80,9 +80,13 @@ Station's `browser/signals.py` + `scoring.py` + `mail/phishing.py` where they di
    host is another registrable domain, the URL keeps its userinfo (`https://www.paypal.com|login@paypa1-secure.xyz`
    is paypa1-secure.xyz); when it is the same, it is judged too. After any cut, every later piece of the
    token that starts with a URL or a host with a listed TLD is judged (`https://paypal.com，evil.com/login`),
-   and a known or brand URL run straight into another domain is `link_stitched` (30) (*fix loop 5*).
-   Hrefs are read as the browser reads them (*fix loop 5*): every HTML character reference in the
-   attribute decoded (numeric and the full WHATWG named table), `href` only as a whole attribute name;
+   and a known or brand URL whose host a stop runs straight into another domain is `link_stitched` (30); a stop after the
+   first URL's path began (`www.facebook.com/nileshoes｜www.nileshoes.com`) is two links side by side, not a stitch (*fix loops 5–6*).
+   Hrefs are read as the browser reads them (*fix loops 5–6*): the HTML is tokenised in full (comments,
+   bogus comments, script/style/textarea/title/xmp/iframe/noembed/noframes text and `<template>` hide no
+   anchor and make none up), every HTML character reference in the attribute decoded (numeric and the
+   full WHATWG named table), `href` only as a whole attribute name (`xlink:href` for an `<a>` inside
+   `<svg>`), a relative href resolved against the document's first absolute `<base href>`;
    C0 controls, spaces and no-break spaces trimmed and tabs and newlines removed **before** the scheme
    is read (`ht\ntps://x` is https://x); two leading `/` or `\` in any mix are scheme-relative
    (`\\x`, `/\x`, `///x` are host x); one leading `/` or `\` before a host name with a listed TLD is

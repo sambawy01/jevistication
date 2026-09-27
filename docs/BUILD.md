@@ -2069,6 +2069,19 @@ Every answer below changed on the iPhone and the desktop (JVM) too; Loupe Statio
     address stitched to another domain is `link_stitched` (30).
   - Mail judges the host of an unreadable link too; a host ending in `。．｡` is `disguised_host`; a
     no-break space around an href is trimmed, as origin/main did.
+- **Fix loop 6**:
+  - HTML is tokenised in full, so an `<a>` hidden in another tag's open quote or in a comment is found
+    (Chrome finds it), and anchors in script/style/textarea/xmp/template text are not. `<svg><a xlink:href>`
+    is a link. A relative href is resolved against the first `<base href>` (`<base href="https://paypa1-secure.xyz/">`
+    then `<a href="/login">` is paypa1-secure.xyz). All 41 round-6 HTML files list the same hrefs as Chrome's
+    DOMParser, except a Blink quirk in the query of one: `&copy=` is decoded when a later reference follows.
+  - `link_stitched` needs the stop to be inside the first host, so link lists like
+    `www.instagram.com/bistrocloud|www.bistrocloud.com` are safe again.
+  - The text rescan after a cut is one forward pass: 1 MB of `https://a.com|x|x…` takes about 13 ms (it
+    took 25–44 s on the iOS simulator).
+  - The fuzz oracle is stricter. "No host" counts only when both bases give none, and Apple Mail's host
+    only when the href has its own scheme. Reverting backslash scheme-relative hrefs now fails 67 cases;
+    reading `https:host` as relative fails 494.
 - **URLs are split as browsers split them** (fix loop 3; hosts checked against Chrome 153,
   r3/chrome1.out): C0 controls and spaces at both ends are stripped; for http, https, ws, wss, ftp and
   file the host follows the scheme however many `/` or `\` come first, so a mail link

@@ -19,8 +19,12 @@ programs rather than our reading of the specs.
   - text: linkify-it and NSDataDetector find the links, and Chrome canonicalises their hosts.
 - `pinned.json` is committed. `HostParityFuzzTest` (loupe-kit commonTest: JVM, Android unit tests,
   iOS simulator) reads it and runs `HostParityFuzz`:
-  - an href's judged host must be one of Chrome's two, or Loupe must flag the message (caution or
-    worse);
+  - an href's judged host must be Chrome's under the web client's base, or under Apple Mail's only
+    when the href has a scheme of its own ("own" in the pin: Chrome's `new URL(href)` with no base);
+    "no host" counts only when both bases give none. Otherwise Loupe must flag the message (caution or
+    worse). Two regressions the looser rule of loop 5 missed now fail (fix loop 6):
+    - hrefs like `\\x` are no longer read as scheme-relative: 67 cases fail;
+    - `https:x` is read as relative: 494 cases fail;
   - every linked text host must be one Loupe judges (or share its registrable domain: linkify-it
     glues CJK text before `www.` into the name), or Loupe must flag the line.
   - Loupe judging a host where Chrome opens none is counted as *over-judged* and allowed. That
@@ -32,4 +36,4 @@ Regenerate (macOS: Chrome, node with linkify-it, swift):
     cd tools/parity/fuzz
     python3 gen.py | LINKIFY_IT=/path/to/node_modules/linkify-it python3 oracle.py > pinned.json
 
-`pinned.json` records the oracle versions. Review the diff before committing a new pin.
+`pinned.json` records the oracle versions. `oracle.py` removes its temporary Chrome profile when done. Review the diff before committing a new pin.

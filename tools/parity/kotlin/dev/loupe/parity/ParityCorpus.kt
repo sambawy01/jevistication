@@ -151,6 +151,7 @@ object ParityCorpus {
                 trusted = args?.get("trusted")?.asArr?.items?.map { it.asString } ?: emptyList(),
                 links = links(args),
             ).let { v -> "{\"level\":${str(v.level)},\"codes\":${list(v.reasons.map { it.code }.sorted())}}" }
+            "mail.hrefs" -> list(MailMessage.anchors(s).map { it.first })
             "mail.anchors" -> MailMessage.anchors(s).joinToString(",", "[", "]") { (h, t) -> "[" + quote(h) + "," + quote(t) + "]" }
             "mail.link_targets" -> list(Phishing.linkTargets(args?.get("body")?.asString ?: "", links(args), s.ifEmpty { null }, Phishing.DEFAULT_CONFIG))
             "link.check" -> SiteCheck.checkUrl(s).verdict.let { v ->

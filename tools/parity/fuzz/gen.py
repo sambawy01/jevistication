@@ -29,7 +29,7 @@ HOST = ["paypa1-secure.xyz", "paypa1-secure.xyz", "www.paypal.com", "paypal.com"
         "paypal。com", "paypal．com", "paypal｡com", "xn--pypal-4ve.com", "p\u0430ypal.com", "PAYPAL.COM", "paypal.com.",
         "paypal.com%2Eevil.tk", "evil.com\\.paypal.com", "pay\u00adpal.com", "pay\u200dpal.com", "americanexpre\u00df.com",
         "www.example.com", "\u4f8b\u3048.jp", "b\u00fccher.de", "paypal.com%00.evil.com", "paypal.com%40evil.com",
-        "evil|com", "[::1]", "192.168.0.1", "", ".", "%2e"]
+        "evil|com", "[::1]", "192.168.0.1", "", ".", "%2e", "evil.tk\\@www.paypal.com", "paypa1-secure.xyz\\@paypal.com"]
 PORT = ["", "", "", "", ":443", ":8080", ":x", ":"]
 PATH = ["/login", "/login", "", "/", "?q=1", "#frag", "\\login", "/a b", "/%2F..%2F", "/@paypal.com"]
 TAIL = ["", "", "", " ", "\n", "\t"]
@@ -58,7 +58,11 @@ PINNED_HREF = ["ht\ntps://paypa1-secure.xyz/login", "h\tttps://paypa1-secure.xyz
     "https&#58;//paypa1-secure.xyz/login", "ht&#10;tps://paypa1-secure.xyz/login", "&Tab;https://paypa1-secure.xyz/login",
     "&NewLine;//paypa1-secure.xyz/login", "&#x20;https://paypa1-secure.xyz/login", "&#1;https://paypa1-secure.xyz/login",
     "&nbsp;https://paypa1-secure.xyz/login", "&#xFEFF;https://paypa1-secure.xyz/login", "/", "?utm=1", "./x.html", "*|UNSUB|*",
-    "%%unsubscribe%%", "https://", "https:///", "mailto:x@example.com", "https://paypa1-secure.xyz%00/", "https://paypal.com%40evil.com/login"]
+    "%%unsubscribe%%", "https://", "https:///", "mailto:x@example.com", "https://paypa1-secure.xyz%00/", "https://paypal.com%40evil.com/login",
+    # round 6: the attacker before `\@`, the brand after it (a web client opens the attacker)
+    "//evil.tk\\@www.paypal.com/login", "\\\\evil.tk\\@www.paypal.com/", "/\\evil.tk\\@www.paypal.com/", "\\/evil.tk\\@www.paypal.com/",
+    "https://evil.tk\\@www.paypal.com/login", "https:evil.tk\\@www.paypal.com/", "https:\\evil.tk\\@www.paypal.com/", "//paypa1-secure.xyz\\@www.paypal.com/",
+    "https:paypa1-secure.xyz/login", "https:/paypa1-secure.xyz/login", "http:paypa1-secure.xyz/login", "HTTPS:paypa1-secure.xyz/login"]
 PINNED_TEXT = ["https://www.paypal.com|login@paypa1-secure.xyz/login", "https://www.paypal.com\uff0clogin@paypa1-secure.xyz/login",
     "https://www.paypal.com\uff20paypa1-secure.xyz/login", "https://paypal.com\uff0cevil.com/login", "https://paypal.com:x|y@paypa1-secure.xyz/login",
     "https://www.paypal.com^@paypa1-secure.xyz/login", "www.paypal.com\uff0eevil\uff0exyz/login", "www.paypal.com\u3002evil\u3002xyz/login",

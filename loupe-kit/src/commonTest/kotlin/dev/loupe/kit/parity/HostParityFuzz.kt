@@ -13,8 +13,9 @@ import dev.loupe.persistence.JsonValue
  *   are the hosts it resolves the decoded value to against the two kinds of base a mail client
  *   gives a message (a web client's `https://mail.example.com/inbox/`, where `https:x` is relative,
  *   and Apple Mail's non-special `x-msg://base.invalid/`, where it is host x). Loupe reads the anchor
- *   with [MailMessage.anchors] and judges the host the mail check judges. It must be one of Chrome's,
- *   or Loupe must flag the link (the message is at least caution) when it cannot say.
+ *   with [MailMessage.anchors] and judges the host the mail check judges. It must be the web client's
+ *   host, or the x-msg one when the href has its own scheme; "no host" counts only when both bases
+ *   give none. Otherwise Loupe must flag the link (the message is at least caution).
  * - `text` cases: a line of plain-text mail. Every web host linkify-it or NSDataDetector links must be
  *   one of the hosts Loupe judges ([Phishing.urls]), or Loupe must flag the line.
  *
@@ -61,9 +62,15 @@ object HostParityFuzz {
             if (o["kind"]!!.asString == "href") {
                 val anchors = MailMessage.anchors("<a href=\"$input\">x</a>")
                 val loupe = anchors.firstOrNull()?.let { judgedHost(it.first) } ?: ""
-                val chrome = o["chrome"]!!.asArr.items.map { norm(it.asString) }.toSet()
+                // Chrome's host under the web client's base always counts; under the x-msg base only
+                // when the href has a scheme of its own (a scheme-relative `\\x` is a path there, not
+                // a host a client opens); "no host" only when both bases give none (fix loop 6)
+                val (web, xmsg) = o["chrome"]!!.asArr.items.map { norm(it.asString) }
+                val own = o["own"]?.let { it as? JsonValue.Str }?.value
+                val chrome = (setOf(web) + (if (own != null) setOf(xmsg) else emptySet()))
+                    .let { set -> if (web.isEmpty() && xmsg.isEmpty()) set else set - "" }
                 val safe = loupe !in chrome && Phishing.assess(SENDER, "", links = anchors).level == "safe"
-                if (safe && chrome == setOf("")) {
+                if (safe && web.isEmpty() && xmsg.isEmpty()) {
                     over++
                 } else if (safe) {
                     out += "$id ${show(input)}: Chrome opens ${chrome.map { "\"$it\"" }}, Loupe judges \"$loupe\" and says safe"

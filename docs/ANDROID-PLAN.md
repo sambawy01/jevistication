@@ -410,6 +410,27 @@ corpus.json and pinned.json both fail on iOS; ICU 129 compiled, 0 rejected; API 
 0 problems; performance linear (new row: unclosed anchors). Release APK 1,970,131 bytes (unchanged);
 LoupeKit arm64 30,467,736 bytes (+154 KB, mostly the HTML entity table).
 
+**Fix loop 6 (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix6/`.
+- **Mail HTML is tokenised in full:** every tag, comment, bogus comment and raw-text element by the WHATWG rules.
+  - An anchor hidden in another tag's open quote or in a comment is found; one in script, style, textarea, xmp or template text is not.
+  - `<svg><a xlink:href>` is a link, and relative hrefs resolve against the first `<base href>`.
+  - All 41 round-6 HTML files give Chrome DOMParser's hrefs, except a Blink quirk in one query (`&copy=` before a later reference).
+- **`link_stitched`** needs the stop inside the first host, so link lists (`www.instagram.com/bistrocloud|www.bistrocloud.com`) are safe again.
+- **The text rescan** is one forward pass: `https://a.com|x|x…` took 25–44 s on the iOS simulator and now takes about 120 ms.
+- **The fuzz oracle** counts "no host" only when both bases give none, and Apple Mail's host only for an href with its own scheme.
+  - Two regressions the loop-5 oracle missed now fail: backslash not scheme-relative (67 cases), `https:host` read as relative (494).
+  - `oracle.py` removes its temporary Chrome profile.
+- **Criteria:** r3+r5 459 attack rows none lower and r4+r5 192 legitimate rows none higher (8 accepted +10 notes).
+  - 157 attack and 240 legitimate rows are pinned in AttackRowsTest and LegitimateMailTest, including round 6's stitch lines, `<base>` newsletters and extra attacks.
+  - Two adversarial files (`data-href` only, an anchor swallowed by an open quote) score lower than origin/main because origin/main read a link Chrome does not have.
+- **Gates:**
+  - `clean check` green, 3,046 tests, 0 failed; no-SDK 1,576.
+  - Corpus 916 cases (791), 0 differ on API 29, API 35, the iOS simulator and the JVM.
+  - Planted faults in corpus.json and pinned.json fail on iOS.
+  - ICU 129 compiled, 0 rejected; API check 691 classes, 0 problems.
+  - Performance linear; the check is now the median of five with `t(4n) < 12 t(n) + 250 ms`.
+- **Sizes:** release APK unchanged; LoupeKit arm64 30,475,560 bytes.
+
 ## Needed from the owner
 
 1. A Google Play developer account (one-time $25).

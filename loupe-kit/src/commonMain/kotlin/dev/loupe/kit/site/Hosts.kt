@@ -290,6 +290,37 @@ object Hosts {
     internal fun protocolRelative(t: String): Boolean =
         t.length >= 2 && (t[0] == '/' || t[0] == '\\') && (t[1] == '/' || t[1] == '\\')
 
+    /**
+     * [href] resolved against the absolute web URL [base], as a browser resolves an anchor under a
+     * `<base href>` (WHATWG): an href with its own scheme stays (except `https:x` under an https
+     * base, which is relative), `//x` and its backslash mixes take the base's scheme, `/x` its
+     * authority, `?x` and `#x` its path, anything else its directory.
+     */
+    fun resolve(base: String, href: String): String {
+        val t = cleanHref(href)
+        val b = splitUrl(base)
+        val authority = b.authority ?: return href
+        val scheme = b.scheme
+        val colon = t.indexOf(':')
+        var rel = t
+        if (colon > 0 && SCHEME.matches(t.substring(0, colon))) {
+            val own = t.substring(0, colon).lowercase()
+            val rest = t.substring(colon + 1)
+            if (own != scheme || own !in SPECIAL || (rest.length >= 2 && (rest[0] == '/' || rest[0] == '\\') && (rest[1] == '/' || rest[1] == '\\'))) return href
+            rel = rest
+        }
+        val origin = "$scheme://$authority"
+        val path = b.rest.substringBefore('#')
+        return when {
+            protocolRelative(rel) -> "$scheme:$rel"
+            rel.startsWith("/") || rel.startsWith("\\") -> origin + rel
+            rel.isEmpty() -> origin + path
+            rel.startsWith("?") -> origin + path.substringBefore('?') + rel
+            rel.startsWith("#") -> origin + path + rel
+            else -> origin + path.substringBefore('?').let { p -> if ('/' in p) p.substringBeforeLast('/') + "/" else "/" } + rel
+        }
+    }
+
     /** True when [url]'s scheme is http or https (after stripping, in any case). */
     fun isWebUrl(url: String): Boolean = splitUrl(url).scheme.let { it == "http" || it == "https" }
 

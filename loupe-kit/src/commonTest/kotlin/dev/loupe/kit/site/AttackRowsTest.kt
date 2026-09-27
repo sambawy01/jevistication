@@ -2,12 +2,13 @@ package dev.loupe.kit.site
 
 import dev.loupe.kit.mail.MailMessage
 import dev.loupe.kit.mail.Phishing
+import dev.loupe.sources.common.HtmlText
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
  * Attacks never score lower than before the branch (fix loop 5): every attack row of the round-5
- * review (scratchpad r5/f1.txt, f2.txt, f3.txt, t1.txt: hrefs with tabs and newlines in the scheme,
+ * review (scratchpad r5/f1.txt, f2.txt, f3.txt, t1.txt, and round 6's r6-work/extra.txt: hrefs with tabs and newlines in the scheme,
  * backslash and slash mixes, HTML character references, userinfo behind CJK punctuation, stand-in
  * dots in a text URL's host) scores at least what origin/main (7e13578) gave it with the same probe
  * (the .b files in loupe-android-evidence/parity-fix5/probes). The floors are origin/main's scores.
@@ -34,6 +35,10 @@ class AttackRowsTest {
             mapOf("FROM" to Phishing.assess(f[0], "Your weekly update.", replyTo = f.getOrElse(1) { "" }).let { it.score to it.level })
         }
         'A' -> mapOf("HTML" to Phishing.assess(sender, "", links = MailMessage.anchors(r.input)).let { it.score to it.level })
+        'M' -> r.input.split("\t", limit = 2).let { (snd, t) -> mapOf("T" to Phishing.assess(snd, t).let { it.score to it.level }) }
+        'H' -> r.input.split("\t", limit = 2).let { (snd, h) ->
+            mapOf("HTML" to Phishing.assess(snd, HtmlText.toText(h), links = MailMessage.anchors(h)).let { it.score to it.level })
+        }
         else -> mapOf("T" to Phishing.assess(sender, r.input).let { it.score to it.level })
     }
 
@@ -159,6 +164,12 @@ class AttackRowsTest {
             Row('U', "https://paypal.com%00.evil.com/", mapOf("SITE" to 30, "PW" to 50, "MAIL" to 30, "SELF" to 30, "TEXT" to 30)),
             Row('U', "https://paypal.com%20evil.com/", mapOf("SITE" to 30, "PW" to 50, "MAIL" to 30, "SELF" to 30, "TEXT" to 30)),
             Row('U', "https://paypal.com%40evil.com/login", mapOf("SITE" to 30, "PW" to 50, "MAIL" to 30, "SELF" to 60, "TEXT" to 30)),
+            Row('U', "//evil.tk@www.paypal.com/login", mapOf("SITE" to 30, "PW" to 50, "MAIL" to 0, "SELF" to 0, "TEXT" to 0)),
+            Row('U', "https:paypa1-secure.xyz/login", mapOf("SITE" to 0, "PW" to 0, "MAIL" to 0, "SELF" to 0, "TEXT" to 0)),
+            Row('A', "<svg><a xlink:href=\"https://paypa1-secure.xyz/login\"><text>Sign in to PayPal</text></a></svg>", mapOf("HTML" to 83)),
+            Row('A', "<img alt='<a href=\"https://www.paypal.com/'><a href=\"https://paypa1-secure.xyz/login\">Sign in to PayPal</a>", mapOf("HTML" to 0)),
+            Row('A', "<!-- <a href=\"https://www.paypal.com/ --> <a href=\"https://paypa1-secure.xyz/login\">Sign in to PayPal</a>", mapOf("HTML" to 0)),
+            Row('A', "<base href=\"https://paypa1-secure.xyz/\"><a href=\"/login\">Sign in to PayPal</a>", mapOf("HTML" to 0)),
             Row('T', "Log in: https://paypal-secure.xyz/login", mapOf("T" to 43)),
             Row('T', "Log in: https://paypal.com\uFF0Cevil.com/login", mapOf("T" to 30)),
             Row('T', "Log in: www.paypal.com\uFF5Cevil.tk", mapOf("T" to 38)),

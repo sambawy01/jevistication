@@ -652,8 +652,8 @@ object Phishing {
         return urls to stitches.map { clean(it.first) to clean(it.second) }
     }
 
-    /** A bare host at the start of what follows a cut (`，evil.com/login`): labels, a dot, a TLD. */
-    private val BARE_HOST_RE = Regex("""^[A-Za-z0-9][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}(?:[:/?#][^${Rx.SPACE}<>"'()\[\]{}]*)?""")
+    /** A bare host name: labels of letters, digits and hyphens, a dot, a top-level domain. */
+    private val BARE_HOST_RE = Regex("""[A-Za-z0-9][A-Za-z0-9-]*(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}""")
 
     /**
      * The URL(s) one URL_RE match stands for in running text (fix loops 4–5): the address up to where
@@ -667,28 +667,56 @@ object Phishing {
         if (url.isNotEmpty()) out += url
         if (after != null) out += after
         if (cut < 0 || depth >= 4) return
-        // the next address in the token, recorded with the one it was stitched to
+        // A stitch is a cut inside the first URL's host (`paypal.com，evil.com`), not after its path
+        // began (`www.facebook.com/nileshoes｜www.nileshoes.com` is two links side by side), fix loop 6
+        val stitchable = cut < authorityEnd(token)
         fun follow(next: String) {
             val before = out.size
             textUrls(next, out, depth + 1, stitches)
-            if (out.size > before && url.isNotEmpty()) stitches += url to out[before]
+            if (stitchable && out.size > before && url.isNotEmpty()) stitches += url to out[before]
         }
+        // One forward pass over the rest of the token (fix loop 6: no copy or rescan per stop): the
+        // next URL start anywhere, found once, and a bare host at the start of each piece.
+        val n = token.length
+        val nextUrl = urlStartFrom(token, cut)
         var k = cut
-        while (k < token.length && out.size < MAX_LINKS) {
-            // the next piece: after this stop (and any stops that follow it)
-            while (k < token.length && (textStop(token[k]) || token[k] == '^')) k++
-            if (k >= token.length) return
-            val piece = token.substring(k)
-            val again = URL_RE.find(piece)
-            if (again != null && again.range.first == 0) { follow(again.value); return }
-            BARE_HOST_RE.find(piece)?.let { bare ->
-                val tld = bare.value.substringBefore('/').substringBefore('?').substringBefore('#').substringBefore(':').substringAfterLast('.')
-                if (Hosts.toAsciiLabel(tld)?.let { it in PublicSuffix.DEFAULT } == true) { follow(bare.value); return }
-            }
-            if (again != null) { textUrls(again.value, out, depth + 1, stitches); return }
-            // no address at the start of this piece: on to the next stop
-            while (k < token.length && !textStop(token[k])) k++
+        while (k < n && out.size < MAX_LINKS) {
+            while (k < n && (textStop(token[k]) || token[k] == '^')) k++
+            if (k >= n) return
+            if (nextUrl == k) { follow(token.substring(k)); return }
+            var e = k
+            while (e < n && !textStop(token[e])) e++
+            if (nextUrl in k until e) { textUrls(token.substring(nextUrl), out, depth + 1, stitches); return }
+            if (bareHostAt(token, k, e)) { follow(token.substring(k, e)); return }
+            k = e
         }
+    }
+
+    /** End of the authority of a URL token (after `scheme://` or at 0 for `www.`): the first `/ ? # \`. */
+    private fun authorityEnd(token: String): Int {
+        val from = token.indexOf("://").let { if (it < 0) 0 else it + 3 }
+        for (i in from until token.length) if (token[i] == '/' || token[i] == '?' || token[i] == '#' || token[i] == '\\') return i
+        return token.length
+    }
+
+    /** Index of the first `http://`, `https://` or `www.` (any case) at or after [from], or -1. */
+    private fun urlStartFrom(s: String, from: Int): Int {
+        for (i in from until s.length) {
+            val c = s[i]
+            if ((c == 'h' || c == 'H') && (s.regionMatches(i, "http://", 0, 7, ignoreCase = true) || s.regionMatches(i, "https://", 0, 8, ignoreCase = true))) return i
+            if ((c == 'w' || c == 'W') && s.regionMatches(i, "www.", 0, 4, ignoreCase = true)) return i
+        }
+        return -1
+    }
+
+    /** A bare host with a listed top-level domain at [k] of the piece [k, end): `evil.com/login`, `evil.tk`. */
+    private fun bareHostAt(s: String, k: Int, end: Int): Boolean {
+        var j = k
+        while (j < end && (s[j] in 'a'..'z' || s[j] in 'A'..'Z' || s[j] in '0'..'9' || s[j] == '-' || s[j] == '.')) j++
+        if (j < end && s[j] !in ":/?#") return false
+        val host = s.substring(k, j).trimEnd('.')
+        if (!BARE_HOST_RE.matches(host)) return false
+        return Hosts.toAsciiLabel(host.substringAfterLast('.'))?.let { it in PublicSuffix.DEFAULT } == true
     }
 
     /**
@@ -749,10 +777,21 @@ object Phishing {
 
     /** The first stop in [from, until), with host rules before [hostEnd]; -1 for none. */
     private fun firstStop(url: String, from: Int, until: Int, hostEnd: Int): Int {
+        // the TLD verdict of a run of stand-in dots is the same for every dot in it: computed once
+        // per run, so a host of many dots stays linear (fix loop 6)
+        var runEnd = -1
+        var runVerdict = false
         for (i in from until until) {
             val c = url[i]
             val inHost = i < hostEnd
-            if (inHost && c in TEXT_DOTS && dotInHost(url, i, hostEnd)) continue
+            if (inHost && c in TEXT_DOTS) {
+                val ascii = c != '\u3002' && i + 1 < hostEnd && url[i + 1].let { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' }
+                if (!ascii && i >= runEnd) {
+                    runEnd = dotRunEnd(url, i, hostEnd)
+                    runVerdict = tldAt(url, i, runEnd)
+                }
+                if (ascii || runVerdict) continue
+            }
             if (textStop(c) || (inHost && c == '^')) return i
         }
         return -1
@@ -767,15 +806,20 @@ object Phishing {
     }
 
     /**
-     * Whether the stand-in dot at [i] separates labels: the host after it (through further stand-in
-     * dots, up to the port, the end of the host or another stop) ends with a top-level domain on the
-     * Public Suffix List; or it is `．`/`｡` with an ASCII letter or digit after it.
+     * Where the host after the stand-in dot at [i] ends: through further stand-in dots, up to the
+     * port, an `@`, the end of the host or another stop.
      */
-    private fun dotInHost(url: String, i: Int, hostEnd: Int): Boolean {
-        if (url[i] != '\u3002' && i + 1 < hostEnd && url[i + 1].let { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' }) return true
+    private fun dotRunEnd(url: String, i: Int, hostEnd: Int): Int {
         var j = i + 1
         while (j < hostEnd && url[j] != ':' && url[j] != '@' && url[j] != '\uFF20' && (url[j] in TEXT_DOTS || !textStop(url[j]))) j++
-        val tld = url.substring(i + 1, j).split('.', '\u3002', '\uFF0E', '\uFF61').last()
+        return j
+    }
+
+    /** Whether the host run (i, j) ends with a top-level domain on the Public Suffix List. */
+    private fun tldAt(url: String, i: Int, j: Int): Boolean {
+        var k = j
+        while (k > i + 1 && url[k - 1] != '.' && url[k - 1] !in TEXT_DOTS) k--
+        val tld = url.substring(k, j)
         if (tld.isEmpty()) return false
         val ascii = Hosts.toAsciiLabel(tld) ?: return false
         return ascii in PublicSuffix.DEFAULT
