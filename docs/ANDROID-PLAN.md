@@ -140,7 +140,7 @@ Swift callers need no change. The constructor threw on a bad pattern before too 
 ## Known parity gaps
 
 **B1 and B2 are closed** (2026-09-27, branch `parity`; record below). Android, iOS and the JVM now give
-the same mechanical answers, pinned by a shared corpus (`tools/parity/corpus.json`, 182 cases) that
+the same mechanical answers, pinned by a shared corpus (`tools/parity/corpus.json`, 332 cases) that
 runs in `commonTest` (JVM, iOS simulator, Android unit tests) and on the API 29 and API 35 emulators
 (`tools/parity/run-device.sh`). Loupe Station is to be made to pass the same file (its format:
 `tools/parity/README.md`). Every answer that changed for the iPhone or the desktop is listed in
@@ -327,6 +327,18 @@ Unicode table's strings are about 70 KB; the APK stores dex uncompressed, the ta
 Kotlin/Native: +155 KB `__DATA,__const`; code +87 KB), +96 KB DWARF (not shipped in an App Store
 binary). The table covers NFC/NFD/NFKC/NFKD, NFKC_Casefold, simple case folding and lowercase,
 general-category groups and the Unicode 3.2 drift set.
+
+**Fix loop after review (2026-09-27, same branch).** Evidence: `.../loupe-android-evidence/parity-fix/`.
+Mail senders written with non-ASCII are never known or trusted and new `disguised_host` signals read
+stand-in letters (a spoofed `"PayPal" <service@ｐａｙｐａｌ.com>` went danger 85 → safe 0 → danger 85);
+drift was redefined (879,549 → 5,598 code points; Burmese, Malayalam, emoji, new CJK and Arabic
+Extended are clean; no longer an impostor code); `PortableRegex.translate` decodes escapes and keeps
+class ranges; the card-cue search reads a short window (6.6 s → 0.6 s on 48,000 characters on the iOS
+simulator); one IDNA mapping. Gates: `clean check` green, 2,982 tests (2,962 before), 0 failed; no-SDK
+clone green, 1,544 tests; corpus 332 cases, 0 differ on API 29 and 35 and the iOS simulator; ICU check
+125 compiled, 0 rejected on both; API check 685 classes, 0 problems; the performance test checks each
+pattern is linear (n vs 4n) on every target. Release APK unchanged (1,953,747 bytes); LoupeKit arm64
+release +59 KB over the first parity build.
 
 ## Needed from the owner
 
