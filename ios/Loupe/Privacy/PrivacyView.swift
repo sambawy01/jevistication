@@ -30,6 +30,8 @@ struct PrivacyCard: View {
 
 /// The Privacy screen: findings grouped by type, masked previews, the item, and what can be done.
 struct PrivacyView: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @ObservedObject var privacy: PrivacyService
     @State private var openItem: SourceItem?
     @State private var confirmDelete: PrivacyFinding?

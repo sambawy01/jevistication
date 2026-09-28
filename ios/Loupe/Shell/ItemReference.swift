@@ -227,20 +227,50 @@ enum ItemImages {
 /// Id -> item for rows that only hold an item id. Rebuilt at most once a second (a screen renders
 /// many rows at once; the items list is the sources' cache, never re-read from disk here).
 @MainActor enum ItemIndex {
+    /// Screens that name items observe this: bumped when a background rebuild of the index lands.
+    final class Store: ObservableObject {
+        static let shared = Store()
+        @Published fileprivate(set) var version = 0
+    }
+
     private static var map: [String: SourceItem] = [:]
     private static var builtRevision = -1
+    private static var building: Int?
 
-    /// Rebuilt only when the sources change (their revision). Reading every source is a database
-    /// read of all items with their text: doing it on each render, or on each miss, starved the
-    /// main thread and held back the privacy check (ReviewPacksUITests timed out).
+    /// Rebuilt only when the sources change (their revision), and **off the main thread**: reading every
+    /// source parses each source's whole cache file. Doing it on each render, or on each miss, starved the
+    /// main thread and held back the privacy check (ReviewPacksUITests timed out); doing it once in Now's
+    /// body still hung the launch on a phone with thousands of files (2026-09-28). Until the rebuild lands
+    /// this answers from the previous index (nil the first time); `Store` then repaints the screen.
     static func item(_ id: String?) -> SourceItem? {
         guard let id, !id.isEmpty else { return nil }
-        let sources = SourcesService.shared
-        if sources.revision != builtRevision {
-            map = Dictionary(sources.items().map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-            if !map.isEmpty { builtRevision = sources.revision }   // sources not loaded yet: try again next time
-        }
+        refreshIfStale()
         return map[id]
+    }
+
+    /// Starts a background rebuild when the sources changed since the last one (a no-op otherwise).
+    static func refreshIfStale() {
+        let sources = SourcesService.shared
+        let revision = sources.revision
+        guard revision != builtRevision, building != revision else { return }
+        building = revision
+        let reader = sources.itemsReader()
+        Task.detached(priority: .userInitiated) {
+            let built = IndexBox(Dictionary(reader().map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a }))
+            await MainActor.run {
+                if building == revision { building = nil }
+                // Sources not loaded yet (an empty read): keep what we had and try again next time.
+                guard !built.map.isEmpty else { return }
+                map = built.map
+                builtRevision = revision
+                Store.shared.version += 1
+            }
+        }
+    }
+
+    private struct IndexBox: @unchecked Sendable {
+        let map: [String: SourceItem]
+        init(_ map: [String: SourceItem]) { self.map = map }
     }
 }
 
