@@ -1,0 +1,173 @@
+<style>
+.phones{display:flex;gap:26px;flex-wrap:wrap;justify-content:center}
+.wrap{display:flex;flex-direction:column;align-items:center}
+.ph{width:262px;height:566px;border-radius:34px;background:#0b1020;color:#e8ecff;border:3px solid #28314d;position:relative;overflow:hidden;font:12.5px -apple-system,system-ui,sans-serif}
+.st{display:flex;justify-content:space-between;padding:10px 20px 0;font-size:11px;color:#c9d2ff}
+.hd{padding:10px 16px 4px;font-weight:750;font-size:20px;display:flex;justify-content:space-between;align-items:center}
+.hd small{font-size:11px;font-weight:500;color:#8a96c8}
+.body{padding:0 12px;overflow:hidden;height:440px}
+.card{background:#131a31;border:1px solid #232c52;border-radius:14px;padding:10px 12px;margin:8px 0}
+.lab{font-size:9.5px;letter-spacing:.09em;color:#7c89c0;text-transform:uppercase;margin-bottom:5px}
+.t{font-weight:700;font-size:13px}
+.s{color:#99a4d4;font-size:11px;margin-top:2px}
+.row{display:flex;justify-content:space-between;align-items:center}
+.act{font-size:11px;font-weight:700;color:#5fd4ff}
+.pill{font-size:10px;padding:3px 8px;border-radius:10px;background:#1a2244;color:#b8c3f4;border:1px solid #2b3670}
+.warn{border-color:#6b2f3a;background:#1c1220}
+.warn .t{color:#ff8e9a}
+.ok{color:#6ee7a8}
+.big2{display:flex;gap:8px;margin:8px 0}
+.big2 div{flex:1;text-align:center;padding:12px 6px;border-radius:14px;background:#17214a;border:1px solid #33418c;font-weight:700;font-size:11.5px;color:#cfd8ff}
+.money{font-size:22px;font-weight:800}
+.tabs{position:absolute;bottom:0;left:0;right:0;height:62px;display:flex;justify-content:space-around;align-items:center;background:#0e1429;border-top:1px solid #1f2748;font-size:10px;color:#8f9bd0}
+.tabs .on{color:#5fd4ff;font-weight:700}
+.fab{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);width:62px;height:62px;border-radius:31px;background:linear-gradient(135deg,#5fd4ff,#6b7bff);display:flex;align-items:center;justify-content:center;color:#071024;font-weight:850;font-size:13px}
+.fab .b{position:absolute;top:-4px;right:-4px;background:#ff5d6c;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700}
+.inp{background:#0f1530;border:1px solid #33408a;border-radius:10px;padding:8px;color:#c9d2ff;font-size:11.5px}
+.att{display:flex;gap:5px;margin-top:6px}.att span{font-size:10px;padding:4px 6px;border-radius:9px;background:#1a2244;color:#a9b6f0}
+.dec{display:flex;flex-wrap:wrap;gap:5px}.dec span{font-size:10.5px;padding:5px 8px;border-radius:11px;background:#1a2244;color:#c3cdfb;border:1px solid #2c3870}
+.dec .sel{background:#5fd4ff;color:#071024;border-color:#5fd4ff;font-weight:700}
+.dec .paid{border-style:dashed;color:#f5c26b;border-color:#8a6a2c}
+.btn{margin:8px 0;text-align:center;padding:11px;border-radius:14px;background:linear-gradient(135deg,#5fd4ff,#6b7bff);color:#071024;font-weight:800;font-size:12px}
+.ans{font-size:24px;font-weight:850;color:#6ee7a8}
+.bar{height:6px;border-radius:3px;background:#26305a;margin-top:5px}.bar i{display:block;height:6px;border-radius:3px;background:#6ee7a8}
+.ref{font-size:10.5px;color:#a9b4e2;line-height:1.45}
+.ref b{color:#dfe5ff}
+.hl{background:#3a3212;color:#ffd97a;border-radius:3px;padding:0 2px}
+.donut{width:78px;height:78px;border-radius:50%;background:conic-gradient(#6ee7a8 0 38%,#6b7bff 38% 86%,#f5c26b 86% 100%);display:flex;align-items:center;justify-content:center}
+.donut i{width:48px;height:48px;border-radius:50%;background:#131a31;display:flex;align-items:center;justify-content:center;font-style:normal;font-size:11px;font-weight:800}
+.swipe{height:250px;border-radius:18px;background:#16204a;border:1px solid #3a4aa0;margin:10px 4px;padding:14px;position:relative}
+.sw{display:flex;justify-content:space-between;margin:6px 10px}
+.sw div{width:66px;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center;font-weight:800}
+.li{display:flex;justify-content:space-between;align-items:center;padding:9px 2px;border-bottom:1px solid #1d2546;font-size:12px}
+.li span{color:#8a96c8;font-size:11px}
+.cap{font-size:11px;color:#8a96c8;margin-top:8px;max-width:262px;text-align:center}
+</style>
+
+<h2>Loupe: the final screens (visual reference)</h2>
+<p class="subtitle">Structure B: Home · a big Ask button · Me. Every answer shows its reference. It's the same dark theme, calmer, with one main action per card.</p>
+
+<div class="phones">
+
+<!-- 1 HOME -->
+<div class="wrap"><div class="label">1 · Home</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Loupe <small class="ok">● 0 bytes out</small></div>
+<div class="body">
+ <div class="card warn"><div class="lab">Needs attention · 2</div>
+  <div class="row"><div><div class="t">Fake InstaPay page blocked</div><div class="s">instapay-eg-secure.com · Safari · 10:12</div></div><span class="act">Details</span></div>
+ </div>
+ <div class="card warn"><div class="row"><div><div class="t">"Mum" wrote from a new address</div><div class="s">mum.family@quickmail… · Mail</div></div><span class="act">Review</span></div></div>
+ <div class="big2"><div>🔗 Check a link</div><div>📋 Check what I copied</div></div>
+ <div class="card"><div class="lab">Money</div><div class="row"><div><div class="money">EGP 1,150<small style="font-size:11px;color:#8a96c8"> / month</small></div><div class="s">6 subscriptions · Netflix renews Thu</div></div><span class="act">All ›</span></div></div>
+ <div class="card"><div class="lab">Documents</div><div class="row"><div><div class="t">Car licence expires in 12 days</div><div class="s">+ 3 more · passport in 5 months</div></div><span class="act">›</span></div></div>
+ <div class="card"><div class="lab">Protected</div><div class="s ok">✓ Safari · ✓ Keyboard · ✓ Clipboard</div></div>
+</div>
+<div class="tabs"><span class="on">⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div>
+<div class="fab">Ask<span class="b">17</span></div></div>
+<div class="cap">Opens here. Risky things first, each with one action. Quick checks. Money, documents and protection at a glance.</div></div>
+
+<!-- 2 ASK -->
+<div class="wrap"><div class="label">2 · Ask (approved)</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Ask <small>✕</small></div>
+<div class="body">
+ <div class="card"><div class="lab">Question</div><div class="inp">Should I pay this?</div>
+  <div class="att"><span>📷 bill.jpg ✓</span><span>📄 File</span><span>🔗 Link</span><span>📋 Paste</span></div></div>
+ <div class="card"><div class="lab">Decision needed</div>
+  <div class="dec"><span>Yes / No</span><span class="sel">Do / Don't</span><span>Go / No-go</span><span>Pick one…</span><span>Score 1–5 (rough)</span><span class="paid">✍ Plain-text answer · Unlock Personal Assistant</span></div>
+  <div class="s" style="margin-top:6px">Answers: <b>Pay it</b> · <b>Don't pay it</b> ✎</div></div>
+ <div class="card"><div class="lab">What counts (optional)</div><div class="inp" style="color:#7c89c0">Pay only if it's a company I use and the amount matches</div></div>
+ <div class="btn">Decide on this iPhone</div>
+ <div class="lab" style="margin-top:6px">Try</div>
+ <div class="dec"><span>Is this a receipt?</span><span>Is this a scam?</span><span>EGP to USD</span></div>
+</div>
+<div class="tabs"><span>⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div></div>
+<div class="cap">Opens from the big button anywhere. Question, then decision needed, then optional criteria. Suggestion chips replace templates.</div></div>
+
+<!-- 3 ANSWER + REFERENCE -->
+<div class="wrap"><div class="label">3 · Answer + reference</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Answer <small>Done</small></div>
+<div class="body">
+ <div class="card"><div class="lab">Should I pay this?</div><div class="ans">Pay it</div>
+  <div class="bar"><i style="width:86%"></i></div><div class="s">86% sure · decided on this iPhone</div>
+  <div class="dec" style="margin-top:8px"><span>👍 Right</span><span>👎 Wrong</span></div></div>
+ <div class="card"><div class="lab">Reference</div><div class="ref">
+  <b>Source:</b> bill.jpg · <span class="act">Open original</span><br>
+  <b>Read:</b> "Electricity bill · North Cairo · <span class="hl">EGP 842</span> · due <span class="hl">30 Sep</span>"<br>
+  <b>Answered by:</b> the decision model (86%)<br>
+  <b>Asked:</b> Do / Don't · "Pay only if it's a company I use…"<br>
+  <b>When:</b> today 9:41 · <span class="ok">0 bytes out</span></div></div>
+ <div class="card"><div class="lab">Keep asking</div><div class="dec"><span>My photos</span><span>My files</span><span>My mail</span></div></div>
+</div>
+<div class="tabs"><span>⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div></div>
+<div class="cap">Every answer shows where it came from, what was read, who answered, and what left the phone.</div></div>
+
+<!-- 4 SAVED QUESTIONS -->
+<div class="wrap"><div class="label">4 · Your questions</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Is this a receipt? <small>⋯</small></div>
+<div class="body">
+ <div class="card"><div class="row"><div class="donut"><i>2,578</i></div>
+  <div class="ref" style="margin-left:10px"><span class="ok">●</span> Receipt 312<br><span style="color:#6b7bff">●</span> Not a receipt 1,840<br><span style="color:#f5c26b">●</span> Not sure 17<br><span class="act">Answered by rule 426</span></div></div></div>
+ <div class="card"><div class="lab">Keeps asking</div><div class="s">My files · My mail · last run 2 min ago</div></div>
+ <div class="lab" style="margin-top:6px">Answers</div>
+ <div class="li">Carrefour receipt.pdf <span class="pill">Receipt 94%</span></div>
+ <div class="li">Bugaboo product page.pdf <span class="pill">Not a receipt · rule</span></div>
+ <div class="li">Amazon order.eml <span class="pill">Receipt 88%</span></div>
+ <div class="li">scan_0412.jpg <span class="pill" style="color:#f5c26b">Not sure</span></div>
+ <div class="s" style="margin-top:6px">Tap any row for its reference. ⋯ = Edit · Delete</div>
+</div>
+<div class="tabs"><span>⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div></div>
+<div class="cap">A saved "keep asking" question: a summary first, then answers, each with its reference.</div></div>
+
+<!-- 5 UNSURE STACK -->
+<div class="wrap"><div class="label">5 · Unsure stack (badge)</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">17 need you <small>Undo</small></div>
+<div class="body">
+ <div class="swipe"><div class="lab">Is this a receipt?</div>
+  <div class="t">scan_0412.jpg</div>
+  <div class="ref" style="margin-top:8px"><b>Read:</b> "Total 250.00 … thank you for shopping"<br><b>Loupe:</b> 52% receipt · not sure</div>
+  <div style="position:absolute;bottom:12px;left:14px;right:14px;height:90px;border-radius:10px;background:#0f1530;display:flex;align-items:center;justify-content:center;color:#7c89c0;font-size:11px">photo preview</div></div>
+ <div class="sw"><div style="background:#3a1620;color:#ff8e9a">✗ No</div><div style="background:#1a2244;color:#b8c3f4;width:52px">Skip</div><div style="background:#12301f;color:#6ee7a8">✓ Yes</div></div>
+ <div class="s" style="text-align:center">Your answer teaches Loupe · 1 of 17</div>
+</div>
+<div class="tabs"><span>⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div></div>
+<div class="cap">The number on the Ask button opens one swipe stack across all questions.</div></div>
+
+<!-- 6 ME -->
+<div class="wrap"><div class="label">6 · Me</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Me</div>
+<div class="body">
+ <div class="card"><div class="lab">What Loupe reads</div>
+  <div class="li">📷 Photos <span>1,204 · on</span></div><div class="li">📄 Files <span>312 · on</span></div><div class="li">✉ Mail <span>sambawy@… · ›</span></div><div class="li">📅 Calendar · 👤 Contacts <span>on</span></div></div>
+ <div class="card"><div class="row"><div><div class="t" style="color:#f5c26b">Personal Assistant</div><div class="s">Plain-text answers, drafts, plans</div></div><span class="act">Unlock</span></div></div>
+ <div class="li">Decision model <span>on this iPhone ›</span></div>
+ <div class="li">Your data <span>export · delete ›</span></div>
+ <div class="li">See Loupe think <span>game ›</span></div>
+ <div class="li">Advanced <span>›</span></div>
+ <div class="li">About <span>v0.2 · privacy · terms ›</span></div>
+</div>
+<div class="tabs"><span>⌂ Home</span><span style="width:70px"></span><span class="on">👤 Me</span></div>
+<div class="fab">Ask<span class="b">17</span></div></div>
+<div class="cap">Everything else, one level down. Sources are "What Loupe reads".</div></div>
+
+<!-- 7 MAIL -->
+<div class="wrap"><div class="label">7 · Mail (one place)</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Mail <small>‹ Me</small></div>
+<div class="body">
+ <div class="card"><div class="row"><div><div class="t">sambawy@gmail.com</div><div class="s">Gmail · read-only · synced 3 min ago</div></div><span class="pill">Online</span></div>
+  <div class="s" style="margin-top:6px">Fetching mail: 120 of 200</div></div>
+ <div class="card warn"><div class="lab">Phishing · 2</div><div class="row"><div class="t">"Your account is locked"</div><span class="act">Review</span></div></div>
+ <div class="card"><div class="lab">Needs a reply · 5</div><div class="row"><div class="t">Landlord: rent increase</div><span class="act">Open</span></div></div>
+ <div class="card"><div class="lab">Subscriptions found · 4</div><div class="s">Netflix · Spotify · iCloud · WE</div></div>
+ <div class="row" style="margin-top:8px"><span class="act">Scan again</span><span class="act" style="color:#ff8e9a">Remove mailbox</span></div>
+</div>
+<div class="tabs"><span>⌂ Home</span><span style="width:70px"></span><span class="on">👤 Me</span></div></div>
+<div class="cap">Connect, sync, what was found, and the actions, all in one place (Mail triage folded in).</div></div>
+
+</div>

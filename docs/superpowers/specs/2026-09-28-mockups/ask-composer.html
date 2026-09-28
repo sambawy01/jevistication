@@ -1,0 +1,87 @@
+<style>
+.phones{display:flex;gap:28px;flex-wrap:wrap;justify-content:center}
+.ph{width:260px;min-height:560px;border-radius:32px;background:#0b1020;color:#e8ecff;border:3px solid #2a3350;position:relative;overflow:hidden;font:13px -apple-system,system-ui,sans-serif;padding-bottom:20px}
+.ph .top{padding:18px 16px 6px;font-weight:700;font-size:18px}
+.body{padding:0 12px}
+.card{background:#141b33;border:1px solid #26305a;border-radius:14px;padding:10px 12px;margin:8px 0}
+.lab{font-size:10px;letter-spacing:.08em;color:#7f8cc4;text-transform:uppercase;margin-bottom:6px}
+.inp{background:#0f1530;border:1px solid #33408a;border-radius:10px;padding:8px;color:#c9d2ff;font-size:12px;min-height:30px}
+.att{display:flex;gap:6px;margin-top:6px}
+.att span{font-size:10px;padding:4px 7px;border-radius:10px;background:#1a2244;color:#a9b6f0}
+.thumb{display:inline-block;width:40px;height:40px;border-radius:8px;background:#2c3870;margin-top:6px;font-size:9px;color:#b9c5ff;text-align:center;line-height:40px}
+.dec{display:flex;flex-wrap:wrap;gap:6px}
+.dec span{font-size:11px;padding:6px 9px;border-radius:12px;background:#1a2244;color:#c3cdfb;border:1px solid #2c3870}
+.dec .sel{background:#5fd4ff;color:#071024;border-color:#5fd4ff;font-weight:700}
+.dec .paid{border-style:dashed;color:#f5c26b;border-color:#8a6a2c}
+.opts{font-size:11px;color:#9aa6d6;margin-top:6px}
+.note{font-size:10.5px;color:#f5c26b;background:#2a2210;border:1px solid #5a4418;border-radius:10px;padding:7px 8px;margin-top:8px}
+.btn{margin:10px 12px 0;text-align:center;padding:11px;border-radius:14px;background:linear-gradient(135deg,#5fd4ff,#6b7bff);color:#071024;font-weight:800}
+.btn.gold{background:linear-gradient(135deg,#f5c26b,#e89a3c)}
+.ans{font-size:22px;font-weight:800;color:#6ee7a8}
+.why{font-size:11px;color:#9aa6d6;margin-top:4px}
+.bar{height:6px;border-radius:3px;background:#26305a;margin-top:6px}.bar i{display:block;height:6px;border-radius:3px;background:#6ee7a8;width:86%}
+.link{font-size:11px;color:#5fd4ff;margin-top:8px}
+</style>
+
+<h2>Ask: question first, then the kind of decision</h2>
+<p class="subtitle">Card 1 is the Question (words plus a photo, file, link or paste). Card 2 is "Decision needed": you pick the kind of answer before sending. Free kinds run on the phone. "Written answer" is marked as the paid AI assistant, so nobody finds out only after asking.</p>
+
+<div class="phones">
+ <div>
+  <div class="label" style="text-align:center">1 · Asking (free, on-device)</div>
+  <div class="ph"><div class="top">Ask</div><div class="body">
+   <div class="card"><div class="lab">Question</div>
+    <div class="inp">Should I pay this?</div>
+    <div class="thumb">bill.jpg</div>
+    <div class="att"><span>📷 Photo</span><span>📄 File</span><span>🔗 Link</span><span>📋 Paste</span></div>
+   </div>
+   <div class="card"><div class="lab">Decision needed</div>
+    <div class="dec"><span>Yes / No</span><span class="sel">Do / Don't</span><span>Go / No-go</span><span>Pick one…</span><span>Score 1–5</span><span class="paid">✍ Written answer · AI</span></div>
+    <div class="opts">Answers: <b>Pay it</b> · <b>Don't pay it</b> · <i>Not sure</i> ✎</div>
+   </div>
+   <div class="card"><div class="lab">What counts (optional)</div>
+    <div class="inp" style="color:#7f8cc4">e.g. "Pay only if it's from a company I use and the amount matches"</div>
+   </div>
+  </div><div class="btn">Decide on this iPhone</div></div>
+ </div>
+
+ <div>
+  <div class="label" style="text-align:center">2 · The answer</div>
+  <div class="ph"><div class="top">Answer</div><div class="body">
+   <div class="card"><div class="lab">Should I pay this? · bill.jpg</div>
+    <div class="ans">Pay it</div>
+    <div class="bar"><i></i></div>
+    <div class="why">Sure: 86% · decided on this iPhone · 0 bytes out</div>
+    <div class="why">Read from the photo: "Electricity bill · EGP 842 · due 30 Sep"</div>
+   </div>
+   <div class="card"><div class="lab">Was it right?</div>
+    <div class="dec"><span>👍 Right</span><span>👎 Wrong</span></div>
+   </div>
+   <div class="card"><div class="lab">Keep asking</div>
+    <div class="dec"><span>My photos</span><span>My files</span><span>My mail</span></div>
+    <div class="why">Loupe keeps answering this for new items. You'll find it under Your questions.</div>
+   </div>
+   <div class="link">Ask something else →</div>
+  </div></div>
+ </div>
+
+ <div>
+  <div class="label" style="text-align:center">3 · Choosing "Written answer"</div>
+  <div class="ph"><div class="top">Ask</div><div class="body">
+   <div class="card"><div class="lab">Question</div>
+    <div class="inp">What does this letter say I must do?</div>
+    <div class="thumb">letter.pdf</div>
+   </div>
+   <div class="card"><div class="lab">Decision needed</div>
+    <div class="dec"><span>Yes / No</span><span>Do / Don't</span><span>Pick one…</span><span class="sel" style="background:#f5c26b;border-color:#f5c26b">✍ Written answer · AI</span></div>
+    <div class="note">A written answer comes from the AI assistant (paid). Your question and this letter are sent to <b>[provider]</b> and nowhere else. Choices like Yes / No stay on this iPhone for free.</div>
+   </div>
+  </div><div class="btn gold">Unlock the AI assistant</div>
+  <div style="text-align:center;font-size:11px;color:#7f8cc4;margin-top:8px">or pick a free decision above</div></div>
+ </div>
+</div>
+
+<div class="options" style="margin-top:22px">
+ <div class="option" data-choice="yes" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>Yes, this is the Ask screen</h3><p>Question card, then Decision needed (with Written answer marked as paid), then optional criteria.</p></div></div>
+ <div class="option" data-choice="change" onclick="toggleSelect(this)"><div class="letter">✎</div><div class="content"><h3>Close, but change something</h3><p>Tell me what in the terminal.</p></div></div>
+</div>

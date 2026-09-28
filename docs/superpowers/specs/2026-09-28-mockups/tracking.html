@@ -1,0 +1,117 @@
+<style>
+.phones{display:flex;gap:26px;flex-wrap:wrap;justify-content:center}
+.wrap{display:flex;flex-direction:column;align-items:center}
+.ph{width:262px;height:566px;border-radius:34px;background:#0b1020;color:#e8ecff;border:3px solid #28314d;position:relative;overflow:hidden;font:12.5px -apple-system,system-ui,sans-serif}
+.st{display:flex;justify-content:space-between;padding:10px 20px 0;font-size:11px;color:#c9d2ff}
+.hd{padding:10px 16px 4px;font-weight:750;font-size:20px;display:flex;justify-content:space-between;align-items:center}
+.hd small{font-size:11px;font-weight:500;color:#8a96c8}
+.body{padding:0 12px;overflow:hidden;height:440px}
+.card{background:#131a31;border:1px solid #232c52;border-radius:14px;padding:10px 12px;margin:8px 0}
+.lab{font-size:9.5px;letter-spacing:.09em;color:#7c89c0;text-transform:uppercase;margin-bottom:5px}
+.t{font-weight:700;font-size:12.5px}
+.s{color:#99a4d4;font-size:10.5px;margin-top:2px}
+.row{display:flex;justify-content:space-between;align-items:center}
+.act{font-size:11px;font-weight:700;color:#5fd4ff}
+.money{font-size:26px;font-weight:850}
+.pill{font-size:9.5px;padding:3px 7px;border-radius:10px;background:#1a2244;color:#b8c3f4;border:1px solid #2b3670}
+.red{color:#ff8e9a}.amb{color:#f5c26b}.grn{color:#6ee7a8}
+.sub{display:flex;align-items:center;gap:9px;padding:8px 0;border-bottom:1px solid #1d2546}
+.ic{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px}
+.sub .m{flex:1}.sub .p{text-align:right;font-weight:700;font-size:12px}
+.bar{height:7px;border-radius:4px;background:#26305a;display:flex;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:7px}
+.grp{font-size:10px;letter-spacing:.08em;text-transform:uppercase;margin:10px 2px 2px;font-weight:700}
+.doc{display:flex;gap:9px;align-items:center;padding:8px 0;border-bottom:1px solid #1d2546}
+.days{width:44px;text-align:center;border-radius:10px;padding:5px 0;font-weight:850;font-size:13px;line-height:1.1}
+.days small{display:block;font-size:8.5px;font-weight:600}
+.tabs{position:absolute;bottom:0;left:0;right:0;height:62px;display:flex;justify-content:space-around;align-items:center;background:#0e1429;border-top:1px solid #1f2748;font-size:10px;color:#8f9bd0}
+.tabs .on{color:#5fd4ff;font-weight:700}
+.fab{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);width:62px;height:62px;border-radius:31px;background:linear-gradient(135deg,#5fd4ff,#6b7bff);display:flex;align-items:center;justify-content:center;color:#071024;font-weight:850;font-size:13px}
+.fab .b{position:absolute;top:-4px;right:-4px;background:#ff5d6c;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700}
+.cap{font-size:11px;color:#8a96c8;margin-top:8px;max-width:262px;text-align:center}
+.ref{font-size:10.5px;color:#a9b4e2;line-height:1.45}.ref b{color:#dfe5ff}
+.hl{background:#3a3212;color:#ffd97a;border-radius:3px;padding:0 2px}
+.dec{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.dec span{font-size:10.5px;padding:5px 8px;border-radius:11px;background:#1a2244;color:#c3cdfb;border:1px solid #2c3870}
+</style>
+
+<h2>Subscription tracking and expiry tracking</h2>
+<p class="subtitle">Home's Money card opens Subscriptions; Home's Documents card opens Expiring. Both are one tap from Home, and every row opens its reference.</p>
+
+<div class="phones">
+
+<!-- SUBSCRIPTIONS -->
+<div class="wrap"><div class="label">8 · Subscriptions (Home › Money)</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Subscriptions <small>‹ Home</small></div>
+<div class="body">
+ <div class="card"><div class="lab">You pay every month</div>
+  <div class="money">EGP 1,150</div>
+  <div class="s">≈ EGP 13,800 a year · 6 subscriptions</div>
+  <div class="bar"><i style="width:38%;background:#e5484d"></i><i style="width:20%;background:#1db954"></i><i style="width:17%;background:#6b7bff"></i><i style="width:13%;background:#f5c26b"></i><i style="width:12%;background:#8a96c8"></i></div></div>
+ <div class="card red" style="border-color:#6b2f3a;background:#1c1220"><div class="row"><div><div class="t red">Netflix price went up</div><div class="s">EGP 350 → 440 from next bill</div></div><span class="act">See</span></div></div>
+ <div class="lab" style="margin-top:6px">Next charges</div>
+ <div class="sub"><div class="ic" style="background:#e5484d">N</div><div class="m"><div class="t">Netflix</div><div class="s">Thu 2 Oct · monthly</div></div><div class="p">440</div></div>
+ <div class="sub"><div class="ic" style="background:#1db954">S</div><div class="m"><div class="t">Spotify</div><div class="s">12 Oct · monthly</div></div><div class="p">230</div></div>
+ <div class="sub"><div class="ic" style="background:#6b7bff">W</div><div class="m"><div class="t">WE Internet</div><div class="s">15 Oct · monthly</div></div><div class="p">195</div></div>
+ <div class="sub"><div class="ic" style="background:#8a96c8">G</div><div class="m"><div class="t">Gym <span class="pill amb">No charge 45 days</span></div><div class="s">still paying? · irregular</div></div><div class="p">150</div></div>
+ <div class="s" style="margin-top:6px">Each row: Confirm · Not a subscription · Set aside · reference (the receipts it came from)</div>
+</div>
+<div class="tabs"><span class="on">⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div>
+<div class="fab">Ask<span class="b">17</span></div></div>
+<div class="cap">Monthly and yearly totals, price rises, next charges by date, and ones you may have stopped using.</div></div>
+
+<!-- SUBSCRIPTION DETAIL -->
+<div class="wrap"><div class="label">9 · One subscription</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Netflix <small>‹ Subscriptions</small></div>
+<div class="body">
+ <div class="card"><div class="money">EGP 440<small style="font-size:11px;color:#8a96c8"> / month</small></div><div class="s">Next charge Thu 2 Oct · since Mar 2024</div>
+  <div class="dec"><span>✓ Confirm</span><span>Not a subscription</span><span>Set aside</span></div></div>
+ <div class="card"><div class="lab">Reference</div><div class="ref">
+  <b>Found in:</b> 7 emails from info@account.netflix.com · <span class="act">Open</span><br>
+  <b>Last:</b> "Your Netflix bill · <span class="hl">EGP 440.00</span> · 2 Sep"<br>
+  <b>Price change:</b> "your price will change to <span class="hl">EGP 440</span>"<br>
+  <b>Answered by:</b> rule (recurring payments) · 0 bytes out</div></div>
+ <div class="card"><div class="lab">Charges</div><div class="s">Sep 440 · Aug 350 · Jul 350 · Jun 350</div></div>
+ <div class="card"><div class="row"><div class="t">Want to cancel?</div><span class="act" style="color:#f5c26b">Personal Assistant ›</span></div><div class="s">Drafts the cancellation for you (paid)</div></div>
+</div>
+<div class="tabs"><span class="on">⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div></div>
+<div class="cap">The evidence behind it, the charge history, your verdict, and a paid "cancel for me" hook.</div></div>
+
+<!-- EXPIRING -->
+<div class="wrap"><div class="label">10 · Expiring (Home › Documents)</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Expiring <small>‹ Home</small></div>
+<div class="body">
+ <div class="grp red">Overdue · 1</div>
+ <div class="doc"><div class="days" style="background:#3a1620;color:#ff8e9a">−3<small>days</small></div><div><div class="t">Car insurance</div><div class="s">Allianz policy.pdf · ended 25 Sep</div></div></div>
+ <div class="grp amb">This month · 2</div>
+ <div class="doc"><div class="days" style="background:#33280f;color:#f5c26b">12<small>days</small></div><div><div class="t">Car licence (رخصة)</div><div class="s">photo of licence · 10 Oct</div></div></div>
+ <div class="doc"><div class="days" style="background:#33280f;color:#f5c26b">26<small>days</small></div><div><div class="t">Gym membership</div><div class="s">contract.pdf · 24 Oct</div></div></div>
+ <div class="grp" style="color:#8a96c8">Later · 3</div>
+ <div class="doc"><div class="days" style="background:#1a2244;color:#b8c3f4">5<small>months</small></div><div><div class="t">Passport</div><div class="s">passport scan · 3 Mar 2027</div></div></div>
+ <div class="doc"><div class="days" style="background:#1a2244;color:#b8c3f4">2<small>years</small></div><div><div class="t">National ID</div><div class="s">ID photo · 2028</div></div></div>
+ <div class="s" style="margin-top:6px">Remind me: 30 · 7 · 1 day before (Me › Advanced)</div>
+</div>
+<div class="tabs"><span class="on">⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div>
+<div class="fab">Ask<span class="b">17</span></div></div>
+<div class="cap">A timeline by urgency: overdue, this month, later. National ID, passport, car licence, insurance, contracts.</div></div>
+
+<!-- EXPIRY DETAIL -->
+<div class="wrap"><div class="label">11 · One document</div>
+<div class="ph"><div class="st"><span>9:41</span><span>●●● 5G</span></div>
+<div class="hd">Car licence <small>‹ Expiring</small></div>
+<div class="body">
+ <div class="card"><div class="t amb" style="font-size:18px">Expires in 12 days</div><div class="s">Friday 10 October 2026</div>
+  <div class="dec"><span>✓ Right date</span><span>Wrong date</span><span>Not a licence</span><span>🔔 Remind me</span></div></div>
+ <div class="card"><div class="lab">Reference</div><div class="ref">
+  <b>Source:</b> IMG_2210.jpg · <span class="act">Open original</span><br>
+  <b>Read:</b> "رخصة تسيير · تنتهي في <span class="hl">١٠/١٠/٢٠٢٦</span>"<br>
+  <b>Date found by:</b> rule (expiry words + date) · Arabic digits read<br>
+  <b>Kind decided by:</b> the decision model (78%)</div></div>
+ <div class="card"><div class="row"><div class="t">Renew it</div><span class="act" style="color:#f5c26b">Personal Assistant ›</span></div><div class="s">Checklist of papers + the traffic unit steps (paid)</div></div>
+</div>
+<div class="tabs"><span class="on">⌂ Home</span><span style="width:70px"></span><span>👤 Me</span></div></div>
+<div class="cap">Days left, the exact source and date read, who decided, a reminder, and a paid "help me renew" hook.</div></div>
+
+</div>
