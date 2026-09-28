@@ -85,6 +85,45 @@ class ChargeExtractorTest {
     }
 
     @Test
+    fun inboxRowsOfOneFileAreNeverMergedWithEachOther() {
+        val sameDay = listOf(TrackingItems.csvRow("b1/statement.csv#row1", "2026-09-14", "TALABAT EGYPT", 12000, "EGP"),
+                             TrackingItems.csvRow("b1/statement.csv#row2", "2026-09-14", "TALABAT EGYPT", 12000, "EGP"))
+        assertEquals(2, ChargeExtractor.extract(sameDay).size, "two same-day orders")
+        val rides = listOf(TrackingItems.csvRow("b1/statement.csv#row3", "2026-09-16", "UBER TRIP", 5000, "EGP"),
+                           TrackingItems.csvRow("b1/statement.csv#row4", "2026-09-19", "UBER TRIP", 5000, "EGP"))
+        assertEquals(2, ChargeExtractor.extract(rides).size, "two rides three days apart")
+        val helperRows = listOf(TrackingItems.csvRow("x1", "2026-09-14", "TALABAT EGYPT", 12000, "EGP"),
+                                TrackingItems.csvRow("x2", "2026-09-14", "TALABAT EGYPT", 12000, "EGP"))
+        assertEquals(2, ChargeExtractor.extract(helperRows).size, "rows of one file by path")
+        val otherBatch = TrackingItems.csvRow("b2/statement.csv#row1", "2026-09-14", "TALABAT EGYPT", 12000, "EGP")
+        assertEquals(2, ChargeExtractor.extract(sameDay + otherBatch).size, "a second export of the same charge is one of the two")
+    }
+
+    @Test
+    fun aReceiptMergesWithOneRowOfItsStatementOnly() {
+        val rows = listOf(TrackingItems.csvRow("b1/statement.csv#row1", "2026-06-04", "NETFLIX.COM", 16500, "EGP"),
+                          TrackingItems.csvRow("b1/statement.csv#row2", "2026-06-04", "NETFLIX.COM", 16500, "EGP"))
+        val all = ChargeExtractor.extract(rows + netflixMail)
+        assertEquals(2, all.size)
+        val mail = all.single { it.kind == ItemKind.EMAIL }
+        assertEquals(1, mail.alsoSeenIn.size, "the receipt takes one row; the other row is a second charge")
+    }
+
+    @Test
+    fun aStatementWithoutACurrencyMatchesTheMerchantsOneCurrency() {
+        val row = TrackingItems.csvRow("b1/statement.csv#row1", "2026-06-04", "NETFLIX.COM", 16500, "")
+        assertEquals("", ChargeExtractor.of(row).single().currency)
+        val one = ChargeExtractor.extract(listOf(row, netflixMail)).single()
+        assertEquals("EGP", one.currency, "the merged charge keeps the known currency")
+        assertEquals(listOf(row.id), one.alsoSeenIn)
+        val usd = TrackingItems.email("u1", "2026-06-03", "Netflix <info@mailer.netflix.com>", "Your Netflix payment receipt",
+            "We've charged your card.\n\nAmount paid: USD 165.00")
+        val twoKnown = ChargeExtractor.extract(listOf(row, netflixMail, usd))
+        assertEquals(3, twoKnown.size, "with two known currencies the row cannot tell which: nothing is merged into it")
+        assertEquals(setOf("", "EGP", "USD"), twoKnown.map { it.currency }.toSet())
+    }
+
+    @Test
     fun promotionsCreditsAndRefundsAreNotCharges() {
         val items = listOf(
             TrackingItems.email("p1", "2026-06-10", "Vodafone <offers@vodafone.com.eg>", "عرض خاص لك",
@@ -99,5 +138,28 @@ class ChargeExtractorTest {
                 "فوري\nرقم مرجعي للدفع: 7788123\nالمبلغ المطلوب: ١٥٠ جنيه\nادفع قبل ٢٠٢٦/١٠/٠٥ من أي منفذ فوري"),
         )
         assertEquals(emptyList(), ChargeExtractor.extract(items))
+    }
+
+    @Test
+    fun futureAndFailedPaymentsAreNotCharges() {
+        val items = listOf(
+            TrackingItems.email("f1", "2026-06-28", "Netflix <info@mailer.netflix.com>", "Your membership renews soon",
+                "Hi Sam,\n\nYou will be charged EGP 165.00 on 3 July 2026.\nThanks for being a member."),
+            TrackingItems.email("f2", "2026-06-28", "Shahid <no-reply@shahid.net>", "Your plan",
+                "Your Shahid VIP plan will be renewed on 3 July.\nAmount: EGP 99.99"),
+            TrackingItems.email("f3", "2026-07-03", "Netflix <info@mailer.netflix.com>", "Your payment failed",
+                "We tried to renew your membership but your card was not charged.\n\nAmount billed: EGP 165.00\nPlease update your payment method."),
+            TrackingItems.email("f4", "2026-07-03", "Netflix <info@mailer.netflix.com>", "Payment problem",
+                "Your payment of EGP 165.00 was declined."),
+            TrackingItems.email("f5", "2026-07-05", "WE <billing@te.eg>", "فاتورة WE",
+                "فاتورة الإنترنت الأرضي\nالمبلغ: ٣٥٠ جنيه\nالحالة: غير مدفوعة"),
+            TrackingItems.email("f6", "2026-07-05", "Vodafone <billing@vodafone.com.eg>", "لم تتم عملية الدفع",
+                "حاولنا تجديد باقتك.\nتم خصم مبلغ ١٢٠ جنيه مؤقتاً وسيعود إلى حسابك."),
+            TrackingItems.file("f7.txt", "2026-07-05", ItemKind.TEXT, "فشلت عملية الدفع\nالمبلغ المدفوع: ٢٠٠ جنيه"),
+        )
+        assertEquals(emptyList(), ChargeExtractor.extract(items).map { it.itemId })
+        val renewsLater = TrackingItems.email("ok", "2026-06-03", "Netflix <info@mailer.netflix.com>", "Your Netflix payment receipt",
+            "We've charged your card.\n\nAmount paid: EGP 165.00\nYour membership will renew on 3 July 2026.")
+        assertEquals(1, ChargeExtractor.of(renewsLater).size, "a receipt that says when it renews next is still a charge")
     }
 }

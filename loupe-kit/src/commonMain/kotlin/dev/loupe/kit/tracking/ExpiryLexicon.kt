@@ -31,19 +31,28 @@ enum class DocumentKind(val id: String, val title: String) {
     WARRANTY("warranty", "warranty"),
 }
 
-/** Egyptian and English document kinds, the most specific first (a car licence before a driving licence). */
+/**
+ * Egyptian and English document kinds, the most specific first (a car licence before a driving licence). An ID
+ * card's, a policy's or a residence permit's own title comes before a contract; a contract comes before the words
+ * a contract also uses: an Egyptian lease lists its parties' "الرقم القومي" and a "مبلغ التأمين" deposit (and their
+ * "محل الإقامة"), and is still a contract.
+ */
 object DocumentKinds {
     private val RULES: List<Pair<DocumentKind, Regex>> = listOf(
         DocumentKind.CAR_LICENCE to TrackingText.words(listOf("vehicle licence", "vehicle license", "car licence", "car license",
             "رخصة تسيير", "رخصة سيارة", "رخصة العربية", "رخصة مركبة")),
         DocumentKind.DRIVING_LICENCE to TrackingText.words(listOf("driving licence", "driving license", "driver's license", "driver license",
             "رخصة قيادة", "رخصة السواقة")),
-        DocumentKind.NATIONAL_ID to TrackingText.words(listOf("national id", "national identity", "id card", "identity card",
-            "بطاقة الرقم القومي", "الرقم القومي", "بطاقة تحقيق الشخصية", "تحقيق الشخصية", "البطاقة الشخصية")),
-        DocumentKind.PASSPORT to TrackingText.words(listOf("passport", "جواز سفر", "جواز السفر", "باسبور")),
-        DocumentKind.RESIDENCE to TrackingText.words(listOf("residence permit", "إقامة")),
-        DocumentKind.INSURANCE to TrackingText.words(listOf("insurance", "وثيقة تأمين", "تأمين", "بوليصة")),
+        DocumentKind.NATIONAL_ID to TrackingText.words(listOf("national id card", "national identity card", "id card", "identity card",
+            "بطاقة الرقم القومي", "بطاقة تحقيق الشخصية", "البطاقة الشخصية")),
+        DocumentKind.INSURANCE to TrackingText.words(listOf("insurance policy", "policy of insurance", "certificate of insurance",
+            "وثيقة تأمين", "وثيقة التأمين", "بوليصة")),
+        DocumentKind.RESIDENCE to TrackingText.words(listOf("residence permit", "تصريح إقامة", "بطاقة إقامة")),
         DocumentKind.CONTRACT to TrackingText.words(listOf("contract", "lease", "tenancy", "agreement", "عقد")),
+        DocumentKind.NATIONAL_ID to TrackingText.words(listOf("national id", "national identity", "الرقم القومي", "تحقيق الشخصية")),
+        DocumentKind.PASSPORT to TrackingText.words(listOf("passport", "جواز سفر", "جواز السفر", "باسبور")),
+        DocumentKind.RESIDENCE to TrackingText.words(listOf("إقامة")),
+        DocumentKind.INSURANCE to TrackingText.words(listOf("insurance", "تأمين")),
         DocumentKind.MEMBERSHIP to TrackingText.words(listOf("membership", "member card", "عضوية", "كارنيه")),
         DocumentKind.WARRANTY to TrackingText.words(listOf("warranty", "guarantee", "ضمان")),
     )

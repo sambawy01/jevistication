@@ -38,6 +38,35 @@ class TrackingEndToEndTest {
     }
 
     @Test
+    fun identicalRowsOfOneImportedStatementAreTwoCharges() {
+        val rows = TrackingFixtures.statementRows("statement-same-day.csv")
+        assertTrue(rows.all { it.duplicateOf == null }, "the Inbox keeps both identical rows")
+        val charges = WatcherRun.trackedCharges(rows)
+        assertEquals(2, charges.count { it.merchant == "TALABAT EGYPT" }, "two same-day orders")
+        assertEquals(2, charges.count { it.merchant == "UBER TRIP" }, "two rides three days apart")
+        assertEquals(4, charges.size, "the credit is not a charge")
+    }
+
+    @Test
+    fun aStatementWithoutACurrencyJoinsTheNetflixReceiptsInEgp() {
+        val mails = items("netflix-en-2026-06", "netflix-en-2026-07", "netflix-en-2026-08")
+        val statement = TrackingFixtures.statementRows("statement-no-currency.csv")
+        assertTrue(statement.none { it.facts.containsKey("currency") }, "no currency column, no marker")
+        val all = mails + statement
+        val charges = WatcherRun.trackedCharges(all)
+        assertEquals(3, charges.size, "each receipt once, with its row")
+        assertTrue(charges.all { it.merchant == "Netflix" && it.currency == "EGP" }, charges.toString())
+        val summary = WatcherFindings.summarise(WatcherRun.run(all, today, null), all, emptySet())
+        val netflix = summary.census.rows.single()
+        assertEquals("Netflix", netflix.merchant)
+        assertEquals("EGP", netflix.currency)
+        assertEquals(3, netflix.occurrences)
+        val netflixRows = statement.filter { it.facts["merchant"] == "NETFLIX.COM" || it.facts["description"] == "NETFLIX.COM" }.map { it.id }
+        assertEquals(3, netflixRows.size)
+        assertEquals((mails.map { it.id } + netflixRows).toSet(), netflix.itemIds.toSet())
+    }
+
+    @Test
     fun calendarPhotoAndFrancoChargesReachTheCensus() {
         val all = items("gym-en-2026-06", "gym-en-2026-07", "gym-en-2026-08", "we-eg-2026-06", "we-eg-2026-07", "we-eg-2026-08",
                         "anghami-franco-2026-06", "anghami-franco-2026-07", "anghami-franco-2026-08",

@@ -27,11 +27,28 @@ object MerchantHints {
         hint("Orange", "orange egypt", "orange money", "orange mobile", "orange internet", "أورنج", "اورانج"),
         hint("e&", "etisalat", "e& egypt", "اتصالات مصر"),
         hint("InstaPay", "instapay", "انستاباي", "إنستاباي", rail = true),
-        hint("Fawry", "fawry", "فوري", rail = true),
+        // "فوري" is also the adjective "instant" ("تحويل فوري"): the rail only as a line of its own (a receipt's
+        // heading) or in its own phrases.
+        hint("Fawry", "fawry", "كود فوري", "فوري باي", "منفذ فوري", "ماكينة فوري", "فوري للمدفوعات",
+             "re:(?:^|(?<=\\n))[ \\t]*فوري[ \\t]*(?=\\r?\\n|$)", rail = true),
     )
 
-    /** WE writes its name in capitals; "we" in a sentence is not the company. Matched on the folded original. */
-    private val WE_CAPS = Regex("(?<![A-Za-z])WE(?![A-Za-z])")
+    /**
+     * WE writes its name in capitals; "we" in a sentence, and "WE'VE" / "WE HAVE" in a receipt written in capitals,
+     * are not the company. WE is the company as a line of its own (a heading, a sender's name, "WE - فاتورة") or
+     * before one of its services ("WE Internet", "WE Home", "WE Mobile", "WE Space", "WE Gold"). Matched on the
+     * folded original.
+     */
+    private val WE_CAPS = Regex(
+        "(?:^|(?<=\\n))[ \\t]*WE[ \\t]*(?=\\r?\\n|$|[-–|·:])" +
+            "|(?<![A-Za-z'’])WE(?=[ \\t]+(?:Internet|INTERNET|Home|HOME|Mobile|MOBILE|Space|SPACE|Gold|GOLD)(?![A-Za-z]))",
+    )
+
+    /** "via InstaPay", "paid with …", "عن طريق فوري": what comes next is how it was paid, not who (match form). */
+    private val PAID_WITH = Regex("(?:^|[^a-z0-9ء-ي])(?:via|with|using|paid by|pay by|بواسطه|عن طريق|من خلال|باستخدام|عبر)\\s*$")
+
+    /** A brand followed by "Cash" or "wallet" ("Vodafone Cash", "فودافون كاش") is a wallet paid from (match form). */
+    private val WALLET = Regex("^\\s*(?:cash|wallet|كاش|محفظه)(?![a-z0-9ء-ي])")
 
     /** "Beneficiary: …", "المستفيد: …", "الخدمة: …" (over the match form). */
     private val PAYEE = Regex(
@@ -47,9 +64,28 @@ object MerchantHints {
     /** The merchant a text is about: a rail's payee or service, else the first known brand, else the rail itself. */
     fun merchant(text: String): String? {
         val form = TrackingText.matchForm(text)
-        val rail = ALL.filter { it.rail }.mapNotNull { h -> h.pattern.find(form)?.let { it.range.first to h.canonical } }.minByOrNull { it.first }
+        val rail = rail(form)
         if (rail != null) payee(text)?.let { return canonical(it) }
-        return firstBrand(text, form) ?: rail?.second
+        return firstBrand(text, form) ?: rail
+    }
+
+    /**
+     * The merchant of an email receipt: a rail's payee when a rail is named and the payee line is there; else a known
+     * brand that is the sender (its name or its address) or named in the subject; else a known brand named in the
+     * body (Apple's receipt for iCloud); else the sender's name; else its address's domain; else the rail. A brand
+     * named as the way it was paid ("paid via InstaPay", "Paid with Vodafone Cash") is never the merchant.
+     */
+    fun ofEmail(subject: String, body: String, fromName: String?, fromAddress: String?): String? {
+        val read = subject + "\n" + body
+        val rail = rail(TrackingText.matchForm(read))
+        if (rail != null) payee(read)?.let { return canonical(it) }
+        val sender = listOfNotNull(fromName?.trim(), fromAddress?.trim()).filter { it.isNotEmpty() }.joinToString("\n")
+        return firstBrand(sender, TrackingText.matchForm(sender))
+            ?: paidTo(subject)
+            ?: paidTo(body)
+            ?: fromName?.trim()?.takeIf { it.isNotEmpty() }?.let { canonical(it) }
+            ?: fromAddress?.substringAfter('@', "")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: rail
     }
 
     /** A written merchant name brought to its canonical form when it is a known brand ("NETFLIX.COM" → Netflix). */
@@ -77,9 +113,25 @@ object MerchantHints {
         return canonical(line)
     }
 
-    private fun firstBrand(text: String, form: String): String? {
-        val hits = ALL.filter { !it.rail }.mapNotNull { h -> h.pattern.find(form)?.let { it.range.first to h.canonical } }.toMutableList()
-        WE_CAPS.find(TrackingText.foldDigits(text))?.let { hits += it.range.first to "WE" }
-        return hits.minByOrNull { it.first }?.second
+    private fun rail(form: String): String? =
+        ALL.filter { it.rail }.mapNotNull { h -> h.pattern.find(form)?.let { it.range.first to h.canonical } }.minByOrNull { it.first }?.second
+
+    private fun firstBrand(text: String, form: String): String? = brands(text, form).firstOrNull()?.second
+
+    /** The first known brand in [text] that is not named as the way it was paid (see [PAID_WITH], [WALLET]). */
+    private fun paidTo(text: String): String? {
+        val form = TrackingText.matchForm(text)
+        return brands(text, form).firstOrNull { (range, _) ->
+            val lineStart = form.lastIndexOf('\n', range.first - 1) + 1
+            !PAID_WITH.containsMatchIn(form.substring(lineStart, range.first)) &&
+                !WALLET.containsMatchIn(form.substring(range.last + 1))
+        }?.second
+    }
+
+    /** Every known brand in [text] (not the rails), each at its first place, in order of appearance. */
+    private fun brands(text: String, form: String): List<Pair<IntRange, String>> {
+        val hits = ALL.filter { !it.rail }.mapNotNull { h -> h.pattern.find(form)?.let { it.range to h.canonical } }.toMutableList()
+        WE_CAPS.find(TrackingText.foldDigits(text))?.let { hits += it.range to "WE" }
+        return hits.sortedBy { it.first.first }
     }
 }

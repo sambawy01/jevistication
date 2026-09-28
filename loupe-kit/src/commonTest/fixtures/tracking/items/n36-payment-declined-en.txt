@@ -1,0 +1,11 @@
+lang: en
+kind: email
+date: 2026-09-20
+from: Anghami <billing@anghami.example>
+subject: We couldn't renew your plan
+expect: none
+---
+Hi Sam,
+
+Your payment of EGP 49.99 was declined.
+Please update your card to keep listening.

@@ -51,6 +51,22 @@ class ExpiryExtractorTest {
     }
 
     @Test
+    fun aCardEndingFollowedByADateIsNotAnExpiry() {
+        val reversed = TrackingItems.email("sp-rev", "2026-06-12", "Spotify <no-reply@spotify.com>", "إيصال اشتراك Spotify Premium",
+            "تم تجديد اشتراكك.\nالمبلغ المدفوع: ٦٩٫٩٩ ج.م\nطريقة الدفع: ماستركارد تنتهي بـ ٧٧٢٠\nتاريخ الدفع: ١٢/٠٦/٢٠٢٦")
+        assertNull(ExpiryExtractor.of(reversed, today, rule), "the card's last digits then the payment date")
+        val alert = TrackingItems.file("alert.txt", "2026-09-10", ItemKind.TEXT,
+            "تم تفعيل بطاقتك التي تنتهي بـ 1234 بتاريخ ٢٠٢٦/٠٩/١٠. لأي استفسار اتصل بنا.")
+        assertNull(ExpiryExtractor.of(alert, today, rule), "a bank alert about a card")
+        val masked = TrackingItems.file("masked.txt", "2026-09-10", ItemKind.TEXT, "Card expires ****4821 on file since 01/02/2026")
+        assertNull(ExpiryExtractor.of(masked, today, rule), "masked digits after an expiry word")
+        val card = TrackingItems.image("card", "2026-03-02", "بطاقة تحقيق الشخصية\nالبطاقة سارية حتى ٢٠٢٨/٠٣/١٤")
+        assertEquals(LocalDate(2028, 3, 14), ExpiryExtractor.of(card, today, rule)!!.expiry, "a real validity line stays")
+        val byDate = TrackingItems.file("lease-b.txt", "2025-07-01", ItemKind.TEXT, "عقد إيجار\nينتهي ب ٣٠/٠٦/٢٠٢٧")
+        assertEquals(LocalDate(2027, 6, 30), ExpiryExtractor.of(byDate, today, rule)!!.expiry, "ب then a date is still a date")
+    }
+
+    @Test
     fun anOfferThatExpiresIsNotADocument() {
         val offer = TrackingItems.email("of", "2026-09-20", "Noon <deals@noon.example>", "Flash sale",
             "Flash sale! 30% off electronics.\nThis offer expires 30/10/2026. Use code SAVE30.")

@@ -50,6 +50,17 @@ class ExpiryLexiconTest {
     }
 
     @Test
+    fun aLeaseWithNationalIdsAndADepositIsAContract() {
+        val lease = "عقد إيجار شقة سكنية\nالطرف الأول: أحمد فؤاد، الرقم القومي: ٢٨٠٠٥٠٥٠١٢٣٤٥٦، محل الإقامة: المعادي\n" +
+            "الطرف الثاني: محمد سامي، الرقم القومي: ٢٩٠٠١٠١٠١٢٣٤٥٦\nمبلغ التأمين: ١٦٬٠٠٠ جنيه\nينتهي العقد في ٣٠ يونيو ٢٠٢٧"
+        assertEquals(DocumentKind.CONTRACT, DocumentKinds.of(lease))
+        assertEquals(DocumentKind.CONTRACT, DocumentKinds.of("Tenancy agreement\nTenant national ID: 29001010123456\nSecurity deposit (insurance): EGP 16,000"))
+        assertEquals(DocumentKind.NATIONAL_ID, DocumentKinds.of("بطاقة تحقيق الشخصية\nالمهنة: موظف بعقد"), "an ID card's own title first")
+        assertEquals(DocumentKind.INSURANCE, DocumentKinds.of("وثيقة تأمين سيارة\nيخضع هذا العقد لشروط الوثيقة"), "a policy's own title first")
+        assertEquals(DocumentKind.RESIDENCE, DocumentKinds.of("تصريح إقامة\nالغرض: عقد عمل"), "a residence permit's own title first")
+    }
+
+    @Test
     fun datesInArabicDigitsYearFirstAndArabicMonths() {
         val ymd = TrackingDates.find("البطاقة سارية حتى ٢٠٢٨/٠٣/١٤").single()
         assertEquals(LocalDate(2028, 3, 14), ymd.date)

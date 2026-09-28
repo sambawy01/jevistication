@@ -1,0 +1,13 @@
+lang: en
+kind: email
+date: 2026-09-28
+from: OSN+ <no-reply@osnplus.example>
+subject: Reminder: your plan renews soon
+expect: none
+---
+Hi Sam,
+
+Your OSN+ plan will be renewed on 5 October 2026.
+You will be charged EGP 150.00 to the card on file.
+
+The OSN+ team

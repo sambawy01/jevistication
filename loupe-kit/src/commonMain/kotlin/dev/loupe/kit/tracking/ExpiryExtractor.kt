@@ -44,14 +44,24 @@ enum class ExpiryBucket(val id: String) {
  * The expiry radar's mechanical half (spec §7.2): every item with an expiry word and its date, on a full timeline
  * (no one-year cut; the validity rule is a highlight, not a filter). The date is the first one within [WINDOW]
  * characters after an expiry word; without one, a document of a known kind takes its latest date, and anything
- * else is left out (a receipt's "تنتهي بـ ٧٧٢٠" is a card number). An offer's "expires" is left out unless the item
- * is a known kind of document. Ambiguous dates take the earlier reading, as `ExpiryRadar` does.
+ * else is left out. An expiry word followed by a card's last digits ("ماستركارد تنتهي بـ ٧٧٢٠", "expires ****4821")
+ * names a card, not an expiry, and is skipped, whatever date comes next. An offer's "expires" is left out unless the
+ * item is a known kind of document. Ambiguous dates take the earlier reading, as `ExpiryRadar` does.
  *
  * Every candidate is kept, however long ago it expired — `ExpiryBucket.of` is what sorts an item into the
  * collapsed "older" group, not this extractor.
  */
 object ExpiryExtractor {
     const val WINDOW: Int = 60
+
+    /**
+     * A card's last digits right after an expiry word, over the match form: "بـ ٧٧٢٠" / "ب 1234" (2-4 digits that do
+     * not start a date), or masked digits in any language ("****4821", "in xx21").
+     */
+    private val CARD_ENDING = Regex(
+        "^[\\s:]*(?:بـ*\\s*[*•x·\\s]*[0-9]{2,4}(?![0-9]|\\s*[/.\\-]\\s*[0-9])" +
+            "|(?:(?:ending\\s+)?(?:in|with)\\s+)?[*•x·]{2,}\\s*[0-9]{2,4}(?![0-9]))",
+    )
 
     fun find(items: List<SourceItem>, today: LocalDate, rule: ValidityRule): List<ExpiryFind> =
         items.mapNotNull { of(it, today, rule) }.sortedWith(compareBy<ExpiryFind>({ it.daysRemaining }, { it.item.id }))
@@ -60,7 +70,10 @@ object ExpiryExtractor {
         if (!item.hasText || item.duplicateOf != null || item.kind == ItemKind.CONTACT) return null
         val text = item.text
         val form = TrackingText.matchForm(text)
-        val words = ExpiryLexicon.EXPIRY.findAll(form).toList()
+        val words = ExpiryLexicon.EXPIRY.findAll(form).filterNot { w ->
+            val after = w.range.last + 1
+            CARD_ENDING.containsMatchIn(form.substring(after, minOf(form.length, after + WINDOW)))
+        }.toList()
         if (words.isEmpty()) return null
         val kind = DocumentKinds.of(text)
         if (kind == null && ExpiryLexicon.PROMO.containsMatchIn(form)) return null

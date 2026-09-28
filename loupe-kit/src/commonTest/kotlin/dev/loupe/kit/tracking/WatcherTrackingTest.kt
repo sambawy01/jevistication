@@ -26,6 +26,25 @@ class WatcherTrackingTest {
     }
 
     @Test
+    fun rowsWithoutACurrencyTakeTheMerchantsOneCurrency() {
+        val mails = listOf("06", "07", "08").map { netflix(it, "EGP 165.00") }
+        val rows = listOf("06", "07", "08").map { TrackingItems.csvRow("b1/bank.csv#row$it", "2026-$it-04", "NETFLIX.COM", 16500, "") }
+        val lone = TrackingItems.csvRow("b1/bank.csv#row9", "2026-09-04", "NETFLIX.COM", 16500, "")
+        val charges = WatcherRun.trackedCharges(mails + rows + lone)
+        assertEquals(setOf("Netflix"), charges.map { it.merchant }.toSet(), "no Netflix (no currency) beside Netflix (EGP)")
+        assertEquals(setOf("EGP"), charges.map { it.currency }.toSet())
+        assertEquals(4, charges.size, "three receipts with their rows and one row alone")
+        val report = WatcherRun.run(mails + rows + lone, today, null)
+        assertEquals(listOf("Netflix"), report.recurring.map { it.merchant })
+        assertEquals("EGP", report.currencyOf["Netflix"])
+
+        val usd = listOf("06", "07", "08").map { netflix(it, "USD 9.99") }
+        val mixed = WatcherRun.trackedCharges(mails + usd + lone)
+        assertEquals(setOf("Netflix (EGP)", "Netflix (USD)", "Netflix (no currency)"), mixed.map { it.merchant }.toSet(),
+                     "two known currencies: the row without one is not guessed")
+    }
+
+    @Test
     fun censusRowsCarryTheirLinesAndEveryReference() {
         val mails = listOf("06", "07", "08").map { netflix(it, "EGP 165.00") }
         val rows = listOf("06", "07", "08").map { TrackingItems.csvRow("nf$it", "2026-$it-04", "NETFLIX.COM", 16500, "EGP") }

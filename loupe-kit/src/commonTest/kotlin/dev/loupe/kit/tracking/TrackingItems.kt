@@ -43,12 +43,17 @@ internal object TrackingItems {
         PhoneItems().event(eventId = id, title = title, startIso = date, endIso = null, allDay = true, location = null,
                            calendar = "Personal", organizer = null, attendees = emptyList(), recurrence = null, notes = notes)
 
-    /** One statement row as the Inbox imports it (statement facts read by CsvRows at import). */
+    /**
+     * One statement row as the Inbox imports it (statement facts read by CsvRows at import). [id] may be the Inbox's
+     * own row id shape (`b1/statement.csv#row2`); an empty [currency] is a statement with no currency column.
+     */
     fun csvRow(id: String, date: String, merchant: String, minor: Long, currency: String, direction: String? = "debit"): SourceItem {
         val facts = linkedMapOf("row" to "1", "file" to "statement.csv", "amount_minor" to minor.toString(),
-                                "amount" to CsvRows.formatMinor(minor) + " " + currency, "currency" to currency, "merchant" to merchant)
+                                "amount" to (CsvRows.formatMinor(minor) + " " + currency).trim())
+        if (currency.isNotEmpty()) facts["currency"] = currency
+        facts["merchant"] = merchant
         if (direction != null) facts["direction"] = direction
-        val text = "$date, $merchant, ${CsvRows.formatMinor(minor)} $currency"
+        val text = "$date, $merchant, ${CsvRows.formatMinor(minor)} $currency".trim()
         return SourceItem(
             id = "inbox:$id", sourceId = "inbox", kind = ItemKind.CSV, path = "inbox/statement.csv#$id", messageIndex = null, name = merchant,
             text = text, hasText = true, textTruncated = false, sizeBytes = text.length.toLong(), contentHash = ContentHash.of(text),

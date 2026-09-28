@@ -15,7 +15,7 @@ data class TrackedCharge(
     val merchant: String,
     val date: LocalDate,
     val amountMinor: Long,
-    /** ISO 4217, or "" when the text named no currency. */
+    /** ISO 4217, or "" when the text named no currency (a statement without a currency column). */
     val currency: String,
     /** The line the amount was read from, verbatim (the reference's "Read"). */
     val line: String,
@@ -23,6 +23,11 @@ data class TrackedCharge(
     val saysSubscription: Boolean,
     /** Other items the same charge was seen in (a receipt email and its statement row). */
     val alsoSeenIn: List<String> = emptyList(),
+    /**
+     * The statement file a row was read from (an Inbox row's file within its batch, or a whole CSV item); null for
+     * everything else. Two rows of one file are two charges, however alike.
+     */
+    val statementFile: String? = null,
 ) {
     fun toCharge(): Charge = Charge(merchant, date, amountMinor)
 }
@@ -60,10 +65,7 @@ object ChargeExtractor {
         val money = MoneyReader.best(body) ?: return null
         if (!isCharge(read, body, money)) return null
         val date = email.date ?: item.date ?: return null
-        val merchant = MerchantHints.merchant(read)
-            ?: email.fromName?.let { MerchantHints.canonical(it) }
-            ?: email.fromAddress?.substringAfter('@')
-            ?: return null
+        val merchant = MerchantHints.ofEmail(email.subject.orEmpty(), body, email.fromName, email.fromAddress) ?: return null
         return TrackedCharge(item.id, item.kind, merchant, date, money.minor, money.currency,
                              MoneyReader.lineAt(body, money.start).trim(), says(read))
     }
@@ -89,7 +91,7 @@ object ChargeExtractor {
             val date = item.date ?: return emptyList()
             val amount = item.facts["amount"] ?: CsvRows.formatMinor(minor)
             return listOf(TrackedCharge(item.id, item.kind, MerchantHints.canonical(raw), date, abs(minor),
-                                        item.facts["currency"] ?: "", "$raw · $amount", false))
+                                        item.facts["currency"] ?: "", "$raw · $amount", false, statementFile = fileOf(item)))
         }
         // A whole CSV file (a statement in Files): each debit row, all from this one item.
         val table = CsvRows.read(item.text.substringAfter("\n\n", item.text))
@@ -98,13 +100,26 @@ object ChargeExtractor {
             if (m.direction == "credit" || m.amountMinor == 0L) return@mapNotNull null
             val raw = m.merchant ?: m.description ?: return@mapNotNull null
             TrackedCharge(item.id, item.kind, MerchantHints.canonical(raw), m.date, abs(m.amountMinor), m.currency ?: "",
-                          r.cells.joinToString(", "), false)
+                          r.cells.joinToString(", "), false, statementFile = item.id)
         }
     }
 
-    /** A charge word, and no "not a charge" word on the amount's line or the first line. */
+    /**
+     * The file an imported statement row belongs to. The Inbox names each row `inbox:<batch>/<file>#row<n>`, so the
+     * id before `#row` is the file within its batch; any other row item falls back to its source and path (up to `#`).
+     */
+    private fun fileOf(row: SourceItem): String =
+        if ("#row" in row.id) row.id.substringBeforeLast("#row") else row.sourceId + ":" + row.path.substringBefore('#')
+
+    /**
+     * A charge word on a line without a "not a charge" word ("الحالة: غير مدفوعة" holds مدفوعة but says unpaid), and
+     * no "not a charge" word on the amount's line or the first line.
+     */
     private fun isCharge(read: String, text: String, money: Money): Boolean {
-        if (!ChargeLexicon.CHARGE.containsMatchIn(TrackingText.matchForm(read))) return false
+        val said = read.lines().map { TrackingText.matchForm(it) }.any { line ->
+            ChargeLexicon.CHARGE.containsMatchIn(line) && !ChargeLexicon.NOT_A_CHARGE.containsMatchIn(line)
+        }
+        if (!said) return false
         val first = read.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
         val around = TrackingText.matchForm(MoneyReader.lineAt(text, money.start) + "\n" + first)
         return !ChargeLexicon.NOT_A_CHARGE.containsMatchIn(around)
@@ -125,21 +140,29 @@ object ChargeExtractor {
 
     /**
      * One charge per sighting group: same merchant (case-insensitive), currency and amount, dates at most
-     * [SAME_CHARGE_DAYS] apart, from different items. The richest sighting is kept (see [PRIORITY]); the others'
-     * items go to [TrackedCharge.alsoSeenIn]. Rows of one statement file are never merged with each other.
+     * [SAME_CHARGE_DAYS] apart, from different items and never two rows of one statement file (two same-day
+     * Talabat rows are two orders). The richest sighting is kept (see [PRIORITY]); the others' items go to
+     * [TrackedCharge.alsoSeenIn]. A sighting without a currency (a statement with no currency column) matches the
+     * merchant's currency when the input knows exactly one for it, and the merged charge keeps that currency;
+     * nothing is converted, and one left unmatched keeps "" (see `WatcherRun.trackedCharges`).
      */
     fun dedupe(charges: List<TrackedCharge>): List<TrackedCharge> {
+        val known = charges.filter { it.currency.isNotEmpty() }
+            .groupBy({ it.merchant.lowercase() }, { it.currency }).mapValues { (_, cs) -> cs.toSet() }
+        fun currencyOf(c: TrackedCharge) = c.currency.ifEmpty { known[c.merchant.lowercase()]?.singleOrNull() ?: "" }
         val out = mutableListOf<TrackedCharge>()
-        for ((_, group) in charges.groupBy { Triple(it.merchant.lowercase(), it.currency, it.amountMinor) }) {
+        for ((_, group) in charges.groupBy { Triple(it.merchant.lowercase(), currencyOf(it), it.amountMinor) }) {
             val kept = mutableListOf<TrackedCharge>()
+            val files = mutableListOf<MutableSet<String>>()
             for (c in group.sortedWith(compareBy<TrackedCharge>({ it.date }, { PRIORITY.indexOf(it.kind) }, { it.itemId }))) {
-                val i = kept.indexOfLast { k ->
-                    k.itemId != c.itemId && c.itemId !in k.alsoSeenIn && abs(k.date.daysUntil(c.date)) <= SAME_CHARGE_DAYS
-                }
-                if (i < 0) { kept += c; continue }
+                val file = c.statementFile ?: c.itemId
+                val i = kept.indices.lastOrNull { j -> file !in files[j] && abs(kept[j].date.daysUntil(c.date)) <= SAME_CHARGE_DAYS }
+                if (i == null) { kept += c; files += mutableSetOf(file); continue }
                 val k = kept[i]
                 val (keep, other) = if (PRIORITY.indexOf(c.kind) < PRIORITY.indexOf(k.kind)) c to k else k to c
-                kept[i] = keep.copy(alsoSeenIn = (keep.alsoSeenIn + other.itemId + other.alsoSeenIn).distinct())
+                kept[i] = keep.copy(currency = keep.currency.ifEmpty { other.currency },
+                                    alsoSeenIn = (keep.alsoSeenIn + other.itemId + other.alsoSeenIn).distinct())
+                files[i] += file
             }
             out += kept
         }

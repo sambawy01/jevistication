@@ -14,7 +14,11 @@ class TrackingMeasureTest {
     private val today = TrackingFixtures.TODAY
     private val fixtures by lazy { TrackingFixtures.load() }
     private val statement by lazy { TrackingFixtures.statementRows() }
-    private val items by lazy { fixtures.map { it.item } + statement }
+    /** The other exports: identical same-day rows, and a statement with no currency column. */
+    private val otherStatements by lazy {
+        TrackingFixtures.statementRows("statement-same-day.csv") + TrackingFixtures.statementRows("statement-no-currency.csv")
+    }
+    private val items by lazy { fixtures.map { it.item } + statement + otherStatements }
     private val charges by lazy { WatcherRun.trackedCharges(items) }
     private val report by lazy { WatcherRun.run(items, today, null) }
 
@@ -86,7 +90,7 @@ class TrackingMeasureTest {
     @Test
     fun everydayItemsRaiseNothing() {
         val negatives = fixtures.filter { it.expect == "none" }.map { it.item.id }.toSet()
-        val credits = statement.filter { it.facts["direction"] == "credit" }.map { it.id }.toSet()
+        val credits = (statement + otherStatements).filter { it.facts["direction"] == "credit" }.map { it.id }.toSet()
         val chargeFp = charges.filter { c -> c.itemId in negatives || c.itemId in credits || c.alsoSeenIn.any { it in negatives } }
         val expiryFp = report.expiryCandidates.filter { it.item.id in negatives }
         val censusFp = report.recurring.filter { rc -> charges.any { it.merchant == rc.merchant && it.itemId in negatives } }
@@ -94,5 +98,24 @@ class TrackingMeasureTest {
         assertEquals(emptyList(), chargeFp.map { it.itemId })
         assertEquals(emptyList(), expiryFp.map { it.item.id })
         assertEquals(emptyList(), censusFp.map { it.merchant })
+    }
+
+    @Test
+    fun receiptsAreNotOnTheExpiryTimeline() {
+        val receipts = fixtures.filter { it.expect == "charge" }.map { it.item.id }.toSet()
+        val onTimeline = report.expiryCandidates.filter { it.item.id in receipts }.map { it.item.id }
+        println("tracking false positives · receipts on the expiry timeline ${onTimeline.size} · of ${receipts.size} receipts")
+        assertEquals(emptyList(), onTimeline)
+    }
+
+    @Test
+    fun everyStatementRowIsCountedOnceAndInItsCurrency() {
+        val rows = (statement + otherStatements).filter { it.facts["direction"] != "credit" && it.facts["amount_minor"] != null }
+        val counted = rows.count { r -> charges.any { r.id == it.itemId || r.id in it.alsoSeenIn } }
+        println("tracking statement rows · counted $counted of ${rows.size} debit rows · merchants with no currency " +
+                charges.count { it.currency.isEmpty() })
+        assertEquals(rows.size, counted, "every debit row is a charge or a second reference of one")
+        assertEquals(2, charges.count { it.merchant == "TALABAT EGYPT" }, "two same-day orders are two charges")
+        assertEquals(emptyList(), charges.filter { it.currency.isEmpty() || "(" in it.merchant }.map { it.merchant })
     }
 }

@@ -1,0 +1,18 @@
+lang: en
+kind: email
+date: 2026-09-14
+from: Talabat <no-reply@talabat.com>
+subject: Your talabat order receipt
+expect: charge
+merchant: Talabat
+currency: EGP
+amount: 240.00
+---
+Hi Sam,
+
+Thanks for ordering with talabat. Your order 55120931 is on its way.
+
+Order total: EGP 240.00
+Paid via InstaPay
+
+Enjoy your meal!

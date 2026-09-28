@@ -34,6 +34,19 @@ class ChargeLexiconTest {
     }
 
     @Test
+    fun futureAndFailedPaymentsAreNotCharges() {
+        for (t in listOf("You will be charged EGP 165 on 3 July", "Your plan will be renewed on 3 July", "Your membership will renew on 3 July",
+                         "You will be billed EGP 99 next month", "Payment reminder", "Your upcoming payment", "Your payment of EGP 165 was declined",
+                         "Your payment failed", "Transaction unsuccessful", "الفاتورة غير مدفوعة", "الحالة: غير مدفوع", "فشل الدفع",
+                         "فشلت عملية الدفع", "العملية مرفوضة", "عملية مرفوض", "لم تتم عملية الدفع")) {
+            assertTrue(notCharge(t), t)
+        }
+        for (t in listOf("Your membership was renewed", "Amount paid: EGP 165.00", "المبلغ المدفوع: ٦٩٫٩٩ ج.م", "تم الدفع بنجاح")) {
+            assertFalse(notCharge(t), t)
+        }
+    }
+
+    @Test
     fun subscriptionWords() {
         for (t in listOf("Monthly subscription", "Your membership", "اشتراك شهري", "باقة فليكس", "eshterak shahry", "fatoora el net")) {
             assertTrue(subscription(t), t)
@@ -63,6 +76,41 @@ class ChargeLexiconTest {
         assertEquals("نادي الجزيرة", MerchantHints.merchant("InstaPay\nتم تحويل ١٬٥٠٠ جنيه\nالمستفيد: نادي الجزيرة"))
         assertEquals("Orange", MerchantHints.merchant("فوري\nإيصال سداد\nالخدمة: أورنج - فاتورة موبايل"))
         assertEquals("InstaPay", MerchantHints.merchant("InstaPay\nتم تحويل ٢٠٠ جنيه"))
+    }
+
+    @Test
+    fun weInACapitalisedSentenceIsNotTheCompany() {
+        for (t in listOf("WE'VE RECEIVED YOUR PAYMENT", "THANK YOU. WE HAVE CHARGED YOUR CARD", "WE ARE HAPPY TO CONFIRM", "WE’VE GOT IT")) {
+            assertNull(MerchantHints.merchant(t), t)
+        }
+        for (t in listOf("WE\nتم دفع الفاتورة", "WE - فاتورة الإنترنت", "Your WE Internet bill", "WE Home Internet", "MY WE app")) {
+            assertEquals("WE", MerchantHints.merchant(t), t)
+        }
+    }
+
+    @Test
+    fun fawryAsTheWordInstantIsNotTheRail() {
+        assertNull(MerchantHints.merchant("تم تحويل ٥٠٠ جنيه تحويل فوري"), "فوري as instant")
+        assertNull(MerchantHints.merchant("الرد فوري والخدمة ممتازة"))
+        assertEquals("Fawry", MerchantHints.merchant("فوري\nتم الدفع ١٥٠ جنيه"), "the rail as a heading")
+        assertEquals("Fawry", MerchantHints.merchant("تم الدفع ١٥٠ جنيه\nكود فوري: 9912-4455"))
+        assertEquals("Fawry", MerchantHints.merchant("Fawry receipt\nPaid EGP 150"))
+    }
+
+    @Test
+    fun anEmailsMerchantIsItsSenderBeforeHowItWasPaid() {
+        assertEquals("Talabat", MerchantHints.ofEmail("Your Talabat order", "Paid via InstaPay\nTotal: EGP 240.00", "Talabat", "no-reply@talabat.com"))
+        assertEquals("Talabat", MerchantHints.ofEmail("Your order", "Paid with Vodafone Cash\nTotal: EGP 240.00", "Talabat", "no-reply@talabat.com"))
+        assertEquals("Jumia Egypt", MerchantHints.ofEmail("Order paid", "تم الدفع عن طريق فوري\nالإجمالي: ٥٠٠ جنيه", "Jumia Egypt", "no-reply@jumia.com.eg"))
+        assertEquals("Talabat", MerchantHints.ofEmail("Order", "Paid using Orange Money\nTotal: EGP 90.00", "Talabat", "x@talabat.com"))
+        assertEquals("Netflix", MerchantHints.ofEmail("Your receipt", "Amount paid: EGP 165.00", "Netflix", "info@mailer.netflix.com"))
+        assertEquals("Spotify", MerchantHints.ofEmail("إيصال اشتراك Spotify Premium", "المبلغ المدفوع: ٦٩٫٩٩ ج.م", null, "no-reply@spotify.com"))
+        assertEquals("iCloud", MerchantHints.ofEmail("Your receipt from Apple", "iCloud+ with 50 GB\nTotal: \$0.99", "Apple", "no_reply@email.apple.com"),
+                     "a brand in the body of a store's receipt")
+        assertEquals("نادي الجزيرة", MerchantHints.ofEmail("InstaPay", "تم تحويل ١٬٥٠٠ جنيه\nالمستفيد: نادي الجزيرة", "InstaPay", "noreply@instapay.eg"),
+                     "a rail's payee line")
+        assertEquals("talabat.com", MerchantHints.ofEmail("Order", "Paid via InstaPay", null, "no-reply@talabat.com"))
+        assertEquals("InstaPay", MerchantHints.ofEmail("Transfer", "Paid via InstaPay", null, null))
     }
 
     @Test

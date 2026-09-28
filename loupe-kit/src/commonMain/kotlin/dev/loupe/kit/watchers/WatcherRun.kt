@@ -3,7 +3,6 @@ package dev.loupe.kit.watchers
 import dev.loupe.engine.Backend
 import dev.loupe.engine.Charge
 import dev.loupe.engine.Contact
-import dev.loupe.engine.DateFacts
 import dev.loupe.engine.DecisionEngine
 import dev.loupe.engine.ExpiryAlert
 import dev.loupe.engine.ExpiryRadar
@@ -221,11 +220,17 @@ object WatcherRun {
     }
 
     /**
-     * Every charge from every source, once each (`ChargeExtractor`). A merchant billed in more than one currency is
-     * named with the currency in each ("Netflix (EGP)", "Netflix (USD)"): amounts are never added across currencies.
+     * Every charge from every source, once each (`ChargeExtractor`). A charge without a currency (a statement with
+     * no currency column) takes its merchant's currency when the merchant has exactly one known currency; a merchant
+     * billed in more than one currency is named with the currency in each ("Netflix (EGP)", "Netflix (USD)"):
+     * amounts are never converted or added across currencies.
      */
     fun trackedCharges(items: List<SourceItem>): List<TrackedCharge> {
-        val charges = ChargeExtractor.extract(items)
+        val found = ChargeExtractor.extract(items)
+        val known = found.filter { it.currency.isNotEmpty() }.groupBy({ it.merchant }, { it.currency }).mapValues { (_, cs) -> cs.toSet() }
+        val charges = found.map { c ->
+            if (c.currency.isEmpty()) known[c.merchant]?.singleOrNull()?.let { c.copy(currency = it) } ?: c else c
+        }
         val multi = charges.groupBy { it.merchant }.filterValues { cs -> cs.map { it.currency }.toSet().size > 1 }.keys
         return charges.map { c ->
             if (c.merchant in multi) c.copy(merchant = "${c.merchant} (${c.currency.ifEmpty { "no currency" }})") else c

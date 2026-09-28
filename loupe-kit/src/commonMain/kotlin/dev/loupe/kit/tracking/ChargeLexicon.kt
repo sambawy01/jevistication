@@ -2,7 +2,8 @@ package dev.loupe.kit.tracking
 
 /**
  * Charge and subscription words (spec §7.2), over [TrackingText.matchForm] text: English, Arabic, Egyptian and
- * Franco. A charge needs a [CHARGE] word; a [NOT_A_CHARGE] word on the amount's line or the first line vetoes it.
+ * Franco. A charge needs a [CHARGE] word on a line without a [NOT_A_CHARGE] word; a [NOT_A_CHARGE] word on the
+ * amount's line or the first line vetoes it.
  */
 object ChargeLexicon {
     /** Something was paid, charged, deducted, renewed or transferred. */
@@ -15,12 +16,15 @@ object ChargeLexicon {
         "et5asam", "etkhasam", "it5asam", "et5sam", "dafa3t", "dafa3na", "tam el daf3", "tam daf3", "etdafa3", "etgadad",
     ))
 
-    /** Money that came in, came back, is still due, is only asked for, or is advertised. */
+    /** Money that came in, came back, is still due, is only asked for, is still to come, failed, or is advertised. */
     val NOT_A_CHARGE: Regex = TrackingText.words(listOf(
         "refund", "refunded", "credited", "deposit", "deposited", "request to pay", "payment request", "amount due",
         "due date", "pay now", "subscribe now", "sign up", "offer", "re:[0-9]+% off",
+        "will be charged", "will be renewed", "will renew", "will be billed", "reminder", "upcoming",
+        "declined", "failed", "unsuccessful",
         "استرداد", "مسترد", "تم إيداع", "إيداع", "طلب تحويل", "طلب دفع", "مستحق", "ادفع", "اشترك الآن", "اشترك دلوقتي",
-        "عرض", "momken", "3ayez", "e3mel eshterak", "eshtrek delwa2ty",
+        "عرض", "غير مدفوع", "غير مدفوعة", "فشل", "فشلت", "مرفوض", "مرفوضة", "لم تتم",
+        "momken", "3ayez", "e3mel eshterak", "eshtrek delwa2ty",
     ))
 
     /** The text names a subscription or a recurring bill (kept as evidence; a cadence still needs three charges). */

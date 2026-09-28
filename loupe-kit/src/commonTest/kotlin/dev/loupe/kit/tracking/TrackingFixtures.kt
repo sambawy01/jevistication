@@ -53,13 +53,16 @@ internal object TrackingFixtures {
                        meta["amount"]?.let { CsvRows.parseNumber(it) }, meta["expiry"]?.let { LocalDate.parse(it) }, meta["doc"])
     }
 
-    /** statement.csv imported through the Inbox, as the phone imports a bank export: one item per row (CsvRows). */
-    fun statementRows(): List<SourceItem> {
+    /**
+     * A statement of the set ([name], statement.csv by default) imported through the Inbox, as the phone imports a
+     * bank export: one item per row (CsvRows).
+     */
+    fun statementRows(name: String = "statement.csv"): List<SourceItem> {
         val home = "$TEST_TMP/tracking-inbox-" + Random.nextLong().toULong()
         InboxFs.createDirectories("$home/in")
-        InboxFs.writeNew("$home/in/statement.csv", SourceFs.readBytes("$TRACKING_FIXTURES/statement.csv"))
+        InboxFs.writeNew("$home/in/$name", SourceFs.readBytes("$TRACKING_FIXTURES/$name"))
         val inbox = Inbox("$home/home", NoPlatformExtractors, TimeZone.UTC, Inbox.Limits())
-        inbox.importFiles(listOf("$home/in/statement.csv"), "statement.csv", "Files", 1_790_000_000_000L)
+        inbox.importFiles(listOf("$home/in/$name"), name, "Files", 1_790_000_000_000L)
         val rows = inbox.items()
         InboxFs.deleteRecursively(home)
         return rows
