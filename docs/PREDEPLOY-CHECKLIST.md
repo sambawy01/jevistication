@@ -40,18 +40,18 @@ screenshot. About 45 minutes, plus the model download and one night on the charg
 
 ## 6. Sorting while charging (overnight)
 - [ ] Me → **Sort while charging** is on. Plug in, lock the phone, and leave it overnight.
-- [ ] In the morning: Now shows a sorted card with real counts, and Me shows the last run. Did the phone get hot? Note the battery.
+- [ ] In the morning: Me → Sort while charging shows the last run with real counts. Did the phone get hot? Note the battery.
 - [ ] Me → **Run now** also works in the foreground, and **Cancel** stops it.
 
 ## 7. The game with two thumbs
-- [ ] Now → **Play**. Steer with one thumb on the river and hold **FIRE** with the other at the same time. Both work together: steering never fires, and FIRE never pauses.
+- [ ] Me → See Loupe think → **Play**. Steer with one thumb on the river and hold **FIRE** with the other at the same time. Both work together: steering never fires, and FIRE never pauses.
 - [ ] A quick tap on the river pauses. FIRE is never over the river or the plane.
 - [ ] **Watch Loupe** with the model installed: the speed panel shows decisions per second. When the run ends, the **results card** shows (the simulator cannot show this; it needs the model).
 
 ## 8. A real Gmail sign-in
 - [ ] Sources → Mail → **Sign in with Google**, with your test-user account. The consent screen asks for **read-only** mail.
 - [ ] Mail fills in with "Online · gmail · fetched …". Nothing is marked read in Gmail.
-- [ ] Now → Mail triage lists your mail. Close and reopen Loupe: still signed in. **Remove mailbox** asks first, then removes the messages.
+- [ ] Me → Mail lists your mail, with what was found (phishing, needs a reply, subscriptions). Close and reopen Loupe: still signed in. **Remove mailbox** asks first, then removes the messages.
 
 ## 9. Phone sources with real data
 - [ ] Sources → Photos → Allow access (try **Limited** first, then **Full**). The live scan shows your thumbnails and settles on a summary.
@@ -62,3 +62,11 @@ screenshot. About 45 minutes, plus the model download and one night on the charg
 ## 10. The device smoke run (only if you say so)
 The non-destructive automated subset for this iPhone is the **`LoupeDeviceSmoke`** scheme. It changes one game setting and puts it back, and adds one link check to Recent checks. It never deletes anything.
 `cd ios && xcodebuild test -project Loupe.xcodeproj -scheme LoupeDeviceSmoke -destination 'platform=iOS,id=<your UDID>'`
+
+## 11. The three places (Home · Ask · Me)
+- [ ] Loupe opens on **Home**. Needs attention shows only when something needs you; Quick check, Money, Documents and Protected follow, each opening its screen.
+- [ ] Opening Loupe starts no scan: Home shows the latest results, or Not checked yet with Run now.
+- [ ] Tap **Home** again on a pushed screen: back to Home's first screen. The same for Ask and Me.
+- [ ] **Ask** shows a number when answers are waiting; "Needs you" opens the queue.
+- [ ] **Me → What Loupe reads** lists every source; **Mail** is one entry and one screen (mailbox, found, actions).
+- [ ] Settings → Accessibility → Larger Text at the largest size, and the phone in Arabic: every button on Home, Ask and Me is still tappable and readable.
