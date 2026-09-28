@@ -1,6 +1,14 @@
 import Foundation
 import LoupeKit
 
+/// LoupeKit's own bucketing (`dev.loupe.kit.tracking.ExpiryBucket.Companion.of`), called from file scope because
+/// `GuardModel.ExpiryBucket` (this file's Swift-native mirror) shadows the bare name `ExpiryBucket` everywhere
+/// inside `enum GuardModel`, and — separately — the Kotlin `LoupeKit` object is exported under the exact name of
+/// the `LoupeKit` module, so `LoupeKit.ExpiryBucket` does not resolve to the module's type from inside GuardModel.
+private func engineExpiryBucket(daysRemaining: Int64) -> ExpiryBucket {
+    ExpiryBucket.companion.of(daysRemaining: daysRemaining)
+}
+
 /// The Guard tab's view model: pure functions over the watchers' latest `WatcherSummary` (no state, no SwiftUI), so
 /// the grouping, sorting, totals and the locked model half are unit-tested (LoupeTests/GuardModelTests).
 ///
@@ -11,9 +19,12 @@ import LoupeKit
 enum GuardModel {
     // MARK: Expiring soon
 
-    /// The timeline's groups, by days left on the day of the run.
+    /// The timeline's groups, by days left on the day of the run. Mapped 1:1 from LoupeKit's own `ExpiryBucket`
+    /// (task T-B, part 2): a Swift-native `CaseIterable`/`Identifiable` enum is kept here (SwiftUI's `ForEach` and
+    /// `Dictionary(grouping:)` need that), but the bucketing itself — including the 365-day "older" cutoff — is the
+    /// engine's, not re-derived.
     enum ExpiryBucket: Int, CaseIterable, Identifiable {
-        case overdue, thisWeek, thisMonth, later
+        case overdue, thisWeek, thisMonth, later, older
         var id: Int { rawValue }
 
         var title: String {
@@ -22,15 +33,21 @@ enum GuardModel {
             case .thisWeek: return "This week"
             case .thisMonth: return "This month"
             case .later: return "Later"
+            case .older: return "Older"
             }
         }
 
-        /// Overdue: the date has passed. This week: today to 7 days. This month: 8 to 30 days. Later: beyond.
+        /// Overdue: the date has passed. This week: today to 7 days. This month: 8 to 30 days. Later: beyond, within
+        /// a year. Older: expired more than a year ago (`LoupeKit.ExpiryBucket.OLDER_AFTER_DAYS`) — shown last,
+        /// collapsed, and never an alert (`WatcherFindings.isAlert` already keeps these out of every finding).
         static func of(daysLeft: Int64) -> ExpiryBucket {
-            if daysLeft < 0 { return .overdue }
-            if daysLeft <= 7 { return .thisWeek }
-            if daysLeft <= 30 { return .thisMonth }
-            return .later
+            switch engineExpiryBucket(daysRemaining: daysLeft) {
+            case .overdue: return .overdue
+            case .week: return .thisWeek
+            case .month: return .thisMonth
+            case .older: return .older
+            default: return .later
+            }
         }
     }
 
@@ -40,11 +57,19 @@ enum GuardModel {
         var id: Int { bucket.rawValue }
     }
 
-    /// The rows in their buckets (empty buckets left out), soonest first inside each.
+    /// The rows in their buckets (empty buckets left out), soonest first inside each. `.older` sorts last (it is
+    /// `ExpiryBucket`'s final case) and, on the timeline, is shown collapsed.
     static func groupExpiries(_ rows: [ExpiryRow]) -> [ExpiryGroup] {
         let sorted = rows.sorted { ($0.daysRemaining, $0.itemName) < ($1.daysRemaining, $1.itemName) }
         let byBucket = Dictionary(grouping: sorted) { ExpiryBucket.of(daysLeft: $0.daysRemaining) }
         return ExpiryBucket.allCases.compactMap { b in byBucket[b].map { ExpiryGroup(bucket: b, rows: $0) } }
+    }
+
+    /// Whether the "Inside the rule" badge should show for a row in this bucket: never for `.older` (task T-B, part
+    /// 2) — that bucket raises no alert, regardless of the raw `breachesRule` flag. The one place both the timeline
+    /// row and the expiry detail check this, so they can't drift apart.
+    static func showsRuleBadge(_ row: ExpiryRow, in bucket: ExpiryBucket) -> Bool {
+        row.breachesRule && bucket != .older
     }
 
     /// "113 days left", "Today", "Tomorrow", "Expired 4 days ago".
@@ -74,6 +99,17 @@ enum GuardModel {
         if modelRan { return .ran }
         if turnedOff { return .turnedOff }
         return modelReady ? .pending : .locked
+    }
+
+    /// The document's name: the decision model's judgment first ("passport", when the model ran and judged it a
+    /// listed type), then the rules' mechanical `documentKind` ("car licence" -> "Car licence"), then the item's own
+    /// name — the one titling rule Guard's timeline row and detail, and Home's Documents card, all share.
+    static func documentTitle(_ row: ExpiryRow) -> String {
+        if let t = row.documentType { return t.prefix(1).uppercased() + t.dropFirst() }
+        if let id = row.documentKind, let kind = DocumentKind.entries.first(where: { $0.id == id }) {
+            return kind.title.prefix(1).uppercased() + kind.title.dropFirst()
+        }
+        return row.itemName
     }
 
     /// What a row says about the document's type, by the model half's state.
@@ -106,20 +142,48 @@ enum GuardModel {
         }
     }
 
-    /// The monthly total: the sum of the regular merchants' monthly figures (irregular ones have none).
+    /// The sum of the regular merchants' monthly figures across every currency (irregular ones have none). This
+    /// mirrors `SubscriptionCensus.monthlyTotalMinor`'s own engine-side definition
+    /// (`WatcherFindings.summarise`'s `keptRows.sumOf { it.monthlyMinor ?: 0L }`) — a single `Long` field on the
+    /// Kotlin struct, so it is a cross-currency sum by the engine's own design, not a Swift bug. Used **only** to
+    /// keep that field honest after a local Confirm/Set aside/Undo (`census(_:replacing:with:)`,
+    /// `census(_:restoring:)`), which must match what a real re-run would produce for the same field. Not used for
+    /// display any more — see `monthlyByCurrency` for that (task T-B, part 2).
     static func monthlyTotal(_ rows: [CensusRow]) -> Int64 {
         rows.reduce(0) { $0 + ($1.monthlyMinor?.int64Value ?? 0) }
     }
 
-    /// A merchant's share of the monthly total, 0…1 (0 when irregular or the total is 0).
+    /// One total per currency (`WatcherFindings.monthlyByCurrency`, the engine's own grouping — never one sum across
+    /// currencies), largest first, ties broken by currency code. A row whose currency is empty (no currency read
+    /// from its charges) groups under `""`. The one derivation Guard's Subscriptions total and Home's Money card
+    /// both use (task T-B, part 2).
+    static func monthlyByCurrency(_ rows: [CensusRow]) -> [(currency: String, minor: Int64)] {
+        WatcherFindings.shared.monthlyByCurrency(rows: rows)
+            .filter { $0.value.int64Value > 0 }
+            .sorted { a, b in
+                a.value.int64Value != b.value.int64Value ? a.value.int64Value > b.value.int64Value : a.key < b.key
+            }
+            .map { (currency: $0.key, minor: $0.value.int64Value) }
+    }
+
+    /// A merchant's share of its own currency's total, 0…1 (0 when irregular or that total is 0). Never mixes
+    /// currencies: pass the total for `row.currency` (from `monthlyByCurrency`), not a cross-currency sum.
     static func share(_ row: CensusRow, total: Int64) -> Double {
         guard total > 0, let m = row.monthlyMinor?.int64Value else { return 0 }
         return min(1, Double(m) / Double(total))
     }
 
-    /// "9.99/mo", or "irregular".
+    /// A merchant's own monthly figure, in its own currency ("9.99", "EGP 450.00"), or nil when irregular. Never the
+    /// census total's currency — a row is always shown in its own (task T-B, part 2).
+    static func monthlyAmount(_ row: CensusRow) -> String? {
+        guard let m = row.monthlyMinor else { return nil }
+        let money = WatchersService.money(m.int64Value)
+        return row.currency.isEmpty ? money : "\(row.currency) \(money)"
+    }
+
+    /// "9.99/mo", "EGP 450.00/mo", or "irregular".
     static func perMonth(_ row: CensusRow) -> String {
-        row.monthlyMinor.map { WatchersService.money($0.int64Value) + "/mo" } ?? "irregular"
+        monthlyAmount(row).map { "\($0)/mo" } ?? "irregular"
     }
 
     /// The census with one merchant's row replaced (a Confirm) or removed (nil: not a subscription / set aside), and

@@ -25,6 +25,7 @@ struct SubscriptionDetailView: View {
                     if let quiet = GuardModel.quietFinding(row, in: watchers.findings) {
                         FindingCard(finding: quiet, index: 0, onVerdict: { watchers.answer(quiet, $0) }, onOpen: {})
                     }
+                    linesCard(row)
                     evidence(row)
                     answers(row)
                 } else {
@@ -45,7 +46,7 @@ struct SubscriptionDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(row.merchant).font(Typeface.display(26)).foregroundStyle(Palette.ink)
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(row.monthlyMinor.map { WatchersService.money($0.int64Value) } ?? "irregular")
+                    Text(GuardModel.monthlyAmount(row) ?? "irregular")
                         .font(Typeface.mono(30, weight: .bold)).monospacedDigit().foregroundStyle(Palette.ink)
                         .accessibilityIdentifier("guard.subscription.detail.amount")
                     if row.monthlyMinor != nil { Text("a month").font(.subheadline).foregroundStyle(Palette.inkSoft) }
@@ -87,6 +88,25 @@ struct SubscriptionDetailView: View {
             Text(v).font(Typeface.mono(13)).monospacedDigit().foregroundStyle(Palette.ink).multilineTextAlignment(.trailing)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// The census row's own charge lines (task T-B, part 2), verbatim, oldest first — not shown before, and distinct
+    /// from `evidence` below (which opens the source items; this is just what was read off each charge).
+    @ViewBuilder private func linesCard(_ row: CensusRow) -> some View {
+        if !row.lines.isEmpty {
+            VStack(alignment: .leading, spacing: 8) {
+                Caption(text: "What was charged")
+                ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
+                    Text(line).font(Typeface.mono(12)).foregroundStyle(Palette.ink)
+                        .padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Palette.track, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("guard.subscription.lines")
+        }
     }
 
     private func evidence(_ row: CensusRow) -> some View {
@@ -171,7 +191,7 @@ struct ExpiryDetailView: View {
                         Text(GuardModel.day(row.expiryIso)).font(Typeface.mono(30, weight: .bold)).monospacedDigit().foregroundStyle(Palette.ink)
                         Text(GuardModel.daysLeftLine(row.daysRemaining)).font(.headline).foregroundStyle(bucket.hue)
                         HStack(spacing: 6) {
-                            if row.breachesRule { Pill(text: "Inside the rule", color: Palette.warnText) }
+                            if GuardModel.showsRuleBadge(row, in: bucket) { Pill(text: "Inside the rule", color: Palette.warnText) }
                             if row.ambiguous { Pill(text: "Ambiguous date", color: Palette.amber, symbol: "questionmark") }
                         }
                         if let line = row.line {
@@ -208,7 +228,7 @@ struct ExpiryDetailView: View {
             .padding(16)
         }
         .neonGround()
-        .navigationTitle(row?.itemName ?? "Expiry")
+        .navigationTitle(row.map(GuardModel.documentTitle) ?? "Expiry")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $openItem) { ItemTextView(item: $0) }
     }

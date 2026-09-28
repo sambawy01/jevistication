@@ -106,8 +106,9 @@ final class GuardScenarios: ScenarioCase {
         waitUntil(timeout: 10, "\(other) leaves the list") { !self.row(named: other).exists }
         XCTAssertEqual(charges(), before - 1, "one recurring charge fewer")
 
-        // Expiring soon: a dated document opens its detail.
-        let passport = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "passport")).firstMatch
+        // Expiring soon: a dated document opens its detail. Case-insensitive: the row now titles by the rules'
+        // documentKind when the model hasn't judged it (task T-B, part 2: "Passport", not the file name).
+        let passport = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "passport")).firstMatch
         reveal(passport)
         XCTAssertTrue(passport.exists, "Expiring soon lists the passport")
         passport.tap()
@@ -138,7 +139,7 @@ final class GuardScenarios: ScenarioCase {
         let documents = button("home.documents")
         reveal(documents)
         documents.tap()
-        let passportRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "passport")).firstMatch
+        let passportRow = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "passport")).firstMatch
         reveal(passportRow)
         XCTAssertTrue(passportRow.exists, "Documents opens Expiring with the passport")
         shot("07-relaunch-confirmed")

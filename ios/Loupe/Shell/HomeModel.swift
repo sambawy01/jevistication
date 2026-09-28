@@ -62,9 +62,10 @@ enum HomeModel {
     /// The Money card from the census; nil until the watchers have run (or their saved results are read back).
     /// `running`: a run, a scan or the watchers are going now; `loaded`: the saved results have been read back.
     ///
-    /// One total per currency (`WatcherFindings.monthlyByCurrency`, the engine's own grouping — never one sum across
-    /// currencies): "EGP 450.00 a month · USD 12.99 a month", most expensive first, ties broken by currency code. A
-    /// row whose currency is empty (no currency read from its charges) shows with no code, as Guard's own total does.
+    /// One total per currency (`GuardModel.monthlyByCurrency` — the one derivation Guard's own Subscriptions total
+    /// uses too, task T-B part 2 — never one sum across currencies): "EGP 450.00 a month · USD 12.99 a month",
+    /// most expensive first, ties broken by currency code. A row whose currency is empty (no currency read from its
+    /// charges) shows with no code, as Guard's own total does.
     static func money(_ census: SubscriptionCensus?, mailCovered: Bool, running: Bool = false, loaded: Bool = true) -> Summary {
         guard let census else {
             return notYet(running: running, loaded: loaded, what: "your subscriptions",
@@ -89,19 +90,14 @@ enum HomeModel {
     }
 
     /// "EGP 450.00 a month · 12.99 a month" (the last: no currency read for that merchant's charges): one line per
-    /// currency, from `WatcherFindings.monthlyByCurrency`, largest first, so two currencies are never added together.
+    /// currency, from `GuardModel.monthlyByCurrency`, largest first, so two currencies are never added together.
     private static func moneyHeadline(_ rows: [CensusRow]) -> String {
-        let byCurrency = WatcherFindings.shared.monthlyByCurrency(rows: rows)
-        let parts = byCurrency
-            .filter { $0.value.int64Value > 0 }
-            .sorted { a, b in
-                a.value.int64Value != b.value.int64Value ? a.value.int64Value > b.value.int64Value : a.key < b.key
-            }
-            .map { currency, amount -> String in
-                let money = WatchersService.money(amount.int64Value)
-                return currency.isEmpty ? "\(money) a month" : "\(currency) \(money) a month"
-            }
-        return parts.isEmpty ? "\(WatchersService.money(0)) a month" : parts.joined(separator: " · ")
+        let groups = GuardModel.monthlyByCurrency(rows)
+        guard !groups.isEmpty else { return "\(WatchersService.money(0)) a month" }
+        return groups.map { currency, minor -> String in
+            let money = WatchersService.money(minor)
+            return currency.isEmpty ? "\(money) a month" : "\(currency) \(money) a month"
+        }.joined(separator: " · ")
     }
 
     /// The Documents card from the expiry timeline; nil rows until the watchers have run (or their saved results are
@@ -125,29 +121,13 @@ enum HomeModel {
             return Summary(headline: "No expiry dates found",
                            detail: "Not an all-clear: a document Loupe cannot read is not checked.", needsSource: false)
         }
-        let active = rows.filter { !isOlder($0) }
+        let active = rows.filter { GuardModel.ExpiryBucket.of(daysLeft: $0.daysRemaining) != .older }
         guard let soonest = active.min(by: { $0.daysRemaining < $1.daysRemaining }) else {
             return Summary(headline: "\(rows.count) document\(rows.count == 1 ? "" : "s") expired more than a year ago",
                            detail: "Not urgent: see Expiring for the list.", needsSource: false)
         }
-        return Summary(headline: "\(documentTitle(soonest)): \(GuardModel.daysLeftLine(soonest.daysRemaining))",
+        return Summary(headline: "\(GuardModel.documentTitle(soonest)): \(GuardModel.daysLeftLine(soonest.daysRemaining))",
                        detail: active.count > 1 ? "+ \(active.count - 1) more" : "1 document", needsSource: false)
-    }
-
-    /// `ExpiryBucket` is LoupeKit's own timeline grouping (the one `WatcherFindings` itself uses to decide which
-    /// expiries are worth an alert): reused directly rather than re-derived, since Guard's Swift-side bucket enum
-    /// (`GuardModel.ExpiryBucket`) has not yet been extended with `.older` (see the report: NEEDS_CONTEXT on the
-    /// Expiring and Subscriptions screens).
-    private static func isOlder(_ row: ExpiryRow) -> Bool {
-        ExpiryBucket.companion.of(daysRemaining: row.daysRemaining) == .older
-    }
-
-    /// The rules' document kind, titled ("car licence" -> "Car licence"), or the item name when none was found.
-    private static func documentTitle(_ row: ExpiryRow) -> String {
-        guard let id = row.documentKind, let kind = DocumentKind.entries.first(where: { $0.id == id }) else {
-            return row.itemName
-        }
-        return kind.title.prefix(1).uppercased() + kind.title.dropFirst()
     }
 
     // MARK: Protected

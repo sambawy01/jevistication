@@ -16,17 +16,23 @@ struct SubscriptionsSection: View {
 
     var body: some View {
         let rows = GuardModel.sortedSubscriptions(census.rows)
-        let total = GuardModel.monthlyTotal(rows)
+        // One total per currency (task T-B, part 2): never one number mixing currencies.
+        let byCurrency = GuardModel.monthlyByCurrency(rows)
         VStack(alignment: .leading, spacing: 14) {
             if rows.isEmpty {
                 empty
             } else {
-                totalRow(rows, total: total)
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(byCurrency.enumerated()), id: \.offset) { _, group in
+                        totalRow(rows.filter { $0.currency == group.currency }, currency: group.currency, total: group.minor, allRows: rows)
+                    }
+                }
                 Divider().overlay(Palette.hairline)
                 VStack(spacing: 4) {
                     ForEach(Array(rows.enumerated()), id: \.element.merchant) { i, row in
+                        let ownTotal = byCurrency.first { $0.currency == row.currency }?.minor ?? 0
                         NavigationLink(value: GuardRoute.subscription(row.merchant)) {
-                            SubscriptionRow(row: row, hue: Self.hues[i % Self.hues.count], share: GuardModel.share(row, total: total),
+                            SubscriptionRow(row: row, hue: Self.hues[i % Self.hues.count], share: GuardModel.share(row, total: ownTotal),
                                             quiet: GuardModel.quietFinding(row, in: findings))
                         }
                         .buttonStyle(.plain)
@@ -44,23 +50,28 @@ struct SubscriptionsSection: View {
         .accessibilityIdentifier("guard.subscriptions")
     }
 
-    private func totalRow(_ rows: [CensusRow], total: Int64) -> some View {
-        HStack(alignment: .center, spacing: 14) {
+    /// One currency's total and its own donut (each merchant's slice sized against its own currency's total, never
+    /// mixed with another currency's amounts). `allRows` is the full, sorted list, so a merchant's hue here matches
+    /// its hue in the list below regardless of which currency group it falls into.
+    private func totalRow(_ rowsInCurrency: [CensusRow], currency: String, total: Int64, allRows: [CensusRow]) -> some View {
+        let line = currency.isEmpty ? WatchersService.money(total) : "\(currency) \(WatchersService.money(total))"
+        return HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Caption(text: "Every month")
-                Text(WatchersService.money(total))
+                Caption(text: currency.isEmpty ? "Every month" : "Every month · \(currency)")
+                Text(line)
                     .font(Typeface.mono(38, weight: .bold)).monospacedDigit()
                     .foregroundStyle(Palette.ink)
                     .minimumScaleFactor(0.6).lineLimit(1)
                     .accessibilityIdentifier("guard.subscriptions.total")
-                Text("\(rows.count) recurring charge\(rows.count == 1 ? "" : "s")")
+                Text("\(rowsInCurrency.count) recurring charge\(rowsInCurrency.count == 1 ? "" : "s")")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Subscriptions: \(WatchersService.money(total)) a month, \(rows.count) recurring charge\(rows.count == 1 ? "" : "s")")
+            .accessibilityLabel("Subscriptions: \(line) a month, \(rowsInCurrency.count) recurring charge\(rowsInCurrency.count == 1 ? "" : "s")")
             Spacer(minLength: 8)
-            Donut(parts: rows.enumerated().compactMap { i, r in
-                r.monthlyMinor.map { (Self.hues[i % Self.hues.count], Double($0.int64Value)) }
+            Donut(parts: rowsInCurrency.compactMap { r in
+                guard let m = r.monthlyMinor, let i = allRows.firstIndex(where: { $0.merchant == r.merchant }) else { return nil }
+                return (Self.hues[i % Self.hues.count], Double(m.int64Value))
             }, lineWidth: 9)
             .frame(width: 64, height: 64)
         }
@@ -106,7 +117,7 @@ struct SubscriptionRow: View {
             }
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(row.monthlyMinor.map { WatchersService.money($0.int64Value) } ?? "irregular")
+                Text(GuardModel.monthlyAmount(row) ?? "irregular")
                     .font(Typeface.mono(15, weight: .semibold)).monospacedDigit()
                     .foregroundStyle(row.monthlyMinor == nil ? Palette.inkSoft : Palette.ink)
                 Text(row.monthlyMinor == nil ? "typ. \(WatchersService.money(row.typicalMinor))" : "/ month")
@@ -170,13 +181,21 @@ struct ExpirySection: View {
 
     var body: some View {
         let groups = GuardModel.groupExpiries(rows)
+        // Older (expired more than a year ago) is last and collapsed by default, never an alert (task T-B, part 2).
+        // `groupExpiries` already places it last (it iterates `ExpiryBucket.allCases`, `.older` being the final
+        // case), so this only changes how it renders, not its position.
+        let activeGroups = groups.filter { $0.bucket != .older }
+        let olderGroup = groups.first { $0.bucket == .older }
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 12) {
                 if groups.isEmpty {
                     empty
                 } else {
-                    ForEach(groups) { group in
+                    ForEach(activeGroups) { group in
                         ExpiryGroupView(group: group, half: half)
+                    }
+                    if let olderGroup {
+                        OlderExpiryDisclosure(group: olderGroup, half: half)
                     }
                     Text("Dates are arithmetic, read on this iPhone: an expiry word near a date, however far away, or already passed. \"Inside the rule\" means less than \(ruleName).")
                         .font(.caption).foregroundStyle(Palette.inkSoft)
@@ -219,6 +238,7 @@ extension GuardModel.ExpiryBucket {
         case .thisWeek: return Palette.warnText
         case .thisMonth: return Palette.amber
         case .later: return Palette.blue
+        case .older: return Palette.inkSoft
         }
     }
 }
@@ -249,6 +269,45 @@ struct ExpiryGroupView: View {
                 .accessibilityIdentifier("guard.expiry.row")
             }
         }
+    }
+}
+
+/// The collapsed "Older" group (task T-B, part 2): documents expired more than a year ago. Last on the timeline,
+/// closed by default (a missed expiry that old is not urgent), disclosed on demand behind a ≥44 pt row with a
+/// VoiceOver label naming the count. Never an alert: no "Inside the rule" badge shows inside it either
+/// (`ExpiryTimelineRow` suppresses it for this bucket).
+struct OlderExpiryDisclosure: View {
+    let group: GuardModel.ExpiryGroup
+    let half: GuardModel.ModelHalf
+    @State private var expanded = false
+
+    var body: some View {
+        DisclosureGroup(isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(Array(group.rows.enumerated()), id: \.element.itemId) { i, row in
+                    NavigationLink(value: GuardRoute.expiry(row.itemId)) {
+                        ExpiryTimelineRow(row: row, bucket: .older, half: half, last: i == group.rows.count - 1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("guard.expiry.row")
+                }
+            }
+            .padding(.top, 6)
+        } label: {
+            HStack(spacing: 8) {
+                Circle().fill(GuardModel.ExpiryBucket.older.hue).frame(width: 8, height: 8)
+                Text(GuardModel.ExpiryBucket.older.title.uppercased())
+                    .font(Typeface.mono(11, weight: .bold)).tracking(1)
+                    .foregroundStyle(GuardModel.ExpiryBucket.older.hue)
+                Text("\(group.rows.count)").font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+                Spacer()
+            }
+            .frame(minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Older, \(group.rows.count) document\(group.rows.count == 1 ? "" : "s") expired more than a year ago, collapsed")
+        .accessibilityIdentifier("guard.expiry.group.older")
     }
 }
 
@@ -296,7 +355,7 @@ struct ExpiryTimelineRow: View {
                     }
                 }
                 HStack(spacing: 6) {
-                    if row.breachesRule { Pill(text: "Inside the rule", color: Palette.warnText) }
+                    if GuardModel.showsRuleBadge(row, in: bucket) { Pill(text: "Inside the rule", color: Palette.warnText) }
                     if row.ambiguous { Pill(text: "Ambiguous date", color: Palette.amber, symbol: "questionmark") }
                 }
             }
@@ -311,21 +370,21 @@ struct ExpiryTimelineRow: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private var title: String {
-        if let t = row.documentType { return t.prefix(1).uppercased() + t.dropFirst() }
-        return row.itemName
-    }
+    /// The decision model's judgment first, then the rules' `documentKind`, then the item name (task T-B, part 2;
+    /// `GuardModel.documentTitle` — the one titling rule Home's Documents card shares).
+    private var title: String { GuardModel.documentTitle(row) }
 
-    /// Where the document is; with its file name too when the title is the model's document type.
+    /// Where the document is; with its file name too when the title above is not the item's own name.
     private var source: String {
         let place = ItemIndex.item(row.itemId)?.sourceAndFolder
-        let parts = (row.documentType != nil ? [row.itemName] : []) + [place].compactMap { $0 }
+        let namedByKindOrType = row.documentType != nil || row.documentKind != nil
+        let parts = (namedByKindOrType ? [row.itemName] : []) + [place].compactMap { $0 }
         return parts.isEmpty ? row.itemName : parts.joined(separator: " · ")
     }
 
     private var accessibilityLine: String {
         var parts = [title, "\(GuardModel.daysLeftLine(row.daysRemaining)), \(GuardModel.day(row.expiryIso))"]
-        if row.breachesRule { parts.append("inside the rule") }
+        if GuardModel.showsRuleBadge(row, in: bucket) { parts.append("inside the rule") }
         if row.ambiguous { parts.append("the date could be read two ways; the earlier reading is used") }
         if half != .ran || row.documentType == nil { parts.append(GuardModel.typeLine(row, half: half)) }
         return parts.joined(separator: ", ")

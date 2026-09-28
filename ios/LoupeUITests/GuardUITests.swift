@@ -98,8 +98,10 @@ final class GuardUITests: XCTestCase {
         XCTAssertTrue(undo.waitForExistence(timeout: 5))
         undo.tap()
 
-        // Expiring soon: the passport, dated, the model half locked while the dates show.
-        let passport = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "passport")).firstMatch
+        // Expiring soon: the passport, dated, the model half locked while the dates show. The row now titles by the
+        // rules' documentKind when the model hasn't judged it (task T-B, part 2: "Passport", not the file name), so
+        // the match is case-insensitive.
+        let passport = app.buttons.matching(NSPredicate(format: "label CONTAINS[c] %@", "passport")).firstMatch
         scrollTo(passport, in: app)
         XCTAssertTrue(passport.exists)
         XCTAssertTrue(passport.label.contains("113 days left") || passport.label.contains("days left"), passport.label)

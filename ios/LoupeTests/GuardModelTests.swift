@@ -9,15 +9,16 @@ import LoupeKit
 final class GuardModelTests: XCTestCase {
     // MARK: Builders
 
-    private func expiry(_ days: Int64, _ name: String = "doc", type: String? = nil, breaches: Bool = true, ambiguous: Bool = false) -> ExpiryRow {
+    private func expiry(_ days: Int64, _ name: String = "doc", type: String? = nil, breaches: Bool = true, ambiguous: Bool = false,
+                       kind: String? = nil) -> ExpiryRow {
         ExpiryRow(itemId: "id:\(name)", itemName: name, expiryIso: "2027-01-14", daysRemaining: days, ambiguous: ambiguous,
-                  breachesRule: breaches, documentType: type, findingKey: breaches ? "expiry:id:\(name)" : nil, line: nil, sample: false, documentKind: nil)
+                  breachesRule: breaches, documentType: type, findingKey: breaches ? "expiry:id:\(name)" : nil, line: nil, sample: false, documentKind: kind)
     }
 
-    private func sub(_ merchant: String, monthly: Int64?, typical: Int64 = 0, cadence: String = "monthly") -> CensusRow {
+    private func sub(_ merchant: String, monthly: Int64?, typical: Int64 = 0, cadence: String = "monthly", currency: String = "") -> CensusRow {
         CensusRow(merchant: merchant, cadence: cadence, occurrences: 3, typicalMinor: typical == 0 ? (monthly ?? 0) : typical,
                   lastChargedIso: "2026-09-01", daysSinceLastCharge: 22, monthlyMinor: monthly.map { KotlinLong(value: $0) },
-                  sample: false, itemIds: ["a", "b", "c"], nextExpectedIso: monthly == nil ? nil : "2026-10-01", verdict: nil, currency: "", lines: [])
+                  sample: false, itemIds: ["a", "b", "c"], nextExpectedIso: monthly == nil ? nil : "2026-10-01", verdict: nil, currency: currency, lines: [])
     }
 
     // MARK: Expiring soon
@@ -29,6 +30,10 @@ final class GuardModelTests: XCTestCase {
         XCTAssertEqual(GuardModel.ExpiryBucket.of(daysLeft: 8), .thisMonth)
         XCTAssertEqual(GuardModel.ExpiryBucket.of(daysLeft: 30), .thisMonth)
         XCTAssertEqual(GuardModel.ExpiryBucket.of(daysLeft: 31), .later)
+        // task T-B, part 2: mapped from LoupeKit's own ExpiryBucket, including the 365-day "older" cutoff.
+        XCTAssertEqual(GuardModel.ExpiryBucket.of(daysLeft: -365), .overdue, "the cutoff day itself is still overdue")
+        XCTAssertEqual(GuardModel.ExpiryBucket.of(daysLeft: -366), .older)
+        XCTAssertEqual(GuardModel.ExpiryBucket.of(daysLeft: -5000), .older)
     }
 
     func testGroupsAreInTimelineOrderSoonestFirstAndEmptyOnesLeftOut() {
@@ -38,6 +43,32 @@ final class GuardModelTests: XCTestCase {
         XCTAssertEqual(groups[0].rows.map(\.itemName), ["policy", "card"])
         XCTAssertEqual(groups[2].rows.map(\.itemName), ["passport", "warranty"])
         XCTAssertTrue(GuardModel.groupExpiries([]).isEmpty)
+    }
+
+    /// task T-B, part 2: Older is last (after every other bucket, however the rows are ordered going in), grouped for
+    /// the timeline's collapsed disclosure, and never shows the "inside the rule" badge, whatever the raw flag says.
+    func testOlderIsLastAndNeverShowsTheRuleBadge() {
+        let rows = [expiry(-400, "ancient-warranty", breaches: true), expiry(200, "warranty"), expiry(-4, "card")]
+        let groups = GuardModel.groupExpiries(rows)
+        XCTAssertEqual(groups.map(\.bucket), [.overdue, .later, .older], "older sorts after every other bucket")
+        XCTAssertEqual(groups.last?.bucket, .older)
+        XCTAssertEqual(groups.last?.rows.map(\.itemName), ["ancient-warranty"])
+
+        let old = rows[0]
+        XCTAssertTrue(old.breachesRule, "the raw engine flag can still be set")
+        XCTAssertFalse(GuardModel.showsRuleBadge(old, in: .older), "older raises no alert regardless")
+        XCTAssertTrue(GuardModel.showsRuleBadge(old, in: .overdue), "the same row, in any other bucket, still shows it")
+    }
+
+    /// task T-B, part 2: the decision model's judgment first, then the rules' documentKind, then the item name — the
+    /// one titling rule the timeline row, the expiry detail and Home's Documents card all share.
+    func testDocumentTitlePrefersTheModelThenTheRulesKindThenTheItemName() {
+        XCTAssertEqual(GuardModel.documentTitle(expiry(12, "IMG_0001.jpg", type: "passport")), "Passport")
+        XCTAssertEqual(GuardModel.documentTitle(expiry(12, "IMG_0002.jpg", kind: "car_licence")), "Car licence")
+        XCTAssertEqual(GuardModel.documentTitle(expiry(12, "IMG_0003.jpg")), "IMG_0003.jpg")
+        // The model's judgment wins over the rules' kind when both are present.
+        XCTAssertEqual(GuardModel.documentTitle(expiry(12, "IMG_0004.jpg", type: "insurance policy", kind: "car_licence")),
+                       "Insurance policy")
     }
 
     func testDaysLeftWords() {
@@ -75,11 +106,29 @@ final class GuardModelTests: XCTestCase {
 
     func testTheMonthlyTotalSumsRegularChargesOnly() {
         let rows = [sub("A", monthly: 999), sub("B", monthly: 433), sub("C", monthly: nil, typical: 5000, cadence: "irregular")]
+        // monthlyTotal is now only the Kotlin-parity figure for SubscriptionCensus.monthlyTotalMinor rebuilds (task
+        // T-B, part 2) — still a genuine cross-currency sum, since that field is one on the Kotlin struct. Not used
+        // for display; see monthlyByCurrency below for that.
         XCTAssertEqual(GuardModel.monthlyTotal(rows), 1432)
         XCTAssertEqual(GuardModel.share(rows[0], total: 1432), 999.0 / 1432.0, accuracy: 1e-9)
         XCTAssertEqual(GuardModel.share(rows[2], total: 1432), 0)
         XCTAssertEqual(GuardModel.perMonth(rows[0]), "9.99/mo")
         XCTAssertEqual(GuardModel.perMonth(rows[2]), "irregular")
+    }
+
+    /// task T-B, part 2: one total per currency, from the engine's own grouping — two currencies are never summed
+    /// into one number, and the row's own currency (not the total's) is what perMonth/monthlyAmount show.
+    func testMonthlyByCurrencyGivesOneTotalPerCurrencyNeverSummed() {
+        let egp = sub("Netflix EG", monthly: 45000, currency: "EGP")
+        let usd = sub("Spotify US", monthly: 999, currency: "USD")
+        let none = sub("Unlabelled", monthly: 500)
+        let groups = GuardModel.monthlyByCurrency([egp, usd, none])
+        XCTAssertEqual(groups.map(\.currency), ["EGP", "USD", ""], "largest first, empty currency last among these")
+        XCTAssertEqual(groups.map(\.minor), [45000, 999, 500])
+        XCTAssertEqual(GuardModel.monthlyAmount(egp), "EGP 450.00")
+        XCTAssertEqual(GuardModel.monthlyAmount(usd), "USD 9.99")
+        XCTAssertEqual(GuardModel.monthlyAmount(none), "5.00")
+        XCTAssertEqual(GuardModel.perMonth(egp), "EGP 450.00/mo")
     }
 
     func testSettingASubscriptionAsideTakesItOutOfTheTotalAndUndoPutsItBack() {
