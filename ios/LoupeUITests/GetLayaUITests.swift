@@ -25,7 +25,7 @@ final class GetLayaUITests: XCTestCase {
     }
 
     func testFirstLaunchWithoutTheModelShowsGetLayaThenLaterLocksModelFeatures() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeModelState", "missing", "-LoupeNoModelHost", "-LoupeTab", "me", "-LoupeEphemeralKeychain", "-LoupeFixtures"]
         app.launch()
 
@@ -48,7 +48,8 @@ final class GetLayaUITests: XCTestCase {
         scrollTo(locked, in: app)
         XCTAssertTrue(locked.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Needs the decision model"].exists || locked.label.contains("Needs the decision model"))
-        XCTAssertFalse(app.buttons["me.sort.run"].exists, "Run now is not offered while Laya is missing")
+        // Run now stays (2026-09-28): it runs the checks, which need no model; only its sort waits for the model.
+        XCTAssertTrue(app.buttons["me.sort.run"].exists, "Run now runs the rules-only checks without the model")
 
         // Its button opens Get Laya; Not now returns.
         app.buttons["needsLaya.sort.get"].tap()
@@ -67,7 +68,7 @@ final class GetLayaUITests: XCTestCase {
     /// The shipped build has a host: Download and the consent (with the mobile-data toggle). The
     /// consent is reset and declined, so nothing is ever downloaded by this test.
     func testWithAHostGetLayaOffersDownloadThroughTheConsent() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeModelState", "missing", "-LoupeResetModelConsent", "-LoupeTab", "now", "-LoupeEphemeralKeychain", "-LoupeFixtures"]
         app.launch()
         XCTAssertTrue(any(app, "getLaya.screen").waitForExistence(timeout: 10))
@@ -87,7 +88,7 @@ final class GetLayaUITests: XCTestCase {
     }
 
     func testWithTheModelThereIsNoGetLayaStep() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeModelState", "ready", "-LoupeTab", "me", "-LoupeEphemeralKeychain", "-LoupeFixtures"]
         app.launch()
         passIntroIfShown(app)

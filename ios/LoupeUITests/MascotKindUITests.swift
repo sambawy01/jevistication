@@ -5,7 +5,7 @@ final class MascotKindUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     func testSwitchToDroneInMePersistsAcrossRelaunch() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeTab", "me", "-LoupeResetMascot"]
         app.launch()
         let picker = app.segmentedControls["me.mascot"]

@@ -447,7 +447,7 @@ final class ResultsIndex {
 enum ResultsNames {
     static func source(_ id: String) -> String {
         switch id {
-        case "sample": return "Sample data"
+        case "sample": return "Test fixture"
         case "photos": return "Photos"
         case "files": return "Files"
         case "shared": return "Send to Loupe"

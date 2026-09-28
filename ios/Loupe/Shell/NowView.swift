@@ -13,6 +13,10 @@ struct NowView: View {
     @ObservedObject var mail: MailTriageService = .shared
     @State private var showMail = false
     @ObservedObject var review: ReviewService = .shared
+    /// Running or not (changes only at a run's start and end: Now does not redraw with the run's progress; the
+    /// panel on top draws that itself).
+    @ObservedObject private var runStatus = RunCoordinator.shared.status
+    private var runs: RunCoordinator { .shared }
     @State private var showReview = false
     @State private var openItem: SourceItem?
     @State private var showQueue = false
@@ -32,20 +36,11 @@ struct NowView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(item: $openItem) { ItemTextView(item: $0) }
         }
-        // Re-run the watchers whenever the scanned items change (a scan finishes, a source is
-        // switched on or off). The first value arrives on subscribe, so this also runs on appear.
-        .onReceive(sources.$sampleScan.combineLatest(sources.$sampleEnabled, sources.$revision)) { _ in
-            guard !sources.scanning else { return }
-            Task { await watchers.run() }
-            Task { await privacy.run() }
-            Task { await mail.run() }
-        }
+        // Opening the app only loads (owner decision 2026-09-28): nothing runs from here. The checks run in a
+        // `RunCoordinator` run (the first check after onboarding, overnight while charging, Run now, Scan again), and
+        // their saved results are what this screen shows.
         // Whatever a check proposes goes to Review as soon as it has run (never run until approved).
         // (@Published fires before the value is stored: hop once so collect reads the new one.)
-        // Laya arrived (download finished, files copied in): the watchers' model half can run now.
-        .onChange(of: readiness.isReady) { _, ready in
-            if ready, !sources.scanning { Task { await watchers.run() } }
-        }
         .onReceive(privacy.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .onReceive(mail.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .onReceive(watchers.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
@@ -109,6 +104,8 @@ struct NowView: View {
                         }
                     }
                 }
+                // The run going now (stage, counts, the item, time left, Cancel), or the last one with Run now.
+                RunPanel().padding(.horizontal, 16)
                 // The game sits high on Now so it is found at once (owner, 2026-09-25).
                 PlayCard { launcher.open($0) }
                 // Runs that belong to Now, live and in place: the passive sort and the watchers.
@@ -143,10 +140,18 @@ struct NowView: View {
         }
         .neonGround()
         .scrollBounceBehavior(.basedOnSize)
+        #if DEBUG
+        // What ran since launch, for the no-launch-work UI test (owner decision A, 2026-09-28): nothing, unless asked.
+        .overlay(alignment: .topTrailing) {
+            Text("runs=\(runStatus.runsStarted) scans=\(sources.scansStarted)")
+                .font(.system(size: 6)).opacity(0.02)
+                .accessibilityIdentifier("debug.launchWork")
+        }
+        #endif
     }
 
     private var mascotState: MascotState {
-        if sources.scanning || watchers.running { return .scanning }
+        if sources.scanning || watchers.running || runStatus.running { return .scanning }
         if watchers.newCount > 0 && !watchers.findings.isEmpty { return .found }
         return .idle
     }
@@ -187,7 +192,7 @@ struct NowView: View {
                                 message: "The watchers' last run read 0 items from your \(sources.enabledCount) source\(sources.enabledCount == 1 ? "" : "s"). Run them again once your sources have been read. A source without permission, or with nothing in it, gives them nothing to check.",
                                 symbol: "photo.on.rectangle",
                                 actions: [EmptyStateAction(title: "Run now", symbol: "arrow.clockwise", id: "findings.empty.runNow") {
-                                              Task { await watchers.run() }
+                                              runs.runNow(reason: .manual)
                                           },
                                           EmptyStateAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus",
                                                            id: "findings.empty.sources") { router.open(.sources) }])
@@ -237,15 +242,29 @@ struct NowView: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("now.guard")
                 }
-            } else {
+            } else if !watchers.loaded || watchers.running {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text(sources.scanning ? "Reading your sources…" : "The watchers are reading your items…")
+                    Text(watchers.running ? "The watchers are reading your items…" : "Loading the last results…")
                         .font(.subheadline).foregroundStyle(Palette.inkSoft)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .card()
                 .accessibilityIdentifier("findings.loading")
+            } else {
+                // Loaded, and no check has ever run: say so, and offer the run (nothing runs by itself at launch).
+                HonestEmptyState(
+                    title: "Not checked yet",
+                    message: runStatus.running
+                        ? "A check is running. Its findings show here once the watchers have run."
+                        : "Loupe checks your sources overnight while the phone charges. Run the check now to see what it finds.",
+                    symbol: "moon.stars",
+                    actions: runStatus.running ? [] : [EmptyStateAction(title: "Run now", symbol: "arrow.clockwise", id: "findings.notChecked.runNow") {
+                        runs.runNow(reason: .manual)
+                    }])
+                    .padding(.horizontal, -16)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("findings.notChecked")
             }
         }
         .padding(.horizontal, 16)

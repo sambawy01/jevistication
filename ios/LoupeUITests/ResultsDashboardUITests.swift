@@ -8,7 +8,7 @@ final class ResultsDashboardUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     private func launch(_ n: Int, extra: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeSkipOnboarding", "-LoupeModelState", "ready", "-LoupeTab", "judgments",
                                "-LoupeJudgmentDemo", "is-receipt", "-LoupeResultsFixture", "\(n)"] + extra
         app.launch()

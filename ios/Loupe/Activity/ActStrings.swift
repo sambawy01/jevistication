@@ -250,7 +250,7 @@ enum ActStrings {
         "act.kind.source_scan": ("Source scan", "فحص مصدر"),
         "act.title.scan.photos": ("Reading Photos", "قراءة الصور"),
         "act.title.scan.files": ("Reading Files", "قراءة الملفات"),
-        "act.title.scan.sample": ("Reading the sample", "قراءة العيّنة"),
+        "act.title.scan.sample": ("Reading the test fixture", "قراءة بيانات الاختبار"),
         "act.title.scan.mail": ("Reading Mail", "قراءة البريد"),
         "act.title.scan.calendar": ("Reading Calendar", "قراءة التقويم"),
         "act.title.scan.contacts": ("Reading Contacts", "قراءة جهات الاتصال"),

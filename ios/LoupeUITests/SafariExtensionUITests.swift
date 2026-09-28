@@ -19,7 +19,7 @@ final class SafariExtensionUITests: XCTestCase {
     func testTurnOnInSettingsThenWarnInSafari() throws {
         try XCTSkipIf(url == nil, "set TEST_RUNNER_LOUPE_SAFARI_URL to run it")
         let url = url!
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "guard", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeModelState", "missing"]
         app.launch()
         let turnOn = app.descendants(matching: .any)["protect.safari.turnOn"].firstMatch

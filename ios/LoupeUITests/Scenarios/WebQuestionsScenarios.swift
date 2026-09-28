@@ -18,7 +18,7 @@ final class WebQuestionsScenarios: ScenarioCase {
     }
 
     func testTemplatesCustomQuestionAndSettingsSurviveARelaunch() {
-        start("web", ["-LoupeTab", "web", "-LoupeSkipOnboarding", "-LoupeModelState", "missing"])
+        start("web", ["-LoupeTab", "web", "-LoupeSkipOnboarding", "-LoupeModelState", "missing"], run: false)
         XCTAssertTrue(any("web.template.currency").waitForExistence(timeout: 20))
         audit("06-web-library", ["web.template.currency", "web.template.weather", "web.template.trains", "web.settings"])
 

@@ -7,7 +7,7 @@ final class LaunchResponsivenessUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     func testNowIsInteractiveAtOnceOverABigLedger() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeBigLedger", "3000", "-LoupeMainWatchdog", "-LoupeTab", "now",
                                "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
         let launched = Date()

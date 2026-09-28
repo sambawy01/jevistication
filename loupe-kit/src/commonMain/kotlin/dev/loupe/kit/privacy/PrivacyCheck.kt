@@ -84,6 +84,12 @@ interface PrivacyItemListener {
 
     /** Every item is read; the duplicate pass runs now. */
     fun onDuplicates()
+
+    /**
+     * Asked before each item (the iPhone's Cancel, 2026-09-28): true stops the check there, before the duplicate
+     * pass; the partial result is the caller's to drop (the app keeps the previous run's results).
+     */
+    fun isCancelled(): Boolean = false
 }
 
 object PrivacyCheck {
@@ -141,6 +147,7 @@ object PrivacyCheck {
     ): List<PrivacyFinding> {
         val out = mutableListOf<PrivacyFinding>()
         for ((index, item) in items.withIndex()) {
+            if (listener?.isCancelled() == true) return out
             // Contact cards are the address book itself: a phone number there is the point, not a leak.
             if (item.kind == ItemKind.CONTACT) {
                 listener?.onItem(index + 1, items.size, 0, true)

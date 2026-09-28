@@ -44,15 +44,15 @@ protocol ItemResolving {
 }
 
 /// The live resolver: the privacy locator's rules (bookmarked Files locations, the Send to Loupe
-/// inbox, PhotoKit), plus the bundled sample (read-only files in the app) and mail files.
+/// inbox, PhotoKit), plus mail files and, in tests and DEBUG fixture launches, the fixture sample.
 struct LiveItemResolver: ItemResolving {
     var locator: PrivacyLocating
     var extraFiles: [String: URL] = [:]
-    /// The bundled sample's current location. The app bundle moves to a new container on every
-    /// install, so a sample path cached by an earlier install is rebased onto this one.
-    var sampleRoot: URL? = SourcesService.bundledSample()
+    /// The fixture sample's current location (tests and DEBUG fixture launches; nil in the app). The test bundle
+    /// moves on every install, so a sample path cached earlier is rebased onto this one.
+    var sampleRoot: URL? = SourcesService.fixtureSampleRoot()
 
-    /// Rebases a cached absolute path under an old bundle's `sample/` folder onto the current one.
+    /// Rebases a cached absolute path under an old `sample/` folder onto the current one.
     static func rebaseSample(_ path: String, onto root: URL?) -> URL {
         let old = URL(fileURLWithPath: path)
         guard let root, !FileManager.default.fileExists(atPath: path),
@@ -72,7 +72,7 @@ struct LiveItemResolver: ItemResolving {
         }
         if isSample {
             let url = Self.rebaseSample(item.path, onto: sampleRoot)
-            return FileManager.default.fileExists(atPath: url.path) ? .file(url, scope: nil) : .unavailable("The sample file is missing.")
+            return FileManager.default.fileExists(atPath: url.path) ? .file(url, scope: nil) : .unavailable("The test fixture file is missing.")
         }
         switch locator.access(for: item.id) {
         case .photo(let id): return .photo(localId: id)
@@ -277,7 +277,7 @@ enum ItemImages {
 // MARK: - Row header: thumbnail, name, source/folder, date
 
 extension SourceItem {
-    /// "Photos", "Files · Receipts", "Sample data · documents/identity".
+    /// "Photos", "Files · Receipts", "Mail · INBOX".
     var sourceAndFolder: String {
         var folder = NameHints.shared.folderOf(item: self)
         // files:<location>/… and mail:<account>/…: the first segment is Loupe's key, not a folder.
@@ -286,7 +286,7 @@ extension SourceItem {
         }
         let src: String
         switch sourceId {
-        case SourcesService.sampleId: src = "Sample data"
+        case SourcesService.sampleId: src = "Test fixture"
         case "photos": src = "Photos"
         case "files": src = "Files"
         case "shared": src = "Send to Loupe"

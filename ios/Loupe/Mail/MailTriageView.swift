@@ -69,7 +69,7 @@ struct MailTriageView: View {
                 }
                 if let s = mail.summary {
                     if s.rows.isEmpty {
-                        Text("No mail to triage. Turn on the sample or Mail in Sources.")
+                        Text("No mail to triage. Turn on Mail in Sources, or import mail into the Inbox.")
                             .font(.subheadline).foregroundStyle(Palette.inkSoft).card()
                             .accessibilityIdentifier("mail.none")
                     }

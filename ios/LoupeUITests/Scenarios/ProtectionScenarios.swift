@@ -42,7 +42,7 @@ final class ProtectionScenarios: ScenarioCase {
     func testChecksSpottedAndClearingSurviveRelaunches() {
         UIPasteboard.general.string = lookalike
         start("protection", ["-LoupeTab", "guard", "-LoupeSkipOnboarding", "-LoupeModelState", "missing",
-                             "-LoupeClipboard", "-LoupeClipboardReset"])
+                             "-LoupeClipboard", "-LoupeClipboardReset"], run: false)
         XCTAssertTrue(any("guard.header").waitForExistence(timeout: 20))
 
         // 1. The chip for the link copied in another app, offered without reading it; Check reads it (iOS asks) and

@@ -11,7 +11,9 @@ final class WatchersService: ObservableObject {
     static let shared = WatchersService(ledger: LedgerService.shared,
                                         items: { SourcesService.shared.items() },
                                         model: LayaModel.shared,
-                                        seen: UserDefaults.standard)
+                                        seen: UserDefaults.standard,
+                                        results: ResultsStore.shared,
+                                        reader: { SourcesService.shared.itemsReader() })
 
     @Published private(set) var summary: WatcherSummary?
     @Published private(set) var running = false
@@ -25,6 +27,8 @@ final class WatchersService: ObservableObject {
     @Published private(set) var newKeys: Set<String> = []
     /// When the latest run finished.
     @Published private(set) var lastRun: Date?
+    /// The saved results have been read (or there were none): until then Now says it is loading, not "no findings".
+    @Published private(set) var loaded = false
     /// The running run's per-watcher progress. Its own object, so a progress tick redraws only the strip
     /// that shows it, never the screens that read the findings.
     let progress = WatcherProgressFeed()
@@ -34,21 +38,57 @@ final class WatchersService: ObservableObject {
     private let model: JudgmentModelProvider
     private let seen: UserDefaults
     private let settings: ModelSettingsSource
-    private static let seenKey = "watchers.seenKeys"
+    /// UserDefaults key of the finding keys already shown once (the sample migration prunes it).
+    static let seenKeysKey = "watchers.seenKeys"
     /// What the last set-aside took with it, for Undo: an expiry finding's timeline row, a merchant's "no charge" warning.
     private var removedExpiry: ExpiryRow?
     private var removedQuiet: [WatcherFinding] = []
     /// A run asked for while one was going: it runs once more when the current one ends.
     private var rerun = false
     private var rerunToday: Date?
+    /// Callers of `run` that arrived while a run was going: released when the follow-up run ends.
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+    /// Where the latest results are saved (nil in unit tests that do not test it).
+    private let results: ResultsStore?
+    /// Reads the items off the main thread (the app); nil in unit tests (they pass `items`).
+    private let reader: (() -> ItemsReader)?
 
     init(ledger: LedgerService, items: @escaping () -> [SourceItem], model: JudgmentModelProvider, seen: UserDefaults,
-         settings: ModelSettingsSource = ModelSettingsService.shared) {
+         settings: ModelSettingsSource = ModelSettingsService.shared, results: ResultsStore? = nil,
+         reader: (() -> ItemsReader)? = nil) {
+        self.reader = reader
         self.settings = settings
         self.ledger = ledger
         self.items = items
         self.model = model
         self.seen = seen
+        self.results = results
+        loadSaved()
+    }
+
+    /// Reads the latest saved results off the main thread (2026-09-28: launch loads, it never re-runs). A run that
+    /// finished first wins.
+    private func loadSaved() {
+        guard let results else { loaded = true; return }
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let saved = results.loadWatchers().map { ResultsStore.Box($0) }
+            await MainActor.run {
+                guard let self else { return }
+                if self.summary == nil, let (summary, meta) = saved?.value {
+                    self.summary = summary
+                    self.newKeys = Set(meta?.newKeys ?? [])
+                    self.newCount = self.newKeys.count
+                    self.lastRun = meta?.ranAt ?? meta?.savedAt
+                }
+                self.loaded = true
+            }
+        }
+    }
+
+    /// Saves the latest results (after a run, and after each answer the user gives on them).
+    private func persist() {
+        guard let results, let summary else { return }
+        results.saveWatchers(summary, meta: .init(savedAt: Date(), newKeys: newKeys.sorted(), ranAt: lastRun))
     }
 
     var findings: [WatcherFinding] { summary?.findings ?? [] }
@@ -69,19 +109,33 @@ final class WatchersService: ObservableObject {
     /// A run asked for while one is going is not dropped: it runs again once the current run ends (coalesced,
     /// the same as `PrivacyService`), so a scan that finishes mid-run is never missed (audit P0-1: a slow first
     /// run that opened the model read 0 items and then ignored the sample scan's "items changed").
-    func run(today: Date = Date()) async {
-        guard !running else { rerun = true; rerunToday = today; return }
-        running = true
-        defer {
-            running = false
-            if rerun {
-                rerun = false
-                let next = rerunToday ?? Date()
-                rerunToday = nil
-                Task { await run(today: next) }
-            }
+    ///
+    /// A caller that arrives mid-run waits for that follow-up run (the `RunCoordinator` needs the watchers' stage to be
+    /// over when its `run` returns). [cancel] is looked at before the run and between the follow-ups: the five watchers
+    /// themselves are one call into LoupeKit and finish once started. [report] hears each watcher as it starts.
+    func run(today: Date = Date(), cancel: RunCancel? = nil, report: RunReporter? = nil) async {
+        guard !running else {
+            rerun = true; rerunToday = today
+            await withCheckedContinuation { waiters.append($0) }
+            return
         }
-        let all = items()
+        running = true
+        var day = today
+        repeat {
+            rerun = false
+            if cancel?.isCancelled == true { break }
+            await runOnce(today: day, report: report)
+            day = rerunToday ?? Date()
+            rerunToday = nil
+        } while rerun
+        running = false
+        let released = waiters
+        waiters = []
+        released.forEach { $0.resume() }
+    }
+
+    private func runOnce(today: Date, report: RunReporter?) async {
+        let all = await ItemsReader.load(items, reader)
         let job = ActivityCenter.shared.start("watchers", title: "act.title.watchers", view: "watchers", total: all.count,
                                               stage: "act.stage.starting")
         // Model settings: with the watchers' Laya off the mechanical half runs alone.
@@ -96,27 +150,33 @@ final class WatchersService: ObservableObject {
         // On the one model thread (the expiry radar may ask Laya); foreground, so a sort yields. Each watcher reports
         // as it starts and ends, and the model half per document: the Guard's strip and the live run show it.
         let result: WatcherSummary = await ModelWork.run(.foreground) {
+            let order = WatcherKind.entries.map(\.id)
             let report = WatcherRun.shared.runIsoWithProgress(items: all, todayIso: todayIso, backend: backend, policy: policy) { watcher, done, total in
                 let d = Int(truncating: done), t = Int(truncating: total)
                 feed.report(watcher, done: d, total: t)
+                if let reporter = report, let i = order.firstIndex(of: watcher) {
+                    let title = WatcherKind.entries[i].title
+                    reporter.report(done: d >= t && t > 0 ? i + 1 : i, total: order.count, part: title)
+                }
                 let step = watcher.replacingOccurrences(of: "-", with: "_")
                 if d == 0 { job.stage("act.stage.watcher", ["watcher": step]) }
                 job.step(step, key: "act.stage.watcher", state: d >= t && t > 0 ? "done" : "running", done: d, total: t)
             }
-            return WatcherFindings.shared.summarise(report: report, items: all,
-                                                    sampleSourceIds: [SourcesService.sampleId],
+            // No sample badges anywhere (2026-09-28): nothing is marked as sample data.
+            return WatcherFindings.shared.summarise(report: report, items: all, sampleSourceIds: [],
                                                     corrections: corrections)
         }
         Self.report(job, result: result, items: all.count, laya: backend != nil)
         let keys = Set(result.findings.map(\.key))
-        let before = Set(seen.stringArray(forKey: Self.seenKey) ?? [])
+        let before = Set(seen.stringArray(forKey: Self.seenKeysKey) ?? [])
         newCount = keys.subtracting(before).count
-        seen.set(Array(before.union(keys)).sorted(), forKey: Self.seenKey)
+        seen.set(Array(before.union(keys)).sorted(), forKey: Self.seenKeysKey)
         settings.recordRun(Features.shared.WATCHERS, layaOff: !policy.useLaya)
         newKeys = keys.subtracting(before)
         lastRun = Date()
         feed.end()
         summary = result
+        persist()
     }
 
     /// After "Delete all my Loupe data": the last run's results, what was seen and the Undo go. The next run
@@ -131,7 +191,7 @@ final class WatchersService: ObservableObject {
         lastRun = nil
         removedExpiry = nil
         removedQuiet = []
-        seen.removeObject(forKey: Self.seenKey)
+        seen.removeObject(forKey: Self.seenKeysKey)
         if running { rerun = true }
     }
 
@@ -153,6 +213,7 @@ final class WatchersService: ObservableObject {
             lastSetAsideRow = nil
             notice = verdict == .dismissed ? "Dismissed." : "Marked not relevant."
         }
+        persist()
     }
 
     /// Confirm, Not a subscription (not relevant) or Set aside (dismissed) on a census merchant (Guard): a correction
@@ -174,6 +235,7 @@ final class WatchersService: ObservableObject {
             lastSetAside = nil
             notice = verdict == .notRelevant ? "Marked not a subscription. Left out of the total." : "Set aside. Left out of the total."
         }
+        persist()
     }
 
     /// Undoes the last Dismiss / Not relevant: appends a retraction and puts the finding back.
@@ -185,6 +247,7 @@ final class WatchersService: ObservableObject {
             removedQuiet = []
             lastSetAsideRow = nil
             notice = "Put back."
+            persist()
             return
         }
         guard let f = lastSetAside, let s = summary else { return }
@@ -198,6 +261,7 @@ final class WatchersService: ObservableObject {
         removedExpiry = nil
         lastSetAside = nil
         notice = "Put back."
+        persist()
     }
 
     func item(_ id: String) -> SourceItem? { items().first { $0.id == id } }

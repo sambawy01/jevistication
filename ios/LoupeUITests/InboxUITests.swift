@@ -7,7 +7,7 @@ final class InboxUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     func testImportedCsvRowsAreItems() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "sources", "-LoupeSkipOnboarding", "-LoupeInboxDemo"]
         app.launch()
 

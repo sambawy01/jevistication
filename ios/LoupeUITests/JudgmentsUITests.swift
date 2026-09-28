@@ -5,7 +5,7 @@ final class JudgmentsUITests: XCTestCase {
 
     /// Judgments → Library → a template → Use this → it appears in My judgments.
     func testUseATemplateAppearsInMyJudgments() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "judgments", "-LoupeSkipOnboarding"]
         app.launch()
         let open = app.buttons["judgments.openLibrary"]
@@ -32,7 +32,7 @@ final class JudgmentsUITests: XCTestCase {
     /// Audit P1-3 (2026-09-27): the results screen's menu edits the wording and deletes, asking first; the long-press
     /// Delete on My judgments asks too. Packs and Write your own show their text.
     func testEditAndDeleteFromTheResultsMenu() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeModelState", "missing",
                                "-LoupeJudgmentDemo", "tax-receipt"]
         app.launch()
@@ -64,7 +64,7 @@ final class JudgmentsUITests: XCTestCase {
     }
 
     func testLongPressDeleteAsksFirst() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeModelState", "missing",
                                "-LoupeJudgmentDemo", "tax-receipt"]
         app.launch()

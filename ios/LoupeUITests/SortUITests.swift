@@ -5,7 +5,7 @@ final class SortUITests: XCTestCase {
 
     /// Me → Run now shows progress over the sample and finishes with real counts.
     func testRunNowShowsProgressAndCompletes() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         // The demo's stand-in scorer plays the model: Laya reads as ready (it is required, 2026-09-25).
         app.launchArguments = ["-LoupeFixtures", "-LoupeSortDemo", "-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
         app.launch()

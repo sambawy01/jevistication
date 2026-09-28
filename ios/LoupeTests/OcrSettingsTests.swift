@@ -17,7 +17,7 @@ final class OcrSettingsTests: XCTestCase {
     }
 
     private func sample(_ relative: String) throws -> String {
-        let root = try XCTUnwrap(SourcesService.bundledSample(), "sample folder missing from the app bundle")
+        let root = try XCTUnwrap(TestSample.root(), "sample folder missing from the test bundle")
         return root.appendingPathComponent(relative).path
     }
 

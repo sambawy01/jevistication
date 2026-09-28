@@ -52,7 +52,6 @@ struct SubscriptionDetailView: View {
                 }
                 HStack(spacing: 6) {
                     if row.verdict == .confirmed { Pill(text: "Confirmed by you", color: Palette.okText, symbol: "checkmark") }
-                    if row.sample { Pill(text: "Sample", color: Palette.inkSoft) }
                 }
             }
             Spacer(minLength: 0)
@@ -174,7 +173,6 @@ struct ExpiryDetailView: View {
                         HStack(spacing: 6) {
                             if row.breachesRule { Pill(text: "Inside the rule", color: Palette.warnText) }
                             if row.ambiguous { Pill(text: "Ambiguous date", color: Palette.amber, symbol: "questionmark") }
-                            if row.sample { Pill(text: "Sample", color: Palette.inkSoft) }
                         }
                         if let line = row.line {
                             Text(line).font(Typeface.mono(12)).foregroundStyle(Palette.ink)

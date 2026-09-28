@@ -20,7 +20,7 @@ final class PhishingDatabaseTests: XCTestCase {
         .appendingPathComponent("../../loupe-kit/src/commonTest/fixtures/phishingdb").standardized
 
     private static let sample: [SourceItem] = {
-        let root = SourcesService.bundledSample()!
+        let root = TestSample.root()!
         return try! SourceScanner(extractors: AppleExtractors(timeZone: TimeZone(identifier: "UTC")!),
                                   zone: Kotlinx_datetimeTimeZone.companion.UTC,
                                   limits: SourceScanner.Limits(maxFileBytes: 50 * 1024 * 1024, maxTextChars: 20_000, maxDepth: 16, maxMboxMessages: 20_000))

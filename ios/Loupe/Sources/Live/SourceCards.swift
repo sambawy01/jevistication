@@ -170,8 +170,7 @@ struct SourcesHeader: View {
     private struct Entry: Identifiable { let id: String; let title: String; let on: Bool }
 
     private var entries: [Entry] {
-        [Entry(id: "sample", title: "Sample", on: sources.sampleEnabled)]
-            + PhoneSource.allCases.map { Entry(id: $0.id, title: $0.title, on: sources.state($0).enabled) }
+        PhoneSource.allCases.map { Entry(id: $0.id, title: $0.title, on: sources.state($0).enabled) }
             + [Entry(id: "inbox", title: "Inbox", on: sources.inboxEnabled && !sources.inboxBatches.isEmpty)]
     }
 

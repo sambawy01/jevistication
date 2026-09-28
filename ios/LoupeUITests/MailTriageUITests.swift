@@ -5,8 +5,8 @@ final class MailTriageUITests: XCTestCase {
 
     /// Now → Mail triage shows the sample's PayPal phishing first, with the signals behind it.
     func testNowOpensMailTriageWithThePaypalPhishingAndItsSignals() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeTab", "now", "-LoupeSkipOnboarding"]
         app.launch()
         let card = app.buttons["now.mail"]
         for _ in 0..<4 where !card.waitForExistence(timeout: 15) { app.swipeUp() }
