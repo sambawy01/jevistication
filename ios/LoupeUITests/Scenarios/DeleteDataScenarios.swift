@@ -21,7 +21,7 @@ final class DeleteDataScenarios: ScenarioCase {
     }
 
     private func contactsSwitch() -> XCUIElement {
-        tab("Sources")
+        openReads()
         let sw = app.switches["sources.phone.contacts.toggle"]
         reveal(sw)
         XCTAssertTrue(sw.waitForExistence(timeout: 10))
@@ -29,11 +29,11 @@ final class DeleteDataScenarios: ScenarioCase {
     }
 
     private func assertEmpty(_ when: String) {
-        tab("Judgments")
+        root("Ask")
         let mine = app.segmentedControls["judgments.section"].buttons["My judgments"]
         if mine.waitForExistence(timeout: 5) { mine.tap() }
         XCTAssertTrue(button("judgments.openLibrary").waitForExistence(timeout: 15), "\(when): My judgments is empty")
-        tab("Guard")
+        root("Home")
         let spotted = any("guard.quick.spotted")
         reveal(spotted)
         spotted.tap()
@@ -46,7 +46,7 @@ final class DeleteDataScenarios: ScenarioCase {
         XCTAssertFalse(any("protect.recent.row").waitForExistence(timeout: 2), "\(when): no recent checks")
         back()
         XCTAssertEqual(contactsSwitch().value as? String, "1", "\(when): Contacts is back to its default (on)")
-        tab("Me")
+        root("Me")
         let run = button("me.sort.run")
         reveal(run)
         XCTAssertTrue(run.exists, "\(when): the decision model is still installed (Run now is unlocked)")
@@ -58,14 +58,14 @@ final class DeleteDataScenarios: ScenarioCase {
         walkOnboarding()
 
         // Data to delete: a pack of judgments, a dangerous link check (recent + Spotted), Contacts off.
-        tab("Judgments")
+        root("Ask")
         button("judgments.packs").tap()
         button("packs.example").tap()
         let add = button("packs.add")
         reveal(add)
         add.tap()
         XCTAssertTrue(button("judgments.mine.j-complaint-triage-team").waitForExistence(timeout: 10))
-        tab("Guard")
+        root("Home")
         let check = button("guard.quick.checkLink")
         reveal(check)
         check.tap()
@@ -81,7 +81,7 @@ final class DeleteDataScenarios: ScenarioCase {
         waitFor(contacts, "value == %@", "0")
 
         // Me → Delete all my Loupe data: a dialog, then DELETE typed; the model kept.
-        tab("Me")
+        root("Me")
         let erase = button("me.erase")
         reveal(erase)
         audit("12-me-erase", ["me.erase"])
@@ -104,6 +104,8 @@ final class DeleteDataScenarios: ScenarioCase {
 
         // Onboarding again, then everything empty and the model still here.
         walkOnboarding()
+        XCTAssertTrue(tabs.buttons["Home"].isSelected, "after the erase Loupe starts again on Home")
+        XCTAssertTrue(button("home.money").waitForExistence(timeout: 20), "Home's first screen, not a screen left pushed")
         assertEmpty("after the erase")
         shot("12-after-erase")
 

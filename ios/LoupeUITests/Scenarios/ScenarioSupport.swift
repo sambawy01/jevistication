@@ -81,6 +81,50 @@ class ScenarioCase: XCTestCase {
         b.tap()
     }
 
+    // MARK: The three places
+
+    /// A place's first screen: its tab tapped twice (a second tap on the selected tab goes back to its first screen).
+    func root(_ place: String) {
+        tab(place)
+        tab(place)
+    }
+
+    /// Home → Protected → the Protection screen (today's Guard: the watchers, Run now, link protection).
+    func openProtection() {
+        root("Home")
+        let card = button("home.protected")
+        reveal(card)
+        card.tap()
+        XCTAssertTrue(any("guard.header").waitForExistence(timeout: 20), "the Protection screen opens")
+    }
+
+    /// Me → What Loupe reads.
+    func openReads() {
+        root("Me")
+        let row = button("me.reads")
+        reveal(row)
+        row.tap()
+        XCTAssertTrue(app.switches["sources.sample.toggle"].waitForExistence(timeout: 20), "What Loupe reads opens")
+    }
+
+    /// Me → Mail.
+    func openMail() {
+        root("Me")
+        let row = button("me.mail")
+        reveal(row)
+        row.tap()
+        XCTAssertTrue(app.switches["sources.phone.mail.toggle"].waitForExistence(timeout: 20), "Mail opens")
+    }
+
+    /// Me → Advanced.
+    func openAdvanced() {
+        root("Me")
+        let row = button("me.advanced")
+        reveal(row)
+        row.tap()
+        XCTAssertTrue(button("me.modelSettings").waitForExistence(timeout: 10), "Advanced opens")
+    }
+
     /// Swipes up (or down) until `el` is on screen and hittable.
     @discardableResult
     func scrollTo(_ el: XCUIElement, max: Int = 14, up: Bool = true) -> Bool {

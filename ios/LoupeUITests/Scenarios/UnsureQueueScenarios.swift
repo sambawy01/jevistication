@@ -1,6 +1,6 @@
 import XCTest
 
-/// Scenario 4: the Unsure queue. Now → Needs you → answer two items, Undo one, Skip one; relaunch → the one answer
+/// Scenario 4: the Unsure queue. Ask → Needs you → answer two items, Undo one, Skip one; relaunch → the one answer
 /// that stands is kept (the count is one lower than at the start) and the undone one is back in the queue.
 /// `-LoupeQueueDemo` seeds the fixture queue once (with a stand-in scorer), only while the ledger is empty, so the
 /// relaunch does not seed it again.
@@ -8,8 +8,9 @@ final class UnsureQueueScenarios: ScenarioCase {
     private var count: XCUIElement { app.staticTexts["queue.count"] }
 
     private func openQueue() -> Int {
-        let card = button("now.needsYou")
-        XCTAssertTrue(card.waitForExistence(timeout: 60), "Now shows Needs you")
+        root("Ask")
+        let card = button("ask.needsYou")
+        XCTAssertTrue(card.waitForExistence(timeout: 60), "Ask shows Needs you")
         card.tap()
         XCTAssertTrue(count.waitForExistence(timeout: 10))
         return number(count.label)

@@ -22,11 +22,11 @@ final class ProtectionScenarios: ScenarioCase {
         button("protect.link.check").tap()
     }
 
-    /// The unseen count that badges the Guard tab (`ProtectionStore.unseenCount`). The tab's badge is drawn but not
+    /// The unseen count that badges Home (`ProtectionStore.unseenCount`). The tab's badge is drawn but not
     /// exposed to accessibility, so this reads the same count from Guard's Spotted row ("2 new"); empty when none.
     private var guardBadge: String {
         let row = any("guard.quick.spotted")
-        if !row.exists { tab("Guard") }
+        if !row.exists { root("Home") }
         reveal(row)
         let words = row.label.components(separatedBy: CharacterSet(charactersIn: ",·"))
         return words.first { $0.hasSuffix(" new") }?.trimmingCharacters(in: .whitespaces) ?? ""

@@ -79,9 +79,15 @@ final class SourcesScenarios: ScenarioCase {
             set(sw, false, id)
             set(sw, true, id)
         }
+        // Mail is one place: its entry opens the Mail screen, where the mailbox's switch and setup are.
+        let mailEntry = button("sources.mail")
+        reveal(mailEntry)
+        mailEntry.tap()
+        XCTAssertTrue(app.switches["sources.phone.mail.toggle"].waitForExistence(timeout: 10), "Mail opens")
         let mail = phoneSwitch("mail")
         XCTAssertEqual(mail.value as? String, "0", "Mail is offered, not forced")
         audit("02-sources-mail", ["sources.phone.mail.setup"])
+        back()
         // Files offers its picker.
         let add = button("sources.phone.files.add")
         answerSystemPrompt(wait: 8)
@@ -102,7 +108,12 @@ final class SourcesScenarios: ScenarioCase {
         XCTAssertEqual(phoneSwitch("files").value as? String, "1", "Files stays on")
         XCTAssertEqual(phoneSwitch("calendar").value as? String, "0", "Calendar stays off")
         XCTAssertEqual(phoneSwitch("contacts").value as? String, "0", "Contacts stays off")
+        let mailAgain = button("sources.mail")
+        reveal(mailAgain)
+        mailAgain.tap()
+        XCTAssertTrue(app.switches["sources.phone.mail.toggle"].waitForExistence(timeout: 10), "Mail opens")
         XCTAssertEqual(phoneSwitch("mail").value as? String, "0", "Mail stays off")
+        back()
         shot("02-relaunch")
 
         // The live scan: Photos reads the demo pictures in place, then settles on its summary and count.

@@ -41,7 +41,7 @@ final class JudgmentsScenarios: ScenarioCase {
     }
 
     private func openMine() {
-        tab("Judgments")
+        root("Ask")
         let seg = app.segmentedControls["judgments.section"].buttons["My judgments"]
         if seg.waitForExistence(timeout: 5) { seg.tap() }
     }

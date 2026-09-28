@@ -6,8 +6,8 @@ import XCTest
 /// The results card follows a decision-model run only, so it needs the real model (the device checklist).
 final class GameScenarios: ScenarioCase {
     private func openYouFly() {
-        tab("Now")
-        let play = button("now.play.human")
+        root("Me")
+        let play = button("me.play.human")
         reveal(play)
         XCTAssertTrue(play.waitForExistence(timeout: 10))
         play.tap()
@@ -17,9 +17,9 @@ final class GameScenarios: ScenarioCase {
     private var autofire: XCUIElement { app.switches["game.autofire"] }
 
     func testFireWatchAndAutoFireSurviveARelaunch() {
-        start("game", ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeModelState", "missing"])
+        start("game", ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeModelState", "missing"])
         XCTAssertTrue(tabs.waitForExistence(timeout: 20))
-        audit("11-now-play", ["now.play.human", "now.play.watch"])
+        audit("11-me-play", ["me.play.human", "me.play.watch"])
         openYouFly()
 
         // FIRE: hittable, big, under the river on the right; a tap fires and does not pause.
@@ -53,7 +53,7 @@ final class GameScenarios: ScenarioCase {
         let close = button("game.close")
         reveal(close)
         close.tap()
-        XCTAssertTrue(button("now.play.human").waitForExistence(timeout: 5), "Close returns to Now")
+        XCTAssertTrue(button("me.play.human").waitForExistence(timeout: 5), "Close returns to Me")
 
         // Relaunch: auto-fire stays on.
         relaunch()

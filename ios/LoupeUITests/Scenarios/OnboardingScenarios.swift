@@ -36,7 +36,7 @@ final class OnboardingScenarios: ScenarioCase {
         button("onboarding.skip").tap()
         XCTAssertTrue(tabs.waitForExistence(timeout: 10))
         // Later locks the model features, and says how to get the model.
-        tab("Me")
+        root("Me")
         let locked = any("needsLaya.sort")
         reveal(locked)
         XCTAssertTrue(locked.exists, "Sorting is locked without the model")

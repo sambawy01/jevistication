@@ -9,23 +9,24 @@ import XCTest
 final class DeviceSmokeScenarios: ScenarioCase {
     private func launchSmoke(_ tab: String) {
         launch(["-LoupeSkipOnboarding", "-LoupeTab", tab])
-        XCTAssertTrue(tabs.waitForExistence(timeout: 30), "the tabs")
+        XCTAssertTrue(tabs.waitForExistence(timeout: 30), "the places")
     }
 
-    /// Every tab: the actions it needs are there, hittable and 44 pt, and nothing says "Laya".
-    func testEveryTabHasItsActions() {
-        launchSmoke("now")
-        XCTAssertEqual(tabs.buttons.allElementsBoundByIndex.map(\.label).filter { !$0.isEmpty }.count, 5, "five tabs")
-        audit("smoke-now", ["now.play.watch", "now.play.human"])
+    /// Every place: the actions it needs are there, hittable and 44 pt, and nothing says "Laya".
+    func testEveryPlaceHasItsActions() {
+        launchSmoke("home")
+        XCTAssertEqual(tabs.buttons.count, 3, "three places")
+        for name in ["Home", "Ask", "Me"] { XCTAssertTrue(tabs.buttons[name].exists, "no \(name) place") }
+        XCTAssertTrue(button("home.money").waitForExistence(timeout: 30))
+        audit("smoke-home", ["guard.quick.checkLink", "guard.quick.checkCopied", "home.money", "home.documents", "home.protected"])
 
-        tab("Guard")
-        XCTAssertTrue(any("guard.header").waitForExistence(timeout: 20))
-        audit("smoke-guard", ["guard.quick.checkLink", "guard.quick.checkCopied", "guard.runNow"])
+        openProtection()
+        audit("smoke-protection", ["guard.quick.checkLink", "guard.runNow"])
 
-        tab("Judgments")
+        root("Ask")
         let mine = app.segmentedControls["judgments.section"].buttons["My judgments"]
         if mine.waitForExistence(timeout: 5) { mine.tap() }
-        audit("smoke-judgments", ["judgments.write", "judgments.packs"])
+        audit("smoke-ask", ["judgments.write", "judgments.packs"])
         let library = app.segmentedControls["judgments.section"].buttons["Library"]
         library.tap()
         XCTAssertTrue(app.textFields["library.search"].waitForExistence(timeout: 10), "the Library opens")
@@ -34,22 +35,28 @@ final class DeviceSmokeScenarios: ScenarioCase {
         XCTAssertTrue(any("web.template.currency").waitForExistence(timeout: 10), "Web questions open")
         audit("smoke-web", ["web.template.currency", "web.settings"])
 
-        tab("Sources")
-        for id in ["photos", "files", "calendar", "contacts", "mail"] {
+        root("Me")
+        audit("smoke-me", ["me.reads", "me.mail", "me.assistant", "me.model", "me.review", "me.export", "me.erase",
+                           "me.play.watch", "me.play.human", "me.advanced", "me.licences", "me.privacy", "me.terms"])
+        XCTAssertTrue(any("me.version").exists, "the version is shown")
+
+        openReads()
+        for id in ["photos", "files", "calendar", "contacts"] {
             let sw = app.switches["sources.phone.\(id).toggle"]
             reveal(sw)
-            XCTAssertTrue(sw.exists, "Sources has \(id)")
+            XCTAssertTrue(sw.exists, "What Loupe reads has \(id)")
         }
-        audit("smoke-sources")
+        audit("smoke-reads", ["sources.mail"])
 
-        tab("Me")
-        audit("smoke-me", ["me.model", "me.modelSettings", "me.onlineChecks", "me.assistant", "me.export", "me.erase",
-                           "me.licences", "me.privacy", "me.terms"])
-        XCTAssertTrue(any("me.version").exists, "the version is shown")
+        openMail()
+        audit("smoke-mail", ["sources.phone.mail.setup"])
+
+        openAdvanced()
+        audit("smoke-advanced", ["me.modelSettings", "me.onlineChecks"])
     }
 
-    /// Guard → Check a link with an ordinary website: no warning signs, and the check is in Recent checks after a
-    /// relaunch.
+    /// Protection → Check a link with an ordinary website: no warning signs, and the check is in Recent checks after
+    /// a relaunch.
     func testCheckAWebsiteAndItIsInRecentChecksAfterARelaunch() {
         launchSmoke("guard")
         let check = button("guard.quick.checkLink")
@@ -76,8 +83,8 @@ final class DeviceSmokeScenarios: ScenarioCase {
 
     /// A preference (the game's auto-fire) survives a relaunch, then is put back.
     func testAPreferenceSurvivesARelaunch() {
-        launchSmoke("now")
-        let play = button("now.play.human")
+        launchSmoke("me")
+        let play = button("me.play.human")
         reveal(play)
         play.tap()
         let fire = any("game.fire")
@@ -91,7 +98,7 @@ final class DeviceSmokeScenarios: ScenarioCase {
         waitFor(autofire, "value == %@", changed)
 
         relaunch()
-        let play2 = button("now.play.human")
+        let play2 = button("me.play.human")
         reveal(play2)
         play2.tap()
         let autofire2 = app.switches["game.autofire"]

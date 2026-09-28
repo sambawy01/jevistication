@@ -125,6 +125,22 @@ final class GuardScenarios: ScenarioCase {
         c.tap()
         XCTAssertTrue(any("guard.subscription.detail.amount").waitForExistence(timeout: 5))
         XCTAssertFalse(button("guard.subscription.confirm").exists, "\(confirmed) is still confirmed")
+        back()
+        // Home: Money and Documents open the same Subscriptions and Expiring, with the verdicts kept.
+        root("Home")
+        audit("07-home", ["home.money", "home.documents", "home.protected"])
+        let money = button("home.money")
+        reveal(money)
+        money.tap()
+        XCTAssertTrue(any("guard.subscriptions.total").waitForExistence(timeout: 10), "Money opens Subscriptions")
+        XCTAssertEqual(charges(), before - 1, "the same census as on Protection")
+        back()
+        let documents = button("home.documents")
+        reveal(documents)
+        documents.tap()
+        let passportRow = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "passport")).firstMatch
+        reveal(passportRow)
+        XCTAssertTrue(passportRow.exists, "Documents opens Expiring with the passport")
         shot("07-relaunch-confirmed")
     }
 }

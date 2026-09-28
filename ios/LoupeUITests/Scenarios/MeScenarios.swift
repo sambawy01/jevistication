@@ -8,7 +8,7 @@ import XCTest
 /// them back as it found them.
 final class MeScenarios: ScenarioCase {
     private func openModelSettings() {
-        tab("Me")
+        openAdvanced()
         let open = button("me.modelSettings")
         reveal(open)
         open.tap()
@@ -28,7 +28,7 @@ final class MeScenarios: ScenarioCase {
     }
 
     private func openOnlineChecks() {
-        tab("Me")
+        openAdvanced()
         let open = button("me.onlineChecks")
         reveal(open)
         open.tap()
@@ -38,7 +38,7 @@ final class MeScenarios: ScenarioCase {
     func testSettingsTogglesSortingOnlineChecksAndAbout() {
         start("me", ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeModelState", "ready", "-LoupeSortDemo"])
         XCTAssertTrue(tabs.waitForExistence(timeout: 20))
-        audit("09-me-top", ["me.model", "me.modelSettings", "me.export", "me.erase"])
+        audit("09-me-top", ["me.reads", "me.mail", "me.assistant", "me.model", "me.export", "me.erase", "me.advanced"])
 
         // 1. Model settings: calibration off by default → on; the privacy check's decision-model switch off.
         openModelSettings()
@@ -53,6 +53,7 @@ final class MeScenarios: ScenarioCase {
         XCTAssertTrue(button("settings.features.scan.use_laya.reset").exists, "a changed row offers Reset to default")
         audit("09-model-settings", ["settings.features.scan.use_laya.reset"])
         closeSettings()
+        root("Me")
 
         // 2. Sort while charging: on by default here; Run now sorts (the demo's stand-in scorer).
         let sort = app.switches["me.sort.toggle"]
@@ -84,7 +85,8 @@ final class MeScenarios: ScenarioCase {
         audit("09-online-checks")
         back()
 
-        // 4. The writing assistant: off by default, its fields there; nothing saved, nothing sent.
+        // 4. The Personal Assistant row (today's writing assistant): off by default; nothing saved, nothing sent.
+        root("Me")
         let assistant = button("me.assistant")
         reveal(assistant)
         assistant.tap()
@@ -119,7 +121,10 @@ final class MeScenarios: ScenarioCase {
         reset.tap()
         waitFor(setting("features.scan.use_laya"), "value == %@", "1")
         closeSettings()
-        XCTAssertEqual(app.switches["me.sort.toggle"].value as? String, "1", "sorting stays on")
+        root("Me")
+        let sortAgain = app.switches["me.sort.toggle"]
+        reveal(sortAgain)
+        XCTAssertEqual(sortAgain.value as? String, "1", "sorting stays on")
         openOnlineChecks()
         let factsAgain = app.switches["online.domainFacts"]
         reveal(factsAgain)

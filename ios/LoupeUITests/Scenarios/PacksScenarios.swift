@@ -26,7 +26,7 @@ final class PacksScenarios: ScenarioCase {
         XCTAssertTrue(button("judgments.mine.j-complaint-triage-team").waitForExistence(timeout: 10))
 
         relaunch()
-        tab("Judgments")
+        root("Ask")
         let mine = app.segmentedControls["judgments.section"].buttons["My judgments"]
         if mine.waitForExistence(timeout: 5) { mine.tap() }
         let team = button("judgments.mine.j-complaint-triage-team")
