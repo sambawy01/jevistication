@@ -9,16 +9,16 @@ import SwiftUI
 ///
 /// Performance: the header's progress strip observes its own feed, so a progress tick redraws the strip only; the
 /// sections take plain values and redraw only when the run's summary changes.
-struct GuardView: View {
+struct GuardScreen: View {
+    /// "Protection" when Home pushes it (Task 2 on); "Guard" while it is still a tab.
+    var title = "Protection"
     @ObservedObject var watchers: WatchersService = .shared
     @ObservedObject var sources: SourcesService = .shared
     @ObservedObject private var readiness = ModelReadiness.shared
     @ObservedObject private var settings = ModelSettingsService.shared
     @EnvironmentObject private var router: AppRouter
-    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack(path: $path) {
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -48,34 +48,14 @@ struct GuardView: View {
             #endif
             }
             .neonGround()
-            .navigationTitle("Guard")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .navigationDestination(for: GuardRoute.self) { route in
-                switch route {
-                case .subscription(let merchant): SubscriptionDetailView(watchers: watchers, merchant: merchant)
-                case .expiry(let itemId): ExpiryDetailView(watchers: watchers, itemId: itemId)
-                case .finding(let key): FindingDetailView(watchers: watchers, key: key)
-                case .mail: MailTriageView(mail: MailTriageService.shared)
-                case .onlineChecks: OnlineChecksView(online: OnlineChecksService.shared)
-                }
-            }
-        }
-        // Now's "Loupe spotted …" card: push the Spotted list (its destination is registered by the Protection section).
-        .onChange(of: router.guardPush) { _, _ in takePush() }
-        .onReceive(NotificationCenter.default.publisher(for: .loupeDataErased)) { _ in path = NavigationPath() }
-        // The run's live progress is drawn here (the strip), so the Activity dock leaves the watchers out on this tab.
-        .onAppear { ActivityCenter.shared.show("watchers"); takePush() }
-        .onDisappear { ActivityCenter.shared.hide("watchers") }
+            // The run's live progress is drawn here (the strip), so the Activity dock leaves the watchers out here.
+            .onAppear { ActivityCenter.shared.show("watchers") }
+            .onDisappear { ActivityCenter.shared.hide("watchers") }
     }
 
     private var coverage: GuardCoverage { GuardCoverage.from(sources) }
-
-    private func takePush() {
-        guard let route = router.guardPush else { return }
-        router.guardPush = nil
-        path = NavigationPath()
-        path.append(route)
-    }
 
     private var modelHalf: GuardModel.ModelHalf {
         GuardModel.modelHalf(modelRan: watchers.summary?.modelRan ?? false, modelReady: readiness.isReady,
@@ -604,5 +584,48 @@ struct GuardActionButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(id)
+    }
+}
+
+// MARK: - Hosting
+
+/// The Guard tab's stack until the shell swap (Task 2 deletes it): Now's "Loupe spotted …" push and the reset after
+/// Delete all my Loupe data.
+struct GuardView: View {
+    @EnvironmentObject private var router: AppRouter
+    @State private var path = NavigationPath()
+
+    var body: some View {
+        NavigationStack(path: $path) {
+            GuardScreen(title: "Guard")
+                .guardDestinations()
+                .protectionDestinations()
+        }
+        .onChange(of: router.guardPush) { _, _ in takePush() }
+        .onReceive(NotificationCenter.default.publisher(for: .loupeDataErased)) { _ in path = NavigationPath() }
+        .onAppear { takePush() }
+    }
+
+    private func takePush() {
+        guard let route = router.guardPush else { return }
+        router.guardPush = nil
+        path = NavigationPath()
+        path.append(route)
+    }
+}
+
+extension View {
+    /// Where Guard's rows lead (a merchant, a document, a finding, Mail, the online checks). Registered once, at the
+    /// root of the stack that shows Guard's screens.
+    func guardDestinations() -> some View {
+        navigationDestination(for: GuardRoute.self) { route in
+            switch route {
+            case .subscription(let merchant): SubscriptionDetailView(watchers: WatchersService.shared, merchant: merchant)
+            case .expiry(let itemId): ExpiryDetailView(watchers: WatchersService.shared, itemId: itemId)
+            case .finding(let key): FindingDetailView(watchers: WatchersService.shared, key: key)
+            case .mail: MailTriageView(mail: MailTriageService.shared)
+            case .onlineChecks: OnlineChecksView(online: OnlineChecksService.shared)
+            }
+        }
     }
 }

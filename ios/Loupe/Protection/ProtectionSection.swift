@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Browsing protection inside Guard → Protection (2026-09-26): the Safari card (a banner with one
-/// button while it is off), Check a link, and the Spotted log. It registers its own navigation
-/// destinations, so it only needs a NavigationStack above it.
+/// button while it is off), Check a link, and the Spotted log. The stack that shows it registers
+/// `protectionDestinations()` once at its root (Home, the old Guard tab).
 struct ProtectionSectionContent: View {
     @ObservedObject var setup: SafariSetup = .shared
     @ObservedObject var store: ProtectionStore = .shared
@@ -18,13 +18,6 @@ struct ProtectionSectionContent: View {
             ClipboardCard(store: store)
             NavigationLink(value: ProtectionRoute.spotted) { SpottedRow(store: store) }
                 .buttonStyle(.plain)
-        }
-        .navigationDestination(for: ProtectionRoute.self) { route in
-            switch route {
-            case .checkLink: LinkCheckView(store: store)
-            case .spotted: SpottedListView(store: store)
-            case .spottedEntry(let id): SpottedDetailView(store: store, id: id)
-            }
         }
         .navigationDestination(isPresented: $openCheck) { LinkCheckView(store: store) }
         .task {
@@ -58,5 +51,19 @@ struct ProtectionSectionContent: View {
         .frame(minHeight: 44)
         .card()
         .accessibilityElement(children: .combine)
+    }
+}
+
+extension View {
+    /// Check a link, the Spotted list and a Spotted entry: registered once at the root of the stack that shows
+    /// browsing protection (Home's quick checks and Protection screen push them).
+    func protectionDestinations() -> some View {
+        navigationDestination(for: ProtectionRoute.self) { route in
+            switch route {
+            case .checkLink: LinkCheckView(store: ProtectionStore.shared)
+            case .spotted: SpottedListView(store: ProtectionStore.shared)
+            case .spottedEntry(let id): SpottedDetailView(store: ProtectionStore.shared, id: id)
+            }
+        }
     }
 }

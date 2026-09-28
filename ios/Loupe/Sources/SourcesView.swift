@@ -8,10 +8,18 @@ import SwiftUI
 /// permission state, count, last scan and any error with what to do about it.
 struct SourcesView: View {
     @ObservedObject var sources: SourcesService
+
+    var body: some View {
+        NavigationStack { SourcesScreen(sources: sources) }
+    }
+}
+
+/// What Loupe reads (today's Sources screen) without a stack of its own: Me pushes it from Task 2 on.
+struct SourcesScreen: View {
+    @ObservedObject var sources: SourcesService
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
 
     var body: some View {
-        NavigationStack {
             ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
@@ -73,12 +81,11 @@ struct SourcesView: View {
             #endif
             }
             .neonGround()
-            .navigationTitle("Sources")
+            .navigationTitle("What Loupe reads")
             .navigationBarTitleDisplayMode(.inline)
-        }
-        // The scans' live runs are drawn in place here, so the Activity dock leaves them out on this screen.
-        .onAppear { ActivityCenter.shared.show("sources") }
-        .onDisappear { ActivityCenter.shared.hide("sources") }
+            // The scans' live runs are drawn in place here, so the Activity dock leaves them out on this screen.
+            .onAppear { ActivityCenter.shared.show("sources") }
+            .onDisappear { ActivityCenter.shared.hide("sources") }
     }
 
     @ViewBuilder private var sampleCard: some View {
