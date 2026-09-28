@@ -41,3 +41,22 @@ enum ModelWork {
         func get() -> ModelMemory? { lock.lock(); defer { lock.unlock() }; return value }
     }
 }
+
+/// Rules-only work (mail triage with its site checks, the privacy check): LoupeKit's mechanical
+/// rules, no model call on iPhone. It must NOT go through `ModelWork`: a background sort holds the
+/// model queue for its whole run and yields only to a higher claim, so a sweep-priority rules run
+/// sat behind thousands of items ("Classifying" that never moved, owner's iPhone 2026-09-28).
+/// Each check has its own serial queue, so a long privacy check never holds up triage either, and
+/// the runs share no mutable state (every call builds its own collectors; the rule tables are
+/// read-only).
+enum RulesWork {
+    static let mail = DispatchQueue(label: "com.loupe-ai.ios.rules.mail", qos: .userInitiated)
+    static let privacy = DispatchQueue(label: "com.loupe-ai.ios.rules.privacy", qos: .userInitiated)
+
+    /// Runs `work` on `queue` and returns its value.
+    static func run<T>(on queue: DispatchQueue, _ work: @escaping () -> T) async -> T {
+        await withCheckedContinuation { c in
+            queue.async { c.resume(returning: work()) }
+        }
+    }
+}

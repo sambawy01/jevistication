@@ -48,6 +48,22 @@ final class MailTriageTests: XCTestCase {
         XCTAssertEqual(Int(s.summary!.phishingCount), 1)
     }
 
+    /// Owner's iPhone 2026-09-28: triage sat on "Classifying" behind a background sort. The sort holds
+    /// the model queue for its whole run; triage is rules only and must not wait for it.
+    func testTriageFinishesWhileASortHoldsTheModelQueue() async {
+        let hold = DispatchSemaphore(value: 0)
+        let held = expectation(description: "model queue held")
+        ModelWork.queue.async { held.fulfill(); _ = hold.wait(timeout: .now() + 30) }
+        defer { hold.signal() }
+        await fulfillment(of: [held], timeout: 5)
+        let (s, _) = service()
+        let done = expectation(description: "triage finished")
+        Task { await s.run(); done.fulfill() }
+        await fulfillment(of: [done], timeout: 10)
+        XCTAssertEqual(s.rows.count, Self.sample.filter { $0.kind == .email }.count)
+        XCTAssertFalse(s.running)
+    }
+
     func testRawSourcesReadTheSampleEml() {
         let raws = MailTriageService.rawSources(Self.sample)
         let paypal = Self.sample.first { $0.id.hasSuffix("phishing-paypal.eml") }!

@@ -5,7 +5,8 @@ import LoupeKit
 /// classifier rules and the one phishing / site formula shared with Station (docs/PHISHING-FORMULA.md),
 /// with the opt-in online checks when they are on — over every mail item of the enabled sources
 /// (the sample's inbox now; IMAP mail when that source is on), plus site checks on web-link items.
-/// Mechanical, no model; it runs on the model queue at sweep priority like the privacy check.
+/// Mechanical, no model; it runs on its own rules queue (`RulesWork.mail`), never behind a sort on
+/// the model queue.
 /// Mark safe / Confirm phishing are appended ledger corrections, with Undo. Nothing leaves the phone.
 @MainActor
 final class MailTriageService: ObservableObject {
@@ -53,7 +54,7 @@ final class MailTriageService: ObservableObject {
         let context = await online.context(items: all, raws: raws)
         onlineStatus = context == nil ? nil : online.status
         job.stage("act.stage.classifying")
-        let result = await ModelWork.run(.sweep) {
+        let result = await RulesWork.run(on: RulesWork.mail) {
             MailTriage.shared.summariseOnline(items: all, raws: raws, corrections: corrections, online: context)
         }
         summary = result
