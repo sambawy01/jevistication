@@ -6,14 +6,6 @@ import SwiftUI
 /// numbers or, while it is read, the live scan display in place. The sample is on by default and labelled as
 /// sample data at every mention. The phone's own sources (epic #7 child 7) follow, each with its switch,
 /// permission state, count, last scan and any error with what to do about it.
-struct SourcesView: View {
-    @ObservedObject var sources: SourcesService
-
-    var body: some View {
-        NavigationStack { SourcesScreen(sources: sources) }
-    }
-}
-
 /// What Loupe reads (today's Sources screen) without a stack of its own: Me pushes it from Task 2 on.
 struct SourcesScreen: View {
     @ObservedObject var sources: SourcesService

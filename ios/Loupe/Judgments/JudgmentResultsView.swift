@@ -340,7 +340,7 @@ struct JudgmentResultsView: View {
                     .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                     .fixedSize(horizontal: false, vertical: true)
                 if items.isEmpty {
-                    CardAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan) { router.open(.sources) }
+                    CardAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan) { router.openReads() }
                         .accessibilityIdentifier("results.openSources")
                 }
             }

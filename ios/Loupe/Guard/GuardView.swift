@@ -69,14 +69,14 @@ struct GuardScreen: View {
         }
         GuardSectionTitle(title: "Subscriptions", detail: WatcherKind.recurring.title).id("subscriptions")
         SubscriptionsSection(census: summary.census, findings: findings, coverage: coverage,
-                             openSources: { router.open(.sources) })
+                             openSources: { router.openReads() })
         GuardSectionTitle(title: "Expiring soon", detail: WatcherKind.expiry.title).id("expiry")
         ExpirySection(rows: summary.expiries, ruleName: summary.ruleName, itemsChecked: Int(summary.itemsChecked),
-                      half: modelHalf, coverage: coverage, openSources: { router.open(.sources) })
+                      half: modelHalf, coverage: coverage, openSources: { router.openReads() })
         ForEach(GuardModel.otherWatchers, id: \.self) { kind in
             GuardSectionTitle(title: kind.guardTitle, detail: kind.title)
             WatcherSection(kind: kind, findings: GuardModel.findings(kind, in: findings), summary: summary,
-                           coverage: coverage, openSources: { router.open(.sources) })
+                           coverage: coverage, openSources: { router.openReads() })
         }
         Text("Warnings only. \(summary.itemsChecked) item(s), \(summary.emailsChecked) email(s) and \(summary.linksChecked) link(s) checked on \(GuardModel.day(summary.todayIso)). Anything with nothing raised is not cleared: each watcher covers only what it looks for.")
             .font(.caption).foregroundStyle(Palette.inkSoft)
@@ -123,7 +123,7 @@ struct GuardScreen: View {
             }
             .accessibilityElement(children: .combine)
             HStack(spacing: 10) {
-                CardAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan) { router.open(.sources) }
+                CardAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan) { router.openReads() }
                     .accessibilityIdentifier("guard.empty.sources")
                 if coverage.anyOn {
                     CardAction(title: "Run now", symbol: "arrow.clockwise", hue: Palette.blue) {
@@ -588,31 +588,6 @@ struct GuardActionButton: View {
 }
 
 // MARK: - Hosting
-
-/// The Guard tab's stack until the shell swap (Task 2 deletes it): Now's "Loupe spotted …" push and the reset after
-/// Delete all my Loupe data.
-struct GuardView: View {
-    @EnvironmentObject private var router: AppRouter
-    @State private var path = NavigationPath()
-
-    var body: some View {
-        NavigationStack(path: $path) {
-            GuardScreen(title: "Guard")
-                .guardDestinations()
-                .protectionDestinations()
-        }
-        .onChange(of: router.guardPush) { _, _ in takePush() }
-        .onReceive(NotificationCenter.default.publisher(for: .loupeDataErased)) { _ in path = NavigationPath() }
-        .onAppear { takePush() }
-    }
-
-    private func takePush() {
-        guard let route = router.guardPush else { return }
-        router.guardPush = nil
-        path = NavigationPath()
-        path.append(route)
-    }
-}
 
 extension View {
     /// Where Guard's rows lead (a merchant, a document, a finding, Mail, the online checks). Registered once, at the

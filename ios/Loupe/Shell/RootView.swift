@@ -1,58 +1,17 @@
 import SwiftUI
 
-/// The five tabs (owner decision 2026-09-26): Now · Guard · Judgments · Sources · Me. The Web tab's template library
-/// moved into Judgments as "Web questions"; "web" still opens it (`AppTab.route`).
-enum AppTab: String, CaseIterable {
-    case now
-    case guardTab = "guard"
-    case judgments, sources, me
-
-    /// Where a tab name (the DEBUG `-LoupeTab` launch argument, a deep link) goes. The old "web" tab is Judgments →
-    /// Web questions.
-    static func route(_ name: String) -> (tab: AppTab, judgments: JudgmentsView.Section?)? {
-        if name == "web" { return (.judgments, .web) }
-        return AppTab(rawValue: name).map { ($0, nil) }
-    }
-}
-
-/// Switches tabs from inside a tab ("See all in Guard" on Now, "Turn on Mail" on Guard) and asks Judgments for a
-/// section (Web questions). Owned by RootView, in the environment of every tab.
-@MainActor
-final class AppRouter: ObservableObject {
-    @Published var tab: AppTab
-    /// A section Judgments should show; it clears it once shown.
-    @Published var judgmentsSection: JudgmentsView.Section?
-    /// A browsing-protection screen Guard should push (Now's "Loupe spotted …" card); Guard clears it once pushed.
-    @Published var guardPush: ProtectionRoute?
-
-    init(tab: AppTab = .now, judgmentsSection: JudgmentsView.Section? = nil) {
-        self.tab = tab
-        self.judgmentsSection = judgmentsSection
-    }
-
-    /// Guard → Protection → Spotted.
-    func openSpotted() {
-        guardPush = .spotted
-        tab = .guardTab
-    }
-
-    func open(_ tab: AppTab, judgments section: JudgmentsView.Section? = nil) {
-        if let section { judgmentsSection = section }
-        self.tab = tab
-    }
-}
-
 struct RootView: View {
-    @State var initialTab: AppTab
-    var initialSection: JudgmentsView.Section? = nil
+    let initialPlace: LaunchPlace
     @StateObject private var router = AppRouter()
-    /// Browsing protection's Spotted log: its unseen entries badge the Guard tab.
+    /// Browsing protection's Spotted log: its unseen entries badge Home (where the alerts are).
     @ObservedObject private var protection = ProtectionStore.shared
+    /// The Unsure count badges Ask (spec D6).
+    @ObservedObject private var judgments = JudgmentsService.shared
     @StateObject private var launcher = GameLauncher()
     @ObservedObject private var sources = SourcesService.shared
     @State private var showOnboarding = false
     @State private var watchAfterOnboarding = false
-    /// What shows before the tabs (`LaunchFlow`): Get the Loupe Decision Model while the model is not ready
+    /// What shows before the places (`LaunchFlow`): Get the Loupe Decision Model while the model is not ready
     /// (every launch until it is installed), then the permissions and protection steps once each. Decided from
     /// the model's state at launch, which `ModelReadiness` has right when it is created (the relaunch bug of
     /// 2026-09-26 was this reading "missing" for a model that was installed).
@@ -83,7 +42,7 @@ struct RootView: View {
                 ProtectStepView { leave(.protect) }
                     .transition(.opacity)
             case .tabs:
-                tabs
+                places
             }
         }
         .animation(Motion.reduced(reduceMotion) ? nil : .easeOut(duration: 0.25), value: step)
@@ -103,19 +62,18 @@ struct RootView: View {
                 showOnboarding = false
             })
         }
-        // "Open in Loupe" from the share sheet or Files: a preset pack goes to the Judgments preview
-        // (packs need no model, so this leaves the onboarding steps for the tabs; the undone ones come back
-        // on the next launch).
+        // "Open in Loupe" from the share sheet or Files: a preset pack goes to Ask's preview (packs need no model, so
+        // this leaves the onboarding steps for the places; the undone ones come back on the next launch).
         .onOpenURL { url in
             guard url.isFileURL else { return }
             step = .tabs
-            router.open(.judgments, judgments: .mine)
+            router.openAsk(.mine)
             PacksService.shared.open(url)
         }
     }
 
     /// Leaves an onboarding step: records it as done (Get the model is not recorded: it comes back until the
-    /// model is here), moves on, and once at the tabs shows the one-time intro.
+    /// model is here), moves on, and once at the places shows the one-time intro.
     private func leave(_ current: LaunchStep) {
         let record = OnboardingRecord()
         switch current {
@@ -124,8 +82,8 @@ struct RootView: View {
         case .getModel, .tabs: break
         }
         step = LaunchFlow.after(current, record: record)
-        // The intro is a sheet on the tabs: it is presented once they are on screen (see `tabs`' onAppear),
-        // since a sheet asked for in the same update that creates its host is dropped.
+        // The intro is a sheet on the places: it is presented once they are on screen (see `places`' task), since a
+        // sheet asked for in the same update that creates its host is dropped.
     }
 
     /// iOS's prompts, or in DEBUG with `-LoupePermissions granted|denied` a stand-in that answers without them.
@@ -136,16 +94,15 @@ struct RootView: View {
         return SystemPermissionAsker(deps: sources.deps)
     }
 
-    /// After "Delete all my Loupe data": the onboarding steps again (Get the model first when it went too), Now as
-    /// the tab, and the sources started again from their fresh-install defaults.
+    /// After "Delete all my Loupe data": the onboarding steps again (Get the model first when it went too), Home with
+    /// every stack at its first screen, and the sources started again from their fresh-install defaults.
     private func restartAfterErase() {
         showOnboarding = false
-        router.open(.now)
+        router.reset()
         sources.start()
-        // The Delete sheet is still up (on Me, inside the tabs) when the erase finishes: let it go before the tabs are
-        // swapped for the onboarding steps. Torn down while presenting, it left UIKit's presentation stale, so the
-        // one-time game intro could not present after the steps and came up at the next launch instead (scenario
-        // test 2026-09-27).
+        // The Delete sheet is still up (on Me) when the erase finishes: let it go before the places are swapped for
+        // the onboarding steps. Torn down while presenting, it left UIKit's presentation stale, so the one-time game
+        // intro could not present after the steps and came up at the next launch instead (scenario test 2026-09-27).
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 700_000_000)
             step = LaunchFlow.first(ready: ModelReadiness.shared.isReady, launch: .current, record: OnboardingRecord())
@@ -155,7 +112,7 @@ struct RootView: View {
     private func start() {
         guard !started else { return }
         started = true
-        router.open(initialTab, judgments: initialSection)
+        router.go(initialPlace)
         sources.start()
         #if DEBUG
         DeviceDiag.run(sources)
@@ -165,29 +122,27 @@ struct RootView: View {
         if let game = launch.game { launcher.open(game) }
     }
 
-    private var tabs: some View {
-        TabView(selection: $router.tab) {
+    /// A tab tap goes through the router, so tapping the place already showing returns to its first screen.
+    private var selection: Binding<Place> {
+        Binding(get: { router.place }, set: { router.select($0) })
+    }
+
+    private var places: some View {
+        TabView(selection: selection) {
             NowView()
-                .tabItem { Label("Now", systemImage: "dot.radiowaves.left.and.right") }
-                .tag(AppTab.now)
-                .environment(\.mascotTabSelected, router.tab == .now)
-            GuardView()
-                .tabItem { Label("Guard", systemImage: "shield.lefthalf.filled") }
+                .tabItem { Label(Place.home.title, systemImage: Place.home.symbol) }
                 .badge(protection.unseenCount)
-                .tag(AppTab.guardTab)
-                .environment(\.mascotTabSelected, router.tab == .guardTab)
+                .tag(Place.home)
+                .environment(\.mascotTabSelected, router.place == .home)
             JudgmentsView(service: JudgmentsService.shared)
-                .tabItem { Label("Judgments", systemImage: "checklist") }
-                .tag(AppTab.judgments)
-                .environment(\.mascotTabSelected, router.tab == .judgments)
-            SourcesView(sources: sources)
-                .tabItem { Label("Sources", systemImage: "externaldrive.fill.badge.checkmark") }
-                .tag(AppTab.sources)
-                .environment(\.mascotTabSelected, router.tab == .sources)
+                .tabItem { Label(Place.ask.title, systemImage: Place.ask.symbol) }
+                .badge(judgments.needsYou ?? 0)
+                .tag(Place.ask)
+                .environment(\.mascotTabSelected, router.place == .ask)
             MeView()
-                .tabItem { Label("Me", systemImage: "person.crop.circle.fill") }
-                .tag(AppTab.me)
-                .environment(\.mascotTabSelected, router.tab == .me)
+                .tabItem { Label(Place.me.title, systemImage: Place.me.symbol) }
+                .tag(Place.me)
+                .environment(\.mascotTabSelected, router.place == .me)
         }
         // Jobs running off-screen, and the model-load banner (the live run views are in place on each screen).
         .overlay(alignment: .bottom) { ActivityDock() }
@@ -197,7 +152,7 @@ struct RootView: View {
         }
         #endif
         .task {
-            // Arriving at the tabs from the onboarding steps: the one-time intro follows, once the step's fade
+            // Arriving at the places from the onboarding steps: the one-time intro follows, once the step's fade
             // has finished (a sheet asked for mid-transition, or in the update that creates its host, is dropped).
             guard LaunchOptions.current.game == nil,
                   LaunchFlow.showsIntro(launch: .current, record: OnboardingRecord()) else { return }

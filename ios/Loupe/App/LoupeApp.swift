@@ -47,13 +47,13 @@ struct LoupeApp: App {
             if ProcessInfo.processInfo.arguments.contains("-LoupeMascotGallery") {
                 MascotGallery().preferredColorScheme(.dark)
             } else {
-                RootView(initialTab: LaunchOptions.current.initialTab, initialSection: LaunchOptions.current.initialSection)
+                RootView(initialPlace: LaunchOptions.current.launchPlace)
                     .environmentObject(web)
                     .tint(Palette.blue)
                     .preferredColorScheme(.dark)
             }
             #else
-            RootView(initialTab: LaunchOptions.current.initialTab, initialSection: LaunchOptions.current.initialSection)
+            RootView(initialPlace: LaunchOptions.current.launchPlace)
                 .environmentObject(web)
                 .tint(Palette.blue)
                 .preferredColorScheme(.dark)
@@ -68,9 +68,9 @@ struct LaunchOptions {
     var fixtureMode = false      // -LoupeFixtures: fixture offers, no network at all
     var autoSearch = false       // -LoupeAutoSearch: run the fixture search on appear
     var ephemeralKey = false     // -LoupeEphemeralKeychain: in-memory key store, starts empty
-    var initialTab: AppTab = .now
-    /// `-LoupeTab web` (the old Web tab): Judgments on Web questions.
-    var initialSection: JudgmentsView.Section?
+    /// `-LoupeTab <name>`: a place and a screen on it (`LaunchPlace.from`: home|now, guard|protection, ask|judgments,
+    /// web, sources|reads, mail, me, advanced).
+    var launchPlace: LaunchPlace = .start
     var skipOnboarding = false   // -LoupeSkipOnboarding: never show the first-launch sheet
     var game: GameMode?          // -LoupeGame human|watch: open the game at launch
     var noModel = false          // -LoupeNoModel: Laya reads as not installed (tests own their model state)
@@ -85,7 +85,7 @@ struct LaunchOptions {
     var queueDemo = false        // -LoupeQueueDemo (DEBUG, with -LoupeFixtures): seed the queue with a stand-in scorer
     var mainWatchdog = false     // -LoupeMainWatchdog (DEBUG): show the worst main-thread stall for UI tests
     var bigLedger = 0            // -LoupeBigLedger n (DEBUG, with -LoupeFixtures): n long items and n model answers (launch perf)
-    var openScreen: String?      // -LoupeOpen queue|measure: open Now's queue, or the first judgment's Measure
+    var openScreen: String?      // -LoupeOpen queue|review|measure|linkcheck: Ask's queue, Home's Review, a Measure, Check a link
     var sortDemo = false         // -LoupeSortDemo (DEBUG, with -LoupeFixtures): passive sort with a stand-in scorer
     var inboxDemo = false        // -LoupeInboxDemo (DEBUG, with -LoupeFixtures): import a statement CSV into the Inbox
     var fakeAssistant = false    // -LoupeFakeAssistant (DEBUG): a configured writing assistant whose provider is an in-app fake (no network)
@@ -106,9 +106,8 @@ struct LaunchOptions {
         o.fixtureMode = args.contains("-LoupeFixtures")
         o.autoSearch = args.contains("-LoupeAutoSearch")
         o.ephemeralKey = args.contains("-LoupeEphemeralKeychain") || o.fixtureMode
-        if let i = args.firstIndex(of: "-LoupeTab"), i + 1 < args.count, let route = AppTab.route(args[i + 1]) {
-            o.initialTab = route.tab
-            o.initialSection = route.judgments
+        if let i = args.firstIndex(of: "-LoupeTab"), i + 1 < args.count, let place = LaunchPlace.from(args[i + 1]) {
+            o.launchPlace = place
         }
         o.skipOnboarding = args.contains("-LoupeSkipOnboarding")
         if let i = args.firstIndex(of: "-LoupeGame"), i + 1 < args.count { o.game = GameMode(rawValue: args[i + 1]) }

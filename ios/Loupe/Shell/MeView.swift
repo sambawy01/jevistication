@@ -2,6 +2,8 @@ import SwiftUI
 
 struct MeView: View {
     @EnvironmentObject private var launcher: GameLauncher
+    @EnvironmentObject private var router: AppRouter
+    @ObservedObject private var sources = SourcesService.shared
     @ObservedObject private var laya = LayaModel.shared
     @ObservedObject private var ledger = LedgerService.shared
     @ObservedObject private var judgments = JudgmentsService.shared
@@ -17,8 +19,14 @@ struct MeView: View {
     private let engine = EngineInfo.load()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $router.mePath) {
             List {
+                NeonSection("What Loupe reads") {
+                    NavigationLink(value: MeRoute.reads) { row("Sources", "\(sources.enabledCount) on") }
+                        .accessibilityIdentifier("me.reads")
+                    NavigationLink(value: MeRoute.mail) { row("Mail", sources.isPhoneEnabled(.mail) ? "on" : "off") }
+                        .accessibilityIdentifier("me.mail")
+                }
                 NeonSection("Engine (on device)") {
                     row("LoupeKit", engine.linked ? "linked" : "missing")
                     row("Built-in judgments", "\(engine.builtInJudgments)")
@@ -128,6 +136,12 @@ struct MeView: View {
             }
             .sheet(isPresented: $showErase) { DeleteDataView() }
             .sheet(item: $shared) { file in ShareSheet(items: [file.url]) }
+            .navigationDestination(for: MeRoute.self) { route in
+                switch route {
+                case .reads: SourcesScreen(sources: SourcesService.shared)
+                case .mail: MailTriageView(mail: MailTriageService.shared)
+                }
+            }
         }
     }
 

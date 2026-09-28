@@ -23,7 +23,7 @@ struct NowView: View {
     @ObservedObject private var itemIndex = ItemIndex.Store.shared
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $router.homePath) {
             content
                 .navigationDestination(isPresented: $showQueue) { UnsureQueueView(service: service) }
                 .navigationDestination(isPresented: $showPrivacy) { PrivacyView(privacy: privacy) }
@@ -31,6 +31,15 @@ struct NowView: View {
                 .navigationDestination(isPresented: $showReview) { ReviewView(review: review) }
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(item: $openItem) { ItemTextView(item: $0) }
+                .navigationDestination(for: HomeRoute.self) { route in
+                    switch route {
+                    case .protection: GuardScreen()
+                    case .review: ReviewView(review: review)
+                    case .privacy: PrivacyView(privacy: privacy)
+                    }
+                }
+                .guardDestinations()
+                .protectionDestinations()
         }
         // Re-run the watchers whenever the scanned items change (a scan finishes, a source is
         // switched on or off). The first value arrives on subscribe, so this also runs on appear.
@@ -177,7 +186,7 @@ struct NowView: View {
                                 message: "The watchers read what your sources hold. No source is on, so there is nothing to check and nothing is shown. Turn on a source to see them work.",
                                 symbol: "photo.on.rectangle",
                                 actions: [EmptyStateAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus",
-                                                           id: "findings.empty.sources") { router.open(.sources) }])
+                                                           id: "findings.empty.sources") { router.openReads() }])
                                 .padding(.horizontal, -16)
                                 .accessibilityElement(children: .contain)
                                 .accessibilityIdentifier("findings.empty")
@@ -190,7 +199,7 @@ struct NowView: View {
                                               Task { await watchers.run() }
                                           },
                                           EmptyStateAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus",
-                                                           id: "findings.empty.sources") { router.open(.sources) }])
+                                                           id: "findings.empty.sources") { router.openReads() }])
                                 .padding(.horizontal, -16)
                                 .accessibilityElement(children: .contain)
                                 .accessibilityIdentifier("findings.notRead")
@@ -233,7 +242,7 @@ struct NowView: View {
                     .accessibilityIdentifier("now.spotted")
                 }
                 if summary.itemsChecked > 0 {
-                    Button { router.open(.guardTab) } label: { GuardDoorCard(summary: summary) }
+                    Button { router.openHome(.protection) } label: { GuardDoorCard(summary: summary) }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("now.guard")
                 }

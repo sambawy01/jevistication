@@ -119,16 +119,6 @@ final class GuardModelTests: XCTestCase {
         XCTAssertNil(feed.state)
     }
 
-    func testTheOldWebTabOpensJudgmentsWebQuestions() {
-        XCTAssertEqual(AppTab.route("web")?.tab, .judgments)
-        XCTAssertEqual(AppTab.route("web")?.judgments, .web)
-        XCTAssertEqual(AppTab.route("guard")?.tab, .guardTab)
-        XCTAssertNil(AppTab.route("guard")?.judgments)
-        XCTAssertEqual(AppTab.route("now")?.tab, .now)
-        XCTAssertNil(AppTab.route("nowhere"))
-        XCTAssertEqual(AppTab.allCases.map(\.rawValue), ["now", "guard", "judgments", "sources", "me"])
-    }
-
     func testTheHeaderSaysWhatTheOnlineChecksSend() {
         var s = OnlinePhishingSettings()
         s.domainFacts = true

@@ -13,12 +13,11 @@ struct JudgmentsView: View {
     @EnvironmentObject private var router: AppRouter
     @State private var section: Section = .mine
     @State private var showWebSettings = false
-    @State private var path = NavigationPath()
     @State private var writing = false
     @State private var demoDone = false
 
     var body: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: $router.askPath) {
             VStack(spacing: 0) {
                 Picker("Section", selection: $section) {
                     ForEach(Section.allCases, id: \.self) { Text($0.rawValue).tag($0) }
@@ -77,7 +76,7 @@ struct JudgmentsView: View {
                 WriteJudgmentView(service: service) { id in
                     writing = false
                     section = .mine
-                    path.append(JudgmentRoute.results(id))
+                    router.askPath.append(JudgmentRoute.results(id))
                 }
             }
         }
@@ -87,10 +86,10 @@ struct JudgmentsView: View {
             runDemo()
             takeRequestedSection()
         }
-        .onChange(of: router.judgmentsSection) { _, _ in takeRequestedSection() }
+        .onChange(of: router.askSection) { _, _ in takeRequestedSection() }
         // After "Delete all my Loupe data": nothing pushed is left over from before.
         .onReceive(NotificationCenter.default.publisher(for: .loupeDataErased)) { _ in
-            path = NavigationPath()
+            router.askPath = NavigationPath()
             section = .mine
             writing = false
         }
@@ -98,9 +97,9 @@ struct JudgmentsView: View {
 
     /// A section asked for from elsewhere (the old Web tab's launch argument, "Open in Loupe" for a pack).
     private func takeRequestedSection() {
-        guard let requested = router.judgmentsSection else { return }
+        guard let requested = router.askSection else { return }
         section = requested
-        router.judgmentsSection = nil
+        router.askSection = nil
     }
 
     private var demoRoute: JudgmentRoute? {
@@ -117,9 +116,9 @@ struct JudgmentsView: View {
         if launch.openLibrary { section = .library }
         guard let t = launch.judgmentDemo else { return }
         if service.judgments.first(where: { $0.templateId == t }) == nil { service.useTemplate(t) }
-        if let route = demoRoute { path.append(route) }
+        if let route = demoRoute { router.askPath.append(route) }
         if launch.openScreen == "measure", let j = service.judgments.first(where: { $0.templateId == t }) {
-            path.append(JudgmentRoute.measure(j.id))
+            router.askPath.append(JudgmentRoute.measure(j.id))
         }
     }
 }
