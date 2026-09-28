@@ -17,7 +17,7 @@ final class ModelSettingsUITests: XCTestCase {
     func testTurnLayaOffRunSeeTheBannerAndResetRestores() {
         let app = XCUIApplication()
         // -LoupeFixtures: settings and ledger live in a throwaway directory.
-        app.launchArguments = ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeLanguage", "en"]
+        app.launchArguments = ["-LoupeTab", "advanced", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeLanguage", "en"]
         app.launch()
 
         let open = app.buttons["me.modelSettings"]
@@ -33,9 +33,13 @@ final class ModelSettingsUITests: XCTestCase {
         XCTAssertEqual(toggle.value as? String, "0", "Laya is now off for the privacy check")
         XCTAssertTrue(app.buttons["settings.features.scan.use_laya.reset"].exists, "a changed row offers Reset to default")
 
-        // Run the privacy check from Now.
-        app.tabBars.buttons["Now"].tap()
-        let card = app.buttons["now.privacy"]
+        // Run the privacy check from Me → What Loupe reads (a second tap on Me returns to its first screen).
+        app.tabBars.buttons["Me"].tap()
+        let reads = app.buttons["me.reads"]
+        XCTAssertTrue(reads.waitForExistence(timeout: 10))
+        reads.tap()
+        let card = app.buttons["sources.privacy"]
+        for _ in 0..<8 where !(card.exists && card.isHittable) { app.swipeUp() }
         XCTAssertTrue(card.waitForExistence(timeout: 60))
         card.tap()
         let rerun = app.buttons["privacy.rerun"]

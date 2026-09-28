@@ -3,13 +3,14 @@ import XCTest
 final class GameUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    /// Open the game from Now's Play card, see it run (rows climb), pause it, and see it stop.
-    func testPlayFromNowRunsAndPauses() {
+    /// Open the game from Me's Play card, see it run (rows climb), pause it, and see it stop.
+    func testPlayFromMeRunsAndPauses() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "now"]
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me"]
         app.launch()
 
-        let play = app.buttons["now.play.human"]
+        let play = app.buttons["me.play.human"]
+        for _ in 0..<6 where !(play.exists && play.isHittable) { app.swipeUp() }
         XCTAssertTrue(play.waitForExistence(timeout: 5))
         play.tap()
 
@@ -33,13 +34,14 @@ final class GameUITests: XCTestCase {
         XCTAssertTrue(play.waitForExistence(timeout: 3))
     }
 
-    /// Watch from Now's Play card: the river runs, the level climbs (30 rows a level here), and
+    /// Watch from Me's Play card: the river runs, the level climbs (30 rows a level here), and
     /// pause stops it.
-    func testWatchFromNowLevelClimbsAndPauses() {
+    func testWatchFromMeLevelClimbsAndPauses() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "now", "-LoupeGameLevelRows", "30"]
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeGameLevelRows", "30"]
         app.launch()
-        let watch = app.buttons["now.play.watch"]
+        let watch = app.buttons["me.play.watch"]
+        for _ in 0..<6 where !(watch.exists && watch.isHittable) { app.swipeUp() }
         XCTAssertTrue(watch.waitForExistence(timeout: 5))
         // The card leads with the live, on-device decisions; no numbers until this iPhone measured a run.
         XCTAssertTrue(app.staticTexts["Watch Loupe fly"].exists)

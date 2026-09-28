@@ -20,6 +20,7 @@ final class ShellRoutingTests: XCTestCase {
         XCTAssertEqual(LaunchPlace.from("sources"), LaunchPlace(place: .me, me: .reads))
         XCTAssertEqual(LaunchPlace.from("mail"), LaunchPlace(place: .me, me: .mail))
         XCTAssertEqual(LaunchPlace.from("me"), LaunchPlace(place: .me))
+        XCTAssertEqual(LaunchPlace.from("advanced"), LaunchPlace(place: .me, me: .advanced))
         XCTAssertNil(LaunchPlace.from("nowhere"))
     }
 

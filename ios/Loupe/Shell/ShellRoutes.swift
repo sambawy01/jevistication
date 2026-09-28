@@ -39,6 +39,10 @@ enum MeRoute: Hashable {
     case reads
     /// Mail as one place (spec D10).
     case mail
+    /// Me → Advanced: Model settings, online checks, mascot, diagnostics.
+    case advanced
+    /// Actions to review (the queue's history stays reachable when Needs attention has none open).
+    case review
 }
 
 /// Where a launch opens: a place, and at most one screen pushed on it. `-LoupeTab` (DEBUG) takes today's and the old
@@ -60,6 +64,7 @@ struct LaunchPlace: Equatable {
         case "sources", "reads": return LaunchPlace(place: .me, me: .reads)
         case "mail": return LaunchPlace(place: .me, me: .mail)
         case "me": return LaunchPlace(place: .me)
+        case "advanced": return LaunchPlace(place: .me, me: .advanced)
         default: return nil
         }
     }

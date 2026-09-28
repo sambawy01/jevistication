@@ -1,12 +1,12 @@
 import XCTest
 
-/// Me → Appearance → Mascot (epic #7 child 17): switching to the drone persists across relaunch.
+/// Me → Advanced → Mascot (epic #7 child 17): switching to the drone persists across relaunch.
 final class MascotKindUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     func testSwitchToDroneInMePersistsAcrossRelaunch() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeTab", "me", "-LoupeResetMascot"]
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeTab", "advanced", "-LoupeResetMascot"]
         app.launch()
         let picker = app.segmentedControls["me.mascot"]
         for _ in 0..<6 where !picker.exists { app.swipeUp() }
@@ -16,7 +16,7 @@ final class MascotKindUITests: XCTestCase {
         XCTAssertTrue(picker.buttons["Drone"].isSelected)
         app.terminate()
 
-        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeTab", "me"]
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeTab", "advanced"]
         app.launch()
         let again = app.segmentedControls["me.mascot"]
         for _ in 0..<6 where !again.exists { app.swipeUp() }

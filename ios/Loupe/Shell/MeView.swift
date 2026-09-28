@@ -1,51 +1,46 @@
 import SwiftUI
 
+/// Me (spec 2026-09-28 §3, mockup #6): everything that is not Home or Ask, one level down, in the spec's groups:
+/// What Loupe reads (the sources; Mail as one place), Personal Assistant, Decision model, Your data, See Loupe think,
+/// Advanced and About.
 struct MeView: View {
     @EnvironmentObject private var launcher: GameLauncher
     @EnvironmentObject private var router: AppRouter
-    @ObservedObject private var sources = SourcesService.shared
     @ObservedObject private var laya = LayaModel.shared
     @ObservedObject private var ledger = LedgerService.shared
     @ObservedObject private var judgments = JudgmentsService.shared
     @ObservedObject private var assist = AssistService.shared
-    @ObservedObject private var online = OnlineChecksService.shared
-    @ObservedObject private var settings = ModelSettingsService.shared
+    @ObservedObject private var sources = SourcesService.shared
+    @ObservedObject private var review = ReviewService.shared
     @State private var exporting = false
     @State private var exportError: String?
     @State private var shared: SharedFile?
     @State private var confirmErase = false
     @State private var showErase = false
-    @AppStorage(MascotKind.storageKey) private var mascotKind = MascotKind.default.rawValue
     private let engine = EngineInfo.load()
 
     var body: some View {
         NavigationStack(path: $router.mePath) {
             List {
                 NeonSection("What Loupe reads") {
-                    NavigationLink(value: MeRoute.reads) { row("Sources", "\(sources.enabledCount) on") }
+                    NavigationLink(value: MeRoute.reads) { row("Sources", MeModel.readsLine(on: sources.enabledCount)) }
                         .accessibilityIdentifier("me.reads")
-                    NavigationLink(value: MeRoute.mail) { row("Mail", sources.isPhoneEnabled(.mail) ? "on" : "off") }
-                        .accessibilityIdentifier("me.mail")
+                    NavigationLink(value: MeRoute.mail) {
+                        row("Mail", MeModel.mailLine(account: sources.mailAccount?.username, on: sources.isPhoneEnabled(.mail)))
+                    }
+                    .accessibilityIdentifier("me.mail")
                 }
-                NeonSection("Engine (on device)") {
-                    row("LoupeKit", engine.linked ? "linked" : "missing")
-                    row("Built-in judgments", "\(engine.builtInJudgments)")
-                    row("Public Suffix List", engine.pslVersion)
-                    NavigationLink { LayaModelView() } label: {
-                        row("Decision model", layaStatus)
+                NeonSection("Personal Assistant") {
+                    NavigationLink { AssistSettingsView(assist: assist) } label: {
+                        row("Personal Assistant", MeModel.assistantLine(enabled: assist.config.enabled, ready: assist.isReady))
                     }
-                    .accessibilityIdentifier("me.model")
-                    NavigationLink { ModelSettingsView() } label: {
-                        row(MS.t("title"), settings.settings.changed.isEmpty ? "defaults" : "\(settings.settings.changed.count) changed")
-                    }
-                    .accessibilityIdentifier("me.modelSettings")
-                    #if DEBUG || LOUPE_DIAGNOSTICS
-                    if Self.showDiagnostics {
-                        NavigationLink { DiagnosticsView() } label: { row("Diagnostics", "device check") }
-                            .accessibilityIdentifier("me.diagnostics")
-                    }
-                    #endif
+                    .accessibilityIdentifier("me.assistant")
                 }
+                NeonSection("Decision model") {
+                    NavigationLink { LayaModelView() } label: { row("Decision model", layaStatus) }
+                        .accessibilityIdentifier("me.model")
+                }
+                SortSection()
                 NeonSection("Your data") {
                     Text(ledgerLine)
                         .font(.footnote).foregroundStyle(Palette.inkSoft)
@@ -53,6 +48,8 @@ struct MeView: View {
                     Text(judgments.overall().line)
                         .font(.footnote).foregroundStyle(Palette.ink)
                         .accessibilityIdentifier("me.agreement")
+                    NavigationLink(value: MeRoute.review) { row("To review", "\(review.toReview)") }
+                        .accessibilityIdentifier("me.review")
                     Button {
                         Task { await export() }
                     } label: {
@@ -61,6 +58,7 @@ struct MeView: View {
                             Spacer()
                             if exporting { ProgressView() }
                         }
+                        .frame(minHeight: 44)
                     }
                     .disabled(exporting || ledger.problem != nil)
                     .accessibilityIdentifier("me.export")
@@ -69,49 +67,28 @@ struct MeView: View {
                     }
                     // Two steps (audit P1-4): this asks, then the sheet wants DELETE typed.
                     Button(role: .destructive) { confirmErase = true } label: {
-                        Text("Delete all my Loupe data…").frame(maxWidth: .infinity, alignment: .leading)
+                        Text("Delete all my Loupe data…").frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                     .accessibilityIdentifier("me.erase")
                 }
-                SortSection()
-                NeonSection("Game") {
-                    Button { launcher.open(.watch) } label: {
-                        row("Riverflight", "watch Loupe fly")
-                    }
-                    .foregroundStyle(Palette.ink)
-                    .accessibilityIdentifier("me.game")
-                    Button("Play it yourself") { launcher.open(.human) }
-                        .accessibilityIdentifier("me.game.play")
+                Section {
+                    PlayCard { launcher.open($0) }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                } header: {
+                    Text("See Loupe think")
                 }
-                NeonSection("Writing assistant") {
-                    NavigationLink { AssistSettingsView(assist: assist) } label: {
-                        row("Writing assistant", assist.config.enabled ? (assist.isReady ? "On · Online" : "Needs setup") : "Off")
-                    }
-                    .accessibilityIdentifier("me.assistant")
+                NeonSection("Advanced") {
+                    NavigationLink(value: MeRoute.advanced) { row("Advanced", "model settings, online checks") }
+                        .accessibilityIdentifier("me.advanced")
                 }
-                NeonSection("Online phishing checks") {
-                    NavigationLink { OnlineChecksView(online: online) } label: {
-                        row("Online phishing checks", online.settings.anyOn ? "On · Online" : "Off")
-                    }
-                    .accessibilityIdentifier("me.onlineChecks")
-                }
-                NeonSection("Appearance") {
-                    HStack {
-                        Text("Mascot")
-                        Spacer()
-                        Picker("Mascot", selection: $mascotKind) {
-                            ForEach(MascotKind.allCases) { Text($0.title).tag($0.rawValue) }
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
-                        .accessibilityIdentifier("me.mascot")
-                    }
-                }
-                // Web settings live on Judgments → Web questions (its gear); the duplicate here went (audit P2-12).
                 NeonSection("About") {
                     row("Version", Self.version)
                         .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("me.version")
+                    row("LoupeKit", engine.linked ? "linked" : "missing")
+                    row("Built-in judgments", "\(engine.builtInJudgments)")
+                    row("Public Suffix List", engine.pslVersion)
                     Link(destination: Self.privacyURL) { linkRow("Privacy policy") }
                         .accessibilityIdentifier("me.privacy")
                     Link(destination: Self.termsURL) { linkRow("Terms of use") }
@@ -119,15 +96,13 @@ struct MeView: View {
                     NavigationLink("Licences") { LicencesView() }
                         .accessibilityIdentifier("me.licences")
                 }
-                NeonSection {
-                    Text("Per-judgment calibration, the baseline and the threshold are on each judgment's Measure screen.")
-                        .font(.footnote).foregroundStyle(Palette.inkSoft)
-                }
             }
             .scrollContentBackground(.hidden)
             .neonGround()
             .navigationTitle("Me")
-            .onAppear { judgments.load(); judgments.refreshLedger() }
+            // C-19 (owner ruling): no main-thread ledger work in a view body. loadInBackground() is async and reads
+            // the ledger off the main thread; .load()/.refreshLedger() do not.
+            .task { await judgments.loadInBackground() }
             .confirmationDialog("Delete all your Loupe data?", isPresented: $confirmErase, titleVisibility: .visible) {
                 Button("Continue", role: .destructive) { showErase = true }
                     .accessibilityIdentifier("me.erase.continue")
@@ -140,6 +115,8 @@ struct MeView: View {
                 switch route {
                 case .reads: SourcesScreen(sources: SourcesService.shared)
                 case .mail: MailScreen(mail: MailTriageService.shared)
+                case .advanced: AdvancedView()
+                case .review: ReviewView(review: ReviewService.shared)
                 }
             }
         }
@@ -160,7 +137,7 @@ struct MeView: View {
         HStack {
             Text(title).foregroundStyle(Palette.ink)
             Spacer()
-            Image(systemName: "arrow.up.right.square").foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
+            Image(systemName: "arrow.up.forward.square").foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
         }
         .frame(minHeight: 44)
         .contentShape(Rectangle())
@@ -205,5 +182,6 @@ struct MeView: View {
 
     private func row(_ k: String, _ v: String) -> some View {
         HStack { Text(k); Spacer(); Text(v).font(Typeface.mono(13)).foregroundStyle(Palette.inkSoft).lineLimit(1) }
+            .frame(minHeight: 44)
     }
 }

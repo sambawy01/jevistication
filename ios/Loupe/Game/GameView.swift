@@ -269,7 +269,7 @@ struct GameView: View {
 
 }
 
-/// The Play card on Now: the point is the model deciding live, fast, on this phone, with nothing
+/// The Play card in Me → See Loupe think (spec D9): the point is the model deciding live, fast, on this phone, with nothing
 /// leaving it. The only numbers are ones this iPhone measured (the last finished watch run).
 struct PlayCard: View {
     var onPlay: (GameMode) -> Void
@@ -293,7 +293,7 @@ struct PlayCard: View {
             if let last {
                 Text(Self.lastLine(last))
                     .font(Typeface.mono(12)).monospacedDigit().foregroundStyle(Palette.ink)
-                    .accessibilityIdentifier("now.play.last")
+                    .accessibilityIdentifier("me.play.last")
             }
             HStack(spacing: 10) {
                 Button { onPlay(.watch) } label: {
@@ -301,13 +301,13 @@ struct PlayCard: View {
                 }
                 .accessibilityLabel("Watch Loupe fly")
                 .buttonStyle(.neonPrimary)
-                .accessibilityIdentifier("now.play.watch")
+                .accessibilityIdentifier("me.play.watch")
                 Button { onPlay(.human) } label: {
                     // 30 pt label + the bordered capsule's padding = a 44 pt target beside Watch (it was 36).
                     Label("Play", systemImage: "gamecontroller").frame(maxWidth: .infinity, minHeight: 30)
                 }
                 .buttonStyle(.bordered)
-                .accessibilityIdentifier("now.play.human")
+                .accessibilityIdentifier("me.play.human")
             }
         }
         .card()
