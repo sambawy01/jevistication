@@ -1,0 +1,8 @@
+lang: en
+kind: email
+date: 2026-08-02
+from: Uber <receipts@uber.example>
+subject: Refund processed
+expect: none
+---
+We have refunded $4.99 to your card for trip 8812.

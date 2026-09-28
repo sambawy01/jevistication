@@ -1,0 +1,6 @@
+lang: en
+kind: text
+date: 2026-09-27
+expect: none
+---
+Your verification code is 482913. It expires in 10 minutes. Do not share it.

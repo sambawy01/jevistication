@@ -1,0 +1,9 @@
+lang: en
+kind: email
+date: 2026-09-10
+from: StreamPlus <news@streamplus.example>
+subject: Everything you love, one app
+expect: none
+---
+Subscribe now for just $9.99/month and watch everything.
+Cancel anytime.

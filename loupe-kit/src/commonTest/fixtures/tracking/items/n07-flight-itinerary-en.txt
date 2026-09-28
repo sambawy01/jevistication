@@ -1,0 +1,9 @@
+lang: en
+kind: pdf
+date: 2026-09-01
+expect: none
+---
+EgyptAir e-ticket
+Cairo (CAI) to Luxor (LXR)
+Departure 12/11/2026 08:30
+Seat 14C · Economy

@@ -34,6 +34,8 @@ val phishingVectorsV12 = rootProject.file("docs/phishing-vectors-v1.2.json")
 // Formula v1.3 vectors (self_vouching, email profile), byte-identical to Station's tests/fixtures (0ff886d).
 val phishingVectorsV13 = rootProject.file("docs/phishing-vectors-v1.3.json")
 val phishingDbFixtures = project.file("src/commonTest/fixtures/phishingdb")
+// The tracking trackers' labelled set (spec 2026-09-28 §7.3): synthetic, real-shaped Egyptian and English items.
+val trackingFixtures = project.file("src/commonTest/fixtures/tracking")
 // shared_hosts.json: copied verbatim from Loupe Station (laya_studio/online/shared_hosts.json, commit
 // 4cb9026). It is the one source of the list: generateSharedHosts turns it into commonMain Kotlin.
 val sharedHostsJson = project.file("data/shared_hosts.json")
@@ -94,6 +96,7 @@ val generateTestPaths by tasks.registering {
     inputs.property("phishingVectorsV12", phishingVectorsV12.absolutePath)
     inputs.property("phishingVectorsV13", phishingVectorsV13.absolutePath)
     inputs.property("phishingDbFixtures", phishingDbFixtures.absolutePath)
+    inputs.property("trackingFixtures", trackingFixtures.absolutePath)
     inputs.property("sharedHostsJson", sharedHostsJson.absolutePath)
     inputs.property("modelPriorDir", modelPriorDir.absolutePath)
     val scratch = layout.buildDirectory.dir("tmp/kit-tests").get().asFile.absolutePath
@@ -113,6 +116,7 @@ val generateTestPaths by tasks.registering {
                 "internal const val PHISHINGDB_FIXTURES: String = \"" + phishingDbFixtures.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val SHARED_HOSTS_JSON: String = \"" + sharedHostsJson.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val MODEL_PRIOR_DIR: String = \"" + modelPriorDir.absolutePath.replace("\\", "/") + "\"\n" +
+                "internal const val TRACKING_FIXTURES: String = \"" + trackingFixtures.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val TEST_TMP: String = \"" + scratch.replace("\\", "/") + "\"\n",
         )
     }

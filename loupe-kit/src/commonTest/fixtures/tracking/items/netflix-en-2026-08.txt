@@ -1,0 +1,19 @@
+lang: en
+kind: email
+date: 2026-08-03
+from: Netflix <info@mailer.netflix.com>
+subject: Your Netflix payment receipt
+expect: charge
+merchant: Netflix
+currency: EGP
+amount: 165.00
+---
+Hi Sam,
+
+Thanks for your payment. We've charged your card for your Standard plan.
+
+Amount paid: EGP 165.00
+Billing date: 2026-08-03
+Payment method: Visa •••• 4821
+
+The Netflix team

@@ -1,0 +1,11 @@
+lang: eg
+kind: image
+date: 2026-02-10
+expect: expiry
+expiry: 2029-02-05
+doc: driving_licence
+---
+رخصة قيادة خاصة
+الاسم: سارة محمود
+صالحة لغاية ٠٥/٠٢/٢٠٢٩
+وحدة مرور مدينة نصر

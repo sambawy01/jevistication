@@ -1,0 +1,10 @@
+lang: en
+kind: email
+date: 2026-09-16
+from: North Cairo Electricity <billing@nced.example>
+subject: Your September bill is ready
+expect: none
+---
+Your bill for September is ready.
+Amount due: EGP 842.00
+Please pay by 30/09/2026.

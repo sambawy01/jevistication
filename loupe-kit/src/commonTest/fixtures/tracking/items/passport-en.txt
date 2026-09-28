@@ -1,0 +1,13 @@
+lang: en
+kind: image
+date: 2021-01-15
+expect: expiry
+expiry: 2031-01-14
+doc: passport
+---
+ARAB REPUBLIC OF EGYPT
+PASSPORT
+Type P  Code EGY  Passport No. A12345678
+Surname SAMI  Given names MOHAMED AHMED
+Date of issue 15 JAN 2021
+Date of expiry 14 JAN 2031

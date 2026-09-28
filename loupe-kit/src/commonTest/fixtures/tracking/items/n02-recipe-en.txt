@@ -1,0 +1,10 @@
+lang: en
+kind: text
+date: 2026-09-18
+expect: none
+---
+Koshari for 4
+2 cups rice
+1 cup brown lentils
+1 pack macaroni
+Total cost about $12 at the market

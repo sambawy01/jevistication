@@ -1,0 +1,6 @@
+lang: franco
+kind: text
+date: 2026-09-23
+expect: none
+---
+el fatoora ghalya awi el shahr da, lazem nekallem WE

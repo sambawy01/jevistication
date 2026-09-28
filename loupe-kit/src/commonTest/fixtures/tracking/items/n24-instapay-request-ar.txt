@@ -1,0 +1,9 @@
+lang: ar
+kind: image
+date: 2026-09-22
+expect: none
+---
+InstaPay
+طلب تحويل
+أحمد يطلب منك ٢٠٠ جنيه
+قبول / رفض

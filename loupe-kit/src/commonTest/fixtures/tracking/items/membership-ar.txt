@@ -1,0 +1,11 @@
+lang: ar
+kind: image
+date: 2025-10-20
+expect: expiry
+expiry: 2026-10-20
+doc: membership
+---
+نادي الصيد المصري
+كارنيه عضوية
+رقم العضوية: ١٢٠٤٥
+صالح حتى ٢٠٢٦/١٠/٢٠

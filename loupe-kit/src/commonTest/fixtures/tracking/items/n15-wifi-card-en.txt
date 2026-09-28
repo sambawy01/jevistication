@@ -1,0 +1,8 @@
+lang: en
+kind: image
+date: 2026-07-01
+expect: none
+---
+Guest Wi-Fi
+Network: Home_5G
+Password: nile2026river

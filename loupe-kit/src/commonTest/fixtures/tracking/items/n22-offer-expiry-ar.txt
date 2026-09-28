@@ -1,0 +1,9 @@
+lang: ar
+kind: email
+date: 2026-09-21
+from: كارفور <offers@carrefour.example>
+subject: تخفيضات نهاية الموسم
+expect: none
+---
+تخفيضات نهاية الموسم على الأجهزة
+العرض ينتهي في ٢٠٢٦/١٠/٣٠

@@ -1,0 +1,19 @@
+lang: en
+kind: email
+date: 2026-08-22
+from: Apple <no_reply@email.apple.com>
+subject: Your receipt from Apple
+expect: charge
+merchant: iCloud
+currency: USD
+amount: 0.99
+---
+Receipt
+
+iCloud+ with 50 GB of storage
+Monthly subscription
+
+Billed to: Visa •••• 4821
+Total: $0.99
+
+This is a receipt for your payment.

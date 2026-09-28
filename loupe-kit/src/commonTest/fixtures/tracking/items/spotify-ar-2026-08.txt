@@ -1,0 +1,19 @@
+lang: ar
+kind: email
+date: 2026-08-12
+from: Spotify <no-reply@spotify.com>
+subject: إيصال اشتراك Spotify Premium
+expect: charge
+merchant: Spotify
+currency: EGP
+amount: 69.99
+---
+مرحباً،
+
+تم تجديد اشتراكك في Spotify Premium Individual بنجاح.
+
+المبلغ المدفوع: ٦٩٫٩٩ ج.م
+تاريخ الدفع: ١٢/٠٨/٢٠٢٦
+طريقة الدفع: ماستركارد تنتهي بـ ٧٧٢٠
+
+شكراً لاستماعك.

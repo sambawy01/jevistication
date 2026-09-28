@@ -1,0 +1,14 @@
+lang: en
+kind: pdf
+date: 2025-12-01
+expect: expiry
+expiry: 2026-11-30
+doc: insurance
+---
+Misr Insurance
+Motor Insurance Policy
+Policy number: MI-2025-0098812
+Insured: Mohamed Sami
+Period of insurance: 01/12/2025 to 30/11/2026
+Annual premium: EGP 9,400.00
+This policy expires on 30/11/2026. Renew before that date to stay covered.

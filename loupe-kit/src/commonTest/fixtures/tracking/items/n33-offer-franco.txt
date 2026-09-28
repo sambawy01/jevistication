@@ -1,0 +1,6 @@
+lang: franco
+kind: text
+date: 2026-09-21
+expect: none
+---
+el offer bta3 Vodafone by5las bokra, eshtrek delwa2ty b 99 geneh

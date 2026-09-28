@@ -1,0 +1,7 @@
+lang: en
+kind: html
+date: 2026-09-12
+expect: none
+---
+How long is an Egyptian passport valid?
+An Egyptian passport is valid for seven years for adults. You can renew it at any passport office.
