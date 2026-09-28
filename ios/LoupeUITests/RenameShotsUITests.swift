@@ -67,6 +67,9 @@ final class RenameShotsUITests: XCTestCase {
         sleep(1)
         save("model-page")
         app.navigationBars.buttons.element(boundBy: 0).tap()
+        let advanced = app.buttons["me.advanced"]
+        for _ in 0..<8 where !(advanced.exists && advanced.isHittable) { app.swipeUp() }
+        advanced.tap()
         let settings = app.buttons["me.modelSettings"]
         XCTAssertTrue(settings.waitForExistence(timeout: 10))
         settings.tap()
@@ -78,7 +81,7 @@ final class RenameShotsUITests: XCTestCase {
         app.terminate()
 
         // Model settings in Arabic.
-        app = launch(["-LoupeModelState", "ready", "-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeLanguage", "ar"])
+        app = launch(["-LoupeModelState", "ready", "-LoupeSkipOnboarding", "-LoupeTab", "advanced", "-LoupeLanguage", "ar"])
         let settingsAr = app.buttons["me.modelSettings"]
         XCTAssertTrue(settingsAr.waitForExistence(timeout: 10))
         settingsAr.tap()
@@ -86,9 +89,9 @@ final class RenameShotsUITests: XCTestCase {
         save("model-settings-ar")
         app.terminate()
 
-        // The Watch card on Now.
-        app = launch(["-LoupeModelState", "ready", "-LoupeSkipOnboarding", "-LoupeTab", "now", "-LoupeLanguage", "en"])
-        let watch = app.buttons["now.play.watch"]
+        // The Watch card in Me → See Loupe think.
+        app = launch(["-LoupeModelState", "ready", "-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeLanguage", "en"])
+        let watch = app.buttons["me.play.watch"]
         XCTAssertTrue(watch.waitForExistence(timeout: 10))
         for _ in 0..<6 where !watch.isHittable { app.swipeUp() }
         save("watch-card")

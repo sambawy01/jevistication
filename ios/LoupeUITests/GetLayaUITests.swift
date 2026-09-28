@@ -56,9 +56,13 @@ final class GetLayaUITests: XCTestCase {
         app.buttons["getLaya.later"].tap()
         XCTAssertTrue(locked.waitForExistence(timeout: 5))
 
-        // A rules-only feature keeps working: the privacy check is on Now and opens.
-        app.tabBars.buttons["Now"].tap()
-        let privacy = app.buttons["now.privacy"]
+        // A rules-only feature keeps working: the privacy check, in Me → What Loupe reads, opens.
+        app.tabBars.buttons["Me"].tap()
+        app.tabBars.buttons["Me"].tap()
+        let reads = app.buttons["me.reads"]
+        XCTAssertTrue(reads.waitForExistence(timeout: 5))
+        reads.tap()
+        let privacy = app.buttons["sources.privacy"]
         for _ in 0..<6 where !privacy.isHittable { app.swipeUp() }
         XCTAssertTrue(privacy.waitForExistence(timeout: 5))
         XCTAssertFalse(any(app, "needsLaya.privacy").exists)

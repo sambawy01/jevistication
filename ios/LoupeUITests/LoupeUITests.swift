@@ -7,8 +7,8 @@ final class LoupeUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-LoupeEphemeralKeychain", "-LoupeSkipOnboarding"]
         app.launch()
-        // The Web tab's library is Judgments → Web questions (owner decision 2026-09-26).
-        app.tabBars.buttons["Judgments"].tap()
+        // The Web tab's library is Ask → Web questions (owner decisions 2026-09-26 and 2026-09-28).
+        app.tabBars.buttons["Ask"].tap()
         app.segmentedControls["judgments.section"].buttons["Web questions"].tap()
         // Flights is a development-only template (owner decision 2026-09-25).
         let flights = app.descendants(matching: .any)["web.template.flights"].firstMatch

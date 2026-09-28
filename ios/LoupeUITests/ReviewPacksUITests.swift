@@ -3,13 +3,16 @@ import XCTest
 final class ReviewPacksUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    /// Now → To review → approve the privacy check's proposal to remove a duplicate copy (a real
+    /// Me → To review → approve the privacy check's proposal to remove a duplicate copy (a real
     /// duplicate pair in the throwaway Send to Loupe inbox), then undo it.
     func testApproveAPrivacyCheckProposedAction() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeReviewDemo"]
+        app.launchArguments = ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeReviewDemo"]
         app.launch()
-        let card = app.buttons["now.review"]
+        // "To review" is a List row (UIKit-backed): below the fold it is not in the hierarchy at all until
+        // scrolled to, so scroll first and only then wait for it to exist.
+        let card = app.buttons["me.review"]
+        for _ in 0..<10 where !(card.exists && card.isHittable) { app.swipeUp() }
         XCTAssertTrue(card.waitForExistence(timeout: 60))
         card.tap()
         XCTAssertTrue(app.staticTexts["review.notUnsure"].waitForExistence(timeout: 10))

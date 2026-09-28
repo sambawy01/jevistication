@@ -2,7 +2,7 @@ import XCTest
 
 /// The live run view (docs/LIVE-RUN-VIEW.md): a privacy check shows its run in place with counters moving, and
 /// under Reduce Motion the view is static while the counters still update. Also saves the dark-theme design
-/// screenshots (Now, Judgments results, a live run, Model settings, the game).
+/// screenshots (Home, Ask's results, a live run, Model settings, the game).
 final class LiveRunUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
@@ -29,10 +29,10 @@ final class LiveRunUITests: XCTestCase {
 
     private func startPrivacyCheck(_ extra: [String]) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeSlowJobs"] + extra
+        app.launchArguments = ["-LoupeTab", "sources", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeSlowJobs"] + extra
         app.launch()
-        let card = app.buttons["now.privacy"]
-        // The Play card sits high on Now (2026-09-25): the privacy card may start below the fold.
+        let card = app.buttons["sources.privacy"]
+        // The privacy check's card is below the sources in What Loupe reads.
         for _ in 0..<4 where !card.waitForExistence(timeout: 15) { app.swipeUp() }
         XCTAssertTrue(card.waitForExistence(timeout: 60))
         expectation(for: NSPredicate(format: "label CONTAINS %@", "findings"), evaluatedWith: card)
@@ -97,9 +97,9 @@ final class LiveRunUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeFixtures"]
         app.launch()
-        XCTAssertTrue(app.buttons["now.privacy"].waitForExistence(timeout: 60))
+        XCTAssertTrue(app.buttons["home.money"].waitForExistence(timeout: 60))
         sleep(3)
-        save("01-now")
+        save("01-home")
 
         app.terminate()
         app.launchArguments = ["-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeFixtures",
@@ -109,7 +109,7 @@ final class LiveRunUITests: XCTestCase {
         save("02-judgment-results")
 
         app.terminate()
-        app.launchArguments = ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeFixtures"]
+        app.launchArguments = ["-LoupeTab", "advanced", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeFixtures"]
         app.launch()
         let open = app.buttons["me.modelSettings"]
         XCTAssertTrue(open.waitForExistence(timeout: 30))

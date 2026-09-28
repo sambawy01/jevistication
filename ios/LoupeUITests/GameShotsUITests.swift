@@ -21,11 +21,11 @@ final class GameShotsUITests: XCTestCase {
     func testShots() throws {
         try XCTSkipIf(dir == nil, "set TEST_RUNNER_LOUPE_SHOTS to take the screenshots")
 
-        // The Watch card on Now.
+        // The Watch card in Me → See Loupe think.
         var app = XCUIApplication()
-        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "now"]
+        app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me"]
         app.launch()
-        let watch = app.buttons["now.play.watch"]
+        let watch = app.buttons["me.play.watch"]
         XCTAssertTrue(watch.waitForExistence(timeout: 10))
         for _ in 0..<6 where !watch.isHittable { app.swipeUp() }
         save("watch-card")

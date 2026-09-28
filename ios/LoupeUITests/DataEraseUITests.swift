@@ -40,12 +40,12 @@ final class DataEraseUITests: XCTestCase {
         field.typeText("DELETE")
         XCTAssertTrue(confirm.isEnabled)
         confirm.tap()
-        // Back at the start (onboarding is skipped here, so the tabs, on Now), and the judgment is gone.
-        XCTAssertTrue(tabs.buttons["Now"].waitForExistence(timeout: 20))
+        // Back at the start (onboarding is skipped here, so the places, on Home), and the judgment is gone.
+        XCTAssertTrue(tabs.buttons["Home"].waitForExistence(timeout: 20))
         let deadline = Date().addingTimeInterval(20)
-        while !tabs.buttons["Now"].isSelected && Date() < deadline { usleep(200_000) }
-        XCTAssertTrue(tabs.buttons["Now"].isSelected)
-        tabs.buttons["Judgments"].tap()
+        while !tabs.buttons["Home"].isSelected && Date() < deadline { usleep(200_000) }
+        XCTAssertTrue(tabs.buttons["Home"].isSelected)
+        tabs.buttons["Ask"].tap()
         XCTAssertTrue(app.buttons["judgments.openLibrary"].waitForExistence(timeout: 10), "My judgments is empty")
     }
 }

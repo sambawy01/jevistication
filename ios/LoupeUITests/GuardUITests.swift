@@ -1,7 +1,7 @@
 import XCTest
 
-/// The Guard tab (owner decision 2026-09-26) over the bundled sample (-LoupeFixtures): the five tabs, the status
-/// header, Subscriptions with a merchant's evidence, the Expiring soon timeline with its locked model half, the other
+/// Protection (today's Guard screen, behind Home's Protected card) over the bundled sample (-LoupeFixtures): the three places,
+/// the status header, Subscriptions with a merchant's evidence, the Expiring soon timeline with its locked model half, the other
 /// watchers, Protection; and Web questions in Judgments, with the old `-LoupeTab web` redirected there.
 /// Saves `guard-*.png` (to $LOUPE_SHOTS, set with TEST_RUNNER_LOUPE_SHOTS, else the design folder).
 final class GuardUITests: XCTestCase {
@@ -31,18 +31,19 @@ final class GuardUITests: XCTestCase {
         try? shot.pngRepresentation.write(to: URL(fileURLWithPath: dir + "/\(name)-\(device).png"))
     }
 
-    func testFiveTabsWithGuardAndNoWebTab() {
+    func testThreePlacesWithProtectionBehindHome() {
         let app = launch("now")
         let tabs = app.tabBars.firstMatch
         XCTAssertTrue(tabs.waitForExistence(timeout: 10))
-        XCTAssertEqual(tabs.buttons.allElementsBoundByIndex.map(\.label), ["Now", "Guard", "Judgments", "Sources", "Me"])
+        XCTAssertEqual(tabs.buttons.allElementsBoundByIndex.map(\.label), ["Home", "Ask", "Me"])
+        XCTAssertFalse(tabs.buttons["Guard"].exists)
         XCTAssertFalse(tabs.buttons["Web"].exists)
-        // Now keeps the newest findings and leads to Guard.
-        let door = app.buttons["now.guard"]
+        // Home's Protected card opens today's Guard screen.
+        let door = app.buttons["home.protected"]
         scrollTo(door, in: app)
         XCTAssertTrue(door.waitForExistence(timeout: 60))
         door.tap()
-        XCTAssertTrue(tabs.buttons["Guard"].isSelected)
+        XCTAssertTrue(tabs.buttons["Home"].isSelected)
         XCTAssertTrue(any(app, "guard.header").waitForExistence(timeout: 5))
     }
 
@@ -135,7 +136,7 @@ final class GuardUITests: XCTestCase {
         save("guard-03-expiring")
     }
 
-    func testWebQuestionsAreInJudgments() {
+    func testWebQuestionsAreInAsk() {
         let app = launch("judgments")
         let segment = app.segmentedControls["judgments.section"].buttons["Web questions"]
         XCTAssertTrue(segment.waitForExistence(timeout: 10))
@@ -151,7 +152,7 @@ final class GuardUITests: XCTestCase {
     func testTheOldWebLaunchArgumentOpensWebQuestions() {
         let app = launch("web")
         XCTAssertTrue(any(app, "web.template.currency").waitForExistence(timeout: 10))
-        XCTAssertTrue(app.tabBars.buttons["Judgments"].isSelected)
+        XCTAssertTrue(app.tabBars.buttons["Ask"].isSelected)
         XCTAssertTrue(app.segmentedControls["judgments.section"].buttons["Web questions"].isSelected)
     }
 }

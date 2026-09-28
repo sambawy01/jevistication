@@ -3,13 +3,14 @@ import XCTest
 final class PrivacyUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    /// Now → Privacy check shows the sample's SPECIMEN ID documents and duplicate receipts.
-    func testNowOpensPrivacyCheckWithSampleFindings() {
+    /// Me → What Loupe reads → Privacy check shows the sample's SPECIMEN ID documents and duplicate receipts.
+    func testReadsOpensPrivacyCheckWithSampleFindings() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding"]
+        app.launchArguments = ["-LoupeTab", "sources", "-LoupeSkipOnboarding"]
         app.launch()
-        let card = app.buttons["now.privacy"]
+        let card = app.buttons["sources.privacy"]
         XCTAssertTrue(card.waitForExistence(timeout: 60))
+        for _ in 0..<8 where !card.isHittable { app.swipeUp() }
         let loaded = NSPredicate(format: "label CONTAINS %@", "findings")
         expectation(for: loaded, evaluatedWith: card)
         waitForExpectations(timeout: 60)
@@ -31,10 +32,11 @@ final class PrivacyShowWhereUITests: XCTestCase {
     /// and draws the OCR line's box over the image (a rendered test-card photo, DEBUG only).
     func testShowWhereMasksTheCardAndBoxesItOnThePhoto() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeFixtures", "-LoupePrivacyPhotoDemo", "-LoupeTab", "now", "-LoupeSkipOnboarding"]
+        app.launchArguments = ["-LoupeFixtures", "-LoupePrivacyPhotoDemo", "-LoupeTab", "sources", "-LoupeSkipOnboarding"]
         app.launch()
-        let card = app.buttons["now.privacy"]
+        let card = app.buttons["sources.privacy"]
         XCTAssertTrue(card.waitForExistence(timeout: 60))
+        for _ in 0..<8 where !card.isHittable { app.swipeUp() }
         expectation(for: NSPredicate(format: "label CONTAINS %@", "findings"), evaluatedWith: card)
         waitForExpectations(timeout: 60)
         card.tap()
