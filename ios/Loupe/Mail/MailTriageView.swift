@@ -271,6 +271,12 @@ struct MailFound: Equatable {
 
     /// The card's spoken line (the scenario tests read the numbers from it).
     var line: String { "Phishing: \(phishing) · Needs a reply: \(needsReply) · Subscriptions found: \(subscriptions.count)" }
+
+    /// `line`, plus the subscription names when there are any (VoiceOver's label: the card's `Text` below it,
+    /// combined into one element, is otherwise silent on what was found).
+    var spokenLine: String {
+        subscriptions.isEmpty ? line : "\(line). \(subscriptions.joined(separator: ", "))"
+    }
 }
 
 struct MailFoundCard: View {
@@ -293,7 +299,7 @@ struct MailFoundCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .card()
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(found.line)
+        .accessibilityLabel(found.spokenLine)
         .accessibilityIdentifier("mail.found")
     }
 

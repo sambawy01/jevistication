@@ -17,6 +17,16 @@ final class MailScreenTests: XCTestCase {
         XCTAssertEqual(found.line, "Phishing: 1 · Needs a reply: 3 · Subscriptions found: 2")
     }
 
+    func testSpokenLineAddsTheSubscriptionNamesForVoiceOver() {
+        let withNames = MailFound.of(phishing: 1, needsReply: 3, mailItemIds: ["mail:a", "mail:b"],
+                                     census: [sub("Netflix", ["mail:a"]), sub("Spotify", ["mail:b"])])
+        XCTAssertEqual(withNames.spokenLine, "Phishing: 1 · Needs a reply: 3 · Subscriptions found: 2. Netflix, Spotify")
+
+        let noNames = MailFound.of(phishing: 0, needsReply: 0, mailItemIds: [], census: [])
+        XCTAssertEqual(noNames.spokenLine, noNames.line)
+        XCTAssertEqual(noNames.spokenLine, "Phishing: 0 · Needs a reply: 0 · Subscriptions found: 0")
+    }
+
     func testEntryLineSaysWhatIsConnectedAndWhatWasFound() {
         XCTAssertEqual(MailEntryCard.line(account: nil, on: false, phishing: 0, needsReply: 0),
                        "No mailbox yet · add one to read receipts, bills and phishing")
