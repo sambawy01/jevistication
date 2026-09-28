@@ -16,7 +16,7 @@ struct SubscriptionsScreen: View {
                     SubscriptionsSection(census: summary.census, findings: summary.findings,
                                          coverage: GuardCoverage.from(sources), openSources: openReads)
                 } else {
-                    TrackingLoading(text: "The watchers are reading your sources")
+                    TrackingNotYet(what: "your subscriptions", sources: sources, watchers: watchers, openReads: openReads)
                 }
             }
             .padding(.horizontal, 16)
@@ -46,7 +46,7 @@ struct ExpiringScreen: View {
                                                              turnedOff: !settings.useLaya(Features.shared.WATCHERS)),
                                   coverage: GuardCoverage.from(sources), openSources: openReads)
                 } else {
-                    TrackingLoading(text: "The watchers are reading your sources")
+                    TrackingNotYet(what: "which documents expire soon", sources: sources, watchers: watchers, openReads: openReads)
                 }
             }
             .padding(.horizontal, 16)
@@ -55,6 +55,51 @@ struct ExpiringScreen: View {
         .neonGround()
         .navigationTitle("Expiring")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+/// Run now for the tracking cards and screens: the same action as Protection's Run now (`guard.runNow`), the
+/// watchers and mail triage. A manual run is allowed under O-4 (nothing heavy starts by itself at open).
+enum TrackingRun {
+    @MainActor static func runNow() {
+        Task { await WatchersService.shared.run() }
+        Task { await MailTriageService.shared.run() }
+    }
+}
+
+/// No summary yet: "reading" while a scan or the watchers really run; otherwise not checked since Loupe opened, with
+/// Run now (or, with no source on, the way to turn one on).
+struct TrackingNotYet: View {
+    let what: String
+    @ObservedObject var sources: SourcesService
+    @ObservedObject var watchers: WatchersService
+    let openReads: () -> Void
+
+    var body: some View {
+        if watchers.running || sources.scanning {
+            TrackingLoading(text: "The watchers are reading your sources")
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Not checked yet").font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
+                    Text("Run a check to see \(what).").font(.footnote).foregroundStyle(Palette.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
+                if GuardCoverage.from(sources).anyOn {
+                    CardAction(title: "Run now", symbol: "arrow.clockwise", hue: Palette.cyan) { TrackingRun.runNow() }
+                        .accessibilityLabel("Run the check now")
+                        .accessibilityIdentifier("tracking.run")
+                } else {
+                    CardAction(title: "Open What Loupe reads", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan, action: openReads)
+                        .accessibilityIdentifier("tracking.connect")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("tracking.notYet")
+        }
     }
 }
 

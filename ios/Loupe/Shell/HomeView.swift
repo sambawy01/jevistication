@@ -20,6 +20,8 @@ struct HomeView: View {
     @ObservedObject private var keyboard = KeyboardSetup.shared
     @ObservedObject private var clipboard = ClipboardMonitor.shared
     @ObservedObject private var online = OnlineChecksService.shared
+    /// Findings name their items through `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @State private var openItem: SourceItem?
     /// The scans the panel shows: the live ones, kept after they settle out of `liveScans` so the panel can
     /// collapse to their summary line; replaced when a new scan starts.
@@ -77,7 +79,7 @@ struct HomeView: View {
         let live = liveKeys.compactMap { sources.liveScans[$0] }
         let shown = live.isEmpty ? panelScans : live
         if !shown.isEmpty {
-            HomeScanPanel(scans: shown, sources: sources)
+            HomeLiveScanPanel(scans: shown, sources: sources)
                 .onChange(of: live.map(\.id), initial: true) { _, _ in
                     // A new scan joins the ones shown while they run; once all had finished it starts afresh.
                     guard !live.isEmpty else { return }
@@ -127,14 +129,19 @@ struct HomeView: View {
         if !items.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 HomeSectionTitle(title: "Needs attention", count: items.count)
-                ForEach(items) { attentionRow($0) }
+                let findingKeys = items.compactMap { item -> String? in
+                    if case .finding(let key) = item { return key } else { return nil }
+                }
+                ForEach(items) { attentionRow($0, findingKeys: findingKeys) }
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("home.attention")
         }
     }
 
-    @ViewBuilder private func attentionRow(_ item: HomeModel.Attention) -> some View {
+    /// `findingKeys`: the findings in Needs attention, in order: a card's id is its place among them (finding.0 is
+    /// the newest), as on Now, while its answer and Open act on the finding itself.
+    @ViewBuilder private func attentionRow(_ item: HomeModel.Attention, findingKeys: [String]) -> some View {
         switch item {
         case .spotted(let headline, let dangerous):
             Button { path.append(ProtectionRoute.spotted) } label: { SpottedNowCard(headline: headline, dangerous: dangerous) }
@@ -145,9 +152,8 @@ struct HomeView: View {
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("home.attention.mail")
         case .finding(let key):
-            if let i = watchers.findings.firstIndex(where: { $0.key == key }) {
-                let f = watchers.findings[i]
-                FindingCard(finding: f, index: i, item: ItemIndex.item(f.itemId),
+            if let f = watchers.findings.first(where: { $0.key == key }), let place = findingKeys.firstIndex(of: key) {
+                FindingCard(finding: f, index: place, item: ItemIndex.item(f.itemId),
                             onVerdict: { watchers.answer(f, $0) },
                             onOpen: { openItem = watchers.item(f.itemId) })
             }
@@ -165,7 +171,7 @@ struct HomeView: View {
     // MARK: Money, Documents, Protected
 
     private var moneyCard: some View {
-        let m = HomeModel.money(watchers.summary?.census, mailCovered: coverage.mail)
+        let m = HomeModel.money(watchers.summary?.census, mailCovered: coverage.mail, running: checking)
         return VStack(alignment: .leading, spacing: 10) {
             Button { path.append(HomeRoute.subscriptions) } label: {
                 HomeCardLabel(caption: "Money", headline: m.headline, detail: m.detail, symbol: "creditcard")
@@ -177,11 +183,12 @@ struct HomeView: View {
                 CardAction(title: "Open What Loupe reads", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan, action: openReads)
                     .accessibilityIdentifier("home.money.connect")
             }
+            if m.needsRun { runNow(id: "home.money.run") }
         }
     }
 
     private var documentsCard: some View {
-        let d = HomeModel.documents(watchers.summary?.expiries, documentsCovered: coverage.documents)
+        let d = HomeModel.documents(watchers.summary?.expiries, documentsCovered: coverage.documents, running: checking)
         return VStack(alignment: .leading, spacing: 10) {
             Button { path.append(HomeRoute.expiring) } label: {
                 HomeCardLabel(caption: "Documents", headline: d.headline, detail: d.detail, symbol: "doc.text.magnifyingglass")
@@ -193,6 +200,22 @@ struct HomeView: View {
                 CardAction(title: "Open What Loupe reads", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan, action: openReads)
                     .accessibilityIdentifier("home.documents.connect")
             }
+            if d.needsRun { runNow(id: "home.documents.run") }
+        }
+    }
+
+    /// A scan or the watchers are running now (the cards say "Reading your sources" only then).
+    private var checking: Bool { watchers.running || sources.scanning }
+
+    /// Nothing checked since Loupe opened: Run now (Protection's action), or with no source on, the way to one.
+    @ViewBuilder private func runNow(id: String) -> some View {
+        if coverage.anyOn {
+            CardAction(title: "Run now", symbol: "arrow.clockwise", hue: Palette.cyan) { TrackingRun.runNow() }
+                .accessibilityLabel("Run the check now")
+                .accessibilityIdentifier(id)
+        } else {
+            CardAction(title: "Open What Loupe reads", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan, action: openReads)
+                .accessibilityIdentifier(id.replacingOccurrences(of: ".run", with: ".connect"))
         }
     }
 

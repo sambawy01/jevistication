@@ -1,3 +1,4 @@
+import Combine
 import LoupeKit
 import SwiftUI
 
@@ -54,45 +55,150 @@ enum HomeScanPanelModel {
         if !stopped.isEmpty { line += " · \(stopped.joined(separator: ", ")) stopped" }
         return line
     }
+
+    /// Today's adapter: the live scans' snapshots (in `scanKeys` order) as one progress for the panel. Stages are
+    /// the sources being read, each with its done/total; the rate is theirs together, the time left the longest.
+    /// When none runs any more, the progress carries the collapsed line (`summaryLine`). Nil when there is no scan.
+    static func progress(_ scans: [ScanSnapshot]) -> HomeScanProgress? {
+        guard !scans.isEmpty else { return nil }
+        let running = scans.filter { $0.phase == .running }
+        let stages = scans.map { HomeScanProgress.Stage(id: $0.pipeline.source, name: $0.pipeline.title, done: $0.done, total: $0.total) }
+        guard !running.isEmpty else {
+            return HomeScanProgress(stage: "Done", currentItem: nil, stages: stages, rate: nil, eta: nil,
+                                    summary: summaryLine(scans))
+        }
+        let rates = running.compactMap(\.rate)
+        return HomeScanProgress(stage: "Reading " + running.map(\.pipeline.title).joined(separator: ", "),
+                                // Already masked by the scan (initials for contacts, masked names and subjects).
+                                currentItem: running.first?.recent.first?.name,
+                                stages: stages,
+                                rate: rates.isEmpty ? nil : rates.reduce(0, +),
+                                eta: running.compactMap(\.eta).max(),
+                                summary: nil)
+    }
+
+    /// Cancel shows only while the check runs, and only when whoever runs it can cancel it (today's source scans
+    /// cannot; the run coordinator's runs will).
+    static func showsCancel(_ progress: HomeScanProgress?, canCancel: Bool) -> Bool {
+        canCancel && progress?.running == true
+    }
 }
 
-/// Home's scan panel (owner ruling O-5): whatever started a scan (Run now, Scan again, the first check after
-/// onboarding), Home shows it happening at the top. While a scan runs: the live display of each running scan (the
-/// item being read, each stage's count, the rate and the time left: `ScanDisplay`), then every real source with its
-/// live count and its switch, which can be flipped during the scan. Once they have all finished it collapses to one
-/// line, and Home's cards below take over.
-///
-/// Performance: this view does not observe the scans' snapshots (~12 a second): the displays and the counts observe
-/// their own scan. It repaints with Home, which a scan's end reaches through `SourcesService` (the source's state and
-/// `revision` when it lands, `liveScans` after the settle), so it collapses by the settle at the latest.
+/// What the scan panel shows, as a value: the stage, the item being read, each stage's done/total, the rate, the
+/// time left, and (once finished or stopped) the one-line summary. Built today from the live scans
+/// (`HomeScanPanelModel.progress`); after the rebase from main's `RunCoordinator.current` (a `RunProgress`).
+struct HomeScanProgress: Equatable {
+    struct Stage: Equatable, Identifiable {
+        /// A source id for a source's stage ("photos"), so its row shows the live count.
+        let id: String
+        let name: String
+        let done: Int
+        let total: Int?
+    }
+
+    let stage: String
+    let currentItem: String?
+    let stages: [Stage]
+    /// Items a second.
+    let rate: Double?
+    /// Seconds left.
+    let eta: TimeInterval?
+    /// The finished or stopped line; nil while it runs.
+    let summary: String?
+
+    var running: Bool { summary == nil }
+
+    /// Done over total across the stages, when every total is known.
+    var fraction: Double? {
+        guard !stages.isEmpty, stages.allSatisfy({ $0.total != nil }) else { return nil }
+        let total = stages.reduce(0) { $0 + ($1.total ?? 0) }
+        guard total > 0 else { return nil }
+        return min(1, Double(stages.reduce(0) { $0 + $1.done }) / Double(total))
+    }
+
+    /// "12/s · about 20 s left".
+    var telemetry: String {
+        var parts: [String] = []
+        if let rate, rate > 0 { parts.append("\(ScanSnapshot.rateText(rate))/s") }
+        if let eta { parts.append("about \(ScanSnapshot.duration(eta)) left") }
+        return parts.joined(separator: " · ")
+    }
+}
+
+/// Home's scan panel (owner ruling O-5): whatever started a check (Run now, Scan again, the first check after
+/// onboarding), Home shows it happening at the top. While it runs: the stage, the item being read, each stage's
+/// count, the rate and the time left, Cancel when the run can be cancelled, then every real source with its live
+/// count and its switch, which can be flipped during the check. Once finished it collapses to one line, and Home's
+/// cards below take over. It draws a `HomeScanProgress` only, so it binds to any producer of one.
 struct HomeScanPanel: View {
-    /// The scans to show, in `HomeScanPanelModel.scanKeys` order (running or just finished).
-    let scans: [LiveScan]
+    let progress: HomeScanProgress?
     @ObservedObject var sources: SourcesService
+    /// Cancels the running check; nil when it cannot be cancelled (no Cancel button then).
+    let onCancel: (() -> Void)?
 
     var body: some View {
-        if scans.contains(where: { !$0.finished }) {
-            expanded
-        } else if let line = HomeScanPanelModel.summaryLine(scans.map(\.snapshot)) {
-            HomeScanSummary(line: line)
+        if let progress {
+            if progress.running {
+                expanded(progress)
+            } else if let line = progress.summary {
+                HomeScanSummary(line: line)
+            }
         }
     }
 
-    private var expanded: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Caption(text: "Reading your sources")
+    private func expanded(_ p: HomeScanProgress) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Caption(text: "Checking now")
                 Spacer(minLength: 0)
             }
             .accessibilityAddTraits(.isHeader)
-            ForEach(scans) { scan in
-                ScanDisplay(live: scan)
+            Text(p.stage)
+                .font(Typeface.display(20)).foregroundStyle(Palette.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("home.scan.stage")
+            if let item = p.currentItem {
+                Text("Now reading \(item)")
+                    .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+                    .lineLimit(2)
+                    .accessibilityIdentifier("home.scan.current")
+            }
+            SweepBar(fraction: p.fraction ?? 0, color: Palette.cyan, height: 6, live: true)
+                .accessibilityElement()
+                .accessibilityLabel("Progress")
+                .accessibilityValue(p.fraction.map { "\(Int(($0 * 100).rounded())) percent" } ?? "counting")
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(p.stages) { st in
+                    HStack(spacing: 8) {
+                        Text(st.name).font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        Spacer(minLength: 8)
+                        Text(Self.count(st)).font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("home.scan.stage.\(st.id)")
+                }
+            }
+            if !p.telemetry.isEmpty {
+                Text(p.telemetry)
+                    .font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("home.scan.telemetry")
+            }
+            if HomeScanPanelModel.showsCancel(p, canCancel: onCancel != nil), let onCancel {
+                Button(action: onCancel) {
+                    Label("Cancel", systemImage: "xmark.circle")
+                        .font(.footnote.weight(.semibold))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel("Cancel the check")
+                .accessibilityIdentifier("home.scan.cancel")
             }
             Divider().overlay(Palette.hairline)
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(HomeScanPanelModel.sources(inboxHasImports: !sources.inboxBatches.isEmpty)) { source in
                     HomeScanSourceRow(source: source, sources: sources,
-                                      live: scans.first { $0.source == source.id && !$0.finished })
+                                      live: p.stages.first { $0.id == source.id })
                 }
             }
             Text("Turning a source off takes its items out of every check. Nothing leaves this iPhone except Mail, which you connected.")
@@ -104,9 +210,55 @@ struct HomeScanPanel: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.scan")
     }
+
+    static func count(_ st: HomeScanProgress.Stage) -> String {
+        st.total.map { "\(st.done.formatted()) of \($0.formatted())" } ?? st.done.formatted()
+    }
 }
 
-/// The panel collapsed: one line saying what the scan read.
+/// Today's producer: follows the live scans' snapshots (each publishes ~12 times a second) inside this small view,
+/// so only the panel repaints with them, never Home's body.
+struct HomeLiveScanPanel: View {
+    let scans: [LiveScan]
+    @ObservedObject var sources: SourcesService
+    @StateObject private var feed = HomeScanFeed()
+
+    var body: some View {
+        // RunCoordinator: after the rebase this becomes
+        // HomeScanPanel(progress: runs.current.map(HomeScanProgress.init), sources: sources, onCancel: runs.cancel)
+        HomeScanPanel(progress: HomeScanPanelModel.progress(snapshots), sources: sources, onCancel: nil)
+            .onAppear { feed.track(scans) }
+            .onChange(of: scans.map(\.id)) { _, _ in feed.track(scans) }
+    }
+
+    /// The feed's once it follows these scans; until then (the first pass) their snapshots as they are now.
+    private var snapshots: [ScanSnapshot] { feed.follows(scans) ? feed.snapshots : scans.map(\.snapshot) }
+}
+
+/// The live scans' latest snapshots, in order; re-subscribes only when the set of scans changes.
+@MainActor
+final class HomeScanFeed: ObservableObject {
+    @Published private(set) var snapshots: [ScanSnapshot] = []
+    private var ids: [UUID] = []
+    private var subscription: AnyCancellable?
+
+    func follows(_ scans: [LiveScan]) -> Bool { ids == scans.map(\.id) }
+
+    func track(_ scans: [LiveScan]) {
+        let next = scans.map(\.id)
+        guard next != ids else { return }
+        ids = next
+        snapshots = scans.map(\.snapshot)
+        subscription = Publishers.MergeMany(scans.enumerated().map { i, scan in scan.$snapshot.dropFirst().map { (i, $0) } })
+            .receive(on: RunLoop.main)
+            .sink { [weak self] i, snap in
+                guard let self, i < self.snapshots.count else { return }
+                self.snapshots[i] = snap
+            }
+    }
+}
+
+/// The panel collapsed: one line saying what the check read.
 struct HomeScanSummary: View {
     let line: String
 
@@ -122,7 +274,7 @@ struct HomeScanSummary: View {
         .padding(.horizontal, 12)
         .background(Palette.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Scan finished. \(line)")
+        .accessibilityLabel("Check finished. \(line)")
         .accessibilityIdentifier("home.scan.summary")
     }
 }
@@ -131,8 +283,8 @@ struct HomeScanSummary: View {
 private struct HomeScanSourceRow: View {
     let source: HomeScanPanelModel.Source
     @ObservedObject var sources: SourcesService
-    /// The source's scan while it runs: its count then moves live.
-    let live: LiveScan?
+    /// The source's stage while the check reads it: its count then moves live.
+    let live: HomeScanProgress.Stage?
 
     private var on: Bool {
         if let phone = source.phone { return sources.isPhoneEnabled(phone) }
@@ -144,19 +296,22 @@ private struct HomeScanSourceRow: View {
         return sources.inboxBatches.reduce(0) { $0 + Int($1.itemCount) }
     }
 
+    private var countLine: String {
+        if let live { return "Reading · \(HomeScanPanel.count(live))" }
+        guard on else { return "Off" }
+        return "\(restingCount.formatted()) \(restingCount == 1 ? "item" : "items")"
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             SourceGlyph(id: source.id, on: on, size: 32)
             VStack(alignment: .leading, spacing: 2) {
                 Text(source.title).font(.subheadline.weight(.semibold)).foregroundStyle(Palette.ink)
                     .fixedSize(horizontal: false, vertical: true)
-                if let live {
-                    HomeScanLiveCount(live: live)
-                } else {
-                    Text(on ? Self.countLine(restingCount) : "Off")
-                        .font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
-                        .accessibilityIdentifier("home.scan.source.\(source.id).count")
-                }
+                Text(countLine)
+                    .font(Typeface.mono(11)).monospacedDigit()
+                    .foregroundStyle(live == nil ? Palette.inkSoft : SourceLook.hue(source.id))
+                    .accessibilityIdentifier("home.scan.source.\(source.id).count")
             }
             Spacer(minLength: 8)
             Toggle(source.title, isOn: Binding(get: { on }, set: { value in
@@ -174,19 +329,5 @@ private struct HomeScanSourceRow: View {
         .frame(minHeight: 44)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("home.scan.source.\(source.id)")
-    }
-
-    static func countLine(_ n: Int) -> String { "\(n.formatted()) \(n == 1 ? "item" : "items")" }
-}
-
-/// A running scan's count, observing that scan alone (it publishes ~12 times a second).
-private struct HomeScanLiveCount: View {
-    @ObservedObject var live: LiveScan
-
-    var body: some View {
-        let s = live.snapshot
-        Text("Reading · \(s.read.formatted()) read")
-            .font(Typeface.mono(11, weight: .medium)).monospacedDigit().foregroundStyle(SourceLook.hue(s.pipeline.source))
-            .accessibilityIdentifier("home.scan.source.\(s.pipeline.source).count")
     }
 }

@@ -36,9 +36,19 @@ final class HomeUITests: ScenarioCase {
 
     func testNeedsAttentionShowsTheNewestFindings() {
         launchHome()
-        XCTAssertTrue(any("finding.0").waitForExistence(timeout: 10))
+        XCTAssertTrue(any("finding.0").waitForExistence(timeout: 10), "the newest finding is first on Home: finding.0")
+        // The cards are numbered by their place in Needs attention: 0, 1, 2 and never more.
+        let cards = any("home.attention").descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier MATCHES %@", "finding\\.[0-9]+"))
+        let ids = Set(cards.allElementsBoundByIndex.map(\.identifier))
+        XCTAssertFalse(ids.isEmpty)
+        XCTAssertLessThanOrEqual(ids.count, 3, "three findings at most on Home; the rest are on Protection: \(ids)")
+        XCTAssertEqual(ids, Set((0..<ids.count).map { "finding.\($0)" }), "numbered by place on Home: \(ids)")
         XCTAssertFalse(any("finding.3").exists, "three findings at most on Home; the rest are on Protection")
-        let open = button("finding.open.0")
-        if open.exists { XCTAssertGreaterThanOrEqual(open.frame.height, 44) }
+        // FindingCard's own id covers its children, so its Open item is found by its label: the first one in
+        // Needs attention is finding.0's (the other cards there have none).
+        let open = any("home.attention").buttons["Open item"].firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 5), "the sample's newest finding names its item")
+        XCTAssertGreaterThanOrEqual(open.frame.height, 44)
     }
 }

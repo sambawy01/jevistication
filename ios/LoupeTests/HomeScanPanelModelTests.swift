@@ -63,4 +63,62 @@ final class HomeScanPanelModelTests: XCTestCase {
                                                        snap("mail", .failed)]),
                        "Photos: 5 photos · 0 bytes out · Mail stopped")
     }
+
+    // MARK: The adapter (today's live scans → the panel's progress; RunCoordinator's progress after the rebase)
+
+    private func running(_ source: String, done: Int, total: Int?, rate: Double?, eta: TimeInterval?, current: String?) -> ScanSnapshot {
+        var s = snap(source, .running, read: done)
+        s.done = done
+        s.total = total
+        s.rate = rate
+        s.eta = eta
+        if let current {
+            s.recent = [ScanSnapshot.Recent(id: 1, name: current, snippet: "", read: true, textFound: false, boxes: [],
+                                            thumb: nil, at: 0)]
+        }
+        return s
+    }
+
+    func testNoScansGiveNoProgress() {
+        XCTAssertNil(HomeScanPanelModel.progress([]))
+    }
+
+    func testRunningScansBecomeOneProgress() {
+        let p = HomeScanPanelModel.progress([running("photos", done: 120, total: 300, rate: 8, eta: 20, current: "IMG_4107.JPG"),
+                                             running("files", done: 4, total: nil, rate: 2, eta: nil, current: "lease.pdf")])
+        XCTAssertEqual(p?.stage, "Reading Photos, Files")
+        XCTAssertEqual(p?.currentItem, "IMG_4107.JPG", "the first running scan's newest item (already masked by the scan)")
+        XCTAssertEqual(p?.stages, [HomeScanProgress.Stage(id: "photos", name: "Photos", done: 120, total: 300),
+                                   HomeScanProgress.Stage(id: "files", name: "Files", done: 4, total: nil)])
+        XCTAssertEqual(p?.rate, 10, "the scans' rates together")
+        XCTAssertEqual(p?.eta, 20, "the longest time left")
+        XCTAssertNil(p?.summary)
+        XCTAssertEqual(p?.running, true)
+    }
+
+    func testAFinishedScanStillCountedWhileAnotherRuns() {
+        let p = HomeScanPanelModel.progress([snap("photos", .finished, read: 9, summary: "9 photos · 0 bytes out"),
+                                             running("files", done: 1, total: 2, rate: nil, eta: nil, current: nil)])
+        XCTAssertEqual(p?.stage, "Reading Files")
+        XCTAssertNil(p?.currentItem)
+        XCTAssertNil(p?.rate)
+        XCTAssertEqual(p?.stages.map(\.id), ["photos", "files"])
+        XCTAssertEqual(p?.running, true)
+    }
+
+    func testFinishedScansBecomeTheSummary() {
+        let p = HomeScanPanelModel.progress([snap("photos", .finished, read: 5, summary: "5 photos · 0 bytes out")])
+        XCTAssertEqual(p?.summary, "Photos: 5 photos · 0 bytes out")
+        XCTAssertEqual(p?.running, false)
+        XCTAssertNil(p?.eta)
+    }
+
+    func testCancelShowsOnlyWithACancelWhileRunning() {
+        let live = HomeScanPanelModel.progress([running("photos", done: 1, total: 2, rate: nil, eta: nil, current: nil)])
+        let done = HomeScanPanelModel.progress([snap("photos", .finished, read: 2, summary: "2 photos")])
+        XCTAssertTrue(HomeScanPanelModel.showsCancel(live, canCancel: true))
+        XCTAssertFalse(HomeScanPanelModel.showsCancel(live, canCancel: false), "today's scans cannot be cancelled")
+        XCTAssertFalse(HomeScanPanelModel.showsCancel(done, canCancel: true), "nothing to cancel once it finished")
+        XCTAssertFalse(HomeScanPanelModel.showsCancel(nil, canCancel: true))
+    }
 }

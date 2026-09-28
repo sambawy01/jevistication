@@ -47,7 +47,7 @@ final class HomeModelTests: XCTestCase {
         XCTAssertTrue(m.needsSource)
         XCTAssertTrue(m.detail.contains("Mail"), m.detail)
         XCTAssertEqual(HomeModel.money(empty, mailCovered: true).needsSource, false)
-        XCTAssertEqual(HomeModel.money(nil, mailCovered: true).headline, "Reading your sources")
+        XCTAssertEqual(HomeModel.money(nil, mailCovered: true, running: true).headline, "Reading your sources")
     }
 
     func testDocumentsLeadWithTheSoonest() {
@@ -62,7 +62,34 @@ final class HomeModelTests: XCTestCase {
         XCTAssertEqual(d.headline, "No documents read yet")
         XCTAssertTrue(d.needsSource)
         XCTAssertEqual(HomeModel.documents([], documentsCovered: true).headline, "No expiry dates found")
-        XCTAssertEqual(HomeModel.documents(nil, documentsCovered: true).headline, "Reading your sources")
+        XCTAssertEqual(HomeModel.documents(nil, documentsCovered: true, running: true).headline, "Reading your sources")
+    }
+
+    /// No summary yet (the checks keep nothing across launches and nothing heavy starts at open, O-4): "Reading your
+    /// sources" only while a scan or the watchers run; otherwise say it is not checked and offer Run now.
+    func testNoSummaryYetSaysWhetherAnythingIsRunning() {
+        let reading = HomeModel.money(nil, mailCovered: true, running: true)
+        XCTAssertEqual(reading.headline, "Reading your sources")
+        XCTAssertFalse(reading.needsRun)
+        let idle = HomeModel.money(nil, mailCovered: true, running: false)
+        XCTAssertEqual(idle.headline, "Not checked yet")
+        XCTAssertEqual(idle.detail, "Run a check to see your subscriptions.")
+        XCTAssertTrue(idle.needsRun)
+        XCTAssertFalse(idle.needsSource)
+        XCTAssertNotEqual(reading, idle)
+
+        let docsReading = HomeModel.documents(nil, documentsCovered: true, running: true)
+        XCTAssertEqual(docsReading.headline, "Reading your sources")
+        XCTAssertFalse(docsReading.needsRun)
+        let docsIdle = HomeModel.documents(nil, documentsCovered: true, running: false)
+        XCTAssertEqual(docsIdle.headline, "Not checked yet")
+        XCTAssertEqual(docsIdle.detail, "Run a check to see which documents expire soon.")
+        XCTAssertTrue(docsIdle.needsRun)
+        XCTAssertNotEqual(docsReading, docsIdle)
+
+        let census = SubscriptionCensus(rows: [], monthlyTotalMinor: 0, chargesFound: 0, sample: false, setAside: 0)
+        XCTAssertFalse(HomeModel.money(census, mailCovered: true, running: false).needsRun, "a summary in hand needs no run")
+        XCTAssertFalse(HomeModel.documents([], documentsCovered: true, running: false).needsRun)
     }
 
     func testProtectedNamesWhatIsOffAndOffersTheFirst() {
