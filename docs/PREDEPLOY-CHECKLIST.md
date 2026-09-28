@@ -13,14 +13,14 @@ screenshot. About 45 minutes, plus the model download and one night on the charg
 - [ ] Me → Diagnostics → 3 passes → Run. Share the report back.
 
 ## 2. Loupe for Safari
-- [ ] Guard → Protection → **Turn on Safari protection**. In Settings turn on **Allow Extension**, then **All Websites → Allow**.
+- [ ] Home → Protected → Protection → **Turn on Safari protection**. In Settings turn on **Allow Extension**, then **All Websites → Allow**.
 - [ ] In Safari open `xn--pypal-4ve.com`. Loupe's full-page warning shows with its reasons. **Go back** works.
 - [ ] Open it again and tap **Continue anyway**: the page loads, and no second warning appears in that Safari session.
 - [ ] Open an ordinary site (bbc.co.uk): no Loupe UI at all.
-- [ ] Back in Loupe: Guard shows a badge, and **Spotted** lists the look-alike site. Opening Spotted clears the badge.
+- [ ] Back in Loupe: the Home tab shows a badge, and **Spotted** lists the look-alike site. Opening Spotted clears the badge.
 
 ## 3. The Loupe keyboard (Full Access and memory)
-- [ ] Guard → Protection → Clipboard → **Set up** → **Add the Loupe keyboard**. Turn on Loupe, then **Allow Full Access**.
+- [ ] Home → Protected → Protection → Clipboard → **Set up** → **Add the Loupe keyboard**. Turn on Loupe, then **Allow Full Access**.
 - [ ] In Notes, hold the globe key and pick Loupe. Type English and Arabic (ع / EN key). Holding ا shows أ إ آ.
 - [ ] Copy a link. The strip says "Copied a link · tap to check it". Tap it and answer **Allow Paste**. The verdict shows in the strip.
 - [ ] Copy `xn--pypal-4ve.com`: the strip warns about a fake PayPal page.
@@ -49,12 +49,12 @@ screenshot. About 45 minutes, plus the model download and one night on the charg
 - [ ] **Watch Loupe** with the model installed: the speed panel shows decisions per second. When the run ends, the **results card** shows (the simulator cannot show this; it needs the model).
 
 ## 8. A real Gmail sign-in
-- [ ] Sources → Mail → **Sign in with Google**, with your test-user account. The consent screen asks for **read-only** mail.
+- [ ] Me → Mail → **Sign in with Google**, with your test-user account. The consent screen asks for **read-only** mail.
 - [ ] Mail fills in with "Online · gmail · fetched …". Nothing is marked read in Gmail.
 - [ ] Me → Mail lists your mail, with what was found (phishing, needs a reply, subscriptions). Close and reopen Loupe: still signed in. **Remove mailbox** asks first, then removes the messages.
 
 ## 9. Phone sources with real data
-- [ ] Sources → Photos → Allow access (try **Limited** first, then **Full**). The live scan shows your thumbnails and settles on a summary.
+- [ ] Me → What Loupe reads → Photos → Allow access (try **Limited** first, then **Full**). The live scan shows your thumbnails and settles on a summary.
 - [ ] Files → **Add files or a folder** → pick a folder from iCloud Drive. Its files are read. Close and reopen Loupe: the folder is still there.
 - [ ] From Files or Photos, share a PDF with **Send to Loupe**. It appears on the next open. Share a link: the share sheet shows the link's verdict.
 - [ ] A privacy finding → **Open original** opens the photo or document itself.
