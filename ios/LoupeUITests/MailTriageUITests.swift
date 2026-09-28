@@ -3,18 +3,16 @@ import XCTest
 final class MailTriageUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    /// Now → Mail triage shows the sample's PayPal phishing first, with the signals behind it.
-    func testNowOpensMailTriageWithThePaypalPhishingAndItsSignals() {
+    /// Me → Mail shows the mailbox, what was found, and the sample's PayPal phishing first with its signals.
+    func testMailShowsThePaypalPhishingAndItsSignals() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding"]
+        app.launchArguments = ["-LoupeTab", "mail", "-LoupeSkipOnboarding"]
         app.launch()
-        let card = app.buttons["now.mail"]
-        for _ in 0..<4 where !card.waitForExistence(timeout: 15) { app.swipeUp() }
-        XCTAssertTrue(card.exists)
-        let loaded = NSPredicate(format: "label CONTAINS %@", "possible phishing")
-        expectation(for: loaded, evaluatedWith: card)
+        XCTAssertTrue(app.switches["sources.phone.mail.toggle"].waitForExistence(timeout: 20), "the mailbox is on the Mail screen")
+        let found = app.descendants(matching: .any)["mail.found"]
+        XCTAssertTrue(found.waitForExistence(timeout: 30))
+        expectation(for: NSPredicate(format: "NOT (label BEGINSWITH %@)", "Phishing: 0"), evaluatedWith: found)
         waitForExpectations(timeout: 60)
-        card.tap()
         XCTAssertTrue(app.descendants(matching: .any)["mail.section.phishing"].waitForExistence(timeout: 30))
         XCTAssertTrue(app.buttons["mail.rerun"].exists, "a re-run on the screen itself (audit P2-11)")
         XCTAssertTrue(app.staticTexts["Your account has been limited"].exists)

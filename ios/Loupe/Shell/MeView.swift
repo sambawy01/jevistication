@@ -139,7 +139,7 @@ struct MeView: View {
             .navigationDestination(for: MeRoute.self) { route in
                 switch route {
                 case .reads: SourcesScreen(sources: SourcesService.shared)
-                case .mail: MailTriageView(mail: MailTriageService.shared)
+                case .mail: MailScreen(mail: MailTriageService.shared)
                 }
             }
         }

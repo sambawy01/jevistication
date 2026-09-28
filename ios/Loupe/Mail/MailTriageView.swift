@@ -33,12 +33,15 @@ struct MailTriageCard: View {
     }
 }
 
-/// The Mail triage screen: rows by section (phishing suspected first), each with its category,
-/// the concrete signals behind a phishing verdict, link checks, and Open / Mark safe / Confirm.
-struct MailTriageView: View {
+/// Mail, one place (spec D10): the mailbox (connect, the switch, Scan again, settings and Remove), what was found in
+/// the mail, then the triage rows by section (phishing suspected first), each with its category, the concrete signals
+/// behind a phishing verdict, link checks, and Open / Mark safe / Confirm / Draft a reply.
+struct MailScreen: View {
     /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
     @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @ObservedObject var mail: MailTriageService
+    @ObservedObject var sources: SourcesService = .shared
+    @ObservedObject private var watchers = WatchersService.shared
     @ObservedObject private var assist = AssistService.shared
     @State private var openItem: SourceItem?
     @State private var replyTo: SourceItem?
@@ -46,6 +49,8 @@ struct MailTriageView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                PhoneSourceRow(sources: sources, source: .mail)
+                MailFoundCard(found: found)
                 LiveRunSection(view: "email")
                 Text("Loupe Station's mail rules, read on this iPhone: a category from keyword rules, and a phishing verdict only from evidence a scam cannot hide — the sender's domain, the name it shows, where replies go, the mail server's checks and where links really go. The wording alone never flags an email.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
@@ -69,7 +74,7 @@ struct MailTriageView: View {
                 }
                 if let s = mail.summary {
                     if s.rows.isEmpty {
-                        Text("No mail to triage. Turn on the sample or Mail in Sources.")
+                        Text("No mail yet. Add a mailbox above.")
                             .font(.subheadline).foregroundStyle(Palette.inkSoft).card()
                             .accessibilityIdentifier("mail.none")
                     }
@@ -86,7 +91,7 @@ struct MailTriageView: View {
             .padding(16)
         }
         .neonGround()
-        .navigationTitle("Mail triage")
+        .navigationTitle("Mail")
         .navigationBarTitleDisplayMode(.inline)
         .task { if mail.summary == nil { await mail.run() } }
         .refreshable { await mail.run() }
@@ -103,6 +108,12 @@ struct MailTriageView: View {
         }
         .sheet(item: $openItem) { ItemTextView(item: $0) }
         .sheet(item: $replyTo) { ReplyDraftSheet(item: $0, assist: assist, review: ReviewService.shared) }
+    }
+
+    private var found: MailFound {
+        MailFound.of(phishing: Int(mail.summary?.phishingCount ?? 0), needsReply: Int(mail.summary?.needsReplyCount ?? 0),
+                     mailItemIds: Set(mail.summary?.rows.map(\.itemId) ?? []),
+                     census: watchers.summary?.census.rows ?? [])
     }
 
     private func sectionView(_ section: MailSection, _ rows: [MailRow]) -> some View {
@@ -242,5 +253,91 @@ struct SiteVerdictSections: View {
                 .accessibilityIdentifier("site.notCounted")
             }
         }
+    }
+}
+
+/// What Mail found (spec D10): possible phishing, mail that needs a reply, and the subscriptions whose charges were
+/// read from an email. Pure, for the tests.
+struct MailFound: Equatable {
+    let phishing: Int
+    let needsReply: Int
+    /// Census merchants with at least one charge read from an email, in the census's order.
+    let subscriptions: [String]
+
+    static func of(phishing: Int, needsReply: Int, mailItemIds: Set<String>, census: [CensusRow]) -> MailFound {
+        MailFound(phishing: phishing, needsReply: needsReply,
+                  subscriptions: census.filter { row in row.itemIds.contains { mailItemIds.contains($0) } }.map(\.merchant))
+    }
+
+    /// The card's spoken line (the scenario tests read the numbers from it).
+    var line: String { "Phishing: \(phishing) · Needs a reply: \(needsReply) · Subscriptions found: \(subscriptions.count)" }
+}
+
+struct MailFoundCard: View {
+    let found: MailFound
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Caption(text: "Found in your mail")
+            HStack(spacing: 0) {
+                stat("\(found.phishing)", "possible phishing", found.phishing > 0 ? Palette.dangerText : Palette.ink)
+                stat("\(found.needsReply)", "need a reply", Palette.ink)
+                stat("\(found.subscriptions.count)", "subscriptions", Palette.ink)
+            }
+            if !found.subscriptions.isEmpty {
+                Text(found.subscriptions.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(Palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(found.line)
+        .accessibilityIdentifier("mail.found")
+    }
+
+    private func stat(_ n: String, _ label: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(n).font(Typeface.mono(22, weight: .bold)).monospacedDigit().foregroundStyle(color)
+            Text(label).font(.caption2).foregroundStyle(Palette.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Mail's one entry in What Loupe reads: the mailbox and what it found, opening `MailScreen`.
+struct MailEntryCard: View {
+    @ObservedObject var sources: SourcesService
+    @ObservedObject var mail: MailTriageService
+
+    var body: some View {
+        HStack(spacing: 12) {
+            SourceGlyph(id: PhoneSource.mail.id, on: sources.isPhoneEnabled(.mail))
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Mail").font(Typeface.display(22)).foregroundStyle(Palette.ink)
+                Text(Self.line(account: sources.mailAccount?.username, on: sources.isPhoneEnabled(.mail),
+                               phishing: Int(mail.summary?.phishingCount ?? 0), needsReply: Int(mail.summary?.needsReplyCount ?? 0)))
+                    .font(.footnote).foregroundStyle(Palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.forward").font(.caption).foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
+        }
+        .frame(minHeight: 44)
+        .card()
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Connect, sync, what was found and the actions")
+    }
+
+    static func line(account: String?, on: Bool, phishing: Int, needsReply: Int) -> String {
+        guard let account else { return "No mailbox yet · add one to read receipts, bills and phishing" }
+        guard on else { return "\(account) · off" }
+        var parts = [account]
+        if phishing > 0 { parts.append("\(phishing) possible phishing") }
+        if needsReply > 0 { parts.append("\(needsReply) need\(needsReply == 1 ? "s" : "") a reply") }
+        return parts.joined(separator: " · ")
     }
 }

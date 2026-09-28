@@ -22,9 +22,17 @@ struct SourcesScreen: View {
                     SourcesFootnote(text: "Synthetic receipts, SPECIMEN documents, subscription mail and a phishing example, shipped inside the app so Loupe can be tried without your data. Read on this iPhone; nothing leaves it.")
 
                     SourcesSectionTitle(title: "Phone sources")
-                    ForEach(PhoneSource.allCases) { source in
+                    ForEach(PhoneSource.allCases.filter { $0 != .mail }) { source in
                         PhoneSourceRow(sources: sources, source: source).id(source.id)
                     }
+                    // Mail is one place (spec D10): connect, sync, what was found and the actions, on its own screen.
+                    NavigationLink {
+                        MailScreen(mail: MailTriageService.shared)
+                    } label: {
+                        MailEntryCard(sources: sources, mail: MailTriageService.shared)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("sources.mail")
                     SourcesFootnote(text: "On-device sources (Photos, Files, Calendar and Contacts) are on by default, and you can turn any of them off. Off means its items leave every judgment and watcher. Mail waits until you add a mailbox.")
 
                     SourcesSectionTitle(title: "Inbox")
@@ -46,14 +54,6 @@ struct SourcesScreen: View {
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("sources.privacy")
                     SourcesFootnote(text: "Checks every source that is on for ID and card numbers, IBANs, contact lists, keys and tokens, and duplicate files. Mechanical, on this iPhone.")
-                    NavigationLink {
-                        MailTriageView(mail: MailTriageService.shared)
-                    } label: {
-                        MailTriageCard(mail: MailTriageService.shared)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("sources.mail")
-                    SourcesFootnote(text: "Sorts every email from the sources that are on (the sample now, your IMAP mailbox when it is on) into Loupe Station's categories and checks it for phishing: sender, reply address, mail-server checks and links. Mechanical, on this iPhone.")
 
                     if let problem = sources.problem {
                         Text(problem).font(.footnote).foregroundStyle(Palette.dangerText)

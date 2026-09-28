@@ -83,7 +83,11 @@ final class PersistenceUITests: XCTestCase {
         XCTAssertEqual(contacts.value as? String, "1", "on by default")
         contacts.tap()
         XCTAssertEqual(contacts.value as? String, "0")
+        let mailRow = app.buttons["sources.mail"]
+        for _ in 0..<8 where !(mailRow.exists && mailRow.isHittable) { app.swipeUp() }
+        mailRow.tap()
         XCTAssertEqual(phoneSwitch(app, "mail").value as? String, "0", "Mail is offered, not forced")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
 
         // Me → Sorting: on by default; turn it off.
         app.tabBars.buttons["Me"].tap()

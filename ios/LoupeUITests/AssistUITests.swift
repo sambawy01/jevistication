@@ -23,13 +23,9 @@ final class AssistUITests: XCTestCase {
     /// Send, the draft appears labelled Draft.
     func testFakeProviderDraftAppearsLabelledDraft() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeFakeAssistant"]
+        app.launchArguments = ["-LoupeTab", "mail", "-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeFakeAssistant"]
         app.launch()
-        let card = app.buttons["now.mail"]
-        for _ in 0..<4 where !card.waitForExistence(timeout: 15) { app.swipeUp() }
-        expectation(for: NSPredicate(format: "label CONTAINS %@", "Mail triage:"), evaluatedWith: card)
-        waitForExpectations(timeout: 60)
-        card.tap()
+        XCTAssertTrue(app.descendants(matching: .any)["mail.section.phishing"].waitForExistence(timeout: 60), "Mail triaged the sample")
         let draft = app.buttons["mail.draftReply"].firstMatch
         for _ in 0..<6 where !draft.waitForExistence(timeout: 5) { app.swipeUp() }
         XCTAssertTrue(draft.exists)

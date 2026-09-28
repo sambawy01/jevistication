@@ -574,7 +574,7 @@ extension View {
             case .subscription(let merchant): SubscriptionDetailView(watchers: WatchersService.shared, merchant: merchant)
             case .expiry(let itemId): ExpiryDetailView(watchers: WatchersService.shared, itemId: itemId)
             case .finding(let key): FindingDetailView(watchers: WatchersService.shared, key: key)
-            case .mail: MailTriageView(mail: MailTriageService.shared)
+            case .mail: MailScreen(mail: MailTriageService.shared)
             case .onlineChecks: OnlineChecksView(online: OnlineChecksService.shared)
             }
         }

@@ -16,13 +16,19 @@ final class SourcesUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["sources.sample.label"].label, "Sample data — not from your phone")
         XCTAssertTrue(app.staticTexts["Sample data"].exists)
 
-        for id in ["photos", "files", "calendar", "contacts", "mail"] {
+        for id in ["photos", "files", "calendar", "contacts"] {
             let toggle = app.switches["sources.phone.\(id).toggle"]
             if !toggle.exists { app.swipeUp() }
             XCTAssertTrue(toggle.waitForExistence(timeout: 5), "no row for \(id)")
-            XCTAssertEqual(toggle.value as? String, id == "mail" ? "0" : "1",
-                           id == "mail" ? "Mail waits for a sign-in" : "\(id) is on by default")
+            XCTAssertEqual(toggle.value as? String, "1", "\(id) is on by default")
         }
+        XCTAssertFalse(app.switches["sources.phone.mail.toggle"].exists, "Mail is one place: its switch is on the Mail screen")
+        let mail = app.buttons["sources.mail"]
+        for _ in 0..<4 where !mail.isHittable { app.swipeUp() }
+        mail.tap()
+        let toggle = app.switches["sources.phone.mail.toggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        XCTAssertEqual(toggle.value as? String, "0", "Mail waits for a sign-in")
         XCTAssertTrue(app.descendants(matching: .any)["sources.phone.mail.online"].exists, "Mail is labelled Online")
     }
 
@@ -30,7 +36,7 @@ final class SourcesUITests: XCTestCase {
     /// an OAuth client ID (none is configured: owner-blocked).
     func testMailSetupOffersGmailSignInAndGatesOutlook() {
         let app = XCUIApplication()
-        app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "sources", "-LoupeSkipOnboarding"]
+        app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "mail", "-LoupeSkipOnboarding"]
         app.launch()
         let setup = app.buttons["sources.phone.mail.setup"]
         for _ in 0..<4 where !setup.isHittable { app.swipeUp() }
