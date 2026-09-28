@@ -1,0 +1,10 @@
+lang: en
+kind: text
+date: 2026-09-20
+expect: none
+---
+Shopping list
+- eggs
+- milk 2L
+- bread
+- tomatoes 1 kg

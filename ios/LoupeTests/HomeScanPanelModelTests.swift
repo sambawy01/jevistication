@@ -1,16 +1,16 @@
 import XCTest
 @testable import Loupe
 
-/// Home's scan panel (owner ruling O-5): while a scan runs, the live display and every real source with its switch;
-/// after it, one line. Never the sample (owner ruling O-6).
+/// Home's scan panel (owner rulings O-5, C-16): driven by `RunCoordinator.current` through the pure adapter
+/// `HomeScanPanelModel.progress`; every real source with its switch; idle, the last run in one line. Never the sample
+/// (owner ruling O-6).
 @MainActor
 final class HomeScanPanelModelTests: XCTestCase {
-    private func snap(_ source: String, _ phase: ScanSnapshot.Phase, read: Int = 0, summary: String? = nil) -> ScanSnapshot {
-        var s = ScanSnapshot(pipeline: .of(source))
-        s.phase = phase
-        s.read = read
-        s.summary = summary
-        return s
+    private func run(_ reason: RunReason = .manual, stage: RunStage, part: String? = nil, item: String? = nil,
+                     counts: [RunStage: RunStageCount] = [:], rate: Double? = nil, eta: TimeInterval? = nil,
+                     cancelling: Bool = false) -> RunProgress {
+        RunProgress(id: UUID(), reason: reason, startedAt: Date(), stages: reason.stages, stage: stage, part: part, item: item,
+                    counts: counts, rate: rate, eta: eta, cancelling: cancelling)
     }
 
     func testSourcesAreTheRealOnesInAFixedOrder() {
@@ -30,111 +30,106 @@ final class HomeScanPanelModelTests: XCTestCase {
         }
     }
 
-    func testScansFollowTheSourceOrderWithoutTheSample() {
-        XCTAssertEqual(HomeScanPanelModel.scanKeys(["contacts", SourcesService.sampleId, "photos", "mail"]),
-                       ["photos", "mail", "contacts"])
-        XCTAssertEqual(HomeScanPanelModel.scanKeys([SourcesService.sampleId]), [], "the sample alone shows no panel")
+    // MARK: The adapter: RunProgress → HomeScanProgress
+
+    func testTheSourcesStageNamesTheSourceItReadsAndItsRowMovesLive() {
+        let p = HomeScanPanelModel.progress(run(stage: .sources, part: "Photos · 2 of 3", item: "IMG_4107.JPG",
+                                                counts: [.sources: RunStageCount(done: 120, total: 300, finished: false)],
+                                                rate: 8, eta: 20))
+        XCTAssertEqual(p.reason, "Run now · step 1 of 5")
+        XCTAssertEqual(p.stage, "Reading your sources · Photos · 2 of 3")
+        XCTAssertEqual(p.currentItem, "IMG_4107.JPG", "the live scan's masked name, as given")
+        XCTAssertEqual(p.reading, HomeScanProgress.Stage(id: "photos", name: "Photos", done: 120, total: 300))
+        XCTAssertEqual(p.fraction, 0.4)
+        XCTAssertEqual(p.counts, "120 of 300 items · \(ScanSnapshot.rateText(8))/s · about \(ScanSnapshot.duration(20)) left")
+        XCTAssertFalse(p.cancelling)
+        // Its row: "Reading · 120 of 300" while its source is read.
+        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: p.reading, on: true, restingCount: 9), "Reading · 120 of 300")
     }
 
-    func testNoSummaryLineWhileAScanRunsOrWhenNothingRan() {
-        XCTAssertNil(HomeScanPanelModel.summaryLine([]))
-        XCTAssertNil(HomeScanPanelModel.summaryLine([snap("photos", .finished, read: 3, summary: "3 photos · 0 bytes out"),
-                                                     snap("files", .running)]))
+    func testEveryStageOfTheRunIsListedWithWhereItGot() {
+        let p = HomeScanPanelModel.progress(run(stage: .privacy,
+                                                counts: [.sources: RunStageCount(done: 48, total: 48, finished: true),
+                                                         .privacy: RunStageCount(done: 12, total: 40, finished: false)]))
+        XCTAssertEqual(p.stages.map(\.id), ["sources", "privacy", "mail", "watchers", "sort"])
+        XCTAssertEqual(p.stages.map(\.name), ["Reading your sources", "Privacy check", "Mail triage", "Watchers", "Sorting"])
+        XCTAssertEqual(p.stages.map(HomeScanPanelModel.stageLine), ["Done · 48", "12 of 40", "Waiting", "Waiting", "Waiting"])
+        XCTAssertEqual(p.stages.map(\.running), [false, true, false, false, false])
+        XCTAssertEqual(p.stage, "Privacy check", "main's run.stage label: a UI test waits for BEGINSWITH \"Privacy check\"")
+        XCTAssertEqual(p.reason, "Run now · step 2 of 5")
+        XCTAssertEqual(p.counts, "12 of 40 items")
+        XCTAssertEqual(p.fraction, 0.3)
+        XCTAssertNil(p.reading, "no source is read outside the sources stage")
+        XCTAssertNil(p.currentItem)
     }
 
-    func testOneFinishedScanSaysItsOwnSummary() {
-        XCTAssertEqual(HomeScanPanelModel.summaryLine([snap("photos", .finished, read: 120,
-                                                            summary: "120 photos · 30 with text · 0 bytes out")]),
-                       "Photos: 120 photos · 30 with text · 0 bytes out")
+    func testAStageThatHasNotCountedYetSaysStarting() {
+        let p = HomeScanPanelModel.progress(run(.itemsChanged, stage: .privacy,
+                                                counts: [.privacy: RunStageCount(done: 0, total: nil, finished: false)]))
+        XCTAssertEqual(p.counts, "Starting")
+        XCTAssertNil(p.fraction)
+        XCTAssertEqual(p.reason, "Re-check · step 1 of 3")
+        XCTAssertEqual(p.stages.map(\.id), ["privacy", "mail", "watchers"])
+        let unknownTotal = HomeScanPanelModel.progress(run(stage: .mail, counts: [.mail: RunStageCount(done: 7, total: nil, finished: false)]))
+        XCTAssertEqual(unknownTotal.counts, "7 emails")
+        XCTAssertEqual(HomeScanPanelModel.progress(run(stage: .watchers, item: "")).currentItem, nil, "an empty name is no item")
     }
 
-    func testSeveralFinishedScansAreCountedTogether() {
-        let line = HomeScanPanelModel.summaryLine([snap("photos", .finished, read: 1200, summary: "x"),
-                                                   snap("contacts", .finished, read: 34, summary: "y")])
-        XCTAssertEqual(line, "Read \(1234.formatted()) items from 2 sources")
-        XCTAssertEqual(HomeScanPanelModel.summaryLine([snap("photos", .finished, read: 1, summary: "x"),
-                                                       snap("files", .finished, read: 0, summary: "y")]),
-                       "Read 1 item from 2 sources")
+    func testTheFixtureAndUnknownPartsReadNoPhoneSource() {
+        let fixture = HomeScanPanelModel.progress(run(stage: .sources, part: "Test fixture · 1 of 4",
+                                                      counts: [.sources: RunStageCount(done: 3, total: 48, finished: false)]))
+        XCTAssertEqual(fixture.reading?.id, SourcesService.sampleId)
+        XCTAssertFalse(HomeScanPanelModel.sources(inboxHasImports: true).contains { $0.id == fixture.reading?.id },
+                       "the fixture has no row in the panel")
+        XCTAssertNil(HomeScanPanelModel.sourceId(part: nil))
+        XCTAssertNil(HomeScanPanelModel.sourceId(part: "Expiry radar"))
+        XCTAssertEqual(HomeScanPanelModel.sourceId(part: "Contacts · 3 of 3"), "contacts")
+        XCTAssertEqual(HomeScanPanelModel.sourceId(part: "Mail"), "mail")
+        // A source whose scan has finished (the stage moves to the next source) reads no longer.
+        let between = HomeScanPanelModel.progress(run(stage: .sources, part: "Files · 1 of 2",
+                                                      counts: [.sources: RunStageCount(done: 9, total: 9, finished: true)]))
+        XCTAssertNil(between.reading)
     }
 
-    func testAStoppedScanIsNamed() {
-        XCTAssertEqual(HomeScanPanelModel.summaryLine([snap("mail", .failed)]), "Mail: the scan stopped")
-        XCTAssertEqual(HomeScanPanelModel.summaryLine([snap("photos", .finished, read: 5, summary: "5 photos · 0 bytes out"),
-                                                       snap("mail", .failed)]),
-                       "Photos: 5 photos · 0 bytes out · Mail stopped")
+    func testCancellingIsCarried() {
+        XCTAssertTrue(HomeScanPanelModel.progress(run(stage: .watchers, cancelling: true)).cancelling)
     }
 
-    // MARK: The adapter (today's live scans → the panel's progress; RunCoordinator's progress after the rebase)
+    // MARK: The panel's state
 
-    private func running(_ source: String, done: Int, total: Int?, rate: Double?, eta: TimeInterval?, current: String?) -> ScanSnapshot {
-        var s = snap(source, .running, read: done)
-        s.done = done
-        s.total = total
-        s.rate = rate
-        s.eta = eta
-        if let current {
-            s.recent = [ScanSnapshot.Recent(id: 1, name: current, snippet: "", read: true, textFound: false, boxes: [],
-                                            thumb: nil, at: 0)]
+    func testTheStateFollowsTheRunTheLoadAndTheResults() {
+        typealias M = HomeScanPanelModel
+        XCTAssertEqual(M.state(running: true, loaded: false, checked: false, hasLast: false), .running, "a run shows at once")
+        XCTAssertEqual(M.state(running: false, loaded: false, checked: false, hasLast: true), .loading)
+        XCTAssertEqual(M.state(running: false, loaded: true, checked: false, hasLast: false), .notChecked)
+        XCTAssertEqual(M.state(running: false, loaded: true, checked: false, hasLast: true), .notChecked,
+                       "a cancelled run left no watchers' results: still not checked")
+        XCTAssertEqual(M.state(running: false, loaded: true, checked: true, hasLast: true), .last)
+        XCTAssertEqual(M.state(running: false, loaded: true, checked: true, hasLast: false), .hidden)
+    }
+
+    func testTheLastRunsTitleSaysWhatStartedIt() {
+        func record(_ reason: RunReason) -> RunRecord {
+            RunRecord(id: UUID(), reason: reason, startedAt: Date(), endedAt: Date(), stagesRun: [], counts: [:],
+                      newFindings: RunFindings(), outcome: .finished, note: nil)
         }
-        return s
+        XCTAssertTrue(HomeScanPanelModel.lastTitle(record(.manual)).hasPrefix("Checked on request · "))
+        XCTAssertTrue(HomeScanPanelModel.lastTitle(record(.firstCheck)).hasPrefix("First check · "))
+        XCTAssertTrue(HomeScanPanelModel.lastTitle(record(.nightly)).hasPrefix("Overnight check · "))
+        XCTAssertEqual(HomeScanPanelModel.lastWhat(.scanAgain("photos")), "Scan again")
+        XCTAssertEqual(HomeScanPanelModel.lastWhat(.itemsChanged), "Re-check")
     }
 
-    func testNoScansGiveNoProgress() {
-        XCTAssertNil(HomeScanPanelModel.progress([]))
-    }
+    // MARK: Rows
 
-    func testRunningScansBecomeOneProgress() {
-        let p = HomeScanPanelModel.progress([running("photos", done: 120, total: 300, rate: 8, eta: 20, current: "IMG_4107.JPG"),
-                                             running("files", done: 4, total: nil, rate: 2, eta: nil, current: "lease.pdf")])
-        XCTAssertEqual(p?.stage, "Reading Photos, Files")
-        XCTAssertEqual(p?.currentItem, "IMG_4107.JPG", "the first running scan's newest item (already masked by the scan)")
-        XCTAssertEqual(p?.stages, [HomeScanProgress.Stage(id: "photos", name: "Photos", done: 120, total: 300),
-                                   HomeScanProgress.Stage(id: "files", name: "Files", done: 4, total: nil)])
-        XCTAssertEqual(p?.rate, 10, "the scans' rates together")
-        XCTAssertEqual(p?.eta, 20, "the longest time left")
-        XCTAssertNil(p?.summary)
-        XCTAssertEqual(p?.running, true)
-    }
-
-    func testAFinishedScanStillCountedWhileAnotherRuns() {
-        let p = HomeScanPanelModel.progress([snap("photos", .finished, read: 9, summary: "9 photos · 0 bytes out"),
-                                             running("files", done: 1, total: 2, rate: nil, eta: nil, current: nil)])
-        XCTAssertEqual(p?.stage, "Reading Files")
-        XCTAssertNil(p?.currentItem)
-        XCTAssertNil(p?.rate)
-        XCTAssertEqual(p?.stages.map(\.id), ["photos", "files"])
-        XCTAssertEqual(p?.running, true)
-    }
-
-    func testFinishedScansBecomeTheSummary() {
-        let p = HomeScanPanelModel.progress([snap("photos", .finished, read: 5, summary: "5 photos · 0 bytes out")])
-        XCTAssertEqual(p?.summary, "Photos: 5 photos · 0 bytes out")
-        XCTAssertEqual(p?.running, false)
-        XCTAssertNil(p?.eta)
-    }
-
-    func testCancelShowsOnlyWithACancelWhileRunning() {
-        let live = HomeScanPanelModel.progress([running("photos", done: 1, total: 2, rate: nil, eta: nil, current: nil)])
-        let done = HomeScanPanelModel.progress([snap("photos", .finished, read: 2, summary: "2 photos")])
-        XCTAssertTrue(HomeScanPanelModel.showsCancel(live, canCancel: true))
-        XCTAssertFalse(HomeScanPanelModel.showsCancel(live, canCancel: false), "today's scans cannot be cancelled")
-        XCTAssertFalse(HomeScanPanelModel.showsCancel(done, canCancel: true), "nothing to cancel once it finished")
-        XCTAssertFalse(HomeScanPanelModel.showsCancel(nil, canCancel: true))
-    }
-
-    /// A source that finished while another still reads is not "Reading": it shows its resting count (or Off).
-    func testAFinishedSourceIsNotReadingWhileAnotherRuns() {
-        let p = HomeScanPanelModel.progress([snap("photos", .finished, read: 9, summary: "9 photos · 0 bytes out"),
-                                             running("files", done: 1, total: 2, rate: nil, eta: nil, current: nil)])
-        let photos = p?.stages.first { $0.id == "photos" }
-        let files = p?.stages.first { $0.id == "files" }
-        XCTAssertEqual(photos?.running, false)
-        XCTAssertEqual(files?.running, true)
-        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: photos, on: true, restingCount: 9), "9 items")
-        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: photos, on: false, restingCount: 9), "Off")
-        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: files, on: true, restingCount: 0), "Reading · 1 of 2")
+    func testARowReadsOnlyWhileItsSourceIsRead() {
+        let reading = HomeScanProgress.Stage(id: "files", name: "Files", done: 1, total: 2)
+        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: reading, on: true, restingCount: 0), "Reading · 1 of 2")
+        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: nil, on: true, restingCount: 9), "9 items")
         XCTAssertEqual(HomeScanPanelModel.rowLine(stage: nil, on: true, restingCount: 1), "1 item")
-        XCTAssertFalse(HomeScanPanelModel.rowReading(photos))
-        XCTAssertTrue(HomeScanPanelModel.rowReading(files))
+        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: nil, on: false, restingCount: 9), "Off")
+        XCTAssertTrue(HomeScanPanelModel.rowReading(reading))
+        XCTAssertFalse(HomeScanPanelModel.rowReading(nil))
+        XCTAssertEqual(HomeScanPanelModel.stageCount(HomeScanProgress.Stage(id: "x", name: "X", done: 4, total: nil)), "4")
     }
 }

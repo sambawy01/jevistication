@@ -1,6 +1,7 @@
 package dev.loupe.kit.watchers
 
 import dev.loupe.engine.Cadence
+import dev.loupe.kit.tracking.ExpiryBucket
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
@@ -73,6 +74,10 @@ data class CensusRow(
     val nextExpectedIso: String? = null,
     /** The user's answer about this merchant (Confirm, or null); set-aside merchants leave the census. */
     val verdict: FindingVerdict? = null,
+    /** ISO 4217 of every amount in this row, or "" when the charges named none. Never converted. */
+    val currency: String = "",
+    /** The line each charge was read from, oldest first (the reference's "Read"). */
+    val lines: List<String> = emptyList(),
 ) {
     /**
      * The corrections log key of the user's answer about this merchant ("subscription:<merchant>", under the
@@ -114,6 +119,8 @@ data class ExpiryRow(
     /** The line of the document with the expiry word, verbatim. */
     val line: String?,
     val sample: Boolean,
+    /** The rules' document kind (`DocumentKind.id`: national_id, passport, car_licence …), or null. */
+    val documentKind: String? = null,
 )
 
 /** What Now shows from one watcher run. */
@@ -144,8 +151,13 @@ object WatcherFindings {
     /** Verdicts are keyed by this, not by a judgment's criteria hash: the watchers have no wording. */
     const val CRITERIA = "watcher-v1"
 
-    private val EXPIRY_LINE = Regex("""\b(expir\w*|valid until|valid to|valid thru|renewal date|4b\.)""", RegexOption.IGNORE_CASE)
     private val MONEY = Regex("""([£$€])\s?(\d[\d,]*(?:\.\d{1,2})?)""")
+
+    /**
+     * Inside the rule, and not expired more than a year ago (`ExpiryBucket.OLDER`): a document that old is on the
+     * timeline (the collapsed "older" group) but is not worth an alert any more.
+     */
+    private fun isAlert(c: ExpiryCandidate): Boolean = c.breachesRule && ExpiryBucket.of(c.daysRemaining) != ExpiryBucket.OLDER
 
     fun summarise(
         report: WatcherReport,
@@ -205,9 +217,10 @@ object WatcherFindings {
                 ambiguous = c.ambiguous,
                 breachesRule = c.breachesRule,
                 documentType = alerts?.get(c.item.id)?.documentType,
-                findingKey = if (c.breachesRule) "expiry:" + c.item.id else null,
-                line = c.item.text.lines().firstOrNull { EXPIRY_LINE.containsMatchIn(it) }?.trim(),
+                findingKey = if (isAlert(c)) "expiry:" + c.item.id else null,
+                line = c.line,
                 sample = isSample(c.item),
+                documentKind = c.documentKind,
             )
         }.sortedBy { it.daysRemaining }
     }
@@ -277,9 +290,9 @@ object WatcherFindings {
         }
 
         val alerts = report.expiryAlerts?.associateBy { it.itemId }
-        for (c in report.expiryCandidates.filter { it.breachesRule }) {
+        for (c in report.expiryCandidates.filter(::isAlert)) {
             val alert = alerts?.get(c.item.id)
-            val line = c.item.text.lines().firstOrNull { EXPIRY_LINE.containsMatchIn(it) }?.trim()
+            val line = c.line
             val days = c.daysRemaining
             val when_ = if (days < 0) "expired ${-days} days ago" else "expires in $days days"
             val why = when {
@@ -348,12 +361,11 @@ object WatcherFindings {
     }
 
     fun census(report: WatcherReport, items: List<SourceItem>, isSample: (SourceItem) -> Boolean): SubscriptionCensus {
-        val texty = items.filter { it.hasText && it.duplicateOf == null }
-        val charges = WatcherRun.charges(texty)
-        val byMerchant = charges.groupBy({ it.second.merchant }, { it.first })
-        val evidence = charges.groupBy { it.second.merchant }
-            .mapValues { (_, cs) -> cs.sortedBy { it.second.date }.map { it.first.id }.distinct() }
+        val byId = items.associateBy { it.id }
+        val byMerchant = report.charges.groupBy { it.merchant }.mapValues { (_, cs) -> cs.sortedBy { it.date } }
         val rows = report.recurring.map { rc ->
+            val cs = byMerchant[rc.merchant].orEmpty()
+            val ids = cs.flatMap { listOf(it.itemId) + it.alsoSeenIn }.distinct()
             CensusRow(
                 merchant = rc.merchant,
                 cadence = rc.cadence.name.lowercase(),
@@ -362,9 +374,11 @@ object WatcherFindings {
                 lastChargedIso = rc.lastCharged.toString(),
                 daysSinceLastCharge = rc.daysSinceLastCharge,
                 monthlyMinor = monthly(rc.cadence, rc.typicalAmountMinor),
-                sample = byMerchant[rc.merchant].orEmpty().let { it.isNotEmpty() && it.all(isSample) },
-                itemIds = evidence[rc.merchant].orEmpty(),
+                sample = ids.isNotEmpty() && ids.all { id -> byId[id]?.let(isSample) ?: false },
+                itemIds = ids,
                 nextExpectedIso = nextExpected(rc.cadence, rc.lastCharged, report.today)?.toString(),
+                currency = report.currencyOf[rc.merchant] ?: cs.firstOrNull()?.currency ?: "",
+                lines = cs.map { it.line },
             )
         }
         return SubscriptionCensus(
@@ -374,6 +388,10 @@ object WatcherFindings {
             sample = rows.isNotEmpty() && rows.all { it.sample },
         )
     }
+
+    /** The monthly total per currency (rows with a regular cadence): what the Money card shows, never one mixed sum. */
+    fun monthlyByCurrency(rows: List<CensusRow>): Map<String, Long> =
+        rows.filter { it.monthlyMinor != null }.groupBy { it.currency }.mapValues { (_, rs) -> rs.sumOf { it.monthlyMinor!! } }
 
     /** The last charge plus one period of [cadence]; null when irregular or when that day is already behind [today]. */
     fun nextExpected(cadence: Cadence, lastCharged: LocalDate, today: LocalDate): LocalDate? {

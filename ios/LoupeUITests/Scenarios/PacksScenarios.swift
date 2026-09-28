@@ -4,7 +4,7 @@ import XCTest
 /// what the lint refused) → Add; relaunch → its judgments are in My judgments.
 final class PacksScenarios: ScenarioCase {
     func testTheExamplePackIsAddedAndSurvivesARelaunch() {
-        start("packs", ["-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeModelState", "missing"])
+        start("packs", ["-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeModelState", "missing"], run: false)
         let packs = button("judgments.packs")
         XCTAssertTrue(packs.waitForExistence(timeout: 30))
         packs.tap()

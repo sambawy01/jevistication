@@ -4,8 +4,8 @@ import LoupeKit
 
 /// `-LoupeDiag` (DEBUG only): checks on a real device what the owner reported, printing `LOUPE-DIAG` lines to
 /// stdout (read with `xcrun devicectl device process launch --console`). Counts, states and server codes only.
-/// 1. the bundled sample resolves to a file that exists (Open original);
-/// 2. a sample rescan drives a `source_scan` live run with real counters;
+/// 1. the sample data is gone (no sample source, the migration's marker; 2026-09-28);
+/// 2. a Files rescan (a `RunCoordinator` run, as Scan again) drives a `source_scan` live run with real counters;
 /// 3. Laya opens (status, load time);
 /// 4. Gmail's real refusal for a made-up address maps to the specific sentence (no real account is used).
 @MainActor
@@ -38,26 +38,19 @@ enum DeviceDiag {
         watchJobs()
         guard !ProcessInfo.processInfo.arguments.contains("-LoupeDiagJobsOnly") else { return }
         Task { @MainActor in
-            // 1. Open original for the sample
-            let items = sources.sampleScan?.result.items ?? []
-            say("sample.items=\(items.count) bundle=\(SourcesService.bundledSample()?.path ?? "nil")")
-            if let item = items.first(where: { $0.path.contains("passport-scan-SPECIMEN") }) ?? items.first(where: { $0.kind != .email }) {
-                say("sample.cachedPathExists=\(FileManager.default.fileExists(atPath: item.path))")
-                switch LiveItemResolver.live.target(for: item) {
-                case .file(let url, _): say("sample.open=file exists=\(FileManager.default.fileExists(atPath: url.path)) quicklook=\(ItemOpenPolicy.allows(url))")
-                case .unavailable(let why): say("sample.open=unavailable \(why)")
-                case .photo: say("sample.open=photo")
-                case .mail: say("sample.open=mail")
-                }
-            }
+            // 1. No sample: not a source, nothing cached, the migration ran.
+            let home = LedgerService.defaultHome()
+            let marker = FileManager.default.fileExists(atPath: home.appendingPathComponent(SampleDataMigration.marker).path)
+            let cache = FileManager.default.fileExists(atPath: home.appendingPathComponent("sources/scan-sample.json").path)
+            say("sample.source=\(sources.hasFixtureSample) sample.cache=\(cache) migration.marker=\(marker) bundle=\(Bundle.main.url(forResource: "sample", withExtension: nil) != nil)")
             // 3. Laya
             let laya = LayaModel.shared
             say("laya.installed=\(laya.isInstalled) status=\(laya.status)")
             let began = Date()
             let backend = await laya.backend()
             say("laya.open=\(backend != nil ? "ok" : "failed") seconds=\(String(format: "%.1f", Date().timeIntervalSince(began))) status=\(laya.status)")
-            // 2. The Sources live run
-            sources.scanSample()
+            // 2. The Sources live run (Files, as Scan again does)
+            RunCoordinator.shared.runNow(reason: .scanAgain(PhoneSource.files.rawValue))
             var last = ""
             for _ in 0..<600 {
                 try? await Task.sleep(nanoseconds: 100_000_000)

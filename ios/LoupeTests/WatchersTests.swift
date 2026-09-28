@@ -10,7 +10,7 @@ final class WatchersTests: XCTestCase {
     private let suite = "WatchersTests-\(UUID().uuidString)"
 
     private static let sample: [SourceItem] = {
-        let root = SourcesService.bundledSample()!
+        let root = TestSample.root()!
         let scanner = SourceScanner(extractors: AppleExtractors(timeZone: TimeZone(identifier: "UTC")!),
                                     zone: Kotlinx_datetimeTimeZone.companion.UTC,
                                     limits: SourceScanner.Limits(maxFileBytes: 50 * 1024 * 1024, maxTextChars: 20_000, maxDepth: 16, maxMboxMessages: 20_000))
@@ -49,7 +49,7 @@ final class WatchersTests: XCTestCase {
         let f = s.findings
         XCTAssertFalse(s.running)
         XCTAssertEqual(s.summary?.modelRan, false)
-        XCTAssertTrue(f.allSatisfy { $0.sample }, "every sample finding is labelled sample")
+        XCTAssertFalse(f.contains { $0.sample }, "no finding is labelled sample (2026-09-28: no sample badges)")
 
         let premium = try? XCTUnwrap(f.first { $0.title == "Annual premium up 23%" })
         XCTAssertEqual(premium?.evidence.first, "Annual premium: £450.00 → £553.50 (+23%)")
@@ -66,7 +66,7 @@ final class WatchersTests: XCTestCase {
         XCTAssertFalse(f.contains { $0.watcher == .impersonation && $0.evidence.contains { $0.contains("cloudbox") } })
 
         let census = try? XCTUnwrap(s.summary?.census)
-        XCTAssertEqual(census?.sample, true)
+        XCTAssertEqual(census?.sample, false)
         XCTAssertTrue(census?.rows.contains { $0.merchant == "Streamflix" && $0.monthlyMinor?.int64Value == 999 } == true)
         XCTAssertGreaterThan(census?.monthlyTotalMinor ?? 0, 999)
     }

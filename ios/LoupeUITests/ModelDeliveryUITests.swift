@@ -7,7 +7,7 @@ final class ModelDeliveryUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     func testModelScreenSaysNotConfiguredAndShowsTheConsentCopy() throws {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeEphemeralKeychain", "-LoupeNoModelHost"]
         app.launch()
         let entry = app.descendants(matching: .any)["me.model"]
@@ -36,7 +36,7 @@ final class ModelDeliveryUITests: XCTestCase {
     }
 
     func testWithTheHostTheModelScreenOffersDownload() throws {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeEphemeralKeychain", "-LoupeResetModelConsent"]
         app.launch()
         let entry = app.descendants(matching: .any)["me.model"]

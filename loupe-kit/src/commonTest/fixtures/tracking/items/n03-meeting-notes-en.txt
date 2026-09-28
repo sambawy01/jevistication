@@ -1,0 +1,9 @@
+lang: en
+kind: text
+date: 2026-09-15
+expect: none
+---
+Project sync
+Deadline moved to 2026-10-15
+Owner: Sara
+Next: review the draft

@@ -8,12 +8,12 @@ final class HomeModelTests: XCTestCase {
     private func sub(_ merchant: String, monthly: Int64?, next: String?) -> CensusRow {
         CensusRow(merchant: merchant, cadence: "monthly", occurrences: 3, typicalMinor: monthly ?? 500,
                   lastChargedIso: "2026-09-01", daysSinceLastCharge: 27, monthlyMinor: monthly.map { KotlinLong(value: $0) },
-                  sample: false, itemIds: ["a", "b", "c"], nextExpectedIso: next, verdict: nil)
+                  sample: false, itemIds: ["a", "b", "c"], nextExpectedIso: next, verdict: nil, currency: "", lines: [])
     }
 
     private func doc(_ name: String, days: Int64) -> ExpiryRow {
         ExpiryRow(itemId: "id:\(name)", itemName: name, expiryIso: "2027-01-14", daysRemaining: days, ambiguous: false,
-                  breachesRule: days < 183, documentType: nil, findingKey: nil, line: nil, sample: false)
+                  breachesRule: days < 183, documentType: nil, findingKey: nil, line: nil, sample: false, documentKind: nil)
     }
 
     func testNeedsAttentionIsEmptyWhenNothingWaits() {
@@ -65,8 +65,8 @@ final class HomeModelTests: XCTestCase {
         XCTAssertEqual(HomeModel.documents(nil, documentsCovered: true, running: true).headline, "Reading your sources")
     }
 
-    /// No summary yet (the checks keep nothing across launches and nothing heavy starts at open, O-4): "Reading your
-    /// sources" only while a scan or the watchers run; otherwise say it is not checked and offer Run now.
+    /// No summary yet once the saved results are read (nothing heavy starts at open, O-4): "Reading your sources" only
+    /// while a run, a scan or the watchers go; otherwise say it is not checked (Home's scan panel offers Run now).
     func testNoSummaryYetSaysWhetherAnythingIsRunning() {
         let reading = HomeModel.money(nil, mailCovered: true, running: true)
         XCTAssertEqual(reading.headline, "Reading your sources")
@@ -90,6 +90,21 @@ final class HomeModelTests: XCTestCase {
         let census = SubscriptionCensus(rows: [], monthlyTotalMinor: 0, chargesFound: 0, sample: false, setAside: 0)
         XCTAssertFalse(HomeModel.money(census, mailCovered: true, running: false).needsRun, "a summary in hand needs no run")
         XCTAssertFalse(HomeModel.documents([], documentsCovered: true, running: false).needsRun)
+    }
+
+    /// The last results are saved and read back at launch (2026-09-28): until they are, the cards say so, and neither
+    /// "Not checked yet" nor its Run now shows.
+    func testCardsSayLoadingUntilTheSavedResultsAreRead() {
+        let money = HomeModel.money(nil, mailCovered: true, running: false, loaded: false)
+        XCTAssertEqual(money.headline, "Loading the last results…")
+        XCTAssertFalse(money.needsRun)
+        XCTAssertFalse(money.needsSource)
+        let docs = HomeModel.documents(nil, documentsCovered: true, running: true, loaded: false)
+        XCTAssertEqual(docs.headline, "Loading the last results…", "loading wins over running")
+        XCTAssertFalse(docs.needsRun)
+        let census = SubscriptionCensus(rows: [], monthlyTotalMinor: 0, chargesFound: 0, sample: false, setAside: 0)
+        XCTAssertEqual(HomeModel.money(census, mailCovered: true, loaded: false).headline, "No subscriptions yet",
+                       "a summary in hand is shown whatever the flag says")
     }
 
     func testProtectedNamesWhatIsOffAndOffersTheFirst() {

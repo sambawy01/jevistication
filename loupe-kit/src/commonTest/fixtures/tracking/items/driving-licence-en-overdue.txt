@@ -1,0 +1,11 @@
+lang: en
+kind: text
+date: 2016-05-15
+expect: expiry
+expiry: 2026-05-15
+doc: driving_licence
+---
+Driving licence (scanned copy)
+Name: Mohamed Sami
+Licence class: B
+Valid until 15/05/2026

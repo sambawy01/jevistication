@@ -53,6 +53,20 @@ final class RecentChecksStore {
         }
     }
 
+    /// Removes the checks [drop] picks (the sample migration, 2026-09-28); returns how many went.
+    @discardableResult
+    func removeAll(where drop: (LinkVerdict) -> Bool) -> Int {
+        GroupFileLock.with(lockFile) {
+            let list = read()
+            let kept = list.filter { !drop($0) }
+            guard kept.count != list.count else { return 0 }
+            if let data = try? Self.encoder.encode(kept) {
+                try? data.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            }
+            return list.count - kept.count
+        }
+    }
+
     func clear() {
         GroupFileLock.with(lockFile) { try? FileManager.default.removeItem(at: file) }
     }

@@ -33,7 +33,7 @@ final class LinkCheckUITests: XCTestCase {
     }
 
     func testCheckALinkFromGuard() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "guard", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeModelState", "missing"]
         app.launch()
         XCTAssertTrue(any(app, "guard.header").waitForExistence(timeout: 15))
@@ -91,7 +91,7 @@ final class LinkCheckUITests: XCTestCase {
     }
 
     func testTheManualStepsWithTheIllustration() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "guard", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeModelState", "missing"]
         app.launch()
         let steps = any(app, "protect.safari.steps")

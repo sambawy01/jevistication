@@ -22,19 +22,21 @@ struct HomeView: View {
     @ObservedObject private var online = OnlineChecksService.shared
     /// Findings name their items through `ItemIndex`, built off the main thread: repaint when it lands.
     @ObservedObject private var itemIndex = ItemIndex.Store.shared
+    /// Running or not: changes only at a run's start and end, so Home's body does not redraw with a run's progress
+    /// (the scan panel observes `RunCoordinator.current` itself).
+    @ObservedObject private var runStatus = RunCoordinator.shared.status
     @State private var openItem: SourceItem?
-    /// The scans the panel shows: the live ones, kept after they settle out of `liveScans` so the panel can
-    /// collapse to their summary line; replaced when a new scan starts.
-    @State private var panelScans: [LiveScan] = []
 
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
-                    // A scan, whatever started it (Run now, Scan again, the first check after onboarding), shows
-                    // here live, then collapses to one line (owner ruling O-5).
-                    scanPanel
+                    // A run, whatever started it (Run now, Scan again, the first check after onboarding, the night),
+                    // shows here live, then collapses to one line (owner rulings O-5, C-16). Before that: loading the
+                    // saved results, or "Not checked yet" with Run now.
+                    HomeRunPanel(sources: sources, loaded: resultsLoaded, checked: watchers.summary != nil,
+                                 canRun: coverage.anyOn, openReads: openReads)
                     // Runs that belong to Home, live and in place: the passive sort and the watchers.
                     LiveRunSection(view: "now", whileRunning: true)
                     LiveRunSection(view: "watchers", whileRunning: true)
@@ -52,6 +54,14 @@ struct HomeView: View {
             }
             .neonGround()
             .scrollBounceBehavior(.basedOnSize)
+            #if DEBUG
+            // What ran since launch, for the no-launch-work UI test (owner decision A, 2026-09-28): nothing, unless asked.
+            .overlay(alignment: .topTrailing) {
+                Text("runs=\(runStatus.runsStarted) scans=\(sources.scansStarted)")
+                    .font(.system(size: 6)).opacity(0.02)
+                    .accessibilityIdentifier("debug.launchWork")
+            }
+            #endif
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: HomeRoute.self) { route in
                 switch route {
@@ -70,26 +80,9 @@ struct HomeView: View {
 
     private var coverage: GuardCoverage { GuardCoverage.from(sources) }
 
-    // MARK: Scan panel
-
-    /// The live scans' keys, sample left out, in the panel's order.
-    private var liveKeys: [String] { HomeScanPanelModel.scanKeys(Array(sources.liveScans.keys)) }
-
-    @ViewBuilder private var scanPanel: some View {
-        let live = liveKeys.compactMap { sources.liveScans[$0] }
-        let shown = live.isEmpty ? panelScans : live
-        if !shown.isEmpty {
-            HomeLiveScanPanel(scans: shown, sources: sources)
-                .onChange(of: live.map(\.id), initial: true) { _, _ in
-                    // A new scan joins the ones shown while they run; once all had finished it starts afresh.
-                    guard !live.isEmpty else { return }
-                    let fresh = panelScans.allSatisfy(\.finished)
-                    let kept = fresh ? [] : panelScans.filter { old in !live.contains { $0.source == old.source } }
-                    panelScans = HomeScanPanelModel.scanKeys((kept + live).map(\.source))
-                        .compactMap { key in live.first { $0.source == key } ?? kept.first { $0.source == key } }
-                }
-        }
-    }
+    /// The saved results of the watchers, the privacy check and mail triage have been read back (they load off the
+    /// main thread at launch; nothing runs to fill them).
+    private var resultsLoaded: Bool { watchers.loaded && privacy.loaded && mail.loaded }
 
     private var header: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -108,7 +101,7 @@ struct HomeView: View {
     }
 
     private var mascotState: MascotState {
-        if sources.scanning || watchers.running { return .scanning }
+        if sources.scanning || watchers.running || runStatus.running { return .scanning }
         if watchers.newCount > 0 && !watchers.findings.isEmpty { return .found }
         return .idle
     }
@@ -171,7 +164,7 @@ struct HomeView: View {
     // MARK: Money, Documents, Protected
 
     private var moneyCard: some View {
-        let m = HomeModel.money(watchers.summary?.census, mailCovered: coverage.mail, running: checking)
+        let m = HomeModel.money(watchers.summary?.census, mailCovered: coverage.mail, running: checking, loaded: watchers.loaded)
         return VStack(alignment: .leading, spacing: 10) {
             Button { path.append(HomeRoute.subscriptions) } label: {
                 HomeCardLabel(caption: "Money", headline: m.headline, detail: m.detail, symbol: "creditcard")
@@ -183,12 +176,13 @@ struct HomeView: View {
                 CardAction(title: "Open What Loupe reads", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan, action: openReads)
                     .accessibilityIdentifier("home.money.connect")
             }
-            if m.needsRun { runNow(id: "home.money.run") }
+            if m.needsRun { connectIfNothingOn(id: "home.money.connect") }
         }
     }
 
     private var documentsCard: some View {
-        let d = HomeModel.documents(watchers.summary?.expiries, documentsCovered: coverage.documents, running: checking)
+        let d = HomeModel.documents(watchers.summary?.expiries, documentsCovered: coverage.documents, running: checking,
+                                    loaded: watchers.loaded)
         return VStack(alignment: .leading, spacing: 10) {
             Button { path.append(HomeRoute.expiring) } label: {
                 HomeCardLabel(caption: "Documents", headline: d.headline, detail: d.detail, symbol: "doc.text.magnifyingglass")
@@ -200,22 +194,18 @@ struct HomeView: View {
                 CardAction(title: "Open What Loupe reads", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan, action: openReads)
                     .accessibilityIdentifier("home.documents.connect")
             }
-            if d.needsRun { runNow(id: "home.documents.run") }
+            if d.needsRun { connectIfNothingOn(id: "home.documents.connect") }
         }
     }
 
-    /// A scan or the watchers are running now (the cards say "Reading your sources" only then).
-    private var checking: Bool { watchers.running || sources.scanning }
+    /// A run, a scan or the watchers are going now (the cards say "Reading your sources" only then).
+    private var checking: Bool { runStatus.running || watchers.running || sources.scanning }
 
-    /// Nothing checked since Loupe opened: Run now (Protection's action), or with no source on, the way to one.
-    @ViewBuilder private func runNow(id: String) -> some View {
-        if coverage.anyOn {
-            CardAction(title: "Run now", symbol: "arrow.clockwise", hue: Palette.cyan) { TrackingRun.runNow() }
-                .accessibilityLabel("Run the check now")
-                .accessibilityIdentifier(id)
-        } else {
+    /// Not checked yet: Run now is the scan panel's, above; with no source on, the card offers the way to one.
+    @ViewBuilder private func connectIfNothingOn(id: String) -> some View {
+        if !coverage.anyOn {
             CardAction(title: "Open What Loupe reads", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan, action: openReads)
-                .accessibilityIdentifier(id.replacingOccurrences(of: ".run", with: ".connect"))
+                .accessibilityIdentifier(id)
         }
     }
 

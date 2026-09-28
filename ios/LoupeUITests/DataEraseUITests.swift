@@ -6,7 +6,7 @@ final class DataEraseUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     func testDeleteAllMyDataAsksTwiceThenStartsAgain() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeModelState", "missing",
                                "-LoupeJudgmentDemo", "tax-receipt"]
         app.launch()

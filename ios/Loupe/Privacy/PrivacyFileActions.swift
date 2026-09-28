@@ -4,7 +4,7 @@ import Photos
 
 /// What the app may do to the thing behind a finding. Only files the app can reach (picked Files
 /// locations, the Send to Loupe inbox) can be deleted or moved; a photo can be deleted through
-/// PhotoKit (iOS asks the user); everything else — the sample, mail, calendar — is suggest-only.
+/// PhotoKit (iOS asks the user); everything else — mail, calendar, the test fixture — is suggest-only.
 enum PrivacyAccess: Equatable {
     case file(URL, scope: URL?)
     case photo(localId: String)
@@ -37,7 +37,7 @@ struct LivePrivacyLocator: PrivacyLocating {
             }
             return .file(loc.isFolder ? url.appendingPathComponent(rel) : url, scope: url)
         }
-        if itemId.hasPrefix("sample:") { return .suggestOnly("Sample data is part of the app and cannot be changed.") }
+        if itemId.hasPrefix("sample:") { return .suggestOnly("This is test fixture data and cannot be changed.") }
         return .suggestOnly("Loupe only reads this source; change it in its own app.")
     }
 }

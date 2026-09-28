@@ -5,7 +5,7 @@ final class GameUITests: XCTestCase {
 
     /// Open the game from Me's Play card, see it run (rows climb), pause it, and see it stop.
     func testPlayFromMeRunsAndPauses() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me"]
         app.launch()
 
@@ -37,7 +37,7 @@ final class GameUITests: XCTestCase {
     /// Watch from Me's Play card: the river runs, the level climbs (30 rows a level here), and
     /// pause stops it.
     func testWatchFromMeLevelClimbsAndPauses() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "me", "-LoupeGameLevelRows", "30"]
         app.launch()
         let watch = app.buttons["me.play.watch"]
@@ -66,7 +66,7 @@ final class GameUITests: XCTestCase {
 
     /// Watch mode without the model: the baseline flies, with a note and a link to Me → Laya model.
     func testWatchWithoutModelFliesBaselineWithNote() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeGame", "watch", "-LoupeNoModel"]
         app.launch()
         let rows = app.descendants(matching: .any)["game.rows"]
@@ -82,7 +82,7 @@ final class GameUITests: XCTestCase {
     /// rather than pausing (a quick tap on the river pauses), holding it does not pause either, and
     /// the hint says steering never fires. Watch mode shows no FIRE button.
     func testFireButtonFiresWithoutPausingAndIsAbsentInWatch() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeGame", "human"]
         app.launch()
         let fire = app.descendants(matching: .any)["game.fire"]

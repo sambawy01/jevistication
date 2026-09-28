@@ -37,7 +37,7 @@ final class ClipboardUITests: XCTestCase {
     }
 
     private func launch(_ extra: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeClipboard", "-LoupeTab", "guard", "-LoupeSkipOnboarding",
                                "-LoupeLanguage", "en", "-LoupeModelState", "missing"] + extra
         app.launch()

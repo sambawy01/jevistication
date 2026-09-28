@@ -1,10 +1,9 @@
-import Combine
 import LoupeKit
 import SwiftUI
 
-/// What Home's scan panel lists and says (owner ruling O-5), as plain values so they are unit-tested: the real
-/// sources in a fixed order (never the sample: owner ruling O-6), the running scans in that same order, and the one
-/// line the panel collapses to once they have all finished.
+/// What Home's scan panel lists and says (owner rulings O-5, C-16), as plain values so they are unit-tested: the real
+/// sources in a fixed order (never the sample: owner ruling O-6), the adapter from the run coordinator's live
+/// `RunProgress` to the panel's `HomeScanProgress`, which state the panel is in, and the collapsed line's title.
 enum HomeScanPanelModel {
     struct Source: Equatable, Identifiable {
         let id: String
@@ -16,6 +15,8 @@ enum HomeScanPanelModel {
     static let inboxId = "inbox"
     /// `SourcesService.sampleId` (that one is main-actor isolated; this model is plain values).
     static let sampleKey = "sample"
+    /// `LiveRunWork.sourceTitle` of the DEBUG fixture sample.
+    static let fixtureTitle = "Test fixture"
 
     /// Photos, Files, Mail, Calendar, Contacts: the order the panel lists them in.
     static let phoneOrder: [PhoneSource] = [.photos, .files, .mail, .calendar, .contacts]
@@ -27,61 +28,103 @@ enum HomeScanPanelModel {
             + (inboxHasImports ? [Source(id: inboxId, title: "Inbox", phone: nil)] : [])
     }
 
-    /// The keys of `SourcesService.liveScans` the panel shows, in the sources' order; the sample's scan is left out.
-    static func scanKeys(_ keys: [String]) -> [String] {
-        let rank = Dictionary(uniqueKeysWithValues: phoneOrder.enumerated().map { ($1.id, $0) })
-        return keys.filter { $0 != sampleKey }
-            .sorted { (rank[$0] ?? Int.max, $0) < (rank[$1] ?? Int.max, $1) }
-    }
+    // MARK: The adapter (ruling C-16)
 
-    /// The collapsed line once every scan shown has finished: one scan says its own summary ("Photos: 120 photos ·
-    /// 30 with text · 0 bytes out"), several are counted together ("Read 1,234 items from 2 sources"), and a scan that
-    /// stopped is named. Nil while any scan still runs, or when there is none.
-    static func summaryLine(_ scans: [ScanSnapshot]) -> String? {
-        guard !scans.isEmpty, !scans.contains(where: { $0.phase == .running }) else { return nil }
-        let finished = scans.filter { $0.phase == .finished }
-        let stopped = scans.filter { $0.phase == .failed }.map(\.pipeline.title)
-        var line: String
-        switch finished.count {
-        case 0:
-            return "\(stopped.joined(separator: ", ")): the scan stopped"
-        case 1:
-            let s = finished[0]
-            line = "\(s.pipeline.title): \(s.summary ?? "\(s.read.formatted()) \(s.pipeline.unitWord(s.read))")"
-        default:
-            let read = finished.reduce(0) { $0 + $1.read }
-            line = "Read \(read.formatted()) item\(read == 1 ? "" : "s") from \(finished.count) sources"
+    /// The run going now as the panel draws it. `RunCoordinator.current` publishes at most ~8 times a second, and only
+    /// the panel observes it, so Home's body never redraws per tick.
+    static func progress(_ run: RunProgress) -> HomeScanProgress {
+        let stages = run.stages.map { stage -> HomeScanProgress.Stage in
+            let c = run.counts[stage]
+            return HomeScanProgress.Stage(id: stage.rawValue, name: stage.title, done: c?.done ?? 0, total: c?.total,
+                                          started: c != nil, running: stage == run.stage && c?.finished != true)
         }
-        if !stopped.isEmpty { line += " · \(stopped.joined(separator: ", ")) stopped" }
-        return line
-    }
-
-    /// Today's adapter: the live scans' snapshots (in `scanKeys` order) as one progress for the panel. Stages are
-    /// the sources being read, each with its done/total; the rate is theirs together, the time left the longest.
-    /// When none runs any more, the progress carries the collapsed line (`summaryLine`). Nil when there is no scan.
-    static func progress(_ scans: [ScanSnapshot]) -> HomeScanProgress? {
-        guard !scans.isEmpty else { return nil }
-        let running = scans.filter { $0.phase == .running }
-        let stages = scans.map { HomeScanProgress.Stage(id: $0.pipeline.source, name: $0.pipeline.title, done: $0.done,
-                                                        total: $0.total, running: $0.phase == .running) }
-        guard !running.isEmpty else {
-            return HomeScanProgress(stage: "Done", currentItem: nil, stages: stages, rate: nil, eta: nil,
-                                    summary: summaryLine(scans))
+        // The sources stage names the source it reads ("Photos · 1 of 3"): that source's row moves live.
+        var reading: HomeScanProgress.Stage?
+        if run.stage == .sources, let title = sourceTitle(part: run.part), let id = sourceId(part: run.part),
+           let c = run.counts[.sources], !c.finished {
+            reading = HomeScanProgress.Stage(id: id, name: title, done: c.done, total: c.total)
         }
-        let rates = running.compactMap(\.rate)
-        return HomeScanProgress(stage: "Reading " + running.map(\.pipeline.title).joined(separator: ", "),
-                                // Already masked by the scan (initials for contacts, masked names and subjects).
-                                currentItem: running.first?.recent.first?.name,
+        return HomeScanProgress(reason: "\(run.reason.title) · step \(run.stageNumber) of \(run.stages.count)",
+                                stage: run.stage.title + (run.part.map { " · \($0)" } ?? ""),
+                                currentItem: run.item.flatMap { $0.isEmpty ? nil : $0 },
                                 stages: stages,
-                                rate: rates.isEmpty ? nil : rates.reduce(0, +),
-                                eta: running.compactMap(\.eta).max(),
-                                summary: nil)
+                                reading: reading,
+                                counts: countLine(run),
+                                fraction: run.count.flatMap { c in c.total.map { $0 > 0 ? min(1, Double(c.done) / Double($0)) : 0 } },
+                                cancelling: run.cancelling)
     }
 
-    /// A source row reads live only while its own stage runs (not merely while a sibling source still does).
+    /// "312 of 1,204 items · 48/s · about 20 s left"; "Starting" before the stage has counted anything.
+    static func countLine(_ run: RunProgress) -> String {
+        var parts: [String] = []
+        let unit = run.stage.unit
+        if let c = run.count, let t = c.total {
+            parts.append("\(c.done.formatted()) of \(t.formatted()) \(unit)")
+        } else if let c = run.count, c.done > 0 {
+            parts.append("\(c.done.formatted()) \(unit)")
+        } else {
+            parts.append("Starting")
+        }
+        if let r = run.rate, r > 0 { parts.append("\(ScanSnapshot.rateText(r))/s") }
+        if let eta = run.eta { parts.append("about \(ScanSnapshot.duration(eta)) left") }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The source a sources-stage `part` names ("Photos · 1 of 3" → "photos"; the DEBUG fixture → the sample's key).
+    static func sourceId(part: String?) -> String? {
+        guard let title = sourceTitle(part: part) else { return nil }
+        if title == fixtureTitle { return sampleKey }
+        return PhoneSource.allCases.first { $0.title == title }?.id
+    }
+
+    private static func sourceTitle(part: String?) -> String? {
+        guard let part, let first = part.components(separatedBy: " · ").first, !first.isEmpty else { return nil }
+        return first
+    }
+
+    // MARK: The panel's state
+
+    enum State: Equatable {
+        /// A run goes: the expanded panel.
+        case running
+        /// The saved results are still being read back at launch.
+        case loading
+        /// Loaded, and the watchers have no results: say so, with Run now.
+        case notChecked
+        /// Loaded, results in hand: the last run in one line, with Run now.
+        case last
+        /// Results in hand but no run record (saved before runs were recorded): nothing to say.
+        case hidden
+    }
+
+    static func state(running: Bool, loaded: Bool, checked: Bool, hasLast: Bool) -> State {
+        if running { return .running }
+        if !loaded { return .loading }
+        if !checked { return .notChecked }
+        return hasLast ? .last : .hidden
+    }
+
+    /// "Checked on request · 2 minutes ago".
+    static func lastTitle(_ r: RunRecord) -> String {
+        "\(lastWhat(r.reason)) · \(r.endedAt.formatted(.relative(presentation: .named)))"
+    }
+
+    static func lastWhat(_ reason: RunReason) -> String {
+        switch reason {
+        case .firstCheck: return "First check"
+        case .nightly: return "Overnight check"
+        case .manual: return "Checked on request"
+        case .scanAgain: return "Scan again"
+        case .itemsChanged: return "Re-check"
+        }
+    }
+
+    // MARK: Rows
+
+    /// A source row reads live only while its own source is read (not merely while the run goes).
     static func rowReading(_ stage: HomeScanProgress.Stage?) -> Bool { stage?.running == true }
 
-    /// A source row's line: "Reading · 120 of 300" while its stage runs; otherwise its resting count, or "Off".
+    /// A source row's line: "Reading · 120 of 300" while it is read; otherwise its resting count, or "Off".
     static func rowLine(stage: HomeScanProgress.Stage?, on: Bool, restingCount: Int) -> String {
         if let stage, rowReading(stage) { return "Reading · \(stageCount(stage))" }
         guard on else { return "Off" }
@@ -93,130 +136,193 @@ enum HomeScanPanelModel {
         st.total.map { "\(st.done.formatted()) of \($0.formatted())" } ?? st.done.formatted()
     }
 
-    /// Cancel shows only while the check runs, and only when whoever runs it can cancel it (today's source scans
-    /// cannot; the run coordinator's runs will).
-    static func showsCancel(_ progress: HomeScanProgress?, canCancel: Bool) -> Bool {
-        canCancel && progress?.running == true
+    /// A stage's line in the panel: "Waiting" before it starts, its count while it runs, "Done · 1,204" after.
+    static func stageLine(_ st: HomeScanProgress.Stage) -> String {
+        guard st.started else { return "Waiting" }
+        return st.running ? stageCount(st) : "Done · \(st.done.formatted())"
     }
 }
 
-/// What the scan panel shows, as a value: the stage, the item being read, each stage's done/total, the rate, the
-/// time left, and (once finished or stopped) the one-line summary. Built today from the live scans
-/// (`HomeScanPanelModel.progress`); after the rebase from main's `RunCoordinator.current` (a `RunProgress`).
+/// What the expanded scan panel shows, as a value (built from `RunCoordinator.current` by `HomeScanPanelModel.progress`):
+/// the reason and step, the stage, the item being read, each stage's done/total, the source being read, the count
+/// line with rate and time left, and whether Cancel was tapped.
 struct HomeScanProgress: Equatable {
     struct Stage: Equatable, Identifiable {
-        /// A source id for a source's stage ("photos"), so its row shows the live count.
+        /// A run stage's raw value ("privacy"), or a source id ("photos") for `reading`.
         let id: String
         let name: String
         let done: Int
         let total: Int?
-        /// Still being read (false once this stage finished or stopped, while others may still run).
+        /// Counted at all (a stage not started yet is not).
+        var started = true
+        /// Being worked on now.
         var running = true
     }
 
+    /// "Run now · step 2 of 5".
+    let reason: String
+    /// "Privacy check", "Reading your sources · Photos · 1 of 3".
     let stage: String
+    /// The live scan's masked item name.
     let currentItem: String?
     let stages: [Stage]
-    /// Items a second.
-    let rate: Double?
-    /// Seconds left.
-    let eta: TimeInterval?
-    /// The finished or stopped line; nil while it runs.
-    let summary: String?
+    /// The source the sources stage reads now, with its count; nil otherwise.
+    let reading: Stage?
+    /// "312 of 1,204 items · 48/s · about 20 s left".
+    let counts: String
+    /// The current stage's done over total, when its total is known.
+    let fraction: Double?
+    /// Cancel was tapped; the run stops at its next item.
+    let cancelling: Bool
+}
 
-    var running: Bool { summary == nil }
+/// Home's scan slot (owner rulings O-5, C-16): whatever started a run (Run now, Scan again, the first check after
+/// onboarding, the night), Home shows it here live, with Cancel and the per-source switches; idle, the last run in one
+/// line with Run now; before anything was checked, "Not checked yet" with Run now; while the saved results load at
+/// launch, "Loading the last results…". Observes `RunCoordinator` itself (it publishes at most ~8 times a second), so
+/// only this view repaints with a run's progress, never Home's body.
+struct HomeRunPanel: View {
+    @ObservedObject var runs: RunCoordinator = .shared
+    @ObservedObject var sources: SourcesService
+    /// Every check's saved results have been read back (the watchers', the privacy check's, mail triage's).
+    let loaded: Bool
+    /// The watchers have results (from a run, or saved).
+    let checked: Bool
+    /// A source is on, so a run has something to read; otherwise the way to What Loupe reads.
+    let canRun: Bool
+    let openReads: () -> Void
 
-    /// Done over total across the stages, when every total is known.
-    var fraction: Double? {
-        guard !stages.isEmpty, stages.allSatisfy({ $0.total != nil }) else { return nil }
-        let total = stages.reduce(0) { $0 + ($1.total ?? 0) }
-        guard total > 0 else { return nil }
-        return min(1, Double(stages.reduce(0) { $0 + $1.done }) / Double(total))
+    var body: some View {
+        // No `home.scan` id on a wrapper: SwiftUI folds a one-child wrapper into its child, and the wrapper's id then
+        // replaced the child's own (`findings.notChecked`, `run.panel`), which main's UI tests read.
+        Group {
+            switch HomeScanPanelModel.state(running: runs.current != nil, loaded: loaded, checked: checked, hasLast: runs.last != nil) {
+            case .running:
+                if let p = runs.current {
+                    HomeScanPanel(progress: HomeScanPanelModel.progress(p), sources: sources, onCancel: { runs.cancel() })
+                }
+            case .loading:
+                HStack(spacing: 10) {
+                    ProgressView()
+                    Text("Loading the last results…").font(.subheadline).foregroundStyle(Palette.inkSoft)
+                }
+                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                .card()
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("findings.loading")
+            case .notChecked:
+                notChecked
+            case .last:
+                if let last = runs.last { HomeRunSummary(last: last) { runNowButton } }
+            case .hidden:
+                EmptyView()
+            }
+        }
     }
 
-    /// "12/s · about 20 s left".
-    var telemetry: String {
-        var parts: [String] = []
-        if let rate, rate > 0 { parts.append("\(ScanSnapshot.rateText(rate))/s") }
-        if let eta { parts.append("about \(ScanSnapshot.duration(eta)) left") }
-        return parts.joined(separator: " · ")
+    private var notChecked: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Not checked yet").font(Typeface.display(20)).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                Text("Loupe checks your sources overnight while the phone charges. Run the check now to see what it finds.")
+                    .font(.footnote).foregroundStyle(Palette.inkSoft)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // A run that stopped before the watchers (cancelled, say) still says what happened.
+            if let last = runs.last { HomeRunLastLines(last: last) }
+            runNowButton
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .card()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("findings.notChecked")
+    }
+
+    @ViewBuilder private var runNowButton: some View {
+        if canRun {
+            CardAction(title: "Run now", symbol: "arrow.clockwise", hue: Palette.cyan) { runs.runNow(reason: .manual) }
+                .accessibilityLabel("Run the check now")
+                .accessibilityHint("Reads every source that is on, then runs the privacy check, mail triage, the watchers and the sort")
+                .accessibilityIdentifier("run.runNow")
+        } else {
+            CardAction(title: "Open What Loupe reads", symbol: "externaldrive.fill.badge.plus", hue: Palette.cyan, action: openReads)
+                .accessibilityIdentifier("run.connect")
+        }
     }
 }
 
-/// Home's scan panel (owner ruling O-5): whatever started a check (Run now, Scan again, the first check after
-/// onboarding), Home shows it happening at the top. While it runs: the stage, the item being read, each stage's
-/// count, the rate and the time left, Cancel when the run can be cancelled, then every real source with its live
-/// count and its switch, which can be flipped during the check. Once finished it collapses to one line, and Home's
-/// cards below take over. It draws a `HomeScanProgress` only, so it binds to any producer of one.
+/// The expanded panel while a run goes: the reason and step, Cancel, the stage, the item being read, the progress, the
+/// count line with rate and time left, each stage, then every real source with its live count and its switch, which
+/// can be flipped during the run. Draws a `HomeScanProgress` only.
 struct HomeScanPanel: View {
-    let progress: HomeScanProgress?
+    let progress: HomeScanProgress
     @ObservedObject var sources: SourcesService
     /// Cancels the running check; nil when it cannot be cancelled (no Cancel button then).
     let onCancel: (() -> Void)?
 
     var body: some View {
-        if let progress {
-            if progress.running {
-                expanded(progress)
-            } else if let line = progress.summary {
-                HomeScanSummary(line: line)
-            }
-        }
-    }
-
-    private func expanded(_ p: HomeScanProgress) -> some View {
+        let p = progress
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Caption(text: "Checking now")
-                Spacer(minLength: 0)
+            HStack(alignment: .center, spacing: 8) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Caption(text: "Checking now")
+                        .accessibilityAddTraits(.isHeader)
+                    Text(p.reason)
+                        .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("run.reason")
+                }
+                Spacer(minLength: 8)
+                if let onCancel {
+                    Button(role: .cancel, action: onCancel) {
+                        Label(p.cancelling ? "Stopping…" : "Cancel", systemImage: "xmark.circle")
+                            .font(.footnote.weight(.semibold))
+                            .padding(.horizontal, 8)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
+                    }
+                    .disabled(p.cancelling)
+                    .accessibilityLabel(p.cancelling ? "Stopping the check" : "Cancel the check")
+                    .accessibilityIdentifier("run.cancel")
+                }
             }
-            .accessibilityAddTraits(.isHeader)
             Text(p.stage)
                 .font(Typeface.display(20)).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("home.scan.stage")
+                .accessibilityIdentifier("run.stage")
             if let item = p.currentItem {
-                Text("Now reading \(item)")
+                Text(item)
                     .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                     .lineLimit(2)
-                    .accessibilityIdentifier("home.scan.current")
+                    .accessibilityIdentifier("run.item")
             }
             SweepBar(fraction: p.fraction ?? 0, color: Palette.cyan, height: 6, live: true)
                 .accessibilityElement()
                 .accessibilityLabel("Progress")
                 .accessibilityValue(p.fraction.map { "\(Int(($0 * 100).rounded())) percent" } ?? "counting")
+            Text(p.counts)
+                .font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("run.counts")
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(p.stages) { st in
                     HStack(spacing: 8) {
-                        Text(st.name).font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
+                        Text(st.name).font(.footnote.weight(.semibold))
+                            .foregroundStyle(st.running ? Palette.ink : Palette.inkSoft)
                         Spacer(minLength: 8)
-                        Text(HomeScanPanelModel.stageCount(st)).font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
+                        Text(HomeScanPanelModel.stageLine(st)).font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("home.scan.stage.\(st.id)")
                 }
             }
-            if !p.telemetry.isEmpty {
-                Text(p.telemetry)
-                    .font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("home.scan.telemetry")
-            }
-            if HomeScanPanelModel.showsCancel(p, canCancel: onCancel != nil), let onCancel {
-                Button(action: onCancel) {
-                    Label("Cancel", systemImage: "xmark.circle")
-                        .font(.footnote.weight(.semibold))
-                        .frame(minWidth: 44, minHeight: 44)
-                        .contentShape(Rectangle())
-                }
-                .accessibilityLabel("Cancel the check")
-                .accessibilityIdentifier("home.scan.cancel")
-            }
             Divider().overlay(Palette.hairline)
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(HomeScanPanelModel.sources(inboxHasImports: !sources.inboxBatches.isEmpty)) { source in
                     HomeScanSourceRow(source: source, sources: sources,
-                                      live: p.stages.first { $0.id == source.id })
+                                      live: p.reading?.id == source.id ? p.reading : nil)
                 }
             }
             Text("Turning a source off takes its items out of every check. Nothing leaves this iPhone except Mail, which you connected.")
@@ -226,71 +332,49 @@ struct HomeScanPanel: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .card(active: true)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("home.scan")
+        .accessibilityIdentifier("run.panel")
     }
-
 }
 
-/// Today's producer: follows the live scans' snapshots (each publishes ~12 times a second) inside this small view,
-/// so only the panel repaints with them, never Home's body.
-struct HomeLiveScanPanel: View {
-    let scans: [LiveScan]
-    @ObservedObject var sources: SourcesService
-    @StateObject private var feed = HomeScanFeed()
+/// The last run's title and outcome ("Checked on request · 2 minutes ago" / "Checked 1,204 items · 3 new findings").
+private struct HomeRunLastLines: View {
+    let last: RunRecord
 
     var body: some View {
-        // RunCoordinator: after the rebase this becomes
-        // HomeScanPanel(progress: runs.current.map(HomeScanProgress.init), sources: sources, onCancel: runs.cancel)
-        HomeScanPanel(progress: HomeScanPanelModel.progress(snapshots), sources: sources, onCancel: nil)
-            .onAppear { feed.track(scans) }
-            .onChange(of: scans.map(\.id)) { _, _ in feed.track(scans) }
-    }
-
-    /// The feed's once it follows these scans; until then (the first pass) their snapshots as they are now.
-    private var snapshots: [ScanSnapshot] { feed.follows(scans) ? feed.snapshots : scans.map(\.snapshot) }
-}
-
-/// The live scans' latest snapshots, in order; re-subscribes only when the set of scans changes.
-@MainActor
-final class HomeScanFeed: ObservableObject {
-    @Published private(set) var snapshots: [ScanSnapshot] = []
-    private var ids: [UUID] = []
-    private var subscription: AnyCancellable?
-
-    func follows(_ scans: [LiveScan]) -> Bool { ids == scans.map(\.id) }
-
-    func track(_ scans: [LiveScan]) {
-        let next = scans.map(\.id)
-        guard next != ids else { return }
-        ids = next
-        snapshots = scans.map(\.snapshot)
-        subscription = Publishers.MergeMany(scans.enumerated().map { i, scan in scan.$snapshot.dropFirst().map { (i, $0) } })
-            .receive(on: RunLoop.main)
-            .sink { [weak self] i, snap in
-                guard let self, i < self.snapshots.count else { return }
-                self.snapshots[i] = snap
-            }
-    }
-}
-
-/// The panel collapsed: one line saying what the check read.
-struct HomeScanSummary: View {
-    let line: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: "checkmark.seal.fill").foregroundStyle(Palette.okText).accessibilityHidden(true)
-            Text(line)
+        VStack(alignment: .leading, spacing: 2) {
+            Text(HomeScanPanelModel.lastTitle(last))
+                .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("run.lastTitle")
+            Text(last.outcomeLine)
                 .font(.subheadline).foregroundStyle(Palette.ink)
                 .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+                .accessibilityIdentifier("run.last")
+        }
+    }
+}
+
+/// The panel collapsed: the last run in one line, with Run now.
+private struct HomeRunSummary<RunNow: View>: View {
+    let last: RunRecord
+    @ViewBuilder let runNow: () -> RunNow
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: last.outcome == .finished ? "checkmark.seal.fill" : "pause.circle.fill")
+                    .foregroundStyle(last.outcome == .finished ? Palette.okText : Palette.warnText)
+                    .accessibilityHidden(true)
+                HomeRunLastLines(last: last)
+                Spacer(minLength: 0)
+            }
+            runNow()
         }
         .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        .padding(.horizontal, 12)
+        .padding(12)
         .background(Palette.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Check finished. \(line)")
-        .accessibilityIdentifier("home.scan.summary")
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("run.panel")
     }
 }
 
@@ -298,7 +382,7 @@ struct HomeScanSummary: View {
 private struct HomeScanSourceRow: View {
     let source: HomeScanPanelModel.Source
     @ObservedObject var sources: SourcesService
-    /// The source's stage while the check reads it: its count then moves live.
+    /// The source while the run reads it: its count then moves live.
     let live: HomeScanProgress.Stage?
 
     private var on: Bool {

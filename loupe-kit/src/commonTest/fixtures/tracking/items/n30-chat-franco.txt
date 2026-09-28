@@ -1,0 +1,6 @@
+lang: franco
+kind: text
+date: 2026-09-24
+expect: none
+---
+ana gay el sa3a 8 ba2olak, esta2alny 3and el bab

@@ -15,7 +15,7 @@ final class WebLibraryUITests: XCTestCase {
     }
 
     private func launch(_ extra: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "web", "-LoupeSkipOnboarding", "-LoupeLanguage", "en"] + extra
         app.launch()
         return app
@@ -125,7 +125,7 @@ final class WebLibraryUITests: XCTestCase {
     }
 
     func testTrainsFixtureAnswerAndArabic() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "web", "-LoupeSkipOnboarding", "-LoupeLanguage", "ar", "-LoupeWebSourcesOn"]
         app.launch()
         any(app, "web.template.trains").tap()

@@ -7,7 +7,7 @@ final class MailScreenTests: XCTestCase {
     private func sub(_ merchant: String, _ ids: [String]) -> CensusRow {
         CensusRow(merchant: merchant, cadence: "monthly", occurrences: 3, typicalMinor: 999, lastChargedIso: "2026-09-01",
                   daysSinceLastCharge: 27, monthlyMinor: KotlinLong(value: 999), sample: false, itemIds: ids,
-                  nextExpectedIso: nil, verdict: nil)
+                  nextExpectedIso: nil, verdict: nil, currency: "", lines: [])
     }
 
     func testFoundCountsOnlySubscriptionsReadFromMail() {

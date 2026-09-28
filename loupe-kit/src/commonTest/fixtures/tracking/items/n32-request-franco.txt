@@ -1,0 +1,6 @@
+lang: franco
+kind: text
+date: 2026-09-22
+expect: none
+---
+momken te7wel 200 geneh le Ahmed el naharda?

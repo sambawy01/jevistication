@@ -47,14 +47,18 @@ final class DeleteDataScenarios: ScenarioCase {
         back()
         XCTAssertEqual(contactsSwitch().value as? String, "1", "\(when): Contacts is back to its default (on)")
         root("Me")
+        // The first check after the new onboarding may still be going: Run now shows once it has finished.
+        // Bring the Checks section on screen first; Run now shows once the first check is over.
+        reveal(app.switches["me.sort.toggle"])
         let run = button("me.sort.run")
+        XCTAssertTrue(run.waitForExistence(timeout: 120), "\(when): Run now")
         reveal(run)
         XCTAssertTrue(run.exists, "\(when): the decision model is still installed (Run now is unlocked)")
         XCTAssertFalse(any("needsLaya.sort").exists)
     }
 
     func testDeleteEverythingButTheModelThenRelaunch() {
-        start("erase", ["-LoupeModelState", "installed", "-LoupeResetOnboarding", "-LoupePermissions", "granted", "-LoupeTab", "now"])
+        start("erase", ["-LoupeModelState", "installed", "-LoupeResetOnboarding", "-LoupePermissions", "granted", "-LoupeTab", "now"], run: false)
         walkOnboarding()
 
         // Data to delete: a pack of judgments, a dangerous link check (recent + Spotted), Contacts off.

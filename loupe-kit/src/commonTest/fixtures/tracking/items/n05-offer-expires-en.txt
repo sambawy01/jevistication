@@ -1,0 +1,9 @@
+lang: en
+kind: email
+date: 2026-09-20
+from: Noon <deals@noon.example>
+subject: Flash sale
+expect: none
+---
+Flash sale! 30% off electronics.
+This offer expires 30/10/2026. Use code SAVE30.

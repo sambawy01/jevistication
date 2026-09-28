@@ -21,7 +21,7 @@ final class RenameShotsUITests: XCTestCase {
     }
 
     private func launch(_ args: [String]) -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = args + ["-LoupeEphemeralKeychain", "-LoupeFixtures"]
         app.launch()
         return app

@@ -356,7 +356,7 @@ final class JudgmentsService: ObservableObject {
         }
         let all = items()
         if all.isEmpty {
-            notice = "No items scanned yet. Turn on the sample in Sources."
+            notice = "No items read yet. Turn on a source in Sources, then run the check."
             return
         }
         let plan = JudgmentResults.shared.planFor(all: ledger.allRows(), judgment: j, items: all, rerunAll: rerunAll, layaOn: policy.useLaya)
@@ -447,7 +447,7 @@ extension UserJudgment {
 extension SourceItem {
     /// Where the item came from, for a result row.
     var sourceLabel: String {
-        if sourceId == SourcesService.sampleId { return "Sample data" }
+        if sourceId == SourcesService.sampleId { return "Test fixture" }
         if let imported = facts["imported"] { return imported }   // an Inbox item: where it came from (child 15)
         return sourceId
     }

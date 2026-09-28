@@ -1,0 +1,6 @@
+lang: en
+kind: text
+date: 2026-09-02
+expect: none
+---
+Car service: oil change at 45,000 km. The garage opens at 9 am.

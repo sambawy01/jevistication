@@ -1,0 +1,8 @@
+lang: ar
+kind: email
+date: 2026-08-10
+from: Vodafone <offers@vodafone.com.eg>
+subject: عرض خاص لك
+expect: none
+---
+اشترك الآن في باقة فليكس ٧٠ بـ ١٢٠ جنيه شهرياً واستمتع بدقائق وإنترنت أكتر.

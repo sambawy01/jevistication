@@ -1,18 +1,23 @@
 import Foundation
 import LoupeKit
 
-/// Sources on this iPhone (epic #7 child 2). Today that is the bundled synthetic sample — labelled
-/// "Sample data — not from your phone" wherever it appears — read by LoupeKit's common scanner with
-/// PDFKit/ImageIO as its platform readers, off the main thread, with progress. Results are cached
-/// through LoupeKit's `SourceLibrary` (Application Support/Loupe/sources) so Judgments and the Now
-/// watchers read items without rescanning. The phone's own sources (Photos, Files, Calendar,
-/// Contacts, Mail — child 7) live in `SourcesService+Phone.swift` and store into the same cache.
+/// Sources on this iPhone (epic #7 child 2; child 7 for the phone's own sources in `SourcesService+Phone.swift`),
+/// read by LoupeKit's common scanner with PDFKit/ImageIO/Vision as its platform readers, off the main thread, with
+/// progress. Results are cached through LoupeKit's `SourceLibrary` (Application Support/Loupe/sources) so Judgments,
+/// the watchers and the checks read items without rescanning.
+///
+/// No sample data ships (owner decision 2026-09-28): the synthetic sample lives in the test targets only. Tests pass
+/// its folder as `sampleRoot`, and DEBUG fixture launches (`-LoupeFixtures` with `LOUPE_FIXTURE_SAMPLE` set by the UI
+/// tests) read it as a hidden fixture source with the id `sample`; in every other build `sampleRoot` is nil and the
+/// sample is not a source at all. Nothing is scanned at launch (2026-09-28): scans run in a `RunCoordinator` run
+/// (the first check after onboarding, the nightly run, Run now, Scan again).
 @MainActor
 final class SourcesService: ObservableObject {
+    /// The id of the synthetic sample's items (`sample:documents/…`, `sample:mail/…`): a test fixture now, and what the
+    /// sample migration removes from a phone that ran an older build.
     static let sampleId = "sample"
-    static let sampleLabel = "Sample data — not from your phone"
 
-    static let shared = SourcesService(home: LedgerService.defaultHome(), sampleRoot: SourcesService.bundledSample())
+    static let shared = SourcesService(home: LedgerService.defaultHome(), sampleRoot: SourcesService.fixtureSampleRoot())
 
     struct Progress: Equatable {
         let seen: Int
@@ -21,7 +26,9 @@ final class SourcesService: ObservableObject {
         var fraction: Double { total == 0 ? 0 : Double(seen) / Double(total) }
     }
 
-    @Published private(set) var sampleEnabled = true
+    /// The DEBUG/test fixture sample is on (never true without a `sampleRoot`).
+    @Published private(set) var sampleEnabled = false
+    /// The fixture sample's cached scan (tests and DEBUG fixture launches only).
     @Published private(set) var sampleScan: CachedScan?
     @Published private(set) var progress: Progress?
     @Published private(set) var problem: String?
@@ -38,6 +45,8 @@ final class SourcesService: ObservableObject {
     /// finishes for the settle. Set once at the start and once at the end, so the Sources screen itself does not
     /// redraw per item; the live display observes the `LiveScan` alone (~12 Hz).
     @Published private(set) var liveScans: [String: LiveScan] = [:]
+    /// Scans started since launch (diagnostics; the no-launch-work UI test reads it through a DEBUG label).
+    @Published private(set) var scansStarted = 0
 
     var scanning: Bool { progress != nil || phone.values.contains { $0.scanning } }
     /// Callers that asked for a phone source's scan while one was already reading it: that scan may have listed
@@ -45,6 +54,13 @@ final class SourcesService: ObservableObject {
     var phoneScanWaiters: [PhoneSource: [CheckedContinuation<Void, Never>]] = [:]
     /// Bumped by "Delete all my Loupe data": a follow-up scan queued before it does not run after it.
     private(set) var eraseGeneration = 0
+    /// Where a scan the user asked for goes (a source switched on, access allowed, a folder picked, a mailbox added):
+    /// `RunCoordinator` sets it, so the scan runs as a visible, cancellable run followed by the checks. nil (unit
+    /// tests): the scan runs directly.
+    var userScan: ((String) async -> Void)?
+    /// Told when the items changed without a scan the user asked for (a source switched off, an import added or
+    /// removed, a mailbox removed, the automatic Gmail retry): `RunCoordinator` re-runs the checks. nil in unit tests.
+    var itemsChanged: (() -> Void)?
 
     /// Re-opened only by "Delete all my Loupe data" (`reloadAfterErase`).
     private(set) var library: SourceLibrary?
@@ -52,7 +68,7 @@ final class SourcesService: ObservableObject {
     private(set) var inbox: Inbox?
     let home: URL
     let deps: PhoneDependencies
-    private let sampleRoot: URL?
+    let sampleRoot: URL?
     let queue = DispatchQueue(label: "com.loupe-ai.ios.sources", qos: .utility)
     private var started = false
 
@@ -73,12 +89,15 @@ final class SourcesService: ObservableObject {
         }
         inbox = library == nil ? nil : try? Inbox(home: home.path, extractors: AppleExtractors.live())
         inboxBatches = inbox?.batches() ?? []
-        if let library {
+        if let library, sampleRoot != nil {
             sampleEnabled = library.isEnabled(sourceId: Self.sampleId, default: true)
             sampleScan = library.cached(sourceId: Self.sampleId)
         }
         loadPhoneStates()
     }
+
+    /// Whether the fixture sample is a source here (tests and DEBUG fixture launches only).
+    var hasFixtureSample: Bool { sampleRoot != nil }
 
     /// After "Delete all my Loupe data" (audit P1-4; the button waits while a scan runs): opens the emptied cache
     /// again and forgets every source's state, as on a fresh install. `start()` then runs again from onboarding.
@@ -102,25 +121,34 @@ final class SourcesService: ObservableObject {
         }
         inbox = library == nil ? nil : try? Inbox(home: home.path, extractors: AppleExtractors.live())
         inboxBatches = inbox?.batches() ?? []
-        sampleEnabled = library?.isEnabled(sourceId: Self.sampleId, default: true) ?? true
-        sampleScan = library?.cached(sourceId: Self.sampleId)
+        sampleEnabled = sampleRoot != nil && (library?.isEnabled(sourceId: Self.sampleId, default: true) ?? true)
+        sampleScan = sampleRoot == nil ? nil : library?.cached(sourceId: Self.sampleId)
         phone = [:]
         loadPhoneStates()
         started = false
         revision += 1
     }
 
-    /// The synthetic sample shipped in the app bundle (the desktop's sample resources, verbatim).
-    nonisolated static func bundledSample() -> URL? {
-        Bundle.main.url(forResource: "sample", withExtension: nil)
+    /// The fixture sample's folder for DEBUG fixture launches: `LOUPE_FIXTURE_SAMPLE` (the UI tests set it to the
+    /// sample folder in their own bundle; the simulator shares the Mac's file system), read only under `-LoupeFixtures`.
+    /// nil in every other launch and always in Release: the app bundle carries no sample.
+    nonisolated static func fixtureSampleRoot() -> URL? {
+        #if DEBUG
+        guard LaunchOptions.current.fixtureMode,
+              let path = ProcessInfo.processInfo.environment["LOUPE_FIXTURE_SAMPLE"], !path.isEmpty,
+              FileManager.default.fileExists(atPath: path) else { return nil }
+        return URL(fileURLWithPath: path, isDirectory: true)
+        #else
+        return nil
+        #endif
     }
 
-    /// Scans the sample once if it is on and has never been scanned. Called when the app appears.
+    /// Called when the app appears. Opening the app only LOADS (owner decision 2026-09-28): no source is scanned and
+    /// no check runs here. What was shared to Loupe while it was closed is filed into the Inbox (a copy, no reading
+    /// of the phone), and it is picked up by the next run.
     func start() {
         guard !started else { return }
         started = true
-        if sampleEnabled && sampleScan == nil { scanSample() }
-        refreshOnOpen()
         Task { await collectShared() }
         #if DEBUG
         if LaunchOptions.current.inboxDemo { Task { await seedInboxDemo() } }
@@ -134,12 +162,11 @@ final class SourcesService: ObservableObject {
          SourceRoot(id: sampleId, type: .mailExport, path: root.appendingPathComponent("mail").path, idPrefix: "sample:mail/")]
     }
 
-    func scanSample() {
+    /// Reads the fixture sample (tests and DEBUG fixture launches). Cancellable between files: a cancelled scan keeps
+    /// what it read and, for the files it did not reach, what the last scan had (`SourceMerge`), never a cut cache.
+    func scanSample(cancel: RunCancel? = nil) async {
         guard !scanning, let library else { return }
-        guard let root = sampleRoot else {
-            problem = "The sample data is missing from this build."
-            return
-        }
+        guard let root = sampleRoot else { return }
         progress = Progress(seen: 0, total: 0, current: "")
         problem = nil
         let run = SourceScanRun(source: "sample")
@@ -148,31 +175,33 @@ final class SourcesService: ObservableObject {
         feed.status("Listing the sample files")
         // Progress goes to the live run and the live display only; publishing it here would redraw every screen
         // that observes this service once per file.
-        let observer = Observer { p in
+        let observer = Observer({ p in
             run.scanned(p)
             feed.scanned(p)
-        }
-        queue.async {
-            let outcome = Result { () -> CachedScan in
-                let result = try SourceScanner(extractors: AppleExtractors()).scan(sources: Self.sampleRoots(root), observer: observer)
-                return try library.store(sourceId: Self.sampleId, result: result)
-            }
-            Task { @MainActor in
-                self.progress = nil
-                switch outcome {
-                case .success(let scan):
-                    self.sampleScan = scan; self.revision += 1
-                    run.ocrCount(Self.ocrItems(scan.result))
-                    run.finish(items: scan.result.items.count, skipped: scan.result.skipped.count)
-                    feed.finish(saved: scan.result.items.count)
-                case .failure(let error):
-                    self.problem = "Scan failed: \(error.localizedDescription)"
-                    run.fail()
-                    feed.fail()
-                }
-                self.settle(live)
+        }, cancel: cancel)
+        let previous = sampleScan?.result
+        let outcome: Result<CachedScan, Error> = await withCheckedContinuation { c in
+            queue.async {
+                c.resume(returning: Result { () -> CachedScan in
+                    var result = try SourceScanner(extractors: AppleExtractors()).scan(sources: Self.sampleRoots(root), observer: observer)
+                    if cancel?.isCancelled == true { result = SourceMerge.keepUnreached(partial: result, previous: previous) }
+                    return try library.store(sourceId: Self.sampleId, result: result)
+                })
             }
         }
+        progress = nil
+        switch outcome {
+        case .success(let scan):
+            sampleScan = scan; revision += 1
+            run.ocrCount(Self.ocrItems(scan.result))
+            run.finish(items: scan.result.items.count, skipped: scan.result.skipped.count)
+            feed.finish(saved: scan.result.items.count)
+        case .failure(let error):
+            problem = "Scan failed: \(error.localizedDescription)"
+            run.fail()
+            feed.fail()
+        }
+        settle(live)
     }
 
     // MARK: Live scans
@@ -182,6 +211,7 @@ final class SourcesService: ObservableObject {
 
     /// Starts the live display of one scan.
     func beginLive(_ key: String, _ pipeline: ScanPipeline) -> LiveScan {
+        scansStarted += 1
         let live = LiveScan(pipeline: pipeline)
         liveScans[key] = live
         return live
@@ -198,13 +228,13 @@ final class SourcesService: ObservableObject {
         }
     }
 
+    /// The fixture sample's switch (tests only; there is no sample in the app's screens).
     func setSampleEnabled(_ on: Bool) {
-        guard let library else { return }
+        guard let library, sampleRoot != nil else { return }
         do {
             try library.setEnabled(sourceId: Self.sampleId, enabled: on)
             sampleEnabled = on
             revision += 1
-            if on && sampleScan == nil { scanSample() }
         } catch {
             problem = "Could not save the setting: \(error.localizedDescription)"
         }
@@ -215,7 +245,7 @@ final class SourcesService: ObservableObject {
     func items() -> [SourceItem] {
         guard let library else { return [] }
         let phoneIds = PhoneSource.allCases.filter { isPhoneEnabled($0) }.flatMap(\.cacheIds)
-        return library.items(sourceIds: [Self.sampleId], defaultEnabled: true)
+        return (sampleEnabled ? library.items(sourceIds: [Self.sampleId], defaultEnabled: true) : [])
             + library.items(sourceIds: phoneIds, defaultEnabled: true)   // already filtered by each source's switch
             + (inbox?.items() ?? [])                                      // empty when the Inbox is off
             + debugItems
@@ -244,9 +274,9 @@ final class SourcesService: ObservableObject {
         let phoneIds = PhoneSource.allCases.filter { isPhoneEnabled($0) }.flatMap(\.cacheIds)
         let inbox = self.inbox
         let extra = debugItems
-        let sampleId = Self.sampleId
+        let sampleIds = sampleEnabled ? [Self.sampleId] : []
         return ItemsReader {
-            let all = library.items(sourceIds: [sampleId], defaultEnabled: true)
+            let all = library.items(sourceIds: sampleIds, defaultEnabled: true)
                 + library.items(sourceIds: phoneIds, defaultEnabled: true)
                 + (inbox?.items() ?? [])
                 + extra
@@ -254,7 +284,7 @@ final class SourcesService: ObservableObject {
         }
     }
 
-    /// How many sources are on, the sample included.
+    /// How many sources are on (the fixture sample counts in tests and DEBUG fixture launches).
     var enabledCount: Int {
         (sampleEnabled ? 1 : 0) + PhoneSource.allCases.filter { isPhoneEnabled($0) }.count
             + (inboxEnabled && !inboxBatches.isEmpty ? 1 : 0)
@@ -265,9 +295,10 @@ final class SourcesService: ObservableObject {
 
     private final class Observer: NSObject, ScanObserver {
         let onProgress: (ScanProgress) -> Void
-        init(_ onProgress: @escaping (ScanProgress) -> Void) { self.onProgress = onProgress }
+        let cancel: RunCancel?
+        init(_ onProgress: @escaping (ScanProgress) -> Void, cancel: RunCancel?) { self.onProgress = onProgress; self.cancel = cancel }
         func onProgress(progress: ScanProgress) { onProgress(progress) }
-        func isCancelled() -> Bool { false }
+        func isCancelled() -> Bool { cancel?.isCancelled ?? false }
     }
 }
 
@@ -276,4 +307,28 @@ struct ItemsReader: @unchecked Sendable {
     let read: () -> [SourceItem]
     init(_ read: @escaping () -> [SourceItem]) { self.read = read }
     func callAsFunction() -> [SourceItem] { read() }
+
+    /// The items for a run (2026-09-28: the main thread never reads the caches): through [reader] off the main thread
+    /// when one is given (the app's services), else [items] as is (unit tests pass plain closures).
+    @MainActor
+    static func load(_ items: () -> [SourceItem], _ reader: (() -> ItemsReader)?) async -> [SourceItem] {
+        guard let reader else { return items() }
+        let r = reader()
+        return await Task.detached(priority: .userInitiated) { r() }.value
+    }
+}
+
+/// A cancelled scan's result made safe to store (2026-09-28): the scanner stops between files and returns what it read;
+/// stored alone it would drop every item it did not reach. So the items it read replace theirs, and the previous scan's
+/// items it never reached are kept. A file deleted since stays until the next complete scan; nothing is lost.
+enum SourceMerge {
+    static func keepUnreached(partial: ScanResult, previous: ScanResult?) -> ScanResult {
+        guard let previous else { return partial }
+        let read = Set(partial.items.map(\.id))
+        let kept = previous.items.filter { !read.contains($0.id) }
+        let skipped = Set(partial.skipped.map(\.path))
+        return .of(partial.items + kept,
+                   skipped: partial.skipped + previous.skipped.filter { !skipped.contains($0.path) },
+                   unavailable: partial.unavailable)
+    }
 }

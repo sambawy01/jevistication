@@ -41,7 +41,8 @@ enum HomeModel {
     // MARK: Money and Documents
 
     /// A card's words: a headline, one line under it, whether it should offer "Open What Loupe reads", and whether
-    /// it should offer Run now (nothing checked since Loupe opened, and nothing running).
+    /// nothing was checked yet (loaded, no results, nothing running): Home's scan panel then offers Run now, and the
+    /// card, with no source on, the way to one.
     struct Summary: Equatable {
         let headline: String
         let detail: String
@@ -49,19 +50,20 @@ enum HomeModel {
         var needsRun = false
     }
 
-    /// No summary yet. The checks keep nothing across launches and nothing heavy starts when Loupe opens (O-4), so
-    /// "Reading your sources" is said only while a scan or the watchers really run; otherwise it is not checked yet,
-    /// with Run now.
-    private static func notYet(running: Bool, what: String, readingDetail: String) -> Summary {
-        running ? Summary(headline: "Reading your sources", detail: readingDetail, needsSource: false)
-                : Summary(headline: "Not checked yet", detail: "Run a check to see \(what).", needsSource: false, needsRun: true)
+    /// No summary yet. The last results are saved and read back at launch, off the main thread, and nothing heavy
+    /// starts when Loupe opens (O-4): so "Loading the last results…" until they are read, "Reading your sources" only
+    /// while a run, a scan or the watchers really go; otherwise it is not checked yet.
+    private static func notYet(running: Bool, loaded: Bool, what: String, readingDetail: String) -> Summary {
+        if !loaded { return Summary(headline: "Loading the last results…", detail: "The last check's results show here in a moment.", needsSource: false) }
+        return running ? Summary(headline: "Reading your sources", detail: readingDetail, needsSource: false)
+                       : Summary(headline: "Not checked yet", detail: "Run a check to see \(what).", needsSource: false, needsRun: true)
     }
 
-    /// The Money card from the census; nil until the watchers have run since Loupe opened. `running`: a scan or the
-    /// watchers are running now.
-    static func money(_ census: SubscriptionCensus?, mailCovered: Bool, running: Bool = false) -> Summary {
+    /// The Money card from the census; nil until the watchers have run (or their saved results are read back).
+    /// `running`: a run, a scan or the watchers are going now; `loaded`: the saved results have been read back.
+    static func money(_ census: SubscriptionCensus?, mailCovered: Bool, running: Bool = false, loaded: Bool = true) -> Summary {
         guard let census else {
-            return notYet(running: running, what: "your subscriptions",
+            return notYet(running: running, loaded: loaded, what: "your subscriptions",
                           readingDetail: "Subscriptions show here once the watchers have run.")
         }
         let rows = census.rows
@@ -83,10 +85,11 @@ enum HomeModel {
         return Summary(headline: "\(WatchersService.money(total)) a month", detail: detail, needsSource: false)
     }
 
-    /// The Documents card from the expiry timeline; nil rows until the watchers have run since Loupe opened.
-    static func documents(_ rows: [ExpiryRow]?, documentsCovered: Bool, running: Bool = false) -> Summary {
+    /// The Documents card from the expiry timeline; nil rows until the watchers have run (or their saved results are
+    /// read back).
+    static func documents(_ rows: [ExpiryRow]?, documentsCovered: Bool, running: Bool = false, loaded: Bool = true) -> Summary {
         guard let rows else {
-            return notYet(running: running, what: "which documents expire soon",
+            return notYet(running: running, loaded: loaded, what: "which documents expire soon",
                           readingDetail: "Expiry dates show here once the watchers have run.")
         }
         guard let soonest = rows.min(by: { $0.daysRemaining < $1.daysRemaining }) else {

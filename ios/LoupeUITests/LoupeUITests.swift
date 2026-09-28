@@ -4,7 +4,7 @@ final class LoupeUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     func testWebQuestionsShowKeyOnboarding() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeEphemeralKeychain", "-LoupeSkipOnboarding"]
         app.launch()
         // The Web tab's library is Ask → Web questions (owner decisions 2026-09-26 and 2026-09-28).
@@ -23,7 +23,7 @@ final class LoupeUITests: XCTestCase {
     }
 
     func testFixtureSearchShowsRankedResults() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "web", "-LoupeSkipOnboarding"]
         app.launch()
         let flights = app.descendants(matching: .any)["web.template.flights"].firstMatch

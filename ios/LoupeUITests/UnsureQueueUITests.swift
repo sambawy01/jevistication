@@ -5,9 +5,9 @@ final class UnsureQueueUITests: XCTestCase {
 
     /// Ask → Needs you → answer the first item → the count drops by one.
     func testAnsweringAnItemDropsTheCount() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         // The demo's stand-in scorer plays the model: the model reads as ready (it is required, 2026-09-25).
-        app.launchArguments = ["-LoupeFixtures", "-LoupeQueueDemo", "-LoupeTab", "ask", "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeQueueDemo", "-LoupeTab", "ask", "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
         app.launch()
         XCTAssertTrue(app.navigationBars["Ask"].waitForExistence(timeout: 20), "Ask hosts today's judgments")
         let card = app.buttons["ask.needsYou"]
@@ -28,8 +28,8 @@ final class UnsureQueueUITests: XCTestCase {
 
     /// `-LoupeOpen queue` opens Ask with the Unsure queue pushed (the badge's door in phase 1).
     func testOpenQueueLaunchesStraightIntoTheQueue() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeFixtures", "-LoupeQueueDemo", "-LoupeTab", "now", "-LoupeOpen", "queue",
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeQueueDemo", "-LoupeTab", "now", "-LoupeOpen", "queue",
                                "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
         app.launch()
         XCTAssertTrue(app.staticTexts["queue.count"].waitForExistence(timeout: 30))

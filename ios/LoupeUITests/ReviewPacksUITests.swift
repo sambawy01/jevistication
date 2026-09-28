@@ -6,8 +6,8 @@ final class ReviewPacksUITests: XCTestCase {
     /// Me → To review → approve the privacy check's proposal to remove a duplicate copy (a real
     /// duplicate pair in the throwaway Send to Loupe inbox), then undo it.
     func testApproveAPrivacyCheckProposedAction() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeReviewDemo"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeReviewDemo", "-LoupeRunNow"]
         app.launch()
         // "To review" is a List row (UIKit-backed): below the fold it is not in the hierarchy at all until
         // scrolled to, so scroll first and only then wait for it to exist.
@@ -36,7 +36,7 @@ final class ReviewPacksUITests: XCTestCase {
 
     /// Judgments → Packs → Try the example pack → preview (labelled an example) → Add → its judgments.
     func testImportTheExamplePackAndSeeItsJudgments() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeFixtures"]
         app.launch()
         let menu = app.buttons["judgments.packs"]

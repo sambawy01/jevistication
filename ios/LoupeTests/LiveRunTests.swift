@@ -126,7 +126,7 @@ final class LiveRunTests: XCTestCase {
     /// Privacy: a real privacy check over the bundled sample reports counts only — no file name, path or text
     /// reaches the job.
     func testAPrivacyCheckReportsCountsAndNoNamesOrText() async throws {
-        let root = try XCTUnwrap(SourcesService.bundledSample())
+        let root = try XCTUnwrap(TestSample.root())
         let items = try SourceScanner(extractors: AppleExtractors(timeZone: TimeZone(identifier: "UTC")!),
                                       zone: Kotlinx_datetimeTimeZone.companion.UTC,
                                       limits: SourceScanner.Limits(maxFileBytes: 50 * 1024 * 1024, maxTextChars: 20_000, maxDepth: 16, maxMboxMessages: 20_000))

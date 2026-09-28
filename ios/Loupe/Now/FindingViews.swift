@@ -33,7 +33,6 @@ struct HeroFindingCard: View {
                 Image(systemName: finding.watcher.symbol)
                 Text(finding.watcherTitle.uppercased()).font(Typeface.mono(11, weight: .medium))
                 Spacer()
-                if finding.sample { Pill(text: "Sample", color: .white) }
             }
             .foregroundStyle(Palette.cyan)
             Text(finding.title)
@@ -71,7 +70,6 @@ struct FindingCard: View {
                 Text(finding.watcherTitle).font(Typeface.mono(11, weight: .medium))
                 Spacer()
                 if finding.verdict == .confirmed { Pill(text: "Confirmed", color: Palette.okText, symbol: "checkmark") }
-                if finding.sample { Pill(text: "Sample", color: Palette.inkSoft) }
             }
             .foregroundStyle(finding.watcher.tint)
             Text(finding.title)
@@ -199,9 +197,6 @@ struct ItemTextView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
-                    if item.sourceId == SourcesService.sampleId {
-                        Pill(text: SourcesService.sampleLabel, color: Palette.inkSoft)
-                    }
                     if let imported = item.facts["imported"] {
                         Pill(text: imported, color: Palette.inkSoft)
                     }

@@ -1,0 +1,17 @@
+lang: en
+kind: pdf
+date: 2026-08-21
+expect: charge
+merchant: Vodafone
+currency: EGP
+amount: 1250.00
+---
+Vodafone Egypt
+Monthly bill · Red 1000 plan
+Account 1029384756
+Bill period: 20/07/2026 - 19/08/2026
+
+Total amount paid: L.E. 1,250.00
+Paid on 20/08/2026 by Vodafone Cash
+
+Thank you for choosing Vodafone.

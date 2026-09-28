@@ -13,6 +13,8 @@ final class FakePhotoLibrary: PhotoLibraryReading {
     var tokenValue = 1
     var changesSince: [Int: PhotoChanges] = [:]
     var dataRequests: [String] = []
+    /// Called as each photo's bytes are asked for (the cancel test stops the scan from here).
+    var onData: ((Int) -> Void)?
 
     func authorization() -> PhonePermission { status }
     func requestAuthorization() async -> PhonePermission { requests += 1; status = grantOnRequest; return status }
@@ -22,7 +24,7 @@ final class FakePhotoLibrary: PhotoLibraryReading {
         return changesSince[t]
     }
     func currentToken() -> Data? { Data(String(tokenValue).utf8) }
-    func imageData(localId: String) async -> Data? { dataRequests.append(localId); return data[localId] }
+    func imageData(localId: String) async -> Data? { dataRequests.append(localId); onData?(dataRequests.count); return data[localId] }
 }
 
 struct FakeRecognizer: TextRecognizing {
@@ -469,6 +471,41 @@ final class PhoneSourcesTests: XCTestCase {
         XCTAssertEqual(photos.requests, 1, "asked once")
     }
 
+    /// Cancel mid-scan (2026-09-28): the photos read before the Cancel are kept with every photo read before, the
+    /// change token does not move (so an edited photo not reached is still read next time), and the next scan
+    /// continues with the rest.
+    @MainActor
+    func testACancelledPhotosScanKeepsWhatItReadAndItsPlace() async throws {
+        photos.status = .granted
+        photos.assets = (0..<3).map { asset("P\($0)") }
+        for i in 0..<10 { photos.data["P\(i)"] = Data("p\(i)".utf8) }
+        let s = service()
+        await s.scanPhone(.photos)
+        XCTAssertEqual(s.state(.photos).itemCount, 3)
+        let tokenBefore = PhoneStateStore(home: home).state("photos")[PhotosProducer.tokenKey]
+        XCTAssertNotNil(tokenBefore)
+
+        // Seven new photos; the run is cancelled as the third new one is read.
+        photos.assets = (0..<10).map { asset("P\($0)") }
+        photos.tokenValue = 2
+        photos.dataRequests = []
+        let cancel = RunCancel()
+        photos.onData = { n in if n == 3 { cancel.cancel() } }
+        await s.scanPhone(.photos, cancel: cancel)
+        let ids = Set(s.items().filter { $0.sourceId == "photos" }.map(\.id))
+        XCTAssertEqual(ids.count, 6, "the three before and the three read before the Cancel")
+        XCTAssertTrue(["photos:P0", "photos:P1", "photos:P2"].allSatisfy(ids.contains))
+        XCTAssertEqual(PhoneStateStore(home: home).state("photos")[PhotosProducer.tokenKey], tokenBefore, "the change token stays")
+        XCTAssertFalse(s.state(.photos).scanning)
+
+        // The next scan reads the four it did not reach, and nothing twice.
+        photos.onData = nil
+        photos.dataRequests = []
+        await s.scanPhone(.photos)
+        XCTAssertEqual(photos.dataRequests.count, 4)
+        XCTAssertEqual(s.state(.photos).itemCount, 10)
+    }
+
     func testPhotosCapPerScanAndICloudOnlyOriginals() async {
         photos.assets = (0..<5).map { asset("P\($0)") }
         for i in 0..<4 { photos.data["P\(i)"] = Data("p\(i)".utf8) }   // P4 is only in iCloud
@@ -628,7 +665,7 @@ final class PhoneSourcesTests: XCTestCase {
     @MainActor
     func testSendToLoupeInboxIsReadOnOpen() async throws {
         try SharedInbox.drop(text: "Link shared to Loupe: https://shop.example/order/77\n", title: "shop.example", into: inbox)
-        let pdfSource = try XCTUnwrap(SourcesService.bundledSample()).appendingPathComponent("documents/insurance/home-insurance-renewal-2026.pdf")
+        let pdfSource = try XCTUnwrap(TestSample.root()).appendingPathComponent("documents/insurance/home-insurance-renewal-2026.pdf")
         try SharedInbox.drop(file: pdfSource, into: inbox)
         try SharedInbox.drop(file: pdfSource, into: inbox)   // same name again: kept, not overwritten
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: inbox.path).count, 3)

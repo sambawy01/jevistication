@@ -1,0 +1,8 @@
+lang: en
+kind: email
+date: 2026-09-01
+from: CIB <alerts@cibeg.example>
+subject: Account credited
+expect: none
+---
+Your account ending 4411 was credited with EGP 15,000.00 on 01/09/2026. Salary transfer.

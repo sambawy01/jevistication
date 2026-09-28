@@ -5,7 +5,7 @@ final class AssistUITests: XCTestCase {
 
     /// Me → Writing assistant reads Off on a fresh install, and its switch is off.
     func testSettingsShowAssistantOffByDefault() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeEphemeralKeychain"]
         app.launch()
         let row = app.buttons["me.assistant"]
@@ -22,8 +22,8 @@ final class AssistUITests: XCTestCase {
     /// With the DEBUG fake provider: Mail triage → Draft a reply shows the Online preview; after
     /// Send, the draft appears labelled Draft.
     func testFakeProviderDraftAppearsLabelledDraft() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "mail", "-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeFakeAssistant"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeTab", "mail", "-LoupeSkipOnboarding", "-LoupeEphemeralKeychain", "-LoupeFakeAssistant"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["mail.section.phishing"].waitForExistence(timeout: 60), "Mail triaged the sample")
         let draft = app.buttons["mail.draftReply"].firstMatch

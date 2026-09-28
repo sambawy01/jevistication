@@ -1,0 +1,10 @@
+lang: en
+kind: event
+date: 2026-07-01
+subject: Gym membership
+expect: charge
+merchant: Gym membership
+currency: EGP
+amount: 800.00
+---
+Paid the monthly membership: EGP 800

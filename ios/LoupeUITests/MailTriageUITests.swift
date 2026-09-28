@@ -5,8 +5,8 @@ final class MailTriageUITests: XCTestCase {
 
     /// Me → Mail shows the mailbox, what was found, and the sample's PayPal phishing first with its signals.
     func testMailShowsThePaypalPhishingAndItsSignals() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "mail", "-LoupeSkipOnboarding"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeTab", "mail", "-LoupeSkipOnboarding"]
         app.launch()
         XCTAssertTrue(app.switches["sources.phone.mail.toggle"].waitForExistence(timeout: 20), "the mailbox is on the Mail screen")
         let found = app.descendants(matching: .any)["mail.found"]

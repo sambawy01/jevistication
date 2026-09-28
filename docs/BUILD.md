@@ -2129,6 +2129,53 @@ their acceptance criteria are met; entries here record increments toward them.
   `SourcesScenarios.testEverySourceTurnsOffAndOnAndTheSetSurvivesARelaunch` ("sources.phone.mail.setup is not
   hittable"), which passed alone on a rerun (a Sources-screen scroll flake, nothing this fix touches).
 
+- **2026-09-28 — iPhone: no work at launch, one nightly run, one first check, visible cancellable runs, no sample
+  data (owner decisions A–E).** (A) Opening the app only loads: `SourcesService.start()` no longer scans (the sample on
+  first install, Files on every launch) and Now no longer re-runs the watchers, the privacy check and mail triage on the
+  sources' revision; their summaries are saved after every run and every answer (LoupeKit `ResultsCodec`, lossless, new
+  `dev.loupe.kit.results`; `ios/Loupe/Run/ResultsStore.swift`, `<home>/results/`) and read back off the main thread at
+  launch. The checks and the sort read the sources' caches off the main thread (`ItemsReader.load`), and mail triage
+  reads the `.eml` files off it too. (D) `RunCoordinator` (`ios/Loupe/Run/`) is the one way the checks run: stages
+  sources → privacy → mail → watchers → sort, `@Published current: RunProgress?` (stage, part, masked item, per-stage
+  counts, rate, ETA, ~8 Hz), `last`/`lastNightly` records saved in `<home>/run/state.json`, `runNow(reason:)`,
+  `run(_:)`, `cancel()`, queued runs coalesced. Cancel is real: `RunCancel` reaches the common scanner (sample, Files,
+  Send to Loupe, the Mail cache), the Photos OCR loop, the privacy check's item loop (new
+  `PrivacyItemListener.isCancelled`, Kotlin), mail triage's steps, the watchers' reruns and the sort; a cancelled scan
+  stores what it read merged with the previous scan's unreached items (`SourceMerge`), Photos keeps its change token,
+  and a cancelled check keeps the previous results. Every Run now (Me, Now, Guard) and every Scan again / source
+  switched on goes through it; Now has a minimal live panel (`RunPanel`) with Cancel. (C) The first check runs once
+  when onboarding completes. (B) The `BGProcessingTask` (`com.loupe-ai.ios.sort`, kept) is now the nightly run: every
+  stage, external power (network when Mail is on), at most once per calendar day and never within 12 h, earliest
+  22:00, heat and Low Power Mode gate it as before, checkpointed per source and stage and continued the next night after
+  an expiry; a morning notification ("Loupe checked your phone overnight · N new findings", 08:00, only when something is
+  new, opt-out in Me → Checks). (E) No sample in the app: the folder moved to the two test targets' resources; unit
+  tests read `TestSample.root()`, DEBUG fixture launches read `LOUPE_FIXTURE_SAMPLE` (set by `XCUIApplication.loupe()`)
+  as a hidden fixture source; no Sample card, badge or pill. `SampleDataMigration` removes, once, from a phone that ran
+  an older build: the sample's cache and switch, its ledger rows and corrections (ids `sample:…`, finding keys built on
+  them, and the merchant / duplicate keys the sample alone raises), review proposals and their log, saved findings,
+  seen keys, and Spotted / recent checks of its `.example` sites; nothing else. New DEBUG hook `-LoupeRunNow` (one full
+  run at launch; the scenario suite's `relaunch()` drops it so relaunch assertions read saved results). Traps: a UI
+  test that `await`ed a check's `run()` mid-run expecting an immediate return now waits for the follow-up (the
+  coordinator needs that); an `ObservableObject` publishing progress redraws every screen that observes it, hence
+  `RunCoordinator.status` for screens that only need running/idle. Tests: `RunCoordinatorTests`, `NightlyRunTests`
+  (fake BGTask and scheduler, injectable clock), `ResultsPersistenceTests`, `SampleMigrationTests` (also: no sample in
+  the app bundle), cancel tests in `SourcesTests` and `PhoneSourcesTests`, `LaunchWorkUITests`, the first check in
+  `OnboardingScenarios`; LoupeKit `ResultsCodecTest`. Gate: `./gradlew check` green (1,616 test cases, 0 failures);
+  the full iOS suite on an iPhone 17 Pro Max simulator: 576 tests (496 unit, 80 UI), 569 passed, 7 skipped, 0 failures.
+- **2026-09-28 — iPhone shell (branch `ios-shell`): main's runs, nightly check and tracking engine merged into Home ·
+  Ask · Me.** Merge rule: the shell owns navigation and places, main owns behaviour. Now stays deleted; its new
+  behaviour moved to Home: "Loading the last results…" while the watchers', privacy check's and mail triage's saved
+  results are read back (`loaded`), "Not checked yet" with Run now once loaded with nothing checked, Run now through
+  `RunCoordinator.shared.runNow(reason: .manual)` everywhere (Home, Subscriptions / Expiring, Protection). Home's scan
+  panel is driven by `RunCoordinator.current` (ruling C-16): `HomeRunPanel` observes the coordinator, the pure adapter
+  `HomeScanPanelModel.progress(RunProgress)` → `HomeScanProgress` (unit-tested) replaces the live-scans one, Cancel is
+  `RunCoordinator.shared.cancel()`, idle it collapses to the last run (`last`) with Run now; Home's body observes
+  `status` only. It carries main's `run.*` ids inside a `home.scan` wrapper; main's `RunPanel.swift` went with Now.
+  `ShellEffects` does no launch work any more (no DEBUG fixture run, no re-run on the sources' revision or on the
+  model arriving): the sources' `userScan` / `itemsChanged` hooks route those through the coordinator. The first check
+  after onboarding (`RootView.leave`, the intro sheet's dismissal) is main's, unchanged. UI tests keep the places and
+  take main's `-LoupeRunNow` / `XCUIApplication.loupe()`; `LaunchWorkUITests` reads Home.
+
 ## Where the build stands
 
 As of 2026-09-23. Everything below was built on JVM Kotlin: no iOS or Android build, no device.

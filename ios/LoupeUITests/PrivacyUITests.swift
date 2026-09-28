@@ -3,10 +3,10 @@ import XCTest
 final class PrivacyUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    /// Me → What Loupe reads → Privacy check shows the sample's SPECIMEN ID documents and duplicate receipts.
+    /// Me → What Loupe reads → Privacy check shows the fixture sample's SPECIMEN ID documents and duplicate receipts (after -LoupeRunNow's run).
     func testReadsOpensPrivacyCheckWithSampleFindings() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "sources", "-LoupeSkipOnboarding"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeTab", "sources", "-LoupeSkipOnboarding"]
         app.launch()
         let card = app.buttons["sources.privacy"]
         XCTAssertTrue(card.waitForExistence(timeout: 60))
@@ -31,8 +31,8 @@ final class PrivacyShowWhereUITests: XCTestCase {
     /// Owner rule 2026-09-24: a privacy finding on a picture → Show where shows the masked value
     /// and draws the OCR line's box over the image (a rendered test-card photo, DEBUG only).
     func testShowWhereMasksTheCardAndBoxesItOnThePhoto() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeFixtures", "-LoupePrivacyPhotoDemo", "-LoupeTab", "sources", "-LoupeSkipOnboarding"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupePrivacyPhotoDemo", "-LoupeTab", "sources", "-LoupeSkipOnboarding"]
         app.launch()
         let card = app.buttons["sources.privacy"]
         XCTAssertTrue(card.waitForExistence(timeout: 60))

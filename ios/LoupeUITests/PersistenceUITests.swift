@@ -28,7 +28,7 @@ final class PersistenceUITests: XCTestCase {
     private func any(_ app: XCUIApplication, _ id: String) -> XCUIElement { app.descendants(matching: .any)[id] }
 
     private func launch(_ extra: [String]) -> XCUIApplication {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         // "installed", not "ready": readiness takes its real path over a stand-in installed model, the path that
         // misread the model as missing on every relaunch (the bug this test guards).
         app.launchArguments = extra + ["-LoupeModelState", "installed", "-LoupePermissions", "granted", "-LoupeEphemeralKeychain",

@@ -3,18 +3,19 @@ import XCTest
 final class SourcesUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    /// Sources lists the sample, labelled as sample data, with its item count, and every phone source
+    /// Sources has no sample (owner decision 2026-09-28: no sample data in the app) and lists every phone source
     /// (epic #7 child 7) as a real row with its own switch: the on-device ones on by default (owner decision
-    /// 2026-09-26), Mail off until a mailbox is added. Mail is labelled Online.
-    func testSourcesListsEveryRowAndSampleStillWorks() {
-        let app = XCUIApplication()
+    /// 2026-09-26), Mail off until a mailbox is added. Mail is labelled Online. Nothing was read at launch.
+    func testSourcesListsEveryPhoneSourceAndNoSample() {
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "sources", "-LoupeSkipOnboarding"]
         app.launch()
-        let count = app.staticTexts["sources.sample.count"]
-        XCTAssertTrue(count.waitForExistence(timeout: 30))
-        XCTAssertEqual(count.label, "48 items")
-        XCTAssertEqual(app.staticTexts["sources.sample.label"].label, "Sample data — not from your phone")
-        XCTAssertTrue(app.staticTexts["Sample data"].exists)
+        XCTAssertTrue(app.switches["sources.phone.photos.toggle"].waitForExistence(timeout: 30))
+        XCTAssertFalse(app.descendants(matching: .any)["sources.sample"].exists, "no sample card")
+        XCTAssertFalse(app.staticTexts["Sample data"].exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] %@", "sample")).firstMatch.exists,
+                       "no word of a sample on Sources")
+        XCTAssertEqual(app.staticTexts["debug.fixture.count"].label, "0 items", "the hidden test fixture was not read at launch")
 
         for id in ["photos", "files", "calendar", "contacts"] {
             let toggle = app.switches["sources.phone.\(id).toggle"]
@@ -35,7 +36,7 @@ final class SourcesUITests: XCTestCase {
     /// The Mail screen offers app-password IMAP and says plainly that Google / Microsoft sign-in needs
     /// an OAuth client ID (none is configured: owner-blocked).
     func testMailSetupOffersGmailSignInAndGatesOutlook() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "mail", "-LoupeSkipOnboarding"]
         app.launch()
         let setup = app.buttons["sources.phone.mail.setup"]
@@ -56,12 +57,12 @@ final class SourcesUITests: XCTestCase {
     /// the live scan display in the card, not a spinner and "Reading…": the stages with live counts, the masked
     /// ledger, the telemetry and "0 bytes out"; it ends in the summary, then the card rests on the new count.
     func testPhotosScanShowsTheLiveDisplayThenTheSummary() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "sources", "-LoupeSkipOnboarding", "-LoupePhotosDemo"]
         app.launch()
-        XCTAssertTrue(app.staticTexts["sources.sample.count"].waitForExistence(timeout: 30))
         // Photos is on by default; iOS has not asked yet, so the card offers Allow access, which asks and reads.
         let allow = app.buttons["sources.phone.photos.allow"]
+        XCTAssertTrue(allow.waitForExistence(timeout: 30))
         for _ in 0..<3 where !(allow.exists && allow.isHittable) { app.swipeUp() }
         XCTAssertEqual(app.switches["sources.phone.photos.toggle"].value as? String, "1")
         allow.tap()
@@ -99,7 +100,7 @@ final class SourcesUITests: XCTestCase {
 
     /// Reduce Motion: the same live display with the same numbers, marked static (no sliding, sweeping or flowing).
     func testPhotosScanUnderReduceMotionIsStaticWithTheSameInformation() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "sources", "-LoupeSkipOnboarding", "-LoupePhotosDemo",
                                "-LoupeScanDemo", "photos", "-LoupeReduceMotion"]
         app.launch()
@@ -107,6 +108,11 @@ final class SourcesUITests: XCTestCase {
         XCTAssertTrue(display.waitForExistence(timeout: 30))
         XCTAssertEqual(display.value as? String, "static")
         XCTAssertTrue(app.descendants(matching: .any)["sources.scan.stage.text"].exists)
-        XCTAssertTrue(app.staticTexts["sources.scan.summary"].waitForExistence(timeout: 90))
+        // It ends: the summary settles for 4 s (a busy snapshot can miss that window), then the card rests on its count.
+        let summary = app.staticTexts["sources.scan.summary"]
+        let count = app.staticTexts["sources.phone.photos.count"]
+        let deadline = Date().addingTimeInterval(120)
+        while !(summary.exists || (count.exists && count.label == "16 items")) && Date() < deadline { usleep(300_000) }
+        XCTAssertTrue(summary.exists || count.label == "16 items", "the scan ended in its summary and count")
     }
 }

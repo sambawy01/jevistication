@@ -18,10 +18,11 @@ import XCTest
 /// Screenshots: set TEST_RUNNER_LOUPE_SHOTS to a folder to keep them (scenario-*.png); they are always attached.
 class ScenarioCase: XCTestCase {
     /// Flags that stand for a fresh install or a clean fixture; `relaunch()` drops them.
+    /// `-LoupeRunNow` too (2026-09-28): a relaunch runs nothing and must show what the first launch saved.
     static let resetFlags: Set<String> = ["-LoupeScenarioReset", "-LoupeResetOnboarding", "-LoupeClipboardReset",
-                                          "-LoupeResetModelConsent", "-LoupeResetMascot"]
+                                          "-LoupeResetModelConsent", "-LoupeResetMascot", "-LoupeRunNow"]
 
-    private(set) var app = XCUIApplication()
+    private(set) var app = XCUIApplication.loupe()
     private(set) var arguments: [String] = []
     /// Screens audited in this test (the report lists them).
     private(set) var audited: [String] = []
@@ -33,17 +34,29 @@ class ScenarioCase: XCTestCase {
 
     // MARK: Launching
 
-    /// A fixture scenario: its own persistent fixture home, emptied on this first launch.
+    /// A fixture scenario: its own persistent fixture home, emptied on this first launch. [run]: one full run at launch
+    /// (`-LoupeRunNow`: the fixture sample read, the checks run), as the first check after onboarding would; nothing
+    /// else runs at launch (2026-09-28), and `relaunch()` drops it so the relaunch shows what was saved.
     @discardableResult
-    func start(_ scenario: String, _ extra: [String]) -> XCUIApplication {
-        launch(["-LoupeFixtures", "-LoupeScenarioHome", scenario, "-LoupeScenarioReset", "-LoupeLanguage", "en"] + extra)
+    func start(_ scenario: String, _ extra: [String], run: Bool = true) -> XCUIApplication {
+        launch(["-LoupeFixtures", "-LoupeScenarioHome", scenario, "-LoupeScenarioReset", "-LoupeLanguage", "en"] + (run ? ["-LoupeRunNow"] : []) + extra)
+        if run { waitForRunToFinish() }
+        return app
+    }
+
+    /// Waits until the run started at launch has finished (the DEBUG `debug.runState` label on every tab).
+    func waitForRunToFinish(timeout: TimeInterval = 240) {
+        let state = app.staticTexts["debug.runState"]
+        XCTAssertTrue(state.waitForExistence(timeout: 30), "the tabs are up")
+        waitFor(state, "label BEGINSWITH 'runs=' AND label ENDSWITH ' idle' AND NOT (label BEGINSWITH 'runs=0 ')", timeout: timeout,
+                "the launch's run never finished")
     }
 
     /// Any launch; `relaunch()` reuses these arguments.
     @discardableResult
     func launch(_ args: [String]) -> XCUIApplication {
         arguments = args
-        app = XCUIApplication()
+        app = XCUIApplication.loupe()
         app.launchArguments = args
         app.launch()
         return app
@@ -63,7 +76,7 @@ class ScenarioCase: XCTestCase {
             args.append(a)
         }
         arguments = args
-        app = XCUIApplication()
+        app = XCUIApplication.loupe()
         app.launchArguments = args
         app.launch()
         return app
@@ -104,7 +117,7 @@ class ScenarioCase: XCTestCase {
         let row = button("me.reads")
         reveal(row)
         row.tap()
-        XCTAssertTrue(app.switches["sources.sample.toggle"].waitForExistence(timeout: 20), "What Loupe reads opens")
+        XCTAssertTrue(app.switches["sources.phone.files.toggle"].waitForExistence(timeout: 20), "What Loupe reads opens")
     }
 
     /// Me → Mail.

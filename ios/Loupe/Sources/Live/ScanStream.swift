@@ -48,7 +48,7 @@ struct ScanPipeline: Equatable {
 
     func unitWord(_ n: Int) -> String { n == 1 ? unit : units }
 
-    /// The pipeline of a source ("photos", "files", "calendar", "contacts", "mail", "sample").
+    /// The pipeline of a source ("photos", "files", "calendar", "contacts", "mail"; "sample" is the test fixture).
     static func of(_ source: String, ocr: Bool = true, mailHost: String? = nil, gmail: Bool = false) -> ScanPipeline {
         switch source {
         case "photos":
@@ -70,7 +70,8 @@ struct ScanPipeline: Equatable {
             return ScanPipeline(source: source, title: "Mail", stages: [.fetch, .read, .saved], visual: .names,
                                 unit: "message", units: "messages", online: what)
         default:
-            return ScanPipeline(source: source, title: "Sample data", stages: [.found, .read, .saved], visual: .names,
+            // The DEBUG / test fixture sample (never in a shipped build).
+            return ScanPipeline(source: source, title: "Test fixture", stages: [.found, .read, .saved], visual: .names,
                                 unit: "item", units: "items", online: nil)
         }
     }

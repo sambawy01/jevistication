@@ -8,8 +8,8 @@ final class GuardUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
     private func launch(_ tab: String, _ extra: [String] = []) -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeFixtures", "-LoupeTab", tab, "-LoupeSkipOnboarding", "-LoupeLanguage", "en",
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeTab", tab, "-LoupeSkipOnboarding", "-LoupeLanguage", "en",
                                "-LoupeModelState", "missing"] + extra
         app.launch()
         return app

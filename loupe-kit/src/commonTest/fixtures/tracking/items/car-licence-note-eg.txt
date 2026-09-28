@@ -1,0 +1,8 @@
+lang: eg
+kind: text
+date: 2026-09-10
+expect: expiry
+expiry: 2026-12-01
+doc: car_licence
+---
+رخصة العربية بتخلص يوم 2026/12/01 لازم أجددها

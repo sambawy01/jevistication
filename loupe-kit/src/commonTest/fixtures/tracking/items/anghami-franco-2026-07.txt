@@ -1,0 +1,10 @@
+lang: franco
+kind: text
+date: 2026-07-08
+expect: charge
+merchant: Anghami
+currency: EGP
+amount: 49.99
+---
+el visa et5asam menha 49.99 geneh le Anghami Plus
+eshterak shahry, tagdeed kol shahr

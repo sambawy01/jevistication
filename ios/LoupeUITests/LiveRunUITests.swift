@@ -28,8 +28,8 @@ final class LiveRunUITests: XCTestCase {
     }
 
     private func startPrivacyCheck(_ extra: [String]) -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "sources", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeSlowJobs"] + extra
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeTab", "sources", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeSlowJobs"] + extra
         app.launch()
         let card = app.buttons["sources.privacy"]
         // The privacy check's card is below the sources in What Loupe reads.
@@ -41,9 +41,8 @@ final class LiveRunUITests: XCTestCase {
         card.tap()
         let rerun = app.buttons["privacy.rerun"]
         XCTAssertTrue(rerun.waitForExistence(timeout: 30))
-        // On a fresh install the first check runs before the sample is read ("Files checked: 0"), and the check over
-        // the sample follows once the launch's scans settle (the sample, and Files, on by default since 2026-09-26).
-        // Wait for that one to finish, so the tap below starts a run rather than queueing behind an automatic one.
+        // -LoupeRunNow's run reads the fixture sample, then checks it: wait for that check to finish, so the tap below
+        // starts a run rather than queueing behind it.
         let settled = stage(app, "label BEGINSWITH %@ AND NOT (label BEGINSWITH %@)", "Files checked:", "Files checked: 0 ")
         XCTAssertTrue(settled.waitForExistence(timeout: 120), "the check over the sample finished")
         expectation(for: NSPredicate(format: "isEnabled == true"), evaluatedWith: rerun)
@@ -94,8 +93,8 @@ final class LiveRunUITests: XCTestCase {
 
     /// Design screenshots of the dark neon theme.
     func testDarkThemeScreenshots() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeFixtures"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeFixtures", "-LoupeRunNow"]
         app.launch()
         XCTAssertTrue(app.buttons["home.money"].waitForExistence(timeout: 60))
         sleep(3)

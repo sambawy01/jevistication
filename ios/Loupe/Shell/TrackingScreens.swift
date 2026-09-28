@@ -58,25 +58,29 @@ struct ExpiringScreen: View {
     }
 }
 
-/// Run now for the tracking cards and screens: the same action as Protection's Run now (`guard.runNow`), the
-/// watchers and mail triage. A manual run is allowed under O-4 (nothing heavy starts by itself at open).
+/// Run now for the tracking screens: the same action as Protection's Run now (`guard.runNow`), a full run through
+/// `RunCoordinator` (visible and cancellable on Home). A manual run is allowed under O-4 (nothing heavy starts by
+/// itself at open).
 enum TrackingRun {
     @MainActor static func runNow() {
-        Task { await WatchersService.shared.run() }
-        Task { await MailTriageService.shared.run() }
+        RunCoordinator.shared.runNow(reason: .manual)
     }
 }
 
-/// No summary yet: "reading" while a scan or the watchers really run; otherwise not checked since Loupe opened, with
-/// Run now (or, with no source on, the way to turn one on).
+/// No summary yet: "Loading the last results…" while the saved ones are read back; "reading" while a run, a scan or the
+/// watchers really go; otherwise not checked yet, with Run now (or, with no source on, the way to turn one on).
 struct TrackingNotYet: View {
     let what: String
     @ObservedObject var sources: SourcesService
     @ObservedObject var watchers: WatchersService
     let openReads: () -> Void
+    /// Running or not (changes only at a run's start and end).
+    @ObservedObject private var runStatus = RunCoordinator.shared.status
 
     var body: some View {
-        if watchers.running || sources.scanning {
+        if !watchers.loaded {
+            TrackingLoading(text: "Loading the last results…")
+        } else if watchers.running || sources.scanning || runStatus.running {
             TrackingLoading(text: "The watchers are reading your sources")
         } else {
             VStack(alignment: .leading, spacing: 10) {

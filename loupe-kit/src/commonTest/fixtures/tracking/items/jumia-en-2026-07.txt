@@ -1,0 +1,18 @@
+lang: en
+kind: email
+date: 2026-07-19
+from: Jumia Egypt <no-reply@jumia.com.eg>
+subject: Your order has been paid
+expect: charge
+merchant: Jumia Egypt
+currency: EGP
+amount: 1299.00
+---
+Hello Sam,
+
+Your order 331245 has been paid successfully.
+
+Order total: EGP 1,299.00
+Delivery: 21 - 23 July
+
+Thank you for shopping with Jumia.

@@ -1,0 +1,8 @@
+lang: en
+kind: image
+date: 2026-08-14
+expect: none
+---
+SHARM EL SHEIKH
+Welcome to Naama Bay
+2026
