@@ -27,7 +27,7 @@ final class KeyboardUITests: XCTestCase {
 
     func testAddTheKeyboardThenCheckAPastedLink() throws {
         try XCTSkipIf(ProcessInfo.processInfo.environment["LOUPE_KEYBOARD"] == nil, "set TEST_RUNNER_LOUPE_KEYBOARD=1 to run it")
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeFixtures", "-LoupeTab", "guard", "-LoupeSkipOnboarding", "-LoupeLanguage", "en", "-LoupeModelState", "missing"]
         app.launch()
 

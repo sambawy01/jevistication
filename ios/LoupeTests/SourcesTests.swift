@@ -1,3 +1,4 @@
+import Combine
 import XCTest
 import LoupeKit
 @testable import Loupe
@@ -8,7 +9,7 @@ final class SourcesTests: XCTestCase {
     private let utc = TimeZone(identifier: "UTC")!
 
     private func sample(_ relative: String) throws -> String {
-        let root = try XCTUnwrap(SourcesService.bundledSample(), "sample folder missing from the app bundle")
+        let root = try XCTUnwrap(TestSample.root(), "sample folder missing from the test bundle")
         return root.appendingPathComponent(relative).path
     }
 
@@ -70,7 +71,7 @@ final class SourcesTests: XCTestCase {
     /// The whole sample through the common scanner with PDFKit/ImageIO: the desktop's counts
     /// (48 items: 24 emails, 3 skipped, 1 duplicate), stable ids, PDF text via PDFKit.
     func testSampleScanMatchesTheDesktopShape() throws {
-        let root = try XCTUnwrap(SourcesService.bundledSample())
+        let root = try XCTUnwrap(TestSample.root())
         let scanner = SourceScanner(extractors: AppleExtractors(timeZone: utc), zone: Kotlinx_datetimeTimeZone.companion.UTC,
                                     limits: SourceScanner.Limits(maxFileBytes: 50 * 1024 * 1024, maxTextChars: 20_000, maxDepth: 16, maxMboxMessages: 20_000))
         let result = try scanner.scan(sources: SourcesService.sampleRoots(root), observer: NoObserver())
@@ -89,29 +90,85 @@ final class SourcesTests: XCTestCase {
         XCTAssertEqual(mbox.count, 14)
     }
 
+    /// Opening the app loads, it never scans (owner decision 2026-09-28): `start()` reads nothing, even with a source
+    /// on and never read. A scan runs when asked (a run's sources stage); the cache then survives a relaunch.
     @MainActor
-    func testServiceScansCachesAndSwitchesOff() throws {
+    func testStartScansNothingAndAScanIsCachedForTheNextLaunch() async throws {
         let home = FileManager.default.temporaryDirectory.appendingPathComponent("SourcesTests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: home) }
-        let service = SourcesService(home: home, sampleRoot: SourcesService.bundledSample())
-        XCTAssertTrue(service.sampleEnabled)
+        let service = SourcesService(home: home, sampleRoot: TestSample.root())
+        XCTAssertTrue(service.sampleEnabled, "the fixture source is on")
+        XCTAssertNil(service.sampleScan)
         service.start()
-        XCTAssertTrue(service.scanning)
-        let done = expectation(description: "scan finished")
-        let poll = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { _ in
-            MainActor.assumeIsolated { if service.sampleScan != nil && !service.scanning { done.fulfill() } }
-        }
-        wait(for: [done], timeout: 30)
-        poll.invalidate()
+        try await Task.sleep(nanoseconds: 500_000_000)
+        XCTAssertFalse(service.scanning, "nothing scans at launch")
+        XCTAssertTrue(service.liveScans.isEmpty)
+        XCTAssertNil(service.sampleScan)
+        XCTAssertTrue(service.items().isEmpty)
+
+        await service.scanSample()
         XCTAssertEqual(service.sampleScan?.itemCount, 48)
         XCTAssertEqual(service.items().count, 48)
 
-        // A fresh service over the same home reads the cache: no rescan.
-        let again = SourcesService(home: home, sampleRoot: SourcesService.bundledSample())
+        // A fresh service over the same home (a relaunch) reads the cache: no rescan.
+        let again = SourcesService(home: home, sampleRoot: TestSample.root())
         XCTAssertEqual(again.sampleScan?.itemCount, 48)
+        again.start()
+        XCTAssertFalse(again.scanning)
         again.setSampleEnabled(false)
         XCTAssertTrue(again.items().isEmpty)
-        XCTAssertFalse(SourcesService(home: home, sampleRoot: nil).sampleEnabled)
+        XCTAssertFalse(SourcesService(home: home, sampleRoot: nil).sampleEnabled, "no sample outside tests")
+        XCTAssertTrue(SourcesService(home: home, sampleRoot: nil).items().isEmpty, "and none of its cached items")
+    }
+
+    /// Cancel mid-scan (2026-09-28): the scanner stops between files; what it read replaces its items and the last
+    /// scan's other items stay, so the cache is never cut short, and it still reads back.
+    @MainActor
+    func testACancelledScanKeepsWhatItReadAndWhatItDidNotReach() async throws {
+        let home = FileManager.default.temporaryDirectory.appendingPathComponent("SourcesTests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: home) }
+        let service = SourcesService(home: home, sampleRoot: TestSample.root())
+        await service.scanSample()
+        let full = try XCTUnwrap(service.sampleScan)
+        XCTAssertEqual(full.itemCount, 48)
+
+        // Cancelled a few files in (seen through the live scan, as the run panel sees it).
+        let cancel = RunCancel()
+        var sub: Any?
+        let watch = service.$liveScans.sink { scans in
+            guard let live = scans["sample"] else { return }
+            sub = live.$snapshot.sink { if $0.done >= 5 { cancel.cancel() } }
+        }
+        await service.scanSample(cancel: cancel)
+        watch.cancel()
+        _ = sub
+        XCTAssertTrue(cancel.isCancelled)
+        let after = try XCTUnwrap(service.sampleScan)
+        XCTAssertEqual(Set(after.result.items.map(\.id)), Set(full.result.items.map(\.id)), "every item is still there")
+        XCTAssertEqual(after.result.items.count, 48, "none twice")
+        XCTAssertGreaterThan(after.scannedAtEpochMillis, full.scannedAtEpochMillis)
+        XCTAssertEqual(SourcesService(home: home, sampleRoot: TestSample.root()).sampleScan?.itemCount, 48, "the cache reads back")
+
+        // Cancelled before the first file: nothing is lost either.
+        let early = RunCancel()
+        early.cancel()
+        await service.scanSample(cancel: early)
+        XCTAssertEqual(service.sampleScan?.itemCount, 48)
+    }
+
+    func testTheMergeOfACancelledScan() {
+        func item(_ id: String, _ text: String) -> SourceItem {
+            SourceItem(id: id, sourceId: "files", kind: .text, path: "/f/\(id)", messageIndex: nil, name: id, text: text, hasText: true,
+                       textTruncated: false, sizeBytes: 1, contentHash: "h-\(id)-\(text)", mime: "text/plain", date: nil, dateOrigin: nil,
+                       email: nil, facts: [:], duplicateOf: nil)
+        }
+        let previous = ScanResult.of([item("a", "old"), item("b", "old"), item("c", "old")], skipped: [Skipped(path: "/f/x", reason: "old")])
+        let partial = ScanResult.of([item("b", "new"), item("d", "new")], skipped: [Skipped(path: "/f/y", reason: "new")])
+        let merged = SourceMerge.keepUnreached(partial: partial, previous: previous)
+        XCTAssertEqual(merged.items.map(\.id), ["b", "d", "a", "c"])
+        XCTAssertEqual(merged.items.first { $0.id == "b" }?.text, "new", "what was read replaces the old item")
+        XCTAssertEqual(Set(merged.skipped.map(\.path)), ["/f/x", "/f/y"])
+        XCTAssertEqual(SourceMerge.keepUnreached(partial: partial, previous: nil).items.map(\.id), ["b", "d"])
     }
 
     private final class NoObserver: NSObject, ScanObserver {

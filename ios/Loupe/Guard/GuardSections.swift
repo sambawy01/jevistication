@@ -53,11 +53,11 @@ struct SubscriptionsSection: View {
                     .foregroundStyle(Palette.ink)
                     .minimumScaleFactor(0.6).lineLimit(1)
                     .accessibilityIdentifier("guard.subscriptions.total")
-                Text("\(rows.count) recurring charge\(rows.count == 1 ? "" : "s")\(census.sample ? " · sample" : "")")
+                Text("\(rows.count) recurring charge\(rows.count == 1 ? "" : "s")")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Subscriptions: \(WatchersService.money(total)) a month, \(rows.count) recurring charge\(rows.count == 1 ? "" : "s")\(census.sample ? ", sample data" : "")")
+            .accessibilityLabel("Subscriptions: \(WatchersService.money(total)) a month, \(rows.count) recurring charge\(rows.count == 1 ? "" : "s")")
             Spacer(minLength: 8)
             Donut(parts: rows.enumerated().compactMap { i, r in
                 r.monthlyMinor.map { (Self.hues[i % Self.hues.count], Double($0.int64Value)) }
@@ -125,7 +125,6 @@ struct SubscriptionRow: View {
     private var detailLine: String {
         var parts = [row.cadence.capitalized, "last \(GuardModel.day(row.lastChargedIso))"]
         if let next = row.nextExpectedIso { parts.append("next \(GuardModel.day(next))") }
-        if row.sample { parts.append("sample") }
         return parts.joined(separator: " · ")
     }
 
@@ -135,7 +134,6 @@ struct SubscriptionRow: View {
         if let next = row.nextExpectedIso { parts.append("next expected \(GuardModel.day(next))") }
         if let quiet { parts.append(quiet.title) }
         if row.verdict == .confirmed { parts.append("confirmed by you") }
-        if row.sample { parts.append("sample data") }
         return parts.joined(separator: ", ")
     }
 }
@@ -255,6 +253,8 @@ struct ExpiryGroupView: View {
 }
 
 struct ExpiryTimelineRow: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     let row: ExpiryRow
     let bucket: GuardModel.ExpiryBucket
     let half: GuardModel.ModelHalf
@@ -298,7 +298,6 @@ struct ExpiryTimelineRow: View {
                 HStack(spacing: 6) {
                     if row.breachesRule { Pill(text: "Inside the rule", color: Palette.warnText) }
                     if row.ambiguous { Pill(text: "Ambiguous date", color: Palette.amber, symbol: "questionmark") }
-                    if row.sample { Pill(text: "Sample", color: Palette.inkSoft) }
                 }
             }
             Spacer(minLength: 0)
@@ -329,7 +328,6 @@ struct ExpiryTimelineRow: View {
         if row.breachesRule { parts.append("inside the rule") }
         if row.ambiguous { parts.append("the date could be read two ways; the earlier reading is used") }
         if half != .ran || row.documentType == nil { parts.append(GuardModel.typeLine(row, half: half)) }
-        if row.sample { parts.append("sample data") }
         return parts.joined(separator: ", ")
     }
 }
@@ -431,7 +429,6 @@ struct GuardFindingRow: View {
                 }
                 HStack(spacing: 6) {
                     if finding.verdict == .confirmed { Pill(text: "Confirmed", color: Palette.okText, symbol: "checkmark") }
-                    if finding.sample { Pill(text: "Sample", color: Palette.inkSoft) }
                 }
             }
             Spacer(minLength: 0)
@@ -442,7 +439,7 @@ struct GuardFindingRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([finding.watcherTitle, finding.title, finding.evidence.first ?? "",
-                             finding.verdict == .confirmed ? "confirmed by you" : "", finding.sample ? "sample data" : ""]
+                             finding.verdict == .confirmed ? "confirmed by you" : ""]
             .filter { !$0.isEmpty }.joined(separator: ", "))
         .accessibilityAddTraits(.isButton)
     }

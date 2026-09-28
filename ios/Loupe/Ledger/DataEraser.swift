@@ -111,6 +111,7 @@ enum LoupeDataReset {
     static func eraseEverything(keepModel: Bool) async -> DataEraser.Report {
         // Stop what is writing first: a judgment run, the sort.
         JudgmentsService.shared.cancelSweep()
+        RunCoordinator.shared.cancel()
         SortService.shared.cancel()
         if !keepModel { LayaModel.shared.remove() }
         // Protection's own stores clear through their APIs (the extensions are told), then the folders go.
@@ -127,7 +128,11 @@ enum LoupeDataReset {
         SourcesService.shared.reloadAfterErase()
         JudgmentsService.shared.reloadAfterErase()
         WatchersService.shared.forgetAfterErase()
+        PrivacyService.shared.forgetAfterErase()
+        MailTriageService.shared.forgetAfterErase()
         SortService.shared.forgetAfterErase()
+        // The last run, the nightly checkpoint and "the first check has run" went with the home (run/state.json).
+        RunCoordinator.shared.forgetAfterErase()
         ReviewService.shared.reopenAfterErase()
         ProtectionStore.shared.reload()
         ClipboardMonitor.shared.enabled = ClipboardShared.enabled(ProtectionGroup.defaults)

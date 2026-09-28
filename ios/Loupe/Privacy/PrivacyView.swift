@@ -30,6 +30,8 @@ struct PrivacyCard: View {
 
 /// The Privacy screen: findings grouped by type, masked previews, the item, and what can be done.
 struct PrivacyView: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @ObservedObject var privacy: PrivacyService
     @State private var openItem: SourceItem?
     @State private var confirmDelete: PrivacyFinding?
@@ -47,7 +49,7 @@ struct PrivacyView: View {
                 if let s = privacy.summary {
                     if s.findings.isEmpty {
                         Text(s.itemsChecked == 0
-                             ? "No source is on, so nothing was checked. Turn on the sample in Sources."
+                             ? "No source is on, so nothing was checked. Turn on a source in Sources."
                              : "Nothing raised in \(s.itemsChecked) item(s)\(s.markedSafe > 0 ? " (\(s.markedSafe) marked safe)" : ""). That is not an all-clear: these checks cover only what they look for.")
                             .font(.subheadline).foregroundStyle(Palette.inkSoft).card()
                             .accessibilityIdentifier("privacy.none")
@@ -131,7 +133,6 @@ struct PrivacyView: View {
                     .foregroundStyle(f.severity >= 3 ? Palette.dangerText : f.severity == 2 ? Palette.warnText : Palette.inkSoft)
                 Text(f.ruleId).font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
                 Spacer()
-                if f.sample { Pill(text: "Sample", color: Palette.inkSoft) }
             }
             Text(f.title).font(.headline).foregroundStyle(Palette.ink)
             if let item = ItemIndex.item(f.itemId) { ItemRefHeader(item: item) }

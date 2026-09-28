@@ -7,7 +7,7 @@ import XCTest
 /// 2026-09-25); Later again goes straight to the tabs.
 final class OnboardingScenarios: ScenarioCase {
     func testFirstRunSkippingEverythingThenRelaunch() {
-        start("onboarding", ["-LoupeModelState", "missing", "-LoupeResetOnboarding", "-LoupeResetModelConsent", "-LoupeTab", "now"])
+        start("onboarding", ["-LoupeModelState", "missing", "-LoupeResetOnboarding", "-LoupeResetModelConsent", "-LoupeTab", "now"], run: false)
 
         // 1. Get the decision model: why, the size, Download (through the consent) and Later.
         XCTAssertTrue(any("getLaya.screen").waitForExistence(timeout: 20), "a first run opens on Get the decision model")
@@ -35,6 +35,15 @@ final class OnboardingScenarios: ScenarioCase {
         audit("01-intro", ["onboarding.watch", "onboarding.skip"])
         button("onboarding.skip").tap()
         XCTAssertTrue(tabs.waitForExistence(timeout: 10))
+        // Onboarding complete: the one first check has run (owner decision C, 2026-09-28), visibly, on Now: over the
+        // hidden test fixture here (the app has no sample).
+        let lastTitle = app.staticTexts["run.lastTitle"]
+        XCTAssertTrue(lastTitle.waitForExistence(timeout: 120), "the first check ran and left its record on Now")
+        XCTAssertTrue(lastTitle.label.hasPrefix("First check"), lastTitle.label)
+        // The fixture's 48 items at least (Files and Send to Loupe may hold some from other tests on this simulator).
+        let checked = app.staticTexts["run.last"].label
+        XCTAssertTrue(checked.hasPrefix("Checked "), checked)
+        XCTAssertGreaterThanOrEqual(number(checked), 48, checked)
         // Later locks the model features, and says how to get the model.
         tab("Me")
         let locked = any("needsLaya.sort")
@@ -51,6 +60,11 @@ final class OnboardingScenarios: ScenarioCase {
             XCTAssertFalse(any(id).exists, "\(id) came back after a relaunch")
         }
         XCTAssertFalse(button("onboarding.skip").waitForExistence(timeout: 3), "the game intro came back after a relaunch")
+        // Nothing runs at launch, and the first check does not run twice: Now shows its saved record.
+        XCTAssertFalse(button("run.cancel").waitForExistence(timeout: 3), "no run at launch")
+        tab("Now")
+        XCTAssertTrue(app.staticTexts["run.lastTitle"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["run.lastTitle"].label.hasPrefix("First check"), app.staticTexts["run.lastTitle"].label)
         shot("01-relaunch-tabs")
 
         // 6. And once more (a second relaunch is where a half-recorded step would show).
@@ -66,7 +80,8 @@ final class OnboardingScenarios: ScenarioCase {
     /// With the model installed, a first run has no model step, and after the one-time steps a relaunch goes straight
     /// to the tabs (the owner's relaunch bug of 2026-09-26, through the real readiness path).
     func testFirstRunWithTheModelThenRelaunchGoesStraightToTheTabs() {
-        start("onboarding-model", ["-LoupeModelState", "installed", "-LoupeResetOnboarding", "-LoupePermissions", "granted", "-LoupeTab", "now"])
+        start("onboarding-model", ["-LoupeModelState", "installed", "-LoupeResetOnboarding", "-LoupePermissions", "granted", "-LoupeTab", "now"],
+              run: false)
         XCTAssertTrue(any("permissions.screen").waitForExistence(timeout: 20), "no model step: the permissions step first")
         XCTAssertFalse(any("getLaya.screen").exists)
         button("permissions.allow").tap()

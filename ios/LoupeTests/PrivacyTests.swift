@@ -10,7 +10,7 @@ final class PrivacyTests: XCTestCase {
     private var folder: URL!
 
     private static let sample: [SourceItem] = {
-        let root = SourcesService.bundledSample()!
+        let root = TestSample.root()!
         return try! SourceScanner(extractors: AppleExtractors(timeZone: TimeZone(identifier: "UTC")!),
                                   zone: Kotlinx_datetimeTimeZone.companion.UTC,
                                   limits: SourceScanner.Limits(maxFileBytes: 50 * 1024 * 1024, maxTextChars: 20_000, maxDepth: 16, maxMboxMessages: 20_000))
@@ -60,9 +60,24 @@ final class PrivacyTests: XCTestCase {
         XCTAssertEqual(names, ["passport-scan-SPECIMEN.txt", "driving-licence-SPECIMEN.txt"])
         let dup = try? XCTUnwrap(s.findings.first { $0.group == .duplicates })
         XCTAssertEqual(dup?.duplicates?.count, 2)
-        XCTAssertTrue(s.findings.allSatisfy(\.sample))
-        // The sample is part of the app: suggest-only.
-        if case .suggestOnly = s.access(s.findings[0]) {} else { XCTFail("sample must be suggest-only") }
+        XCTAssertFalse(s.findings.contains(where: \.sample), "no sample badges anywhere (2026-09-28)")
+        // The test fixture is never changed: suggest-only.
+        if case .suggestOnly = s.access(s.findings[0]) {} else { XCTFail("the fixture must be suggest-only") }
+    }
+
+    /// The privacy check is rules only: a background sort holding the model queue must not hold it up.
+    func testPrivacyCheckFinishesWhileASortHoldsTheModelQueue() async {
+        let hold = DispatchSemaphore(value: 0)
+        let held = expectation(description: "model queue held")
+        ModelWork.queue.async { held.fulfill(); _ = hold.wait(timeout: .now() + 30) }
+        defer { hold.signal() }
+        await fulfillment(of: [held], timeout: 5)
+        let (s, _) = service(Self.sample)
+        let done = expectation(description: "privacy check finished")
+        Task { await s.run(); done.fulfill() }
+        await fulfillment(of: [done], timeout: 10)
+        XCTAssertFalse(s.findings.isEmpty)
+        XCTAssertFalse(s.running)
     }
 
     func testMarkSafeIsALedgerCorrectionThatSurvivesARerunAndUndoes() async throws {

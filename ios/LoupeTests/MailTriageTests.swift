@@ -9,7 +9,7 @@ final class MailTriageTests: XCTestCase {
     private var home: URL!
 
     private static let sample: [SourceItem] = {
-        let root = SourcesService.bundledSample()!
+        let root = TestSample.root()!
         return try! SourceScanner(extractors: AppleExtractors(timeZone: TimeZone(identifier: "UTC")!),
                                   zone: Kotlinx_datetimeTimeZone.companion.UTC,
                                   limits: SourceScanner.Limits(maxFileBytes: 50 * 1024 * 1024, maxTextChars: 20_000, maxDepth: 16, maxMboxMessages: 20_000))
@@ -46,6 +46,22 @@ final class MailTriageTests: XCTestCase {
         XCTAssertTrue(codes.isSuperset(of: ["sender_lookalike_brand", "display_brand_mismatch", "link_brand_in_subdomain", "urgent_language", "site_check"]), "\(codes)")
         XCTAssertTrue(top.signals.contains { $0.text.contains("looks like PayPal") })
         XCTAssertEqual(Int(s.summary!.phishingCount), 1)
+    }
+
+    /// Owner's iPhone 2026-09-28: triage sat on "Classifying" behind a background sort. The sort holds
+    /// the model queue for its whole run; triage is rules only and must not wait for it.
+    func testTriageFinishesWhileASortHoldsTheModelQueue() async {
+        let hold = DispatchSemaphore(value: 0)
+        let held = expectation(description: "model queue held")
+        ModelWork.queue.async { held.fulfill(); _ = hold.wait(timeout: .now() + 30) }
+        defer { hold.signal() }
+        await fulfillment(of: [held], timeout: 5)
+        let (s, _) = service()
+        let done = expectation(description: "triage finished")
+        Task { await s.run(); done.fulfill() }
+        await fulfillment(of: [done], timeout: 10)
+        XCTAssertEqual(s.rows.count, Self.sample.filter { $0.kind == .email }.count)
+        XCTAssertFalse(s.running)
     }
 
     func testRawSourcesReadTheSampleEml() {

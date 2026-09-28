@@ -2,10 +2,10 @@ import LoupeKit
 import SwiftUI
 
 /// The Sources tab (visual pass 2026-09-25): a header with every item read, which sources are on, the last scan
-/// and what leaves the phone; then one card per source with its glyph, badge, switch and either its resting
-/// numbers or, while it is read, the live scan display in place. The sample is on by default and labelled as
-/// sample data at every mention. The phone's own sources (epic #7 child 7) follow, each with its switch,
-/// permission state, count, last scan and any error with what to do about it.
+/// and what leaves the phone; then one card per phone source (epic #7 child 7) with its glyph, badge, switch,
+/// permission state and either its resting numbers or, while it is read, the live scan display in place, and any
+/// error with what to do about it. No sample data (owner decision 2026-09-28): the app reads only the phone's own
+/// sources and what is imported.
 struct SourcesView: View {
     @ObservedObject var sources: SourcesService
     @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
@@ -16,10 +16,14 @@ struct SourcesView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     SourcesHeader(sources: sources)
-
-                    SourcesSectionTitle(title: "On this iPhone")
-                    sampleCard
-                    SourcesFootnote(text: "Synthetic receipts, SPECIMEN documents, subscription mail and a phishing example, shipped inside the app so Loupe can be tried without your data. Read on this iPhone; nothing leaves it.")
+                    #if DEBUG
+                    // DEBUG fixture launches: the hidden fixture sample's count, for the UI tests (never in the app).
+                    if sources.hasFixtureSample {
+                        Text("\(Int(sources.sampleScan?.itemCount ?? 0)) items")
+                            .font(.system(size: 6)).opacity(0.02)
+                            .accessibilityIdentifier("debug.fixture.count")
+                    }
+                    #endif
 
                     SourcesSectionTitle(title: "Phone sources")
                     ForEach(PhoneSource.allCases) { source in
@@ -53,7 +57,7 @@ struct SourcesView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("sources.mail")
-                    SourcesFootnote(text: "Sorts every email from the sources that are on (the sample now, your IMAP mailbox when it is on) into Loupe Station's categories and checks it for phishing: sender, reply address, mail-server checks and links. Mechanical, on this iPhone.")
+                    SourcesFootnote(text: "Sorts every email from the sources that are on (your mailbox when it is on, and imported mail) into Loupe Station's categories and checks it for phishing: sender, reply address, mail-server checks and links. Mechanical, on this iPhone.")
 
                     if let problem = sources.problem {
                         Text(problem).font(.footnote).foregroundStyle(Palette.dangerText)
@@ -79,63 +83,5 @@ struct SourcesView: View {
         // The scans' live runs are drawn in place here, so the Activity dock leaves them out on this screen.
         .onAppear { ActivityCenter.shared.show("sources") }
         .onDisappear { ActivityCenter.shared.hide("sources") }
-    }
-
-    @ViewBuilder private var sampleCard: some View {
-        let live = sources.liveScans[SourcesService.sampleId]
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 12) {
-                SourceGlyph(id: "sample", on: sources.sampleEnabled)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: 6) {
-                        Text("Sample data").font(Typeface.display(22)).foregroundStyle(Palette.ink)
-                        SourceBadge(online: false)
-                    }
-                    Text(SourcesService.sampleLabel)
-                        .font(.footnote.weight(.semibold)).foregroundStyle(Palette.amber)
-                        .accessibilityIdentifier("sources.sample.label")
-                }
-                Spacer(minLength: 8)
-                Toggle("Sample data", isOn: Binding(get: { sources.sampleEnabled }, set: { sources.setSampleEnabled($0) }))
-                    .labelsHidden()
-                    .accessibilityLabel("Sample data")
-                    .accessibilityIdentifier("sources.sample.toggle")
-            }
-            if let live {
-                ScanDisplay(live: live).transition(.opacity)
-            } else if let scan = sources.sampleScan {
-                SourceRestStats(id: "sample", count: Int(scan.itemCount), countLine: countLine(scan), countId: "sources.sample.count",
-                                detail: detailLine(scan), coverage: 1,
-                                lastScan: Date(timeIntervalSince1970: Double(scan.scannedAtEpochMillis) / 1000), on: sources.sampleEnabled)
-                if sources.sampleEnabled {
-                    CardAction(title: "Scan again", symbol: "arrow.clockwise", hue: SourceLook.hue("sample")) { sources.scanSample() }
-                        .accessibilityIdentifier("sources.sample.rescan")
-                }
-            } else if sources.sampleEnabled {
-                FirstScanInvite(id: "sample", title: "Sample data") { sources.scanSample() }
-            }
-            if !sources.sampleEnabled {
-                Text("Off: judgments and watchers ignore the sample.").font(.footnote).foregroundStyle(Palette.inkSoft)
-            }
-        }
-        .card(active: live.map { !$0.finished } ?? false)
-        .animation(Motion.reduced(systemReduceMotion) ? .easeInOut(duration: 0.25) : .spring(response: 0.45, dampingFraction: 0.9), value: live?.id)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("sources.sample")
-    }
-
-    private func countLine(_ scan: CachedScan) -> String {
-        let n = Int(scan.itemCount)
-        return "\(n) \(n == 1 ? "item" : "items")"
-    }
-
-    private func detailLine(_ scan: CachedScan) -> String {
-        let r = scan.result
-        var parts: [String] = []
-        let skipped = r.skipped.count
-        if skipped > 0 { parts.append("\(skipped) skipped") }
-        if r.duplicates > 0 { parts.append("\(r.duplicates) duplicate\(r.duplicates == 1 ? "" : "s")") }
-        if r.withoutText > 0 { parts.append("\(r.withoutText) without text") }
-        return parts.joined(separator: " · ")
     }
 }

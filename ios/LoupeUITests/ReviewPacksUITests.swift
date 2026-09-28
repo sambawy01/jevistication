@@ -6,8 +6,8 @@ final class ReviewPacksUITests: XCTestCase {
     /// Now → To review → approve the privacy check's proposal to remove a duplicate copy (a real
     /// duplicate pair in the throwaway Send to Loupe inbox), then undo it.
     func testApproveAPrivacyCheckProposedAction() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeReviewDemo"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeReviewDemo", "-LoupeRunNow"]
         app.launch()
         let card = app.buttons["now.review"]
         XCTAssertTrue(card.waitForExistence(timeout: 60))
@@ -33,7 +33,7 @@ final class ReviewPacksUITests: XCTestCase {
 
     /// Judgments → Packs → Try the example pack → preview (labelled an example) → Add → its judgments.
     func testImportTheExamplePackAndSeeItsJudgments() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeFixtures"]
         app.launch()
         let menu = app.buttons["judgments.packs"]

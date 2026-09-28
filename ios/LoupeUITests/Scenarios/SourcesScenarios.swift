@@ -61,16 +61,10 @@ final class SourcesScenarios: ScenarioCase {
         }
         start("sources", ["-LoupeTab", "sources", "-LoupeSkipOnboarding", "-LoupeModelState", "missing", "-LoupePermissions", "granted",
                           "-LoupePhotosDemo"])
-        let sampleCount = app.staticTexts["sources.sample.count"]
-        XCTAssertTrue(sampleCount.waitForExistence(timeout: 60), "the sample is read")
-        XCTAssertEqual(sampleCount.label, "48 items")
-        audit("02-sources-top", ["sources.sample.rescan"])
-
-        // The sample: off (its items leave) and on again.
-        let sample = app.switches["sources.sample.toggle"]
-        reveal(sample)
-        set(sample, false, "Sample data")
-        set(sample, true, "Sample data")
+        // No sample in the app (2026-09-28): -LoupeRunNow's run reads the hidden test fixture, nothing on screen names it.
+        waitFor(app.staticTexts["debug.fixture.count"], "label == %@", "48 items", timeout: 90)
+        XCTAssertFalse(any("sources.sample").exists, "no sample card")
+        audit("02-sources-top")
 
         // Each phone source: off, then on again. Mail waits for a mailbox (its row offers the setup).
         for id in phone {
@@ -96,8 +90,7 @@ final class SourcesScenarios: ScenarioCase {
 
         // Close and open again.
         relaunch()
-        XCTAssertTrue(app.staticTexts["sources.sample.count"].waitForExistence(timeout: 60))
-        XCTAssertEqual(app.switches["sources.sample.toggle"].value as? String, "1", "the sample stays on")
+        XCTAssertEqual(app.staticTexts["debug.fixture.count"].label, "48 items", "the cache is read back, no rescan")
         XCTAssertEqual(phoneSwitch("photos").value as? String, "1", "Photos stays on")
         XCTAssertEqual(phoneSwitch("files").value as? String, "1", "Files stays on")
         XCTAssertEqual(phoneSwitch("calendar").value as? String, "0", "Calendar stays off")
@@ -128,13 +121,6 @@ final class SourcesScenarios: ScenarioCase {
         XCTAssertTrue(display.waitForExistence(timeout: 20), "Scan again shows the live display")
         XCTAssertTrue(count.waitForExistence(timeout: 120))
         XCTAssertEqual(count.label, "16 items")
-
-        // The sample's Scan again settles too.
-        let sampleAgain = button("sources.sample.rescan")
-        reveal(sampleAgain)
-        sampleAgain.tap()
-        XCTAssertTrue(app.staticTexts["sources.sample.count"].waitForExistence(timeout: 60))
-        waitFor(app.staticTexts["sources.sample.count"], "label == %@", "48 items", timeout: 60)
 
         // The photos read survive a relaunch too (the cache, not a rescan from nothing).
         relaunch()

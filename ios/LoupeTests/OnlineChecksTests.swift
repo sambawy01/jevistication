@@ -45,7 +45,7 @@ final class OnlineChecksTests: XCTestCase {
     private let now = ISO8601DateFormatter().date(from: "2026-09-24T12:00:00Z")!
 
     private static let sample: [SourceItem] = {
-        let root = SourcesService.bundledSample()!
+        let root = TestSample.root()!
         return try! SourceScanner(extractors: AppleExtractors(timeZone: TimeZone(identifier: "UTC")!),
                                   zone: Kotlinx_datetimeTimeZone.companion.UTC,
                                   limits: SourceScanner.Limits(maxFileBytes: 50 * 1024 * 1024, maxTextChars: 20_000, maxDepth: 16, maxMboxMessages: 20_000))

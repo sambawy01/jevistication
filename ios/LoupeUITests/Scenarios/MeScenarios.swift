@@ -36,7 +36,7 @@ final class MeScenarios: ScenarioCase {
     }
 
     func testSettingsTogglesSortingOnlineChecksAndAbout() {
-        start("me", ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeModelState", "ready", "-LoupeSortDemo"])
+        start("me", ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeModelState", "ready", "-LoupeSortDemo"], run: false)
         XCTAssertTrue(tabs.waitForExistence(timeout: 20))
         audit("09-me-top", ["me.model", "me.modelSettings", "me.export", "me.erase"])
 

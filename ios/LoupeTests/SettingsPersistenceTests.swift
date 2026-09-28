@@ -118,7 +118,7 @@ final class SettingsPersistenceTests: XCTestCase {
             XCTAssertTrue(s.isPhoneEnabled(src), "\(src) is on by default")
         }
         XCTAssertFalse(s.isPhoneEnabled(.mail), "Mail needs a sign-in: offered, not forced")
-        XCTAssertTrue(s.sampleEnabled)
+        XCTAssertFalse(s.sampleEnabled, "no sample source in the app (2026-09-28)")
         XCTAssertTrue(s.inboxEnabled)
     }
 
@@ -126,11 +126,9 @@ final class SettingsPersistenceTests: XCTestCase {
         let s = sources()
         await s.setPhoneEnabled(.contacts, false)
         await s.setPhoneEnabled(.photos, false)
-        s.setSampleEnabled(false)
         let again = sources()                                      // a new process over the same home
         XCTAssertFalse(again.isPhoneEnabled(.contacts), "set off: stays off")
         XCTAssertFalse(again.isPhoneEnabled(.photos))
-        XCTAssertFalse(again.sampleEnabled)
         XCTAssertTrue(again.isPhoneEnabled(.calendar), "never set: still the default")
         XCTAssertTrue(again.isPhoneEnabled(.files))
         XCTAssertFalse(again.state(.contacts).enabled)

@@ -164,23 +164,38 @@ object JudgmentMeasure {
             !(row.truncated && judgment.onFailure != FailurePosture.OPEN)
     }
 
-    /** D1 across every judgment: most torn first, plus a random audit arm of confident ones. */
+    /**
+     * D1 across every judgment: most torn first, plus a random audit arm of confident ones.
+     *
+     * [textChars] is the text the evidence gate reads (the judgments' model budget, Model settings'
+     * `text_chars`). [memo] keeps the gate's verdict per item text across draws, so a redraw after a
+     * run or an edit does not read every text again; the result is the same with or without it.
+     */
     fun queue(
         all: List<LedgerRow>,
         judgments: List<UserJudgment>,
         corrections: Map<CorrectionKey, String>,
         items: List<SourceItem>,
         size: Int = QUEUE_SIZE,
+        textChars: Int = TransactionEvidence.SCAN_CHARS,
+        memo: EvidenceMemo? = null,
     ): List<UnsureEntry> {
         val byId = items.associateBy { it.id }
         val byJudgment = judgments.associateBy { it.id }
         // Only items still scanned: the phone cannot show (or answer) what it no longer has.
         // A model answer logged before the evidence gate existed, on an item the gate now answers
         // by rule (a shop's product page under "Is this a receipt?"), is not a question worth asking.
+        // The gate is asked last, only for an unreviewed model answer the queue could pick
+        // (UncertainQueue never picks a corrected or mechanical row), and only for a gated judgment.
         val candidates = judgments.flatMap { j ->
             effectiveRows(all, j, corrections).filter { r ->
                 val item = r.itemId?.let(byId::get)
-                item != null && (r.isMechanical || TransactionEvidence.ruleAnswer(j, item.text) == null)
+                item != null && (
+                    r.isMechanical || r.correction != null ||
+                        TransactionEvidence.ruleAnswerFrom(j, item.text) {
+                            memo?.verdict(item, textChars) ?: TransactionEvidence.assess(item.text, textChars)
+                        } == null
+                    )
             }
         }
         return UncertainQueue.select(candidates, size, AUDIT_SHARE, SEED).map { e ->

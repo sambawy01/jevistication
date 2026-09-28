@@ -119,6 +119,8 @@ struct ReviewView: View {
 extension ReviewItem: Identifiable {}
 
 private struct ReviewRow: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     let item: ReviewItem
     let selected: Bool
     let working: Bool

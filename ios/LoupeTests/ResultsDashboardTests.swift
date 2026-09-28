@@ -215,6 +215,8 @@ final class ResultsDashboardTests: XCTestCase {
         s.ledger.flush()
         XCTAssertEqual(s.ledger.correctionIndex()[key], j.shape.candidates[0], "written to the corrections log")
         XCTAssertEqual(s.measure(j).corrections, 1, "Measure counts it, as a queue answer")
+        await s.prepareQueue(judgmentId: id)
+        XCTAssertTrue(s.queueReady(judgmentId: id))
         XCTAssertFalse(s.unsure(judgmentId: id).contains { $0.itemId == "r1" }, "it leaves the queue")
 
         // Bulk: confirm the rest (the model's lean), then undo all of them at once.
@@ -230,6 +232,7 @@ final class ResultsDashboardTests: XCTestCase {
         XCTAssertNil(s.ledger.correctionIndex()[key], "undo appends a retraction")
 
         // A correction made in the queue shows up when the dashboard comes back.
+        await s.prepareQueue(judgmentId: id)
         let entry = try XCTUnwrap(s.unsure(judgmentId: id).first { $0.itemId != "x" })
         s.answer(entry, label: j.shape.candidates[1])
         await m.refresh(s)

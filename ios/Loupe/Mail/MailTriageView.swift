@@ -36,6 +36,8 @@ struct MailTriageCard: View {
 /// The Mail triage screen: rows by section (phishing suspected first), each with its category,
 /// the concrete signals behind a phishing verdict, link checks, and Open / Mark safe / Confirm.
 struct MailTriageView: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @ObservedObject var mail: MailTriageService
     @ObservedObject private var assist = AssistService.shared
     @State private var openItem: SourceItem?
@@ -67,7 +69,7 @@ struct MailTriageView: View {
                 }
                 if let s = mail.summary {
                     if s.rows.isEmpty {
-                        Text("No mail to triage. Turn on the sample or Mail in Sources.")
+                        Text("No mail to triage. Turn on Mail in Sources, or import mail into the Inbox.")
                             .font(.subheadline).foregroundStyle(Palette.inkSoft).card()
                             .accessibilityIdentifier("mail.none")
                     }

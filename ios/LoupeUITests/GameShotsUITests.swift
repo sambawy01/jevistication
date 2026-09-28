@@ -22,7 +22,7 @@ final class GameShotsUITests: XCTestCase {
         try XCTSkipIf(dir == nil, "set TEST_RUNNER_LOUPE_SHOTS to take the screenshots")
 
         // The Watch card on Now.
-        var app = XCUIApplication()
+        var app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeTab", "now"]
         app.launch()
         let watch = app.buttons["now.play.watch"]
@@ -32,7 +32,7 @@ final class GameShotsUITests: XCTestCase {
         app.terminate()
 
         // You fly: the FIRE bar under the river.
-        app = XCUIApplication()
+        app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeGame", "human"]
         app.launch()
         let fire = app.descendants(matching: .any)["game.fire"]
@@ -44,7 +44,7 @@ final class GameShotsUITests: XCTestCase {
         app.terminate()
 
         // Watch: the speed panel mid-run, then the results card when the run ends.
-        app = XCUIApplication()
+        app = XCUIApplication.loupe()
         app.launchArguments = ["-LoupeSkipOnboarding", "-LoupeGame", "watch", "-LoupeGameLevelRows", "60"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["game.speed"].waitForExistence(timeout: 20))

@@ -94,7 +94,7 @@ struct PhoneSourceRow: View {
     @ViewBuilder private var rest: some View {
         if st.enabled && st.lastScan == nil && st.itemCount == 0 && st.permission.canRead && st.problem == nil
             && !(source == .mail && sources.mailAccount == nil) && !(source == .files && sources.deps.bookmarks.all().isEmpty) {
-            FirstScanInvite(id: "phone.\(source.id)", title: source.title) { Task { await sources.scanPhone(source) } }
+            FirstScanInvite(id: "phone.\(source.id)", title: source.title) { Task { await sources.scanForUser(source) } }
         } else {
             if st.permission != .notNeeded && st.permission != .granted && st.permission != .limited {
                 Text(st.permission.label).font(.footnote.weight(.semibold)).foregroundStyle(Palette.warnText)
@@ -105,7 +105,8 @@ struct PhoneSourceRow: View {
                             countId: "sources.phone.\(source.id).count", detail: st.detail, coverage: coverage,
                             lastScan: st.lastScan, on: st.enabled)
             if st.enabled && st.permission != .notAsked {   // not asked yet: "Allow access" below does the first read
-                CardAction(title: "Scan again", symbol: "arrow.clockwise", hue: hue) { Task { await sources.scanPhone(source) } }
+                // A visible, cancellable run (Now's panel): this source, then the checks over what it read.
+                CardAction(title: "Scan again", symbol: "arrow.clockwise", hue: hue) { Task { await sources.scanForUser(source) } }
                     .accessibilityIdentifier("sources.phone.\(source.id).rescan")
             }
         }

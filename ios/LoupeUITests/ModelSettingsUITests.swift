@@ -15,7 +15,7 @@ final class ModelSettingsUITests: XCTestCase {
     }
 
     func testTurnLayaOffRunSeeTheBannerAndResetRestores() {
-        let app = XCUIApplication()
+        let app = XCUIApplication.loupe()
         // -LoupeFixtures: settings and ledger live in a throwaway directory.
         app.launchArguments = ["-LoupeTab", "me", "-LoupeSkipOnboarding", "-LoupeFixtures", "-LoupeLanguage", "en"]
         app.launch()

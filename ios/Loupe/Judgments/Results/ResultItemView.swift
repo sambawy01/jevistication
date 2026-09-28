@@ -95,7 +95,7 @@ struct ResultItemView: View {
                 }
             }
             if let item, TransactionEvidence.shared.applies(judgment: j), item.hasText {
-                Text(evidence(TransactionEvidence.shared.assess(text: item.text)))
+                Text(evidence(TransactionEvidence.shared.assess(text: item.text, maxChars: TransactionEvidence.shared.SCAN_CHARS)))
                     .font(.caption).foregroundStyle(Palette.inkSoft).fixedSize(horizontal: false, vertical: true)
             }
             Text("Preview only: Loupe changes nothing on this phone.").font(.caption2).foregroundStyle(Palette.inkSoft)

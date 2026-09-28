@@ -61,7 +61,8 @@ final class SortService: ObservableObject {
         model: SortService.defaultModel(),
         conditions: SystemConditions(),
         defaults: .standard,
-        lane: ModelWork.lane)
+        lane: ModelWork.lane,
+        reader: { SourcesService.shared.itemsReader() })
         // The Judgments tab, Now's "Needs you" and Me read the new rows.
         s.afterRun = { JudgmentsService.shared.refreshLedger() }
         return s
@@ -99,6 +100,8 @@ final class SortService: ObservableObject {
     /// Counts carried across a preempted run and its resumption, so the card shows the whole run.
     private var carried: (sorted: Int, needYou: Int)?
     private var resumeTrigger: SortTrigger?
+    /// Reads the items off the main thread (the app); nil in unit tests (they pass `items`).
+    private let reader: (() -> ItemsReader)?
 
     static let enabledKey = "sort.whileCharging"
     static let enabledByDefault = true
@@ -106,7 +109,8 @@ final class SortService: ObservableObject {
 
     init(ledger: LedgerService, judgments: @escaping () -> [UserJudgment], items: @escaping () -> [SourceItem],
          model: JudgmentModelProvider, conditions: DeviceConditions, defaults: UserDefaults, lane: ModelLane,
-         settings: ModelSettingsSource = ModelSettingsService.shared) {
+         settings: ModelSettingsSource = ModelSettingsService.shared, reader: (() -> ItemsReader)? = nil) {
+        self.reader = reader
         self.settings = settings
         self.ledger = ledger
         self.judgments = judgments
@@ -138,6 +142,10 @@ final class SortService: ObservableObject {
     func run(_ trigger: SortTrigger) async -> Outcome {
         guard !running else { return .busy }
         if let b = conditions.blocker { return skip(Self.words(b) + " Sorting waits.") }
+        // No judgment, nothing to sort: skipped before the model is opened (the nightly run and the first check call
+        // this on phones that have not written one yet).
+        let js = judgments()
+        if js.isEmpty { return skip("No judgments yet. Add one in Judgments, then sort.") }
         // Model settings for this run: with judgments' Laya off the rules sort without the model
         // (the watchers still use it when it is on for them and installed).
         let snapshot = settings.current
@@ -151,10 +159,8 @@ final class SortService: ObservableObject {
         } else if snapshot.useLaya(feature: Features.shared.WATCHERS), model.isInstalled {
             backend = await model.backend()
         }
-        let js = judgments()
-        if js.isEmpty { return skip("No judgments yet. Add one in Judgments, then sort.") }
-        let all = items()
-        if all.isEmpty { return skip("No items scanned yet. Turn on the sample in Sources.") }
+        let all = await ItemsReader.load(items, reader)
+        if all.isEmpty { return skip("No items read yet. Turn on a source in Sources, then run again.") }
 
         ledger.flush()
         let rows = ledger.allRows()

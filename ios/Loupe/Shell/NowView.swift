@@ -13,12 +13,18 @@ struct NowView: View {
     @ObservedObject var mail: MailTriageService = .shared
     @State private var showMail = false
     @ObservedObject var review: ReviewService = .shared
+    /// Running or not (changes only at a run's start and end: Now does not redraw with the run's progress; the
+    /// panel on top draws that itself).
+    @ObservedObject private var runStatus = RunCoordinator.shared.status
+    private var runs: RunCoordinator { .shared }
     @State private var showReview = false
     @State private var openItem: SourceItem?
     @State private var showQueue = false
     @State private var opened = false
     @ObservedObject private var readiness = ModelReadiness.shared
     @ObservedObject private var protection = ProtectionStore.shared
+    /// Findings name their items through `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
 
     var body: some View {
         NavigationStack {
@@ -30,27 +36,20 @@ struct NowView: View {
                 .toolbar(.hidden, for: .navigationBar)
                 .sheet(item: $openItem) { ItemTextView(item: $0) }
         }
-        // Re-run the watchers whenever the scanned items change (a scan finishes, a source is
-        // switched on or off). The first value arrives on subscribe, so this also runs on appear.
-        .onReceive(sources.$sampleScan.combineLatest(sources.$sampleEnabled, sources.$revision)) { _ in
-            guard !sources.scanning else { return }
-            Task { await watchers.run() }
-            Task { await privacy.run() }
-            Task { await mail.run() }
-        }
+        // Opening the app only loads (owner decision 2026-09-28): nothing runs from here. The checks run in a
+        // `RunCoordinator` run (the first check after onboarding, overnight while charging, Run now, Scan again), and
+        // their saved results are what this screen shows.
         // Whatever a check proposes goes to Review as soon as it has run (never run until approved).
         // (@Published fires before the value is stored: hop once so collect reads the new one.)
-        // Laya arrived (download finished, files copied in): the watchers' model half can run now.
-        .onChange(of: readiness.isReady) { _, ready in
-            if ready, !sources.scanning { Task { await watchers.run() } }
-        }
         .onReceive(privacy.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .onReceive(mail.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .onReceive(watchers.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .task {
-            service.load()
-            service.refreshLedger()
+            // The ledger is read off the main thread and the Unsure queue drawn in the background:
+            // Now paints at once and shows "—" until the count lands (2026-09-28 launch hang).
+            await service.loadInBackground()
             #if DEBUG
+            if LaunchOptions.current.bigLedger > 0 { await service.seedLargeLedger(count: LaunchOptions.current.bigLedger) }
             if LaunchOptions.current.queueDemo { await seedWhenScanned() }
             if LaunchOptions.current.reviewDemo { await sources.seedReviewDemo() }
             #endif
@@ -95,7 +94,8 @@ struct NowView: View {
                         }
                         Divider().overlay(Palette.hairline)
                         HStack(spacing: 0) {
-                            stat("Needs you", hasDecisions ? "\(service.needsYou)" : nil)
+                            stat("Needs you", hasDecisions ? service.needsYou.map(String.init) : nil,
+                                 busy: hasDecisions && service.drawingQueue, id: "now.stat.needsYou")
                             stat("Findings", watchers.summary.map { "\($0.findings.count)" })
                             stat("Sources", sources.enabledCount > 0 ? "\(sources.enabledCount)" : nil)
                         }
@@ -104,13 +104,15 @@ struct NowView: View {
                         }
                     }
                 }
+                // The run going now (stage, counts, the item, time left, Cancel), or the last one with Run now.
+                RunPanel().padding(.horizontal, 16)
                 // The game sits high on Now so it is found at once (owner, 2026-09-25).
                 PlayCard { launcher.open($0) }
                 // Runs that belong to Now, live and in place: the passive sort and the watchers.
                 LiveRunSection(view: "now", whileRunning: true).padding(.horizontal, 16)
                 LiveRunSection(view: "watchers", whileRunning: true).padding(.horizontal, 16)
                 if hasDecisions {
-                    Button { showQueue = true } label: { NeedsYouCard(count: service.needsYou) }
+                    Button { showQueue = true } label: { NeedsYouCard(count: service.needsYou, drawing: service.drawingQueue) }
                         .buttonStyle(.plain)
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("now.needsYou")
@@ -138,10 +140,18 @@ struct NowView: View {
         }
         .neonGround()
         .scrollBounceBehavior(.basedOnSize)
+        #if DEBUG
+        // What ran since launch, for the no-launch-work UI test (owner decision A, 2026-09-28): nothing, unless asked.
+        .overlay(alignment: .topTrailing) {
+            Text("runs=\(runStatus.runsStarted) scans=\(sources.scansStarted)")
+                .font(.system(size: 6)).opacity(0.02)
+                .accessibilityIdentifier("debug.launchWork")
+        }
+        #endif
     }
 
     private var mascotState: MascotState {
-        if sources.scanning || watchers.running { return .scanning }
+        if sources.scanning || watchers.running || runStatus.running { return .scanning }
         if watchers.newCount > 0 && !watchers.findings.isEmpty { return .found }
         return .idle
     }
@@ -182,7 +192,7 @@ struct NowView: View {
                                 message: "The watchers' last run read 0 items from your \(sources.enabledCount) source\(sources.enabledCount == 1 ? "" : "s"). Run them again once your sources have been read. A source without permission, or with nothing in it, gives them nothing to check.",
                                 symbol: "photo.on.rectangle",
                                 actions: [EmptyStateAction(title: "Run now", symbol: "arrow.clockwise", id: "findings.empty.runNow") {
-                                              Task { await watchers.run() }
+                                              runs.runNow(reason: .manual)
                                           },
                                           EmptyStateAction(title: "Open Sources", symbol: "externaldrive.fill.badge.plus",
                                                            id: "findings.empty.sources") { router.open(.sources) }])
@@ -232,25 +242,44 @@ struct NowView: View {
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("now.guard")
                 }
-            } else {
+            } else if !watchers.loaded || watchers.running {
                 HStack(spacing: 10) {
                     ProgressView()
-                    Text(sources.scanning ? "Reading your sources…" : "The watchers are reading your items…")
+                    Text(watchers.running ? "The watchers are reading your items…" : "Loading the last results…")
                         .font(.subheadline).foregroundStyle(Palette.inkSoft)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .card()
                 .accessibilityIdentifier("findings.loading")
+            } else {
+                // Loaded, and no check has ever run: say so, and offer the run (nothing runs by itself at launch).
+                HonestEmptyState(
+                    title: "Not checked yet",
+                    message: runStatus.running
+                        ? "A check is running. Its findings show here once the watchers have run."
+                        : "Loupe checks your sources overnight while the phone charges. Run the check now to see what it finds.",
+                    symbol: "moon.stars",
+                    actions: runStatus.running ? [] : [EmptyStateAction(title: "Run now", symbol: "arrow.clockwise", id: "findings.notChecked.runNow") {
+                        runs.runNow(reason: .manual)
+                    }])
+                    .padding(.horizontal, -16)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("findings.notChecked")
             }
         }
         .padding(.horizontal, 16)
     }
 
-    private func stat(_ label: String, _ value: String? = nil) -> some View {
+    private func stat(_ label: String, _ value: String? = nil, busy: Bool = false, id: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundStyle(Palette.inkSoft)
+            HStack(spacing: 4) {
+                Text(label).font(.caption).foregroundStyle(Palette.inkSoft)
+                // Counting in the background: a small spinner, never a frozen screen.
+                if busy { ProgressView().controlSize(.mini).accessibilityLabel("Counting") }
+            }
             // An em dash, not a zero: there is no data yet, and zero would be a claim.
             Text(value ?? "—").font(Typeface.display(26)).foregroundStyle(Palette.cyan)
+                .accessibilityIdentifier(id ?? "now.stat.\(label)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

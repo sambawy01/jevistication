@@ -3,11 +3,11 @@ import XCTest
 final class NowFindingsUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    /// Now runs the watchers over the sample and shows the newest findings; Guard has every one of them, among them
+    /// A run (-LoupeRunNow) puts the watchers over the fixture sample and Now shows the newest findings; Guard has every one of them, among them
     /// the +23% renewal premium with its evidence.
     func testNowShowsTheNewestFindingsAndGuardThePremium() {
-        let app = XCUIApplication()
-        app.launchArguments = ["-LoupeTab", "now", "-LoupeSkipOnboarding"]
+        let app = XCUIApplication.loupe()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeRunNow", "-LoupeTab", "now", "-LoupeSkipOnboarding"]
         app.launch()
         XCTAssertTrue(app.descendants(matching: .any)["now.topFinding"].waitForExistence(timeout: 60))
         let door = app.buttons["now.guard"]
@@ -23,10 +23,10 @@ final class NowFindingsUITests: XCTestCase {
         for _ in 0..<14 where !(premium.exists && premium.isHittable) { app.swipeUp() }
         XCTAssertTrue(premium.waitForExistence(timeout: 5))
         XCTAssertTrue(premium.label.contains("£450.00 → £553.50 (+23%)"), premium.label)
-        XCTAssertTrue(premium.label.contains("sample data"), premium.label)
+        XCTAssertFalse(premium.label.contains("sample"), "no sample badges anywhere (2026-09-28): \(premium.label)")
         premium.tap()
         let evidence = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", "£450.00 → £553.50 (+23%)")).firstMatch
         XCTAssertTrue(evidence.waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label == %@", "Sample")).firstMatch.exists)
+        XCTAssertFalse(app.staticTexts.matching(NSPredicate(format: "label == %@", "Sample")).firstMatch.exists, "no Sample pill")
     }
 }

@@ -30,9 +30,13 @@ struct LoupeApp: App {
             try? FileManager.default.removeItem(at: LedgerService.defaultHome().appendingPathComponent("sources/enabled.json"))
         }
         #endif
+        // No sample data ships (2026-09-28): a phone that ran an older build has the sample's cached scan, its
+        // decisions, findings, proposals and link checks removed once, before any store opens. Real data is untouched.
+        SampleDataMigration.runAtLaunch()
         // Dark neon everywhere (owner decision 2026-09-24): bars, tabs, controls.
         NeonChrome.install()
-        // BGTaskScheduler wants every handler registered before launch finishes.
+        // BGTaskScheduler wants every handler registered before launch finishes. Scheduling only asks iOS for the next
+        // night's charging window: nothing runs at launch.
         BackgroundSorter.shared.register()
         BackgroundSorter.shared.schedule()
         // Browsing protection (2026-09-26): the Spotted log (Guard's badge) and Loupe for Safari's state,
@@ -83,6 +87,8 @@ struct LaunchOptions {
     var judgmentDemo: String?    // -LoupeJudgmentDemo <template id>: add it, open its results, run
     var openLibrary = false      // -LoupeLibrary: open Judgments on the Library
     var queueDemo = false        // -LoupeQueueDemo (DEBUG, with -LoupeFixtures): seed the queue with a stand-in scorer
+    var mainWatchdog = false     // -LoupeMainWatchdog (DEBUG): show the worst main-thread stall for UI tests
+    var bigLedger = 0            // -LoupeBigLedger n (DEBUG, with -LoupeFixtures): n long items and n model answers (launch perf)
     var openScreen: String?      // -LoupeOpen queue|measure: open Now's queue, or the first judgment's Measure
     var sortDemo = false         // -LoupeSortDemo (DEBUG, with -LoupeFixtures): passive sort with a stand-in scorer
     var inboxDemo = false        // -LoupeInboxDemo (DEBUG, with -LoupeFixtures): import a statement CSV into the Inbox
@@ -96,6 +102,10 @@ struct LaunchOptions {
     var standInModel = false
     /// -LoupeScenarioHome <name> (DEBUG, with -LoupeFixtures): a fixture home that survives a relaunch (`ScenarioHome`).
     var scenarioHome: String?
+    /// -LoupeRunNow (DEBUG): one full run at launch (sources, privacy, mail, watchers, sort), as Run now does. UI tests
+    /// that need results use it; nothing else runs at launch. `ScenarioCase.relaunch()` drops it, so a relaunch shows
+    /// what was saved.
+    var runNow = false
 
     static let current: LaunchOptions = {
         var o = LaunchOptions()
@@ -120,6 +130,8 @@ struct LaunchOptions {
         if let i = args.firstIndex(of: "-LoupeJudgmentDemo"), i + 1 < args.count { o.judgmentDemo = args[i + 1] }
         o.openLibrary = args.contains("-LoupeLibrary")
         o.queueDemo = args.contains("-LoupeQueueDemo") && o.fixtureMode
+        o.mainWatchdog = args.contains("-LoupeMainWatchdog")
+        if o.fixtureMode, let i = args.firstIndex(of: "-LoupeBigLedger"), i + 1 < args.count, let n = Int(args[i + 1]) { o.bigLedger = n }
         o.sortDemo = args.contains("-LoupeSortDemo") && o.fixtureMode
         o.reviewDemo = args.contains("-LoupeReviewDemo") && o.fixtureMode
         o.privacyPhotoDemo = args.contains("-LoupePrivacyPhotoDemo") && o.fixtureMode
@@ -128,6 +140,7 @@ struct LaunchOptions {
         if let i = args.firstIndex(of: "-LoupeOpen"), i + 1 < args.count { o.openScreen = args[i + 1] }
         o.standInModel = args.contains("-LoupeStandInModel") && o.fixtureMode
         if o.fixtureMode, let i = args.firstIndex(of: "-LoupeScenarioHome"), i + 1 < args.count { o.scenarioHome = args[i + 1] }
+        o.runNow = args.contains("-LoupeRunNow")
         if let i = args.firstIndex(of: "-LoupePermissions"), i + 1 < args.count {
             o.fakePermissions = args[i + 1] == "denied" ? .denied : .granted
         }

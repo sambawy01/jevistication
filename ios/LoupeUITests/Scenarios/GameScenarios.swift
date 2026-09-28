@@ -17,7 +17,7 @@ final class GameScenarios: ScenarioCase {
     private var autofire: XCUIElement { app.switches["game.autofire"] }
 
     func testFireWatchAndAutoFireSurviveARelaunch() {
-        start("game", ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeModelState", "missing"])
+        start("game", ["-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeModelState", "missing"], run: false)
         XCTAssertTrue(tabs.waitForExistence(timeout: 20))
         audit("11-now-play", ["now.play.human", "now.play.watch"])
         openYouFly()

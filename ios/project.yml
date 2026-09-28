@@ -32,11 +32,8 @@ targets:
       # :backend-laya-common:generateIosThirdPartyNotices. Bundled from its one source of truth.
       - path: ../ios-native/THIRD_PARTY_NOTICES-ios.txt
         buildPhase: resources
-      # The synthetic sample (epic #7 child 2): the desktop's sample resources, verbatim, bundled as
-      # a folder named "sample" and read by the Sources tab. Labelled "not from your phone" in the UI.
-      - path: ../sources-desktop/src/main/resources/dev/loupe/sources/sample
-        type: folder
-        buildPhase: resources
+      # No sample data ships (owner decision 2026-09-28): the synthetic sample is a resource of the two
+      # test targets only (below); LoupeTests/AppBundleTests checks the app bundle has no "sample" folder.
       # The example preset pack (epic #7 child 14), copied verbatim from Loupe Station and bundled as
       # a folder named "packs". Business-specific (Bistro Cloud), so the app labels it an example.
       - path: ../examples/packs
@@ -113,7 +110,7 @@ targets:
             LSHandlerRank: Alternate
             LSItemContentTypes: [public.json]
         LSSupportsOpeningDocumentsInPlace: false
-        # F1 passive mode (epic #7 child 6): one BGProcessingTask, external power, no network.
+        # The nightly run (2026-09-28; F1 passive mode before): one BGProcessingTask, external power (and network when Mail is on).
         BGTaskSchedulerPermittedIdentifiers: [com.loupe-ai.ios.sort]
         UIBackgroundModes: [processing]
         # Phone sources (epic #7 child 7), on by default (2026-09-26): asked once in onboarding's permissions step, or by Allow access in Sources.
@@ -295,6 +292,11 @@ targets:
     platform: iOS
     sources:
       - path: LoupeTests
+      # The synthetic sample (the desktop's sample resources, verbatim), bundled into the test bundle as a folder
+      # named "sample": the unit tests read it through `TestSample.root()` (2026-09-28: never in the app bundle).
+      - path: ../sources-desktop/src/main/resources/dev/loupe/sources/sample
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: Loupe
     settings:
@@ -306,6 +308,11 @@ targets:
     platform: iOS
     sources:
       - path: LoupeUITests
+      # The same sample for DEBUG fixture launches: the UI tests pass its path in LOUPE_FIXTURE_SAMPLE and the app
+      # (DEBUG, -LoupeFixtures) reads it as a hidden fixture source (the simulator shares the Mac's file system).
+      - path: ../sources-desktop/src/main/resources/dev/loupe/sources/sample
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: Loupe
     settings:

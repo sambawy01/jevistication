@@ -138,6 +138,16 @@ final class SpottedLog {
 
     var unseenCount: Int { entries().filter { !$0.seen }.count }
 
+    /// Removes the entries [drop] picks (the sample migration, 2026-09-28); returns how many went.
+    @discardableResult
+    func removeAll(where drop: (SpottedEntry) -> Bool) -> Int {
+        mutate { entries in
+            let before = entries.count
+            entries.removeAll(where: drop)
+            return before - entries.count
+        }
+    }
+
     func markAllSeen() {
         mutate { entries in for i in entries.indices { entries[i].seen = true } }
     }

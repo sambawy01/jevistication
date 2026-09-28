@@ -89,14 +89,16 @@ final class FeedObserver: NSObject, ScanObserver {
     let run: ScanObserver
     let feed: ScanFeed
     let mailSubjects: Bool
-    init(run: ScanObserver, feed: ScanFeed, mailSubjects: Bool) {
-        self.run = run; self.feed = feed; self.mailSubjects = mailSubjects
+    /// The run's Cancel (2026-09-28): the common scanner asks between files and stops there.
+    let cancel: RunCancel?
+    init(run: ScanObserver, feed: ScanFeed, mailSubjects: Bool, cancel: RunCancel? = nil) {
+        self.run = run; self.feed = feed; self.mailSubjects = mailSubjects; self.cancel = cancel
     }
     func onProgress(progress: ScanProgress) {
         run.onProgress(progress: progress)
         feed.scanned(progress, label: mailSubjects ? MailSubject.read(progress.current) : nil)
     }
-    func isCancelled() -> Bool { false }
+    func isCancelled() -> Bool { cancel?.isCancelled ?? false }
 }
 
 /// The Subject header of a fetched message: the first 16 KB of the file, unfolded, RFC 2047 decoded.
@@ -201,8 +203,9 @@ extension SourcesService {
         }
     }
 
-    /// The switch. Turning a source on asks for its iOS permission if iOS has not asked yet; off
-    /// removes its items from every judgment and watcher, and (for Mail) stops all requests.
+    /// The switch. Turning a source on asks for its iOS permission if iOS has not asked yet, then reads it (as a
+    /// visible run with the checks after it, when `userScan` is set); off removes its items from every judgment and
+    /// watcher, and (for Mail) stops all requests, and the checks run again without it.
     func setPhoneEnabled(_ s: PhoneSource, _ on: Bool) async {
         guard let library else { return }
         do { try library.setEnabled(sourceId: s.rawValue, enabled: on) } catch {
@@ -211,7 +214,7 @@ extension SourcesService {
         }
         phone[s, default: .init()].enabled = on
         revision += 1
-        guard on else { return }
+        guard on else { itemsChanged?(); return }
         if permission(s) == .notAsked {
             switch s {
             case .photos: _ = await deps.photos.requestAuthorization()
@@ -221,7 +224,13 @@ extension SourcesService {
             }
         }
         phone[s, default: .init()].permission = permission(s)
-        await scanPhone(s)
+        await scanForUser(s)
+    }
+
+    /// A scan the user asked for: through `userScan` (a `RunCoordinator` run: visible, cancellable, the checks after
+    /// it) when set, else directly.
+    func scanForUser(_ s: PhoneSource) async {
+        if let userScan { await userScan(s.rawValue) } else { await scanPhone(s) }
     }
 
     /// "Allow access" on a card that is on but iOS has not asked yet: asks, then reads the source if allowed.
@@ -235,24 +244,20 @@ extension SourcesService {
             }
         }
         phone[s, default: .init()].permission = permission(s)
-        if isPhoneEnabled(s), permission(s).canRead { await scanPhone(s) }
+        if isPhoneEnabled(s), permission(s).canRead { await scanForUser(s) }
     }
 
-    /// After onboarding's permissions step: re-reads each permission, then reads every on-device source that is
-    /// on, now readable and never read (the first scan the switch would have started).
+    /// After onboarding's permissions step: re-reads each permission. Nothing is scanned here (2026-09-28): the first
+    /// check, which runs once when onboarding completes, reads every source that is on.
     func permissionsChanged() {
         loadPhoneStates()
-        for s in [PhoneSource.photos, .calendar, .contacts] where isPhoneEnabled(s) && permission(s).canRead
-            && s.cacheIds.allSatisfy({ library?.cached(sourceId: $0) == nil }) {
-            Task { await scanPhone(s) }
-        }
     }
 
-    /// Re-scans the sources that are cheap to re-read whenever the app opens: picked files (they
-    /// may have changed) and the "Send to Loupe" inbox.
-    func refreshOnOpen() {
-        guard isPhoneEnabled(.files) else { return }
-        Task { await scanPhone(.files) }
+    /// Whether a run can read [s] now: on, and iOS lets Loupe read it (Mail: a mailbox is added).
+    func canScan(_ s: PhoneSource) -> Bool {
+        guard isPhoneEnabled(s), permission(s).canRead else { return false }
+        if s == .mail { return deps.mailAccounts.load() != nil }
+        return true
     }
 
     /// Scans one phone source now. Refuses when it is off (Mail: no request is made). Asked while a scan of that
@@ -260,21 +265,27 @@ extension SourcesService {
     /// caller's change (a file sent to Loupe, a folder picked, a copy removed or put back), so one more scan runs
     /// when it ends and the caller waits for it. Requests made meanwhile share that one scan. "Delete all my Loupe
     /// data" (`reloadAfterErase`) releases the waiters and cancels the follow-up: nothing is read into the emptied cache.
-    func scanPhone(_ s: PhoneSource) async {
+    ///
+    /// [cancel] (a `RunCoordinator` run's Cancel, or iOS ending the nightly run) stops the scan between items: what was
+    /// read is stored together with the previous scan's items it did not reach (`SourceMerge`), so a cancelled scan
+    /// never leaves a cut cache; Photos keeps its change token so edited photos are read next time.
+    func scanPhone(_ s: PhoneSource, cancel: RunCancel? = nil) async {
         if state(s).scanning {
             guard isPhoneEnabled(s) else { return }
             await withCheckedContinuation { phoneScanWaiters[s, default: []].append($0) }
             return
         }
         let generation = eraseGeneration
-        await scanPhoneOnce(s)
-        while generation == eraseGeneration, let waiting = phoneScanWaiters.removeValue(forKey: s) {
-            await scanPhoneOnce(s)
+        await scanPhoneOnce(s, cancel: cancel)
+        while generation == eraseGeneration, cancel?.isCancelled != true, let waiting = phoneScanWaiters.removeValue(forKey: s) {
+            await scanPhoneOnce(s, cancel: cancel)
             waiting.forEach { $0.resume() }
         }
+        // Cancelled with callers waiting for a follow-up: release them (their scan is not run).
+        if let waiting = phoneScanWaiters.removeValue(forKey: s) { waiting.forEach { $0.resume() } }
     }
 
-    private func scanPhoneOnce(_ s: PhoneSource) async {
+    private func scanPhoneOnce(_ s: PhoneSource, cancel: RunCancel?) async {
         guard isPhoneEnabled(s), !state(s).scanning, let library else { return }
         // Files' bookmarks and Mail's account are kept with complete file protection: while the phone is locked
         // (a background launch) they read as empty, and a scan then would store an empty result over the real one.
@@ -290,8 +301,7 @@ extension SourcesService {
         defer {
             phone[s, default: .init()].scanning = false
             // Once more with the scan over: `store` bumped `revision` while this source still read as scanning, and
-            // Now re-runs the watchers only when nothing scans. Without this, a scan that starts at launch (Files,
-            // on by default) swallowed the sample scan's signal and the watchers never ran.
+            // the item index is rebuilt from the revision.
             revision += 1
         }
         // The live run (the Activity dock, docs/LIVE-RUN-VIEW.md) and the live display in the source's card.
@@ -302,7 +312,7 @@ extension SourcesService {
         let feed = live.feed
         var gmailPaused: GmailProducer.Interrupted?
         let obs = run.observer
-        let both = FeedObserver(run: obs, feed: feed, mailSubjects: s == .mail)
+        let both = FeedObserver(run: obs, feed: feed, mailSubjects: s == .mail, cancel: cancel)
         defer { settle(live) }
         do {
             switch s {
@@ -319,8 +329,13 @@ extension SourcesService {
                 #endif
                 let cached = library.cached(sourceId: cacheId)?.result
                 let prior = deps.state.state(s.rawValue)
-                let out = await Task.detached(priority: .utility) { await producer.scan(cached: cached, state: prior) }.value
-                try store(out, as: cacheId, for: s)
+                var out = await Task.detached(priority: .utility) {
+                    await producer.scan(cached: cached, state: prior, cancelled: { cancel?.isCancelled ?? false })
+                }.value
+                // Cancelled: the photos read are kept with the rest (the producer merges them), but the change token
+                // stays where it was, so a photo edited since is still read next time.
+                if cancel?.isCancelled == true { out.state[PhotosProducer.tokenKey] = prior[PhotosProducer.tokenKey] }
+                try store(out, as: cacheId, for: s, cancel: nil)
             case .files:
                 feed.status("Listing your files")
                 let deps = self.deps
@@ -328,8 +343,8 @@ extension SourcesService {
                     (try FilesProducer(store: deps.bookmarks).scan(observer: both), try SharedInbox.scan(folder: deps.inbox()))
                 }
                 run.ocrCount(Self.ocrItems(files.result))
-                try store(files, as: PhoneSourceIds.shared.FILES, for: s)
-                try store(shared, as: PhoneSourceIds.shared.SHARED, for: s)
+                try store(files, as: PhoneSourceIds.shared.FILES, for: s, cancel: cancel)
+                try store(shared, as: PhoneSourceIds.shared.SHARED, for: s, cancel: cancel)
             case .calendar:
                 feed.status("Reading your calendar")
                 let deps = self.deps
@@ -370,7 +385,7 @@ extension SourcesService {
                         let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched) { n, m in
                             if m > 0 { feed.status("Fetching mail: \(n) of \(m)") }
                         }
-                        try store(out, as: PhoneSourceIds.shared.MAIL, for: s)
+                        try store(out, as: PhoneSourceIds.shared.MAIL, for: s, cancel: cancel)
                         deps.gmailRetry.cancel()
                     } catch let paused as GmailProducer.Interrupted {
                         // Gmail asked Loupe to slow down mid-pass: what was fetched is read and shown, and the
@@ -384,7 +399,7 @@ extension SourcesService {
                 let producer = MailProducer(account: account, credential: credential, cacheRoot: deps.mailCache,
                                             makeTransport: deps.makeTransport)
                 let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched)
-                try store(out, as: PhoneSourceIds.shared.MAIL, for: s)
+                try store(out, as: PhoneSourceIds.shared.MAIL, for: s, cancel: cancel)
             }
             let st = state(s)
             run.finish(items: st.itemCount, skipped: st.skippedCount)
@@ -427,6 +442,7 @@ extension SourcesService {
             retry.firing = true
             defer { retry.firing = false }
             await self.scanPhone(.mail)
+            self.itemsChanged?()
         }
         return true
     }
@@ -443,9 +459,12 @@ extension SourcesService {
         r.items.filter { $0.kind == .image && $0.hasText }.count
     }
 
-    private func store(_ out: PhoneScanOutput, as cacheId: String, for s: PhoneSource) throws {
+    /// Stores a scan. [cancel] set and cancelled: the partial result is merged with the previous one (`SourceMerge`).
+    private func store(_ out: PhoneScanOutput, as cacheId: String, for s: PhoneSource, cancel: RunCancel? = nil) throws {
         guard let library else { return }
-        _ = try library.store(sourceId: cacheId, result: out.result)
+        let result = cancel?.isCancelled == true
+            ? SourceMerge.keepUnreached(partial: out.result, previous: library.cached(sourceId: cacheId)?.result) : out.result
+        _ = try library.store(sourceId: cacheId, result: result)
         if !out.state.isEmpty { deps.state.set(s.rawValue, out.state) }
         var st = state(s)
         apply(cached: s, to: &st)
@@ -466,12 +485,12 @@ extension SourcesService {
             phone[.files, default: .init()].problem = "Could not keep access to that location: \(error.localizedDescription)"
             return
         }
-        if !isPhoneEnabled(.files) { await setPhoneEnabled(.files, true) } else { await scanPhone(.files) }
+        if !isPhoneEnabled(.files) { await setPhoneEnabled(.files, true) } else { await scanForUser(.files) }
     }
 
     func removePicked(_ id: String) async {
         try? deps.bookmarks.remove(id: id)
-        await scanPhone(.files)
+        await scanForUser(.files)
     }
 
     // MARK: Mail
@@ -495,7 +514,7 @@ extension SourcesService {
         try deps.keychain(clean).save(secret)
         try deps.mailAccounts.save(clean)
         phone[.mail, default: .init()].detail = "Online · \(clean.username) on \(clean.host)"
-        if !isPhoneEnabled(.mail) { await setPhoneEnabled(.mail, true) } else { await scanPhone(.mail) }
+        if !isPhoneEnabled(.mail) { await setPhoneEnabled(.mail, true) } else { await scanForUser(.mail) }
     }
 
     /// Forgets the mailbox: its password or token, every fetched message and its items.
@@ -505,6 +524,7 @@ extension SourcesService {
         _ = try? library?.store(sourceId: PhoneSourceIds.shared.MAIL, result: ScanResult.companion.EMPTY)
         loadPhoneStates()
         revision += 1
+        itemsChanged?()
     }
 
     private func removeMailData(_ account: MailAccount) {

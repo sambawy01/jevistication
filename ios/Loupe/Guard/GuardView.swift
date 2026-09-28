@@ -147,8 +147,7 @@ struct GuardView: View {
                     .accessibilityIdentifier("guard.empty.sources")
                 if coverage.anyOn {
                     CardAction(title: "Run now", symbol: "arrow.clockwise", hue: Palette.blue) {
-                        Task { await watchers.run() }
-                        Task { await MailTriageService.shared.run() }
+                        RunCoordinator.shared.runNow(reason: .manual)
                     }
                     .accessibilityIdentifier("guard.empty.runNow")
                 }
@@ -197,9 +196,9 @@ enum GuardRoute: Hashable {
 /// Which kinds of item the sources that are on can give the watchers: it decides what an empty section asks you to
 /// turn on.
 struct GuardCoverage: Equatable {
-    /// Mail-like items: the sample's mail, the Mail source, imported mail and statements (Inbox).
+    /// Mail-like items: the Mail source, imported mail and statements (Inbox); the fixture sample in tests.
     var mail = false
-    /// Documents: the sample's documents, Files, Photos (their text), imports.
+    /// Documents: Files, Photos (their text), imports; the fixture sample in tests.
     var documents = false
     /// Contacts (the address book the impersonation watcher knows people by).
     var contacts = false
@@ -255,12 +254,12 @@ struct GuardHeader: View {
     private struct Entry: Identifiable { let id: String; let title: String; let on: Bool }
 
     private var entries: [Entry] {
-        [Entry(id: "sample", title: "Sample", on: sources.sampleEnabled)]
-            + PhoneSource.allCases.map { Entry(id: $0.id, title: $0.title, on: sources.isPhoneEnabled($0)) }
+        PhoneSource.allCases.map { Entry(id: $0.id, title: $0.title, on: sources.isPhoneEnabled($0)) }
             + [Entry(id: "inbox", title: "Inbox", on: sources.inboxEnabled && !sources.inboxBatches.isEmpty)]
     }
 
-    private var running: Bool { watchers.running || sources.scanning }
+    @ObservedObject private var runStatus = RunCoordinator.shared.status
+    private var running: Bool { watchers.running || sources.scanning || runStatus.running }
 
     private var mascot: MascotState {
         if running { return .scanning }
@@ -346,17 +345,16 @@ struct GuardHeader: View {
                 .accessibilityIdentifier("guard.header.lastRun")
             Spacer(minLength: 4)
             Button {
-                Task { await watchers.run() }
-                Task { await mail.run() }
+                RunCoordinator.shared.runNow(reason: .manual)
             } label: {
-                Label(watchers.running ? "Running" : "Run now", systemImage: "arrow.clockwise")
+                Label(running ? "Running" : "Run now", systemImage: "arrow.clockwise")
                     .font(.footnote.weight(.semibold))
                     .padding(.horizontal, 14)
                     .frame(minHeight: 44)
             }
             .buttonStyle(.neonPrimaryCompact)
             .disabled(running || !coverage.anyOn)
-            .accessibilityHint("Runs the five watchers over every source that is on")
+            .accessibilityHint("Reads every source that is on, then runs the privacy check, mail triage, the watchers and the sort")
             .accessibilityIdentifier("guard.runNow")
         }
     }

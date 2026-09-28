@@ -142,7 +142,7 @@ final class GuardModelTests: XCTestCase {
     // MARK: Over the sample
 
     private static let sample: [SourceItem] = {
-        let root = SourcesService.bundledSample()!
+        let root = TestSample.root()!
         let scanner = SourceScanner(extractors: AppleExtractors(timeZone: TimeZone(identifier: "UTC")!),
                                     zone: Kotlinx_datetimeTimeZone.companion.UTC,
                                     limits: SourceScanner.Limits(maxFileBytes: 50 * 1024 * 1024, maxTextChars: 20_000, maxDepth: 16, maxMboxMessages: 20_000))
@@ -268,10 +268,14 @@ final class GuardModelTests: XCTestCase {
         XCTAssertTrue(s.running)
         // The scan lands while the first run is in flight (it already read 0 items), and asks for a run.
         box.items = GuardModelTests.sample
-        await s.run(today: today)
-        XCTAssertTrue(s.running, "the second request returns at once: it is queued, not run alongside")
+        // The second request is queued, not run alongside: it waits for the follow-up run it asked for (the run
+        // coordinator relies on that), which cannot start before the first ends.
+        let second = Task { await s.run(today: today) }
+        for _ in 0..<50 { await Task.yield() }
+        XCTAssertTrue(s.running)
         model.release()
         await first.value
+        await second.value
         let deadline = Date().addingTimeInterval(30)
         while (s.running || (s.summary?.findings.isEmpty ?? true)) && Date() < deadline {
             try await Task.sleep(nanoseconds: 20_000_000)
@@ -293,11 +297,11 @@ final class GuardModelTests: XCTestCase {
         let first = Task { await s.run(today: today) }
         var spins = 0
         while !model.held && spins < 10_000 { await Task.yield(); spins += 1 }
-        await s.run(today: today)
-        await s.run(today: today)
-        await s.run(today: today)
+        let asked = (0..<3).map { _ in Task { await s.run(today: today) } }
+        for _ in 0..<50 { await Task.yield() }
         model.release()
         await first.value
+        for t in asked { await t.value }
         let deadline = Date().addingTimeInterval(30)
         while (s.running || model.opens < 2) && Date() < deadline { try await Task.sleep(nanoseconds: 20_000_000) }
         try await Task.sleep(nanoseconds: 200_000_000)

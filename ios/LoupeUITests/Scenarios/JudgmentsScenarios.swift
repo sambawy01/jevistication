@@ -266,7 +266,7 @@ final class JudgmentsScenarios: ScenarioCase {
     /// the borderline and a histogram bin filter too; a relaunch keeps a correction made in the detail.
     func testFixtureDashboardFiltersAndACorrectionSurvivesARelaunch() {
         start("results", ["-LoupeTab", "judgments", "-LoupeSkipOnboarding", "-LoupeModelState", "ready",
-                          "-LoupeJudgmentDemo", "is-receipt", "-LoupeResultsFixture", "300"])
+                          "-LoupeJudgmentDemo", "is-receipt", "-LoupeResultsFixture", "300"], run: false)
         let unsure = button("results.segment.unsure")
         XCTAssertTrue(unsure.waitForExistence(timeout: 90))
         let parts = split()
