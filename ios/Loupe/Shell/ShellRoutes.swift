@@ -25,6 +25,10 @@ enum Place: String, CaseIterable {
 enum HomeRoute: Hashable {
     /// Today's Guard screen whole (the watchers, Run now, Protection), behind the Protected card.
     case protection
+    /// Guard's Subscriptions section on its own screen (the Money card).
+    case subscriptions
+    /// Guard's Expiring soon timeline on its own screen (the Documents card).
+    case expiring
     case review
     case privacy
 }

@@ -129,7 +129,7 @@ struct RootView: View {
 
     private var places: some View {
         TabView(selection: selection) {
-            NowView()
+            HomeView(path: $router.homePath, openReads: { router.openReads() }, openMail: { router.openMail() })
                 .tabItem { Label(Place.home.title, systemImage: Place.home.symbol) }
                 .badge(protection.unseenCount)
                 .tag(Place.home)
@@ -146,6 +146,7 @@ struct RootView: View {
         }
         // Jobs running off-screen, and the model-load banner (the live run views are in place on each screen).
         .overlay(alignment: .bottom) { ActivityDock() }
+        .modifier(ShellEffects(router: router))
         #if DEBUG
         .overlay(alignment: .topLeading) {
             if LaunchOptions.current.mainWatchdog { MainThreadWatchdogLabel() }

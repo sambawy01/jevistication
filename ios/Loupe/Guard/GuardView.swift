@@ -25,7 +25,7 @@ struct GuardScreen: View {
                     GuardHeader(watchers: watchers, sources: sources, coverage: coverage)
                     // Check a link, Check what I copied and Spotted, up top (audit P1-1); the full section stays below.
                     GuardQuickActions()
-                    notice
+                    GuardNotice(watchers: watchers)
                     if let summary = watchers.summary {
                         content(summary)
                     } else {
@@ -138,30 +138,6 @@ struct GuardScreen: View {
         .card()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("guard.empty")
-    }
-
-    @ViewBuilder private var notice: some View {
-        if let notice = watchers.notice {
-            HStack(spacing: 10) {
-                Text(notice).font(.footnote).foregroundStyle(Palette.ink)
-                    .fixedSize(horizontal: false, vertical: true)
-                Spacer(minLength: 8)
-                if watchers.lastSetAside != nil || watchers.lastSetAsideRow != nil {
-                    // The frame is the label's: outside the Button it left only the word tappable (17 pt).
-                    Button { watchers.undoSetAside() } label: {
-                        Text("Undo").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
-                    }
-                        .font(.footnote.weight(.semibold))
-                        .accessibilityIdentifier("guard.undo")
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(minHeight: 44)
-            .background(Palette.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("guard.notice")
-        }
     }
 }
 
@@ -601,6 +577,36 @@ extension View {
             case .mail: MailTriageView(mail: MailTriageService.shared)
             case .onlineChecks: OnlineChecksView(online: OnlineChecksService.shared)
             }
+        }
+    }
+}
+
+/// The watchers' last answer ("Set aside … · Undo"), on every screen a verdict can be given from (Home, Protection,
+/// Subscriptions, Expiring).
+struct GuardNotice: View {
+    @ObservedObject var watchers: WatchersService
+
+    var body: some View {
+        if let notice = watchers.notice {
+            HStack(spacing: 10) {
+                Text(notice).font(.footnote).foregroundStyle(Palette.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
+                if watchers.lastSetAside != nil || watchers.lastSetAsideRow != nil {
+                    // The frame is the label's: outside the Button it left only the word tappable (17 pt).
+                    Button { watchers.undoSetAside() } label: {
+                        Text("Undo").frame(minWidth: 44, minHeight: 44).contentShape(Rectangle())
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .accessibilityIdentifier("guard.undo")
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .frame(minHeight: 44)
+            .background(Palette.accentSoft, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("guard.notice")
         }
     }
 }
