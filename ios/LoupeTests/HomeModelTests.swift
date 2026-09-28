@@ -5,15 +5,15 @@ import LoupeKit
 /// Home's cards (spec 2026-09-28 §3): what Needs attention holds and in what order, and what Money, Documents and
 /// Protected say, empty states included.
 final class HomeModelTests: XCTestCase {
-    private func sub(_ merchant: String, monthly: Int64?, next: String?) -> CensusRow {
+    private func sub(_ merchant: String, monthly: Int64?, next: String?, currency: String = "") -> CensusRow {
         CensusRow(merchant: merchant, cadence: "monthly", occurrences: 3, typicalMinor: monthly ?? 500,
                   lastChargedIso: "2026-09-01", daysSinceLastCharge: 27, monthlyMinor: monthly.map { KotlinLong(value: $0) },
-                  sample: false, itemIds: ["a", "b", "c"], nextExpectedIso: next, verdict: nil, currency: "", lines: [])
+                  sample: false, itemIds: ["a", "b", "c"], nextExpectedIso: next, verdict: nil, currency: currency, lines: [])
     }
 
-    private func doc(_ name: String, days: Int64) -> ExpiryRow {
+    private func doc(_ name: String, days: Int64, kind: String? = nil) -> ExpiryRow {
         ExpiryRow(itemId: "id:\(name)", itemName: name, expiryIso: "2027-01-14", daysRemaining: days, ambiguous: false,
-                  breachesRule: days < 183, documentType: nil, findingKey: nil, line: nil, sample: false, documentKind: nil)
+                  breachesRule: days < 183, documentType: nil, findingKey: nil, line: nil, sample: false, documentKind: kind)
     }
 
     func testNeedsAttentionIsEmptyWhenNothingWaits() {
@@ -55,6 +55,42 @@ final class HomeModelTests: XCTestCase {
         XCTAssertEqual(d.headline, "car-licence.jpg: \(GuardModel.daysLeftLine(12))")
         XCTAssertEqual(d.detail, "+ 1 more")
         XCTAssertFalse(d.needsSource)
+    }
+
+    // MARK: The tracking engine (task T-B: OLDER, per-currency totals, documentKind)
+
+    func testMoneyShowsOneTotalPerCurrencyNeverSummed() {
+        let census = SubscriptionCensus(rows: [sub("Netflix EG", monthly: 45000, next: "2026-10-01", currency: "EGP"),
+                                               sub("Spotify US", monthly: 999, next: "2026-10-02", currency: "USD")],
+                                        monthlyTotalMinor: 45999, chargesFound: 6, sample: false, setAside: 0)
+        let m = HomeModel.money(census, mailCovered: true)
+        XCTAssertEqual(m.headline, "EGP 450.00 a month · USD 9.99 a month",
+                       "the larger currency first; the two are never added into one number")
+    }
+
+    func testMoneyShowsAnUnlabeledTotalWhenNoCurrencyWasRead() {
+        let census = SubscriptionCensus(rows: [sub("Netflix", monthly: 16500, next: "2026-10-03"),
+                                               sub("Spotify", monthly: 6999, next: "2026-10-01", currency: "USD")],
+                                        monthlyTotalMinor: 23499, chargesFound: 6, sample: false, setAside: 0)
+        let m = HomeModel.money(census, mailCovered: true)
+        XCTAssertEqual(m.headline, "165.00 a month · USD 69.99 a month", "the empty-currency row shows with no code")
+    }
+
+    func testDocumentsOlderOnlyDocumentsGetThePlainLineNotAnAlarm() {
+        let d = HomeModel.documents([doc("ancient-warranty.pdf", days: -400)], documentsCovered: true)
+        XCTAssertEqual(d.headline, "1 document expired more than a year ago")
+        XCTAssertFalse(d.needsSource)
+    }
+
+    func testDocumentsNeverHeadlineAnOlderItemWhileANearerOneExists() {
+        let d = HomeModel.documents([doc("ancient.pdf", days: -400), doc("passport.jpg", days: 30)], documentsCovered: true)
+        XCTAssertEqual(d.headline, "passport.jpg: \(GuardModel.daysLeftLine(30))")
+        XCTAssertEqual(d.detail, "1 document", "the older item does not count toward '+ N more' either")
+    }
+
+    func testDocumentsHeadlineUsesDocumentKindWhenPresent() {
+        let d = HomeModel.documents([doc("IMG_0092.jpg", days: 12, kind: "car_licence")], documentsCovered: true)
+        XCTAssertEqual(d.headline, "Car licence: \(GuardModel.daysLeftLine(12))")
     }
 
     func testDocumentsAskForFilesWhenNothingCouldHoldDocuments() {

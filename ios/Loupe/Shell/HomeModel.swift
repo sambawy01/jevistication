@@ -61,6 +61,10 @@ enum HomeModel {
 
     /// The Money card from the census; nil until the watchers have run (or their saved results are read back).
     /// `running`: a run, a scan or the watchers are going now; `loaded`: the saved results have been read back.
+    ///
+    /// One total per currency (`WatcherFindings.monthlyByCurrency`, the engine's own grouping — never one sum across
+    /// currencies): "EGP 450.00 a month · USD 12.99 a month", most expensive first, ties broken by currency code. A
+    /// row whose currency is empty (no currency read from its charges) shows with no code, as Guard's own total does.
     static func money(_ census: SubscriptionCensus?, mailCovered: Bool, running: Bool = false, loaded: Bool = true) -> Summary {
         guard let census else {
             return notYet(running: running, loaded: loaded, what: "your subscriptions",
@@ -77,22 +81,42 @@ enum HomeModel {
                            detail: "No merchant charged three or more times in the \(census.chargesFound) charge\(census.chargesFound == 1 ? "" : "s") read.",
                            needsSource: false)
         }
-        let total = rows.reduce(Int64(0)) { $0 + ($1.monthlyMinor?.int64Value ?? 0) }
         var detail = "\(rows.count) subscription\(rows.count == 1 ? "" : "s")"
         if let next = rows.compactMap({ r in r.nextExpectedIso.map { (r.merchant, $0) } }).min(by: { $0.1 < $1.1 }) {
             detail += " · \(next.0) next on \(GuardModel.day(next.1))"
         }
-        return Summary(headline: "\(WatchersService.money(total)) a month", detail: detail, needsSource: false)
+        return Summary(headline: moneyHeadline(rows), detail: detail, needsSource: false)
+    }
+
+    /// "EGP 450.00 a month · 12.99 a month" (the last: no currency read for that merchant's charges): one line per
+    /// currency, from `WatcherFindings.monthlyByCurrency`, largest first, so two currencies are never added together.
+    private static func moneyHeadline(_ rows: [CensusRow]) -> String {
+        let byCurrency = WatcherFindings.shared.monthlyByCurrency(rows: rows)
+        let parts = byCurrency
+            .filter { $0.value.int64Value > 0 }
+            .sorted { a, b in
+                a.value.int64Value != b.value.int64Value ? a.value.int64Value > b.value.int64Value : a.key < b.key
+            }
+            .map { currency, amount -> String in
+                let money = WatchersService.money(amount.int64Value)
+                return currency.isEmpty ? "\(money) a month" : "\(currency) \(money) a month"
+            }
+        return parts.isEmpty ? "\(WatchersService.money(0)) a month" : parts.joined(separator: " · ")
     }
 
     /// The Documents card from the expiry timeline; nil rows until the watchers have run (or their saved results are
     /// read back).
+    ///
+    /// Leads with the soonest document that is not in `ExpiryBucket.older` (an item expired more than a year ago
+    /// never headlines Home and is never treated as urgent); when only `.older` documents exist, says so plainly,
+    /// with no alarm wording. Names the document by its `documentKind` when the rules found one ("Car licence: 12
+    /// days left"), else by its item name, as Guard does.
     static func documents(_ rows: [ExpiryRow]?, documentsCovered: Bool, running: Bool = false, loaded: Bool = true) -> Summary {
         guard let rows else {
             return notYet(running: running, loaded: loaded, what: "which documents expire soon",
                           readingDetail: "Expiry dates show here once the watchers have run.")
         }
-        guard let soonest = rows.min(by: { $0.daysRemaining < $1.daysRemaining }) else {
+        guard !rows.isEmpty else {
             if !documentsCovered {
                 return Summary(headline: "No documents read yet",
                                detail: "Turn on Files or Photos: Loupe finds the expiry dates on IDs, licences, passports and policies.",
@@ -101,8 +125,29 @@ enum HomeModel {
             return Summary(headline: "No expiry dates found",
                            detail: "Not an all-clear: a document Loupe cannot read is not checked.", needsSource: false)
         }
-        return Summary(headline: "\(soonest.itemName): \(GuardModel.daysLeftLine(soonest.daysRemaining))",
-                       detail: rows.count > 1 ? "+ \(rows.count - 1) more" : "1 document", needsSource: false)
+        let active = rows.filter { !isOlder($0) }
+        guard let soonest = active.min(by: { $0.daysRemaining < $1.daysRemaining }) else {
+            return Summary(headline: "\(rows.count) document\(rows.count == 1 ? "" : "s") expired more than a year ago",
+                           detail: "Not urgent: see Expiring for the list.", needsSource: false)
+        }
+        return Summary(headline: "\(documentTitle(soonest)): \(GuardModel.daysLeftLine(soonest.daysRemaining))",
+                       detail: active.count > 1 ? "+ \(active.count - 1) more" : "1 document", needsSource: false)
+    }
+
+    /// `ExpiryBucket` is LoupeKit's own timeline grouping (the one `WatcherFindings` itself uses to decide which
+    /// expiries are worth an alert): reused directly rather than re-derived, since Guard's Swift-side bucket enum
+    /// (`GuardModel.ExpiryBucket`) has not yet been extended with `.older` (see the report: NEEDS_CONTEXT on the
+    /// Expiring and Subscriptions screens).
+    private static func isOlder(_ row: ExpiryRow) -> Bool {
+        ExpiryBucket.companion.of(daysRemaining: row.daysRemaining) == .older
+    }
+
+    /// The rules' document kind, titled ("car licence" -> "Car licence"), or the item name when none was found.
+    private static func documentTitle(_ row: ExpiryRow) -> String {
+        guard let id = row.documentKind, let kind = DocumentKind.entries.first(where: { $0.id == id }) else {
+            return row.itemName
+        }
+        return kind.title.prefix(1).uppercased() + kind.title.dropFirst()
     }
 
     // MARK: Protected
