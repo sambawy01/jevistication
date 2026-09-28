@@ -19,6 +19,7 @@ struct JudgmentsView: View {
     var body: some View {
         NavigationStack(path: $router.askPath) {
             VStack(spacing: 0) {
+                AskHeader(needsYou: service.needsYou, drawing: service.drawingQueue)
                 Picker("Section", selection: $section) {
                     ForEach(Section.allCases, id: \.self) { Text($0.rawValue).tag($0) }
                 }
@@ -33,7 +34,7 @@ struct JudgmentsView: View {
                 }
             }
             .neonGround()
-            .navigationTitle("Judgments")
+            .navigationTitle("Ask")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) { PacksMenu(packs: packs) }
                 ToolbarItem(placement: .topBarTrailing) {
@@ -153,9 +154,6 @@ struct MyJudgmentsList: View {
                     }
                     .padding(24).frame(maxWidth: .infinity).card()
                 } else {
-                    NavigationLink(value: JudgmentRoute.queue) { NeedsYouCard(count: service.needsYou, drawing: service.drawingQueue) }
-                        .buttonStyle(.plain)
-                        .accessibilityIdentifier("judgments.needsYou")
                     ForEach(service.judgments, id: \.id) { j in
                         NavigationLink(value: JudgmentRoute.results(j.id)) { JudgmentCard(judgment: j, counts: service.cardCounts(j)) }
                             .buttonStyle(.plain)
@@ -233,7 +231,35 @@ struct JudgmentCard: View {
     }
 }
 
-/// "Needs you: N" — the Unsure queue's door, on Now and in My judgments.
+/// The top of Ask in phase 1 (spec §10 step 1): what Ask holds today, and the Unsure queue's door whenever anything
+/// waits (the Ask tab's badge carries the same count). The composer replaces this in step 2.
+struct AskHeader: View {
+    /// Nil until the queue's first background draw has landed (owner ruling: read only the stored value, never
+    /// call `unsure()`/`refillBatch()` from a view body).
+    let needsYou: Int?
+    /// A draw of the queue is running in the background.
+    var drawing: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Pick a ready question, write your own, or ask the web.")
+                .font(.footnote).foregroundStyle(Palette.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("ask.header")
+            if (needsYou ?? 0) > 0 || (needsYou == nil && drawing) {
+                NavigationLink(value: JudgmentRoute.queue) { NeedsYouCard(count: needsYou, drawing: drawing) }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Answers teach the decision model")
+                    .accessibilityIdentifier("ask.needsYou")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 16)
+        .padding(.top, 4)
+    }
+}
+
+/// "Needs you: N" — the Unsure queue's door, at the top of Ask (`AskHeader`).
 struct NeedsYouCard: View {
     /// Nil until the queue's first background draw has landed: shown as "—", never a made-up zero.
     let count: Int?

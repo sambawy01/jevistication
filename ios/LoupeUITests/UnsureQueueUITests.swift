@@ -3,14 +3,15 @@ import XCTest
 final class UnsureQueueUITests: XCTestCase {
     override func setUp() { continueAfterFailure = false }
 
-    /// Now → Needs you → answer the first item → the count drops by one.
+    /// Ask → Needs you → answer the first item → the count drops by one.
     func testAnsweringAnItemDropsTheCount() {
         let app = XCUIApplication()
-        // The demo's stand-in scorer plays the model: Laya reads as ready (it is required, 2026-09-25).
-        app.launchArguments = ["-LoupeFixtures", "-LoupeQueueDemo", "-LoupeTab", "now", "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
+        // The demo's stand-in scorer plays the model: the model reads as ready (it is required, 2026-09-25).
+        app.launchArguments = ["-LoupeFixtures", "-LoupeQueueDemo", "-LoupeTab", "ask", "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
         app.launch()
-        let card = app.buttons["now.needsYou"]
-        XCTAssertTrue(card.waitForExistence(timeout: 20))
+        XCTAssertTrue(app.navigationBars["Ask"].waitForExistence(timeout: 20), "Ask hosts today's judgments")
+        let card = app.buttons["ask.needsYou"]
+        XCTAssertTrue(card.waitForExistence(timeout: 30))
         card.tap()
         let count = app.staticTexts["queue.count"]
         XCTAssertTrue(count.waitForExistence(timeout: 5))
@@ -23,5 +24,15 @@ final class UnsureQueueUITests: XCTestCase {
         expectation(for: dropped, evaluatedWith: count)
         waitForExpectations(timeout: 5)
         XCTAssertTrue(app.buttons["queue.undo"].isEnabled)
+    }
+
+    /// `-LoupeOpen queue` opens Ask with the Unsure queue pushed (the badge's door in phase 1).
+    func testOpenQueueLaunchesStraightIntoTheQueue() {
+        let app = XCUIApplication()
+        app.launchArguments = ["-LoupeFixtures", "-LoupeQueueDemo", "-LoupeTab", "now", "-LoupeOpen", "queue",
+                               "-LoupeSkipOnboarding", "-LoupeModelState", "ready"]
+        app.launch()
+        XCTAssertTrue(app.staticTexts["queue.count"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.tabBars.buttons["Ask"].isSelected)
     }
 }
