@@ -62,7 +62,8 @@ enum HomeScanPanelModel {
     static func progress(_ scans: [ScanSnapshot]) -> HomeScanProgress? {
         guard !scans.isEmpty else { return nil }
         let running = scans.filter { $0.phase == .running }
-        let stages = scans.map { HomeScanProgress.Stage(id: $0.pipeline.source, name: $0.pipeline.title, done: $0.done, total: $0.total) }
+        let stages = scans.map { HomeScanProgress.Stage(id: $0.pipeline.source, name: $0.pipeline.title, done: $0.done,
+                                                        total: $0.total, running: $0.phase == .running) }
         guard !running.isEmpty else {
             return HomeScanProgress(stage: "Done", currentItem: nil, stages: stages, rate: nil, eta: nil,
                                     summary: summaryLine(scans))
@@ -75,6 +76,21 @@ enum HomeScanPanelModel {
                                 rate: rates.isEmpty ? nil : rates.reduce(0, +),
                                 eta: running.compactMap(\.eta).max(),
                                 summary: nil)
+    }
+
+    /// A source row reads live only while its own stage runs (not merely while a sibling source still does).
+    static func rowReading(_ stage: HomeScanProgress.Stage?) -> Bool { stage?.running == true }
+
+    /// A source row's line: "Reading · 120 of 300" while its stage runs; otherwise its resting count, or "Off".
+    static func rowLine(stage: HomeScanProgress.Stage?, on: Bool, restingCount: Int) -> String {
+        if let stage, rowReading(stage) { return "Reading · \(stageCount(stage))" }
+        guard on else { return "Off" }
+        return "\(restingCount.formatted()) \(restingCount == 1 ? "item" : "items")"
+    }
+
+    /// "120 of 300", or "120" while the total is not known.
+    static func stageCount(_ st: HomeScanProgress.Stage) -> String {
+        st.total.map { "\(st.done.formatted()) of \($0.formatted())" } ?? st.done.formatted()
     }
 
     /// Cancel shows only while the check runs, and only when whoever runs it can cancel it (today's source scans
@@ -94,6 +110,8 @@ struct HomeScanProgress: Equatable {
         let name: String
         let done: Int
         let total: Int?
+        /// Still being read (false once this stage finished or stopped, while others may still run).
+        var running = true
     }
 
     let stage: String
@@ -172,7 +190,7 @@ struct HomeScanPanel: View {
                     HStack(spacing: 8) {
                         Text(st.name).font(.footnote.weight(.semibold)).foregroundStyle(Palette.ink)
                         Spacer(minLength: 8)
-                        Text(Self.count(st)).font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
+                        Text(HomeScanPanelModel.stageCount(st)).font(Typeface.mono(11)).monospacedDigit().foregroundStyle(Palette.inkSoft)
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("home.scan.stage.\(st.id)")
@@ -211,9 +229,6 @@ struct HomeScanPanel: View {
         .accessibilityIdentifier("home.scan")
     }
 
-    static func count(_ st: HomeScanProgress.Stage) -> String {
-        st.total.map { "\(st.done.formatted()) of \($0.formatted())" } ?? st.done.formatted()
-    }
 }
 
 /// Today's producer: follows the live scans' snapshots (each publishes ~12 times a second) inside this small view,
@@ -296,11 +311,7 @@ private struct HomeScanSourceRow: View {
         return sources.inboxBatches.reduce(0) { $0 + Int($1.itemCount) }
     }
 
-    private var countLine: String {
-        if let live { return "Reading · \(HomeScanPanel.count(live))" }
-        guard on else { return "Off" }
-        return "\(restingCount.formatted()) \(restingCount == 1 ? "item" : "items")"
-    }
+    private var countLine: String { HomeScanPanelModel.rowLine(stage: live, on: on, restingCount: restingCount) }
 
     var body: some View {
         HStack(spacing: 12) {
@@ -310,7 +321,7 @@ private struct HomeScanSourceRow: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text(countLine)
                     .font(Typeface.mono(11)).monospacedDigit()
-                    .foregroundStyle(live == nil ? Palette.inkSoft : SourceLook.hue(source.id))
+                    .foregroundStyle(HomeScanPanelModel.rowReading(live) ? SourceLook.hue(source.id) : Palette.inkSoft)
                     .accessibilityIdentifier("home.scan.source.\(source.id).count")
             }
             Spacer(minLength: 8)

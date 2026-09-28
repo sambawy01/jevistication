@@ -121,4 +121,20 @@ final class HomeScanPanelModelTests: XCTestCase {
         XCTAssertFalse(HomeScanPanelModel.showsCancel(done, canCancel: true), "nothing to cancel once it finished")
         XCTAssertFalse(HomeScanPanelModel.showsCancel(nil, canCancel: true))
     }
+
+    /// A source that finished while another still reads is not "Reading": it shows its resting count (or Off).
+    func testAFinishedSourceIsNotReadingWhileAnotherRuns() {
+        let p = HomeScanPanelModel.progress([snap("photos", .finished, read: 9, summary: "9 photos · 0 bytes out"),
+                                             running("files", done: 1, total: 2, rate: nil, eta: nil, current: nil)])
+        let photos = p?.stages.first { $0.id == "photos" }
+        let files = p?.stages.first { $0.id == "files" }
+        XCTAssertEqual(photos?.running, false)
+        XCTAssertEqual(files?.running, true)
+        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: photos, on: true, restingCount: 9), "9 items")
+        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: photos, on: false, restingCount: 9), "Off")
+        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: files, on: true, restingCount: 0), "Reading · 1 of 2")
+        XCTAssertEqual(HomeScanPanelModel.rowLine(stage: nil, on: true, restingCount: 1), "1 item")
+        XCTAssertFalse(HomeScanPanelModel.rowReading(photos))
+        XCTAssertTrue(HomeScanPanelModel.rowReading(files))
+    }
 }
