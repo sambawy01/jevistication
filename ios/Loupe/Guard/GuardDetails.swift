@@ -7,6 +7,8 @@ import SwiftUI
 // MARK: - A subscription
 
 struct SubscriptionDetailView: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @ObservedObject var watchers: WatchersService
     let merchant: String
     @Environment(\.dismiss) private var dismiss
@@ -146,6 +148,8 @@ struct SubscriptionDetailView: View {
 // MARK: - A document with an expiry date
 
 struct ExpiryDetailView: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @ObservedObject var watchers: WatchersService
     let itemId: String
     @ObservedObject private var readiness = ModelReadiness.shared
@@ -234,6 +238,8 @@ struct ExpiryDetailView: View {
 // MARK: - Any other finding
 
 struct FindingDetailView: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @ObservedObject var watchers: WatchersService
     let key: String
     @State private var openItem: SourceItem?

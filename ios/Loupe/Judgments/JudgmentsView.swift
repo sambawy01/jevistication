@@ -154,11 +154,11 @@ struct MyJudgmentsList: View {
                     }
                     .padding(24).frame(maxWidth: .infinity).card()
                 } else {
-                    NavigationLink(value: JudgmentRoute.queue) { NeedsYouCard(count: service.needsYou) }
+                    NavigationLink(value: JudgmentRoute.queue) { NeedsYouCard(count: service.needsYou, drawing: service.drawingQueue) }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("judgments.needsYou")
                     ForEach(service.judgments, id: \.id) { j in
-                        NavigationLink(value: JudgmentRoute.results(j.id)) { JudgmentCard(judgment: j, counts: service.counts(j)) }
+                        NavigationLink(value: JudgmentRoute.results(j.id)) { JudgmentCard(judgment: j, counts: service.cardCounts(j)) }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("judgments.mine.\(j.templateId ?? j.id)")
                             .contextMenu {
@@ -193,7 +193,8 @@ struct MyJudgmentsList: View {
 
 struct JudgmentCard: View {
     let judgment: UserJudgment
-    let counts: JudgmentCounts
+    /// Nil while counted in the background: "—".
+    let counts: JudgmentCounts?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -209,14 +210,14 @@ struct JudgmentCard: View {
                 if judgment.criteriaInPrompt { Pill(text: "criteria in prompt", color: Palette.cyan) }
             }
             HStack(spacing: 16) {
-                stat("\(counts.decisions)", "judged")
-                stat("\(counts.acted)", "answered")
-                stat("\(counts.unsure)", "unsure")
-                if counts.unusable > 0 { stat("\(counts.unusable)", "could not judge", color: Palette.red) }
+                stat(counts.map { "\($0.decisions)" } ?? "—", "judged")
+                stat(counts.map { "\($0.acted)" } ?? "—", "answered")
+                stat(counts.map { "\($0.unsure)" } ?? "—", "unsure")
+                if let counts, counts.unusable > 0 { stat("\(counts.unusable)", "could not judge", color: Palette.red) }
             }
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("judgments.counts")
-            if counts.earlierWording > 0 {
+            if let counts, counts.earlierWording > 0 {
                 Text("\(counts.earlierWording) decision(s) under earlier wording are kept, not counted.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             }
@@ -235,15 +236,22 @@ struct JudgmentCard: View {
 
 /// "Needs you: N" — the Unsure queue's door, on Now and in My judgments.
 struct NeedsYouCard: View {
-    let count: Int
+    /// Nil until the queue's first background draw has landed: shown as "—", never a made-up zero.
+    let count: Int?
+    /// A draw is running in the background: a small spinner beside the count.
+    var drawing: Bool = false
 
     var body: some View {
         HStack(spacing: 12) {
-            MascotView(state: count > 0 ? .thinking : .idle, size: 48)
+            MascotView(state: (count ?? 0) > 0 ? .thinking : .idle, size: 48)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Needs you: \(count)").font(.headline).foregroundStyle(Palette.ink)
-                Text(count > 0 ? "Items the decision model is unsure about, plus a few random checks. One tap each."
-                               : "Nothing waiting for your answer.")
+                HStack(spacing: 6) {
+                    Text("Needs you: \(count.map(String.init) ?? "—")").font(.headline).foregroundStyle(Palette.ink)
+                    if drawing { ProgressView().controlSize(.mini).accessibilityLabel("Counting") }
+                }
+                Text(count == nil ? "Counting what needs your answer…"
+                     : count! > 0 ? "Items the decision model is unsure about, plus a few random checks. One tap each."
+                     : "Nothing waiting for your answer.")
                     .font(.caption).foregroundStyle(Palette.inkSoft)
             }
             Spacer()

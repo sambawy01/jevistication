@@ -36,6 +36,8 @@ struct MailTriageCard: View {
 /// The Mail triage screen: rows by section (phishing suspected first), each with its category,
 /// the concrete signals behind a phishing verdict, link checks, and Open / Mark safe / Confirm.
 struct MailTriageView: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     @ObservedObject var mail: MailTriageService
     @ObservedObject private var assist = AssistService.shared
     @State private var openItem: SourceItem?

@@ -235,6 +235,25 @@ final class SourcesService: ObservableObject {
         items().filter { $0.kind != .contact }
     }
 
+    /// `items()` (or `judgeableItems()`) as a reader to run **off** the main thread (2026-09-28 launch hang):
+    /// reading every source parses each source's whole cache file, far too slow for the main thread on a phone
+    /// with thousands of files. Which sources are on is decided here, now; the reads happen when it is called
+    /// (the library and the Inbox serialise their own file access).
+    func itemsReader(judgeable: Bool = false) -> ItemsReader {
+        guard let library else { return ItemsReader { [] } }
+        let phoneIds = PhoneSource.allCases.filter { isPhoneEnabled($0) }.flatMap(\.cacheIds)
+        let inbox = self.inbox
+        let extra = debugItems
+        let sampleId = Self.sampleId
+        return ItemsReader {
+            let all = library.items(sourceIds: [sampleId], defaultEnabled: true)
+                + library.items(sourceIds: phoneIds, defaultEnabled: true)
+                + (inbox?.items() ?? [])
+                + extra
+            return judgeable ? all.filter { $0.kind != .contact } : all
+        }
+    }
+
     /// How many sources are on, the sample included.
     var enabledCount: Int {
         (sampleEnabled ? 1 : 0) + PhoneSource.allCases.filter { isPhoneEnabled($0) }.count
@@ -250,4 +269,11 @@ final class SourcesService: ObservableObject {
         func onProgress(progress: ScanProgress) { onProgress(progress) }
         func isCancelled() -> Bool { false }
     }
+}
+
+/// A read of the scanned items that may run on any thread (see `SourcesService.itemsReader`).
+struct ItemsReader: @unchecked Sendable {
+    let read: () -> [SourceItem]
+    init(_ read: @escaping () -> [SourceItem]) { self.read = read }
+    func callAsFunction() -> [SourceItem] { read() }
 }

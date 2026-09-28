@@ -191,6 +191,11 @@ struct RootView: View {
         }
         // Jobs running off-screen, and the model-load banner (the live run views are in place on each screen).
         .overlay(alignment: .bottom) { ActivityDock() }
+        #if DEBUG
+        .overlay(alignment: .topLeading) {
+            if LaunchOptions.current.mainWatchdog { MainThreadWatchdogLabel() }
+        }
+        #endif
         .task {
             // Arriving at the tabs from the onboarding steps: the one-time intro follows, once the step's fade
             // has finished (a sheet asked for mid-transition, or in the update that creates its host, is dropped).
@@ -223,3 +228,51 @@ struct PlaceholderTab: View {
         }
     }
 }
+
+#if DEBUG
+/// `-LoupeMainWatchdog` (DEBUG): the longest the main thread has been unable to run a block since launch,
+/// measured from a background timer every 50 ms, shown in a tiny label a UI test reads
+/// (`debug.mainStall`, in milliseconds). The large-ledger launch test holds it under 500 ms (2026-09-28).
+final class MainThreadWatchdog: ObservableObject, @unchecked Sendable {
+    static let shared = MainThreadWatchdog()
+    @Published private(set) var shownMillis = 0   // written on the main queue only
+    private let lock = NSLock()
+    private var worst = 0.0
+    private var pending: Date?
+    private var timer: DispatchSourceTimer?
+
+    func start() {
+        guard timer == nil else { return }
+        let t = DispatchSource.makeTimerSource(queue: DispatchQueue(label: "com.loupe-ai.ios.main-watchdog"))
+        t.schedule(deadline: .now(), repeating: .milliseconds(50))
+        t.setEventHandler { [self] in
+            lock.lock()
+            // A ping still waiting counts as a stall already, however long it waits.
+            if let p = pending { worst = max(worst, Date().timeIntervalSince(p)); lock.unlock(); return }
+            let sent = Date()
+            pending = sent
+            lock.unlock()
+            DispatchQueue.main.async { [self] in
+                lock.lock()
+                worst = max(worst, Date().timeIntervalSince(sent))
+                pending = nil
+                let ms = Int(worst * 1000)
+                lock.unlock()
+                if ms != shownMillis { shownMillis = ms }
+            }
+        }
+        t.resume()
+        timer = t
+    }
+}
+
+private struct MainThreadWatchdogLabel: View {
+    @ObservedObject private var dog = MainThreadWatchdog.shared
+    var body: some View {
+        Text("\(dog.shownMillis)")
+            .font(.system(size: 6)).opacity(0.02)
+            .accessibilityIdentifier("debug.mainStall")
+            .onAppear { dog.start() }
+    }
+}
+#endif

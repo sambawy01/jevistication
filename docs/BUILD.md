@@ -2072,6 +2072,62 @@ their acceptance criteria are met; entries here record increments toward them.
   answers the sheet for up to 8 s, retries a missed tap, and asserts the switch stays put for 3 s. Gate: the full
   iOS suite on an iPhone 17 Pro Max simulator: 541 tests (464 unit, 77 UI), 537 passed, 4 skipped, 0 failures;
   `./gradlew check` green (1,590 tests, 0 failures; no Kotlin changed).
+- **2026-09-28 — iPhone: Mail triage and the privacy check no longer wait behind a background sort (owner's
+  device report: triage sat on "Classifying" while "Sorting in the background · Reading and deciding" ran).**
+  Cause: both ran their LoupeKit call inside `ModelWork.run(.sweep)`. `ModelWork` is the one serial model queue,
+  and a sort (`SortService`, also started by `BackgroundSorter`) is a single block on it that yields between items
+  only when a *higher* claim is held (`ModelLane.shouldYield`: rank strictly above), so a sweep-priority triage
+  waited for the whole sort. Neither needs the model: `MailTriage.summariseOnline` answers with Station's keyword
+  rules (`MailClassify.answers`; the text reading `Phishing.assess` gets is that keyword answer, not a model) plus site checks on the
+  already-fetched online context, and `PrivacyCheck.summariseWatching` is PII / secret / name / duplicate rules;
+  neither takes a `Backend`. Fix: `RulesWork` (in `Sort/ModelWork.swift`), one serial queue per check
+  (`RulesWork.mail`, `RulesWork.privacy`, `.userInitiated`), used by `MailTriageService.run()` and
+  `PrivacyService.run()` instead of the model queue; the coalesced rerun, the live job reporting and
+  `recordRun` are unchanged. Thread safety: every call builds its own collectors (`PiiCollector`,
+  `SecretCollector`), the rule tables are read-only (`by lazy` is synchronised), and `OnlineContext` is
+  immutable, so the two checks and a sort can run side by side. The other `ModelWork.run` callers were checked:
+  there were no other `.sweep` callers; Web questions, Web library, Judgments, the watchers and Diagnostics use
+  `.foreground` (a sort yields to them at its next item). The watchers keep the model queue because the expiry
+  radar can use the model. Tests: `MailTriageTests.testTriageFinishesWhileASortHoldsTheModelQueue` and
+  `PrivacyTests.testPrivacyCheckFinishesWhileASortHoldsTheModelQueue` hold `ModelWork.queue` with a
+  semaphore and require the run to finish in 10 s. Both failed on the old code (timed out) and pass now.
+  `MailTriageUITests`, `PrivacyUITests`, `ReviewPacksUITests` and the `MailPrivacyReviewScenarios` scenario pass.
+  Gate: the full iOS suite on an iPhone 17 Pro Max simulator: 543 tests (466 unit, 77 UI), 536 passed, 7 skipped,
+  0 failures. No Kotlin in this fix.
+- **2026-09-28 — iPhone: launch hang on Now (0x8BADF00D) over a big ledger (owner's device: 1,226 files, 7,653
+  contacts, 289 ledger rows over long texts).** The crash stack: `NowView.content` → `JudgmentsService.needsYou` →
+  `unsure()` → `refillBatch()` → `JudgmentMeasure.queue` → `TransactionEvidence.ruleAnswer` → `assess` →
+  Kotlin/Native `NegativeLookBehindSet` on the main thread, in a view body, on every render. Fixed in three layers.
+  (1) **No heavy work in view bodies.** `needsYou` is a stored `@Published Int?` (nil until the first draw; Now and
+  My judgments show "—" with a small spinner). The Unsure queue is drawn by `scheduleQueueDraw` on its own serial
+  queue (`JudgmentsService.drawQueue`, not the model queue), when the ledger or the judgments change (held batch
+  semantics kept: an answer drops the count, an empty batch is drawn again); the items are read there too
+  (`SourcesService.itemsReader`), since `items()` parses every source's cache file. The ledger is read off the main
+  thread at launch (`loadInBackground`), the per-judgment queue is drawn by the queue screen's `.task`
+  (`prepareQueue`), My judgments' card counts are counted in the background (`cardCounts`), and `ItemIndex` (the
+  id → item map every finding row uses, built in Now's body) is rebuilt off the main thread (`ItemIndex.Store`
+  repaints). (2) **The draw re-reads no text.** `EvidenceMemo` (loupe-kit) keeps the gate's verdict per item id,
+  content hash, text length and budget across draws; the gate is asked only for an unreviewed model answer of a
+  gated judgment. Same entries with or without it (`UnsureQueueSpeedTest`). (3) **The gate is bounded and has no
+  look-behind.** `TransactionEvidence.assess(text, maxChars)` reads the first `SCAN_CHARS` (the judgments' 4,000
+  model budget; the sweep and the phone's queue pass Model settings' `text_chars`), so it never answers on evidence
+  the model could not see — the one deliberate change: evidence only past the budget now reads as none. Word
+  boundaries are `(?:^|[^…])` instead of `(?<![…])` (the same matches for `containsMatchIn`); each pattern sits behind
+  literal anchors found in one pass over a normalised char array, so most texts never reach a regex. Verdicts are
+  proven identical to the shipped gate (`TransactionEvidenceReference`, a copy of it in tests) on every phrase ×
+  22 neighbouring characters, the fixtures, every template example, phrase pairs and 20,000 random texts; the
+  one-pass normalise equals `normalise` on every BMP character. `Baseline.wordRegex` and the privacy/mail
+  look-behinds were left: they do not run in a view body (privacy and mail run on their own queues).
+  Timings (Kotlin/Native debug, the framework the phone links, on the simulator): `assess` on a 20 KB text with the
+  old gate **103–177 s**; on a 200 KB text now **0.35 ms** (17 ms uncapped). JVM: 6 ms → 0.04 ms. Unsure draw over
+  3,000 model answers on 20–50 KB texts: cold ~1.2 s (in the background), warm 27 ms (`UnsureQueueTests`, drawn off
+  the main thread; the main actor's 10 ms ticks stayed under 250 ms throughout). UI: `-LoupeBigLedger 3000` seeds
+  the ledger at launch and `-LoupeMainWatchdog` shows the worst main-thread stall; `LaunchResponsivenessUITests`
+  has the tab bar up within 3 s, taps two tabs and scrolls while it seeds and draws, and holds the worst stall
+  under 500 ms (measured 287–290 ms). Gate: `./gradlew check` green (1,606 test cases, 0 failures);
+  the full iOS suite on an iPhone 17 Pro Max simulator: 545 tests, 538 passed, 7 skipped, 1 failure —
+  `SourcesScenarios.testEverySourceTurnsOffAndOnAndTheSetSurvivesARelaunch` ("sources.phone.mail.setup is not
+  hittable"), which passed alone on a rerun (a Sources-screen scroll flake, nothing this fix touches).
 
 ## Where the build stands
 

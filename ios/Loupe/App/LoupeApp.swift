@@ -83,6 +83,8 @@ struct LaunchOptions {
     var judgmentDemo: String?    // -LoupeJudgmentDemo <template id>: add it, open its results, run
     var openLibrary = false      // -LoupeLibrary: open Judgments on the Library
     var queueDemo = false        // -LoupeQueueDemo (DEBUG, with -LoupeFixtures): seed the queue with a stand-in scorer
+    var mainWatchdog = false     // -LoupeMainWatchdog (DEBUG): show the worst main-thread stall for UI tests
+    var bigLedger = 0            // -LoupeBigLedger n (DEBUG, with -LoupeFixtures): n long items and n model answers (launch perf)
     var openScreen: String?      // -LoupeOpen queue|measure: open Now's queue, or the first judgment's Measure
     var sortDemo = false         // -LoupeSortDemo (DEBUG, with -LoupeFixtures): passive sort with a stand-in scorer
     var inboxDemo = false        // -LoupeInboxDemo (DEBUG, with -LoupeFixtures): import a statement CSV into the Inbox
@@ -120,6 +122,8 @@ struct LaunchOptions {
         if let i = args.firstIndex(of: "-LoupeJudgmentDemo"), i + 1 < args.count { o.judgmentDemo = args[i + 1] }
         o.openLibrary = args.contains("-LoupeLibrary")
         o.queueDemo = args.contains("-LoupeQueueDemo") && o.fixtureMode
+        o.mainWatchdog = args.contains("-LoupeMainWatchdog")
+        if o.fixtureMode, let i = args.firstIndex(of: "-LoupeBigLedger"), i + 1 < args.count, let n = Int(args[i + 1]) { o.bigLedger = n }
         o.sortDemo = args.contains("-LoupeSortDemo") && o.fixtureMode
         o.reviewDemo = args.contains("-LoupeReviewDemo") && o.fixtureMode
         o.privacyPhotoDemo = args.contains("-LoupePrivacyPhotoDemo") && o.fixtureMode

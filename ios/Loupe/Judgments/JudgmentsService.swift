@@ -28,7 +28,8 @@ extension LayaModel: JudgmentModelProvider {
 final class JudgmentsService: ObservableObject {
     static let shared = JudgmentsService(ledger: LedgerService.shared,
                                          items: { SourcesService.shared.judgeableItems() },
-                                         model: JudgmentsService.defaultModel())
+                                         model: JudgmentsService.defaultModel(),
+                                         itemsReader: { SourcesService.shared.itemsReader(judgeable: true) })
 
     /// The decision model, or in DEBUG under `-LoupeStandInModel` the sort demo's stand-in scorer.
     static func defaultModel() -> JudgmentModelProvider {
@@ -55,28 +56,70 @@ final class JudgmentsService: ObservableObject {
     @Published private(set) var corrections: [CorrectionKey: String] = [:]
     /// Answers given in the queue this session, newest last (what Undo retracts).
     @Published fileprivate(set) var answered: [UnsureEntry] = []
-    /// The Unsure queue's current batch, and the ledger size it was drawn from.
-    /// Not @Published: it is drawn lazily while a view reads it; answers publish through `corrections`.
-    fileprivate(set) var batch: [UnsureEntry] = []
+    /// The Unsure queue's current batch, and the ledger/judgments stamp it was drawn from. Drawn in the
+    /// background (`scheduleQueueDraw`), never in a view body: over a big ledger the draw reads every
+    /// row's item (2026-09-28: drawn in Now's body, it hung the launch until iOS killed the app).
+    @Published fileprivate(set) var batch: [UnsureEntry] = [] {
+        didSet { if batchDrawn { needsYou = batch.count } }
+    }
     fileprivate var batchStamp = ""
+    fileprivate var batchDrawn = false
+    /// "Needs you: N" — how many items the current batch holds; nil until the first draw has finished
+    /// (Now shows "—" and a small spinner, never a made-up zero).
+    @Published private(set) var needsYou: Int?
+    /// A draw of the Unsure queue is running in the background.
+    @Published private(set) var drawingQueue = false
     /// The queue opened from one judgment's results: that judgment's own batch, drawn the same way.
-    fileprivate var judgmentBatches: [String: (stamp: String, entries: [UnsureEntry])] = [:]
+    @Published fileprivate var judgmentBatches: [String: (stamp: String, entries: [UnsureEntry])] = [:]
+    fileprivate var queueGeneration = 0
+    fileprivate var drawingStamp = ""
+    fileprivate var queueTask: Task<Void, Never>?
+    fileprivate var judgmentDraws: [String: Task<Void, Never>] = [:]
+    /// The evidence gate's verdicts across draws; touched only on `drawQueue` (it is not thread-safe).
+    fileprivate let evidenceMemo = EvidenceMemo(capacity: 50_000)
     /// `counts(_:)` per judgment wording, until the ledger is read again (corrections do not change them).
     private var countsMemo: [String: JudgmentCounts] = [:]
+    private var countingKeys: Set<String> = []
+    /// Bumped when background counts land (My judgments repaints its cards).
+    @Published private(set) var countsVersion = 0
 
     let ledger: LedgerService
-    private let items: () -> [SourceItem]
+    private let sourceItems: () -> [SourceItem]
+    /// The same items, read off the main thread (the app's sources parse their cache files to answer).
+    fileprivate let itemsReader: () -> ItemsReader
     private let model: JudgmentModelProvider
-    private let settings: ModelSettingsSource
+    fileprivate let settings: ModelSettingsSource
     private var bridge: SweepBridge?
     private var loaded = false
+    #if DEBUG
+    /// `-LoupeBigLedger` and the perf tests: generated items beside the sources' own.
+    var debugItems: [SourceItem] = []
+    #endif
 
     init(ledger: LedgerService, items: @escaping () -> [SourceItem], model: JudgmentModelProvider,
-         settings: ModelSettingsSource = ModelSettingsService.shared) {
+         settings: ModelSettingsSource = ModelSettingsService.shared, itemsReader: (() -> ItemsReader)? = nil) {
         self.ledger = ledger
-        self.items = items
+        self.sourceItems = items
         self.model = model
         self.settings = settings
+        self.itemsReader = itemsReader ?? { let list = items(); return ItemsReader { list } }
+    }
+
+    private func items() -> [SourceItem] {
+        #if DEBUG
+        if !debugItems.isEmpty { return sourceItems() + debugItems }
+        #endif
+        return sourceItems()
+    }
+
+    /// `itemsReader` plus the DEBUG items.
+    fileprivate func offMainItems() -> ItemsReader {
+        let reader = itemsReader()
+        #if DEBUG
+        let extra = debugItems
+        if !extra.isEmpty { return ItemsReader { reader() + extra } }
+        #endif
+        return reader
     }
 
     var running: Bool { sweep?.running == true }
@@ -98,6 +141,29 @@ final class JudgmentsService: ObservableObject {
         rows = ledger.allRows()
         corrections = ledger.correctionIndex()
         countsMemo.removeAll()
+        drawQueueIfStale()
+    }
+
+    /// `load()` then `refreshLedger()`, with the ledger read off the main thread (Now's first appearance:
+    /// the ledger may still be opening, and over thousands of rows that is not work for the main thread).
+    func loadInBackground() async {
+        let ledger = self.ledger
+        let first = !loaded
+        loaded = true
+        let read = await Task.detached(priority: .userInitiated) { () -> (Result<[UserJudgment], Error>?, [LedgerRow], [CorrectionKey: String]) in
+            (first ? Result { try ledger.judgments() } : nil, ledger.allRows(), ledger.correctionIndex())
+        }.value
+        if let js = read.0 {
+            switch js {
+            case .success(let list): judgments = list
+            case .failure(let error): notice = "Your judgments could not be read: \(error.localizedDescription)"
+            }
+            gate = model.isInstalled ? .unknown : .notInstalled
+        }
+        rows = read.1
+        corrections = read.2
+        countsMemo.removeAll()
+        drawQueueIfStale()
     }
 
     func judgment(_ id: String) -> UserJudgment? { judgments.first { $0.id == id } }
@@ -163,8 +229,10 @@ final class JudgmentsService: ObservableObject {
         bridge = nil
         sweep = nil
         answered = []
+        batchDrawn = false
         batch = []
         batchStamp = ""
+        needsYou = nil
         judgmentBatches = [:]
         countsMemo.removeAll()
         judgments = []
@@ -201,6 +269,7 @@ final class JudgmentsService: ObservableObject {
         do {
             try ledger.saveJudgments(next)
             judgments = next
+            drawQueueIfStale()
             return true
         } catch {
             notice = "Could not save your judgments: \(error.localizedDescription)"
@@ -213,11 +282,44 @@ final class JudgmentsService: ObservableObject {
     /// Memoised per wording and threshold until the ledger is read again: My judgments recomputes its cards on
     /// every change here (a correction included), and over 10,000 rows each count is a full pass.
     func counts(_ j: UserJudgment) -> JudgmentCounts {
-        let key = "\(j.id)|\(j.criteriaHash)|\(j.threshold)|\(j.onFailure.name)|\(rows.count)"
+        let key = countsKey(j)
         if let hit = countsMemo[key] { return hit }
         let c = JudgmentResults.shared.counts(all: rows, judgment: j, corrections: corrections)
         countsMemo[key] = c
         return c
+    }
+
+    private func countsKey(_ j: UserJudgment) -> String {
+        "\(j.id)|\(j.criteriaHash)|\(j.threshold)|\(j.onFailure.name)|\(rows.count)"
+    }
+
+    /// My judgments' card numbers for a view body: the memo, or nil while they are counted in the background
+    /// (the card shows "—"). Over thousands of rows a count is a full pass, not work for a render (2026-09-28).
+    func cardCounts(_ j: UserJudgment) -> JudgmentCounts? {
+        if let hit = countsMemo[countsKey(j)] { return hit }
+        let todo = judgments.filter { countsMemo[countsKey($0)] == nil && !countingKeys.contains(countsKey($0)) }
+        guard !todo.isEmpty else { return nil }
+        let keys = todo.map(countsKey)
+        countingKeys.formUnion(keys)
+        let input = CountsInput(rows: rows, judgments: todo, corrections: corrections)
+        Task { [weak self] in
+            let counted = await JudgmentsService.offMain {
+                CountsOutput(counts: input.judgments.map { JudgmentResults.shared.counts(all: input.rows, judgment: $0, corrections: input.corrections) })
+            }
+            guard let self else { return }
+            for (k, c) in zip(keys, counted.counts) { countsMemo[k] = c }
+            countingKeys.subtract(keys)
+            countsVersion += 1
+        }
+        return nil
+    }
+
+    /// Runs `work` on the draw queue (off the main thread) and returns its result.
+    nonisolated static func offMain<T>(_ work: @escaping () -> T) async -> T {
+        let box = WorkBox(work)
+        return await withCheckedContinuation { (c: CheckedContinuation<ResultBox<T>, Never>) in
+            drawQueue.async { c.resume(returning: ResultBox(box.work())) }
+        }.value
     }
 
     func results(_ j: UserJudgment) -> [ResultRow] {
@@ -358,36 +460,125 @@ extension SourceItem {
 /// `JudgmentMeasure`, shared with the desktop's numbers; this only writes answers to the ledger.
 extension JudgmentsService {
     /// D1 across every judgment: most torn first, then a random audit arm of confident answers.
-    /// Held as a batch: answered items leave it (so the count drops), and it is drawn again only
-    /// when it runs out or the ledger gained rows (a new run).
-    func unsure() -> [UnsureEntry] {
-        if batch.isEmpty || batchStamp != stamp { refillBatch() }
-        return batch
-    }
+    /// Held as a batch: answered items leave it (so the count drops), and it is drawn again — in the
+    /// background — only when it runs out or the ledger or the judgments changed. Reading it is free:
+    /// before the first draw has finished it is empty and `needsYou` is nil.
+    func unsure() -> [UnsureEntry] { batch }
 
     /// Changes when a run adds rows or a judgment is added, removed or reworded.
-    private var stamp: String { "\(rows.count)|" + judgments.map { "\($0.id):\($0.criteriaHash)" }.joined(separator: ",") }
+    fileprivate var stamp: String { "\(rows.count)|" + judgments.map { "\($0.id):\($0.criteriaHash)" }.joined(separator: ",") }
 
-    func refillBatch() {
-        batchStamp = stamp
-        batch = JudgmentMeasure.shared.queue(all: rows, judgments: judgments, corrections: corrections,
-                                             items: items(), size: JudgmentMeasure.shared.QUEUE_SIZE)
+    /// The serial queue every draw runs on, off the main thread and off the model's queue (a draw never needs Laya).
+    nonisolated static let drawQueue = DispatchQueue(label: "com.loupe-ai.ios.unsure-draw", qos: .userInitiated)
+
+    #if DEBUG
+    /// Tests: called on the draw queue with whether the draw ran on the main thread, and how long it took.
+    nonisolated(unsafe) static var drawObserver: ((_ onMain: Bool, _ seconds: Double) -> Void)?
+    #endif
+
+    /// Draws the queue again in the background; the newest request wins (an older draw's result is dropped).
+    func scheduleQueueDraw() {
+        queueGeneration += 1
+        let generation = queueGeneration
+        drawingStamp = stamp
+        drawingQueue = true
+        queueTask = Task { [weak self] in await self?.drawQueue(generation) }
     }
 
-    /// "Needs you: N" — how many items the current batch still holds.
-    var needsYou: Int { unsure().count }
+    /// Draws again only when the ledger or the judgments changed since the batch held (or being drawn):
+    /// the batch is held, so an answer drops the count rather than being topped up by a redraw.
+    func drawQueueIfStale() {
+        let current = stamp
+        if drawingQueue ? drawingStamp != current : (!batchDrawn || batchStamp != current) { scheduleQueueDraw() }
+    }
 
-    /// The queue for one judgment (opened from its results), or across all of them for nil. Drawn by the same
-    /// rule (most torn first plus the audit arm) over that judgment alone, and held the same way.
+    /// The old name: draws the queue again (in the background).
+    func refillBatch() { scheduleQueueDraw() }
+
+    /// Waits until the queue's latest draw has landed (tests, and the queue screen before its first draw).
+    func settleQueue() async {
+        if !batchDrawn && !drawingQueue { scheduleQueueDraw() }
+        while drawingQueue, let task = queueTask { await task.value }
+    }
+
+    private func drawQueue(_ generation: Int) async {
+        let stamp = self.stamp
+        let drawn = await Self.draw(rows: rows, judgments: judgments, corrections: corrections, reader: offMainItems(),
+                                    textChars: textChars(), memo: evidenceMemo)
+        guard generation == queueGeneration else { return }   // a newer draw is on its way
+        // Answers given while it was drawing are not asked again.
+        let answeredNow = corrections
+        batchStamp = stamp
+        batchDrawn = true
+        batch = drawn.filter { answeredNow[$0.key] == nil }
+        drawingQueue = false
+    }
+
+    /// The characters the evidence gate reads: the judgments' model text budget under Model settings.
+    fileprivate func textChars() -> Int32 {
+        settings.policy(Features.shared.JUDGMENTS).budget(builtIn: DecisionEngine.companion.DEFAULT_STATE_BUDGET)
+    }
+
+    /// One draw of `JudgmentMeasure.queue`, on `drawQueue`: the items are read there too.
+    nonisolated fileprivate static func draw(rows: [LedgerRow], judgments: [UserJudgment], corrections: [CorrectionKey: String],
+                                             reader: ItemsReader, textChars: Int32, memo: EvidenceMemo) async -> [UnsureEntry] {
+        let input = DrawInput(rows: rows, judgments: judgments, corrections: corrections, reader: reader, memo: memo)
+        return await withCheckedContinuation { (c: CheckedContinuation<DrawOutput, Never>) in
+            drawQueue.async {
+                #if DEBUG
+                dispatchPrecondition(condition: .notOnQueue(.main))
+                let start = Date()
+                #endif
+                let entries = JudgmentMeasure.shared.queue(all: input.rows, judgments: input.judgments, corrections: input.corrections,
+                                                           items: input.reader(), size: JudgmentMeasure.shared.QUEUE_SIZE,
+                                                           textChars: textChars, memo: input.memo)
+                #if DEBUG
+                drawObserver?(Thread.isMainThread, Date().timeIntervalSince(start))
+                #endif
+                c.resume(returning: DrawOutput(entries: entries))
+            }
+        }.entries
+    }
+
+    /// The queue for one judgment (opened from its results), or across all of them for nil: the batch held
+    /// for it, empty until `prepareQueue` has drawn it. Drawn by the same rule (most torn first plus the
+    /// audit arm) over that judgment alone, and held the same way.
     func unsure(judgmentId: String?) -> [UnsureEntry] {
         guard let id = judgmentId else { return unsure() }
-        guard let j = judgment(id) else { return [] }
+        guard judgment(id) != nil, let held = judgmentBatches[id], held.stamp == "\(stamp)|\(id)" else { return [] }
+        return held.entries
+    }
+
+    /// Whether `unsure(judgmentId:)` holds a drawn batch (the queue screen shows a spinner until it does).
+    func queueReady(judgmentId: String?) -> Bool {
+        guard let id = judgmentId else { return batchDrawn && !(drawingQueue && batch.isEmpty) }
+        guard judgment(id) != nil else { return true }
+        return judgmentBatches[id]?.stamp == "\(stamp)|\(id)"
+    }
+
+    /// Draws the batch `unsure(judgmentId:)` returns, in the background, unless it is already held.
+    func prepareQueue(judgmentId: String?) async {
+        guard let id = judgmentId else { await settleQueue(); return }
+        guard let j = judgment(id) else { return }
         let s = "\(stamp)|\(id)"
-        if let held = judgmentBatches[id], held.stamp == s, !held.entries.isEmpty { return held.entries }
-        let entries = JudgmentMeasure.shared.queue(all: rows, judgments: [j], corrections: corrections,
-                                                   items: items(), size: JudgmentMeasure.shared.QUEUE_SIZE)
-        judgmentBatches[id] = (s, entries)
-        return entries
+        if let held = judgmentBatches[id], held.stamp == s, !held.entries.isEmpty { return }
+        if let running = judgmentDraws[s] { await running.value; return }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            let drawn = await Self.draw(rows: rows, judgments: [j], corrections: corrections, reader: offMainItems(),
+                                        textChars: textChars(), memo: evidenceMemo)
+            guard "\(stamp)|\(id)" == s else { return }   // the ledger or the judgment changed meanwhile
+            let answeredNow = corrections
+            judgmentBatches[id] = (s, drawn.filter { answeredNow[$0.key] == nil })
+        }
+        judgmentDraws[s] = task
+        await task.value
+        judgmentDraws[s] = nil
+    }
+
+    /// The old batch ran out: draw the next one (answers leave the batch; an empty one is drawn again).
+    fileprivate func redrawIfEmpty() {
+        if batchDrawn && batch.isEmpty && !drawingQueue { scheduleQueueDraw() }
     }
 
     /// Answers from the results screen (one item, or many at once): exactly the records the queue writes —
@@ -416,6 +607,7 @@ extension JudgmentsService {
             held.entries.removeAll { keys.contains($0.key) }
             judgmentBatches[j.id] = held
         }
+        redrawIfEmpty()
     }
 
     /// A one-tap answer: a correction keyed by item + the judgment's current criteria hash.
@@ -427,6 +619,7 @@ extension JudgmentsService {
         answered.append(entry)
         batch.removeAll { $0.key == entry.key }
         judgmentBatches[entry.judgment.id]?.entries.removeAll { $0.key == entry.key }
+        redrawIfEmpty()
     }
 
     var canUndo: Bool { !answered.isEmpty }
@@ -489,6 +682,22 @@ extension JudgmentsService {
     static func now() -> String { ISO8601DateFormatter().string(from: Date()) }
 }
 
+/// What a draw reads, handed to the draw queue in one piece (LoupeKit's objects are safe to read from any
+/// thread; the memo is only ever touched on `JudgmentsService.drawQueue`).
+private struct DrawInput: @unchecked Sendable {
+    let rows: [LedgerRow]
+    let judgments: [UserJudgment]
+    let corrections: [CorrectionKey: String]
+    let reader: ItemsReader
+    let memo: EvidenceMemo
+}
+
+private struct DrawOutput: @unchecked Sendable { let entries: [UnsureEntry] }
+private struct CountsInput: @unchecked Sendable { let rows: [LedgerRow]; let judgments: [UserJudgment]; let corrections: [CorrectionKey: String] }
+private struct CountsOutput: @unchecked Sendable { let counts: [JudgmentCounts] }
+private struct WorkBox<T>: @unchecked Sendable { let work: () -> T; init(_ work: @escaping () -> T) { self.work = work } }
+private struct ResultBox<T>: @unchecked Sendable { let value: T; init(_ value: T) { self.value = value } }
+
 #if DEBUG
 /// `-LoupeQueueDemo` (with `-LoupeFixtures`, so the ledger is throwaway): a deterministic stand-in
 /// backend so UI tests can drive the queue without the model. Never used outside that flag.
@@ -518,5 +727,31 @@ extension JudgmentsService {
         ledger.flush()
         refreshLedger()
     }
+
+    /// `-LoupeBigLedger n` and the perf tests: n long documents (LoupeKit's `LargeLedgerFixture`, 20–50 KB each)
+    /// and one model answer per item under "Is this a receipt?", logged as if before the evidence gate — so every
+    /// draw of the Unsure queue re-checks each one, the owner's case (2026-09-28). All of it off the main thread.
+    func seedLargeLedger(count: Int) async {
+        await loadInBackground()
+        if judgments.first(where: { $0.templateId == "is-receipt" }) == nil { useTemplate("is-receipt") }
+        guard let j = judgments.first(where: { $0.templateId == "is-receipt" }) else { return }
+        let ledger = self.ledger
+        let seeded = await Task.detached(priority: .userInitiated) { () -> SeededItems in
+            let items = LargeLedgerFixture.shared.items(count: Int32(count))
+            let plan = JudgmentResults.shared.plan(all: ledger.allRows(), judgment: j, items: items, rerunAll: false)
+            let store = EngineSettingsStore(directory: nil)
+            _ = store.setBool(key: "global.use_calibration", value: false)
+            _ = store.setBool(key: "global.rules_first", value: false)   // the gate stays out of the run: rows as before it
+            let bridge = SweepBridge(progress: { _ in }, rows: { ledger.record($0) })
+            _ = JudgmentSweep(backend: FixtureQueueBackend()).runWith(judgment: j, plan: plan, observer: bridge, autoBaseline: false,
+                                                                   policy: store.current.policy(feature: Features.shared.JUDGMENTS))
+            ledger.flush()
+            return SeededItems(items: items)
+        }.value
+        debugItems = seeded.items
+        await loadInBackground()
+    }
 }
+
+private struct SeededItems: @unchecked Sendable { let items: [SourceItem] }
 #endif

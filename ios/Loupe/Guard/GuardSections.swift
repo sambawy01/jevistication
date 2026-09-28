@@ -255,6 +255,8 @@ struct ExpiryGroupView: View {
 }
 
 struct ExpiryTimelineRow: View {
+    /// Item headers come from `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
     let row: ExpiryRow
     let bucket: GuardModel.ExpiryBucket
     let half: GuardModel.ModelHalf

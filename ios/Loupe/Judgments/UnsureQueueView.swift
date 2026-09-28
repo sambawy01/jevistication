@@ -15,16 +15,27 @@ struct UnsureQueueView: View {
     private func id(_ e: UnsureEntry) -> String { "\(e.judgment.id)|\(e.itemId)" }
 
     var body: some View {
+        // Held batches only: the draw runs in the background (`prepareQueue`), never in this body.
         let all = service.unsure(judgmentId: judgmentId)
+        let ready = service.queueReady(judgmentId: judgmentId)
         let waiting = all.filter { !skipped.contains(id($0)) }
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 12) {
                     MascotView(state: happy ? .found : (all.isEmpty ? .idle : .thinking), size: 72)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Needs you: \(all.count)")
-                            .font(Typeface.display(26)).foregroundStyle(Palette.ink)
-                            .accessibilityIdentifier("queue.count")
+                        if ready {
+                            Text("Needs you: \(all.count)")
+                                .font(Typeface.display(26)).foregroundStyle(Palette.ink)
+                                .accessibilityIdentifier("queue.count")
+                        } else {
+                            HStack(spacing: 8) {
+                                Text("Needs you: —").font(Typeface.display(26)).foregroundStyle(Palette.ink)
+                                ProgressView().accessibilityLabel("Counting")
+                            }
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("queue.loading")
+                        }
                         if let id = judgmentId, let j = service.judgment(id) {
                             Text("Only \"\(j.title)\"").font(Typeface.mono(11)).foregroundStyle(Palette.cyan)
                         }
@@ -35,6 +46,13 @@ struct UnsureQueueView: View {
                 if let e = waiting.first {
                     card(e, position: (all.firstIndex { id($0) == id(e) } ?? 0) + 1, of: all.count)
                         .requiresLaya("queue", what: "Answering the Unsure queue")
+                } else if !ready {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                        Text("Finding the decisions that need your answer…").font(.subheadline).foregroundStyle(Palette.inkSoft)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .card()
                 } else if !all.isEmpty {
                     empty("You skipped everything waiting", "Skipped items come back next time you open the queue.") {
                         Button { skipped.removeAll() } label: { Text("Show skipped again").frame(minHeight: 32) }
@@ -64,7 +82,10 @@ struct UnsureQueueView: View {
         .neonGround()
         .navigationTitle("Unsure")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { service.load(); service.refreshLedger() }
+        .task {
+            await service.loadInBackground()
+            await service.prepareQueue(judgmentId: judgmentId)
+        }
     }
 
     private func card(_ e: UnsureEntry, position: Int, of total: Int) -> some View {

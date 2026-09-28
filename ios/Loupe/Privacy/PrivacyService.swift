@@ -2,8 +2,8 @@ import Foundation
 import LoupeKit
 
 /// Privacy check (epic #7 child 10): LoupeKit's shared `PrivacyCheck` (Loupe Station's personal-data,
-/// secret and duplicate rules) over every enabled source. Mechanical — no model — but it runs on the
-/// one model queue at sweep priority, like the sort, so it never competes with Laya for the CPU.
+/// secret and duplicate rules) over every enabled source. Mechanical — no model — so it runs on its own
+/// rules queue (`RulesWork.privacy`), never behind a sort on the model queue.
 /// Mark safe is an appended correction; delete / move act only on files the app can reach, with Undo.
 /// Nothing leaves the phone, and no finding, preview or path is ever logged.
 @MainActor
@@ -65,7 +65,7 @@ final class PrivacyService: ObservableObject {
         let job = ActivityCenter.shared.start("scan", title: "act.title.privacy", view: "scan", total: all.count, stage: "act.stage.deciding")
         job.meta(["files_total": all.count, "files_seen": 0, "laya_files": 0, "rule_only": 0, "ocr_files": 0])
         let listener = PrivacyJobListener(job: job, readContent: readContent, pace: ActivityCenter.slowPace)
-        let result = await ModelWork.run(.sweep) {
+        let result = await RulesWork.run(on: RulesWork.privacy) {
             PrivacyCheck.shared.summariseWatching(items: all, sampleSourceIds: [SourcesService.sampleId], corrections: corrections,
                                                   readContent: readContent, listener: listener)
         }
@@ -177,7 +177,7 @@ final class PrivacyService: ObservableObject {
 }
 
 /// Reports each checked item of a privacy check to its live run: counts only (LoupeKit's `ActivityReport`).
-/// Called on the model queue; `pace` (DEBUG `-LoupeSlowJobs`) spaces items so a UI test can watch them move.
+/// Called on the rules queue; `pace` (DEBUG `-LoupeSlowJobs`) spaces items so a UI test can watch them move.
 final class PrivacyJobListener: NSObject, PrivacyItemListener, @unchecked Sendable {
     let job: LiveJob
     let readContent: Bool

@@ -89,6 +89,8 @@ class JudgmentSweep(private val backend: Backend?) {
         var cancelled = false
         val layaOff = !policy.useLaya
         val switchToBaseline = autoBaseline && policy.baselineSwitch
+        // The model's text budget; the evidence gate reads the same characters (TransactionEvidence.SCAN_CHARS).
+        val textChars = policy.budget(DecisionEngine.DEFAULT_STATE_BUDGET)
 
         fun flush() {
             if (buffer.isEmpty()) return
@@ -111,7 +113,7 @@ class JudgmentSweep(private val backend: Backend?) {
             val engine = DecisionEngine(
                 model, Probability.of(policy.thresholdFor(judgment)),
                 recalibrator = ModelPrior.recalibrator(policy.useCalibration),
-                stateBudget = policy.budget(DecisionEngine.DEFAULT_STATE_BUDGET),
+                stateBudget = textChars,
             )
             for (item in todo) {
                 if (observer.isCancelled()) {
@@ -119,7 +121,7 @@ class JudgmentSweep(private val backend: Backend?) {
                     break
                 }
                 val t0 = TimeSource.Monotonic.markNow()
-                val check = if (layaOff) rulesOnly(judgment, item) else mechanical(judgment, item, policy.rulesFirst)
+                val check = if (layaOff) rulesOnly(judgment, item, textChars) else mechanical(judgment, item, policy.rulesFirst, textChars)
                 if (layaOff && check !is Mechanical.Resolved) {
                     noRule++
                     done++
@@ -165,8 +167,8 @@ class JudgmentSweep(private val backend: Backend?) {
          * With Laya off, the rules alone: "Always baseline", an exact duplicate, then the judgment's
          * baseline rule (logged [LAYA_OFF_CHECK]); [Mechanical.Deferred] when none applies.
          */
-        fun rulesOnly(judgment: UserJudgment, item: SourceItem): Mechanical<String> {
-            val first = mechanical(judgment, item)
+        fun rulesOnly(judgment: UserJudgment, item: SourceItem, textChars: Int = TransactionEvidence.SCAN_CHARS): Mechanical<String> {
+            val first = mechanical(judgment, item, textChars)
             if (first is Mechanical.Resolved) return first
             val baseline = judgment.baseline ?: return Mechanical.Deferred
             return Mechanical.Resolved(baseline.answer(item.text), LAYA_OFF_CHECK)
@@ -176,8 +178,13 @@ class JudgmentSweep(private val backend: Backend?) {
          * [mechanical] under `rules_first`: off, the exact-duplicate rule and the transaction-evidence
          * gate no longer answer before Laya ("Always baseline" is the judgment's own override and still does).
          */
-        fun mechanical(judgment: UserJudgment, item: SourceItem, rulesFirst: Boolean): Mechanical<String> {
-            if (rulesFirst) return mechanical(judgment, item)
+        fun mechanical(
+            judgment: UserJudgment,
+            item: SourceItem,
+            rulesFirst: Boolean,
+            textChars: Int = TransactionEvidence.SCAN_CHARS,
+        ): Mechanical<String> {
+            if (rulesFirst) return mechanical(judgment, item, textChars)
             val baseline = judgment.baseline
             return if (judgment.baselineMode == BaselineMode.ALWAYS_BASELINE && baseline != null) {
                 Mechanical.Resolved(baseline.answer(item.text), AutoBaseline.ALWAYS_CHECK)
@@ -187,7 +194,7 @@ class JudgmentSweep(private val backend: Backend?) {
         }
 
         /** A judgment's mechanical check, where it has one (A3: the model is not asked). */
-        fun mechanical(judgment: UserJudgment, item: SourceItem): Mechanical<String> {
+        fun mechanical(judgment: UserJudgment, item: SourceItem, textChars: Int = TransactionEvidence.SCAN_CHARS): Mechanical<String> {
             val positive = judgment.positiveLabel
             val baseline = judgment.baseline
             if (judgment.baselineMode == BaselineMode.ALWAYS_BASELINE && baseline != null) {
@@ -199,7 +206,7 @@ class JudgmentSweep(private val backend: Backend?) {
             }
             // The money judgments' evidence gate: no sign of a payment (or a shop's product page) is
             // answered "no" by rule, so it never reaches the model or the Unsure queue.
-            TransactionEvidence.ruleAnswer(judgment, item.text)?.let { return Mechanical.Resolved(it, TransactionEvidence.CHECK) }
+            TransactionEvidence.ruleAnswer(judgment, item.text, textChars)?.let { return Mechanical.Resolved(it, TransactionEvidence.CHECK) }
             return Mechanical.Deferred
         }
     }

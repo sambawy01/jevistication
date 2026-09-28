@@ -19,6 +19,8 @@ struct NowView: View {
     @State private var opened = false
     @ObservedObject private var readiness = ModelReadiness.shared
     @ObservedObject private var protection = ProtectionStore.shared
+    /// Findings name their items through `ItemIndex`, built off the main thread: repaint when it lands.
+    @ObservedObject private var itemIndex = ItemIndex.Store.shared
 
     var body: some View {
         NavigationStack {
@@ -48,9 +50,11 @@ struct NowView: View {
         .onReceive(mail.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .onReceive(watchers.$summary.receive(on: DispatchQueue.main)) { _ in review.collect() }
         .task {
-            service.load()
-            service.refreshLedger()
+            // The ledger is read off the main thread and the Unsure queue drawn in the background:
+            // Now paints at once and shows "—" until the count lands (2026-09-28 launch hang).
+            await service.loadInBackground()
             #if DEBUG
+            if LaunchOptions.current.bigLedger > 0 { await service.seedLargeLedger(count: LaunchOptions.current.bigLedger) }
             if LaunchOptions.current.queueDemo { await seedWhenScanned() }
             if LaunchOptions.current.reviewDemo { await sources.seedReviewDemo() }
             #endif
@@ -95,7 +99,8 @@ struct NowView: View {
                         }
                         Divider().overlay(Palette.hairline)
                         HStack(spacing: 0) {
-                            stat("Needs you", hasDecisions ? "\(service.needsYou)" : nil)
+                            stat("Needs you", hasDecisions ? service.needsYou.map(String.init) : nil,
+                                 busy: hasDecisions && service.drawingQueue, id: "now.stat.needsYou")
                             stat("Findings", watchers.summary.map { "\($0.findings.count)" })
                             stat("Sources", sources.enabledCount > 0 ? "\(sources.enabledCount)" : nil)
                         }
@@ -110,7 +115,7 @@ struct NowView: View {
                 LiveRunSection(view: "now", whileRunning: true).padding(.horizontal, 16)
                 LiveRunSection(view: "watchers", whileRunning: true).padding(.horizontal, 16)
                 if hasDecisions {
-                    Button { showQueue = true } label: { NeedsYouCard(count: service.needsYou) }
+                    Button { showQueue = true } label: { NeedsYouCard(count: service.needsYou, drawing: service.drawingQueue) }
                         .buttonStyle(.plain)
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("now.needsYou")
@@ -246,11 +251,16 @@ struct NowView: View {
         .padding(.horizontal, 16)
     }
 
-    private func stat(_ label: String, _ value: String? = nil) -> some View {
+    private func stat(_ label: String, _ value: String? = nil, busy: Bool = false, id: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundStyle(Palette.inkSoft)
+            HStack(spacing: 4) {
+                Text(label).font(.caption).foregroundStyle(Palette.inkSoft)
+                // Counting in the background: a small spinner, never a frozen screen.
+                if busy { ProgressView().controlSize(.mini).accessibilityLabel("Counting") }
+            }
             // An em dash, not a zero: there is no data yet, and zero would be a claim.
             Text(value ?? "—").font(Typeface.display(26)).foregroundStyle(Palette.cyan)
+                .accessibilityIdentifier(id ?? "now.stat.\(label)")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
