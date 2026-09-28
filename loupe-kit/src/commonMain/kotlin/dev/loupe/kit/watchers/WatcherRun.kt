@@ -23,6 +23,9 @@ import dev.loupe.kit.site.SiteVerdict
 import dev.loupe.engine.TermChange
 import dev.loupe.engine.TermChangeDetector
 import dev.loupe.engine.ValidityRule
+import dev.loupe.kit.tracking.ChargeExtractor
+import dev.loupe.kit.tracking.ExpiryExtractor
+import dev.loupe.kit.tracking.TrackedCharge
 import dev.loupe.sources.common.ItemKind
 import dev.loupe.sources.common.SourceItem
 import dev.loupe.templates.Template
@@ -30,7 +33,17 @@ import dev.loupe.templates.TemplateLibrary
 import kotlinx.datetime.LocalDate
 
 /** A document with an expiry-like date, found mechanically. */
-data class ExpiryCandidate(val item: SourceItem, val expiry: LocalDate, val daysRemaining: Long, val ambiguous: Boolean, val breachesRule: Boolean)
+data class ExpiryCandidate(
+    val item: SourceItem,
+    val expiry: LocalDate,
+    val daysRemaining: Long,
+    val ambiguous: Boolean,
+    val breachesRule: Boolean,
+    /** The rules' document kind (`DocumentKind.id`), or null. The model's own judgment is `ExpiryAlert.documentType`. */
+    val documentKind: String? = null,
+    /** The line with the expiry word, verbatim. */
+    val line: String? = null,
+)
 
 /** Two versions of one document whose labelled amounts moved. */
 data class TermChangeFinding(val earlier: SourceItem, val later: SourceItem, val changes: List<TermChange>)
@@ -61,6 +74,10 @@ data class WatcherReport(
     val linksChecked: Int,
     /** `features.watchers.use_laya` was off: the expiry radar's Laya half did not run (the banner). */
     val layaOff: Boolean = false,
+    /** Every charge read, once each, named per currency: the census's evidence. */
+    val charges: List<TrackedCharge> = emptyList(),
+    /** The census merchant's currency (ISO 4217, or "" when none was written). */
+    val currencyOf: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -69,10 +86,12 @@ data class WatcherReport(
  * items to these and delegates) without changing any rule or threshold. Each watcher is the engine's
  * own, unchanged; this layer only turns scanned items into the inputs those watchers take.
  *
- * - **Expiry radar** — the date arithmetic is mechanical and always runs; deciding *what a
- *   document is* needs the model, so the full radar runs only when a backend is passed.
- * - **Recurring money** — charges are read from emails that say something was charged or paid,
- *   and from CSV files with merchant, date and amount columns. The merchant is the sender's name.
+ * - **Expiry radar** — the full timeline (`ExpiryExtractor`: English, Arabic and Egyptian expiry words, Egyptian
+ *   document kinds, Arabic digits and months) is mechanical and always runs; deciding *what a document is* with the
+ *   model runs only when a backend is passed. The six-month rule is a highlight, not a filter.
+ * - **Recurring money** — charges from every source (`ChargeExtractor`: mail, files and photo receipts, statement
+ *   rows, calendar events; EGP and £ $ €; English, Arabic, Egyptian and Franco words), each counted once; the census
+ *   runs per currency.
  * - **Term change** — two versions of one document: files whose names differ only by digits
  *   (`renewal-2025.pdf`, `renewal-2026.pdf`), or successive emails from one address.
  * - **Impersonation** — a contact is inferred from history (a display name used at least twice
@@ -89,9 +108,6 @@ object WatcherRun {
 
     val SIX_MONTHS: ValidityRule = ValidityRule("six months of validity (e.g. Schengen passports)", 6)
 
-    private val EXPIRY_WORDS = Regex("""\b(expir\w*|valid until|valid to|valid thru|renewal date|4b\.)""", RegexOption.IGNORE_CASE)
-    private val CHARGE_WORDS = Regex("""\b(charged|payment received|paid|receipt for)\b""", RegexOption.IGNORE_CASE)
-    private val AMOUNT = Regex("""[£$€]\s?(\d[\d,]*(?:\.\d{2})?)""")
     private val INSTITUTIONAL_LOCAL = setOf("service", "security", "support", "noreply", "no-reply", "account", "accounts", "billing", "alerts", "info", "verify")
     /** Domains where anyone can register an address, so the domain says nothing about the sender. */
     private val WEBMAIL = setOf(
@@ -138,8 +154,8 @@ object WatcherRun {
         }
         progress(WatcherKind.EXPIRY.id, 1, 1)
         progress(WatcherKind.RECURRING.id, 0, 1)
-        val charges = charges(texty)
-        val recurring = RecurringMoney.census(charges.map { it.second }, today)
+        val charges = trackedCharges(texty)
+        val recurring = census(charges, today)
         progress(WatcherKind.RECURRING.id, 1, 1)
         progress(WatcherKind.TERM_CHANGE.id, 0, 1)
         val terms = termChanges(texty)
@@ -163,6 +179,8 @@ object WatcherRun {
             emailsChecked = emails.size,
             linksChecked = emails.sumOf { it.email!!.links.size },
             layaOff = !policy.useLaya,
+            charges = charges,
+            currencyOf = charges.associate { it.merchant to it.currency },
         )
     }
 
@@ -180,20 +198,11 @@ object WatcherRun {
     fun runIso(items: List<SourceItem>, todayIso: String, backend: Backend?): WatcherReport =
         run(items, LocalDate.parse(todayIso), backend, SIX_MONTHS)
 
-    /** Items with an expiry word and a date within a year (or already passed), latest date taken. */
+    /** Every item with an expiry word and its date, on the full timeline, soonest first (`ExpiryExtractor`). */
     fun expiryCandidates(items: List<SourceItem>, today: LocalDate, rule: ValidityRule): List<ExpiryCandidate> =
-        items.mapNotNull { item ->
-            if (!EXPIRY_WORDS.containsMatchIn(item.text)) return@mapNotNull null
-            val dates = DateFacts.find(item.text)
-            if (dates.isEmpty()) return@mapNotNull null
-            val latest = dates.maxBy { it.date }
-            // As ExpiryRadar does: an ambiguous date on its earlier reading, the safe error.
-            val expiry = listOfNotNull(latest.date, latest.alternate).min()
-            val days = DateFacts.daysUntil(expiry, today)
-            if (days > 366) return@mapNotNull null
-            val breaches = DateFacts.expiresWithin(expiry, today, rule.monthsRequired)
-            ExpiryCandidate(item, expiry, days, latest.ambiguous, breaches)
-        }.sortedBy { it.daysRemaining }
+        ExpiryExtractor.find(items, today, rule).map { f ->
+            ExpiryCandidate(f.item, f.expiry, f.daysRemaining, f.ambiguous, f.breachesRule, f.kind?.id, f.line)
+        }
 
     /**
      * The real radar: the document-type template's judgment decides what each candidate is, the
@@ -211,54 +220,28 @@ object WatcherRun {
         return ExpiryRadar.scan(candidates.map { it.toItem() }, judgment, engine, rule, today, judgment.candidates.toSet() - "none of these")
     }
 
-    /** (item, charge) pairs from emails that record a payment and from money CSVs. */
+    /**
+     * Every charge from every source, once each (`ChargeExtractor`). A merchant billed in more than one currency is
+     * named with the currency in each ("Netflix (EGP)", "Netflix (USD)"): amounts are never added across currencies.
+     */
+    fun trackedCharges(items: List<SourceItem>): List<TrackedCharge> {
+        val charges = ChargeExtractor.extract(items)
+        val multi = charges.groupBy { it.merchant }.filterValues { cs -> cs.map { it.currency }.toSet().size > 1 }.keys
+        return charges.map { c ->
+            if (c.merchant in multi) c.copy(merchant = "${c.merchant} (${c.currency.ifEmpty { "no currency" }})") else c
+        }
+    }
+
+    /** The census, run per currency. */
+    fun census(charges: List<TrackedCharge>, today: LocalDate): List<RecurringCharge> =
+        charges.groupBy { it.currency }
+            .flatMap { (_, cs) -> RecurringMoney.census(cs.map { it.toCharge() }, today) }
+            .sortedByDescending { it.totalMinor() }
+
+    /** (item, charge) pairs, for callers that take the engine's `Charge` (the desktop). */
     fun charges(items: List<SourceItem>): List<Pair<SourceItem, Charge>> {
-        val out = mutableListOf<Pair<SourceItem, Charge>>()
-        for (item in items) {
-            val email = item.email
-            if (item.kind == ItemKind.EMAIL && email != null) {
-                val body = item.text.substringAfter("\n\n", item.text)
-                if (!CHARGE_WORDS.containsMatchIn(body)) continue
-                val amount = AMOUNT.find(body)?.groupValues?.get(1) ?: continue
-                val date = email.date ?: item.date ?: continue
-                val merchant = email.fromName ?: email.fromAddress?.substringAfter('@') ?: continue
-                out += item to Charge(merchant, date, minor(amount))
-            } else if (item.kind == ItemKind.CSV && item.facts["amount_minor"] != null) {
-                // An Inbox CSV row (epic #7 child 15): the statement facts were read at import.
-                val minor = item.facts["amount_minor"]?.toLongOrNull() ?: continue
-                val merchant = item.facts["merchant"] ?: continue
-                val date = item.date ?: continue
-                if (item.duplicateOf != null) continue
-                out += item to Charge(merchant, date, kotlin.math.abs(minor))
-            } else if (item.kind == ItemKind.CSV) {
-                out += csvCharges(item)
-            }
-        }
-        return out
-    }
-
-    private fun csvCharges(item: SourceItem): List<Pair<SourceItem, Charge>> {
-        val lines = item.text.substringAfter("\n\n", item.text).lines().filter { it.isNotBlank() }
-        if (lines.size < 2) return emptyList()
-        val header = lines.first().split(',').map { it.trim().lowercase() }
-        val m = header.indexOfFirst { it == "merchant" || it == "payee" || it == "description" }
-        val d = header.indexOfFirst { it == "date" }
-        val a = header.indexOfFirst { it.startsWith("amount") }
-        if (m < 0 || d < 0 || a < 0) return emptyList()
-        return lines.drop(1).mapNotNull { line ->
-            val cells = line.split(',').map { it.trim() }
-            val date = cells.getOrNull(d)?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: return@mapNotNull null
-            val amount = cells.getOrNull(a)?.removePrefix("-")?.takeIf { it.matches(Regex("""\d[\d]*(\.\d{1,2})?""")) } ?: return@mapNotNull null
-            val merchant = cells.getOrNull(m)?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
-            item to Charge(merchant, date, minor(amount))
-        }
-    }
-
-    private fun minor(raw: String): Long {
-        val parts = raw.replace(",", "").split(".")
-        val major = parts[0].toLong()
-        val cents = parts.getOrNull(1)?.padEnd(2, '0')?.take(2)?.toLong() ?: 0L
-        return major * 100 + cents
+        val byId = items.associateBy { it.id }
+        return trackedCharges(items).mapNotNull { c -> byId[c.itemId]?.let { it to c.toCharge() } }
     }
 
     /** Pairs of versions of one document, each compared by `TermChangeDetector`. */

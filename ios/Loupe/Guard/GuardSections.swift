@@ -180,7 +180,7 @@ struct ExpirySection: View {
                     ForEach(groups) { group in
                         ExpiryGroupView(group: group, half: half)
                     }
-                    Text("Dates are arithmetic, read on this iPhone: an expiry word near a date within a year, or already passed. \"Inside the rule\" means less than \(ruleName).")
+                    Text("Dates are arithmetic, read on this iPhone: an expiry word near a date, however far away, or already passed. \"Inside the rule\" means less than \(ruleName).")
                         .font(.caption).foregroundStyle(Palette.inkSoft)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -207,8 +207,8 @@ struct ExpirySection: View {
                        message: "The radar reads documents, scans and screenshots for passports, IDs, insurance, warranties, cards and contracts. Nothing is read until a source is on.",
                        action: "Open Sources", id: "guard.expiry.empty", perform: openSources)
         } else {
-            GuardEmpty(symbol: "calendar", title: "No expiry dates within a year",
-                       message: "None of the \(itemsChecked) item\(itemsChecked == 1 ? "" : "s") read has an expiry word near a date in the next year. Not an all-clear: a document Loupe cannot read is not checked.",
+            GuardEmpty(symbol: "calendar", title: "No expiry dates found",
+                       message: "None of the \(itemsChecked) item\(itemsChecked == 1 ? "" : "s") read has an expiry word near a date. Not an all-clear: a document Loupe cannot read is not checked.",
                        id: "guard.expiry.empty")
         }
     }

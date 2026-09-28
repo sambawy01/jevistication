@@ -264,7 +264,8 @@ extension CensusRow {
     func withVerdict(_ verdict: FindingVerdict?) -> CensusRow {
         CensusRow(merchant: merchant, cadence: cadence, occurrences: occurrences, typicalMinor: typicalMinor,
                   lastChargedIso: lastChargedIso, daysSinceLastCharge: daysSinceLastCharge, monthlyMinor: monthlyMinor,
-                  sample: sample, itemIds: itemIds, nextExpectedIso: nextExpectedIso, verdict: verdict)
+                  sample: sample, itemIds: itemIds, nextExpectedIso: nextExpectedIso, verdict: verdict,
+                  currency: currency, lines: lines)
     }
 }
 

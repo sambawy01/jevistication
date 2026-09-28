@@ -11,13 +11,13 @@ final class GuardModelTests: XCTestCase {
 
     private func expiry(_ days: Int64, _ name: String = "doc", type: String? = nil, breaches: Bool = true, ambiguous: Bool = false) -> ExpiryRow {
         ExpiryRow(itemId: "id:\(name)", itemName: name, expiryIso: "2027-01-14", daysRemaining: days, ambiguous: ambiguous,
-                  breachesRule: breaches, documentType: type, findingKey: breaches ? "expiry:id:\(name)" : nil, line: nil, sample: false)
+                  breachesRule: breaches, documentType: type, findingKey: breaches ? "expiry:id:\(name)" : nil, line: nil, sample: false, documentKind: nil)
     }
 
     private func sub(_ merchant: String, monthly: Int64?, typical: Int64 = 0, cadence: String = "monthly") -> CensusRow {
         CensusRow(merchant: merchant, cadence: cadence, occurrences: 3, typicalMinor: typical == 0 ? (monthly ?? 0) : typical,
                   lastChargedIso: "2026-09-01", daysSinceLastCharge: 22, monthlyMinor: monthly.map { KotlinLong(value: $0) },
-                  sample: false, itemIds: ["a", "b", "c"], nextExpectedIso: monthly == nil ? nil : "2026-10-01", verdict: nil)
+                  sample: false, itemIds: ["a", "b", "c"], nextExpectedIso: monthly == nil ? nil : "2026-10-01", verdict: nil, currency: "", lines: [])
     }
 
     // MARK: Expiring soon

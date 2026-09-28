@@ -117,11 +117,11 @@ fun WatchersScreen(c: LoupeController, platform: Platform) {
                     LinkButton("Open") { platform.open(e.item.path) }
                 }
             }
-            if (r.expiryCandidates.isEmpty()) Muted("No document with an expiry word and a date within a year was found.")
+            if (r.expiryCandidates.isEmpty()) Muted("No document with an expiry word and a date was found.")
         }
         Card {
             H2("Recurring money")
-            Muted("${r.chargesFound} charge(s) read from emails that say something was charged or paid, and from CSV files with merchant, date and amount columns. A cadence needs three charges.")
+            Muted("${r.chargesFound} charge(s) read from mail, files, photo receipts, statements and calendar events, each counted once. A cadence needs three charges.")
             for (rc in r.recurring) {
                 Body(
                     "${rc.merchant}: ${rc.cadence.name.lowercase()}, ${rc.occurrences} charges, typically ${money(rc.typicalAmountMinor)}, last ${rc.lastCharged} (${rc.daysSinceLastCharge} days ago)",
