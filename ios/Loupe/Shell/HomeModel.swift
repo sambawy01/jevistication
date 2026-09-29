@@ -93,11 +93,8 @@ enum HomeModel {
     /// currency, from `GuardModel.monthlyByCurrency`, largest first, so two currencies are never added together.
     private static func moneyHeadline(_ rows: [CensusRow]) -> String {
         let groups = GuardModel.monthlyByCurrency(rows)
-        guard !groups.isEmpty else { return "\(WatchersService.money(0)) a month" }
-        return groups.map { currency, minor -> String in
-            let money = WatchersService.money(minor)
-            return currency.isEmpty ? "\(money) a month" : "\(currency) \(money) a month"
-        }.joined(separator: " · ")
+        guard !groups.isEmpty else { return "\(GuardModel.money(0, currency: "")) a month" }
+        return groups.map { "\(GuardModel.money($0.minor, currency: $0.currency)) a month" }.joined(separator: " · ")
     }
 
     /// The Documents card from the expiry timeline; nil rows until the watchers have run (or their saved results are
@@ -124,7 +121,7 @@ enum HomeModel {
         let active = rows.filter { GuardModel.ExpiryBucket.of(daysLeft: $0.daysRemaining) != .older }
         guard let soonest = active.min(by: { $0.daysRemaining < $1.daysRemaining }) else {
             return Summary(headline: "\(rows.count) document\(rows.count == 1 ? "" : "s") expired more than a year ago",
-                           detail: "Not urgent: see Expiring for the list.", needsSource: false)
+                           detail: "See Expiring for the list.", needsSource: false)
         }
         return Summary(headline: "\(GuardModel.documentTitle(soonest)): \(GuardModel.daysLeftLine(soonest.daysRemaining))",
                        detail: active.count > 1 ? "+ \(active.count - 1) more" : "1 document", needsSource: false)

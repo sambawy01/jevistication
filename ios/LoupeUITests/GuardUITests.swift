@@ -128,6 +128,22 @@ final class GuardUITests: XCTestCase {
         save("guard-04-protection")
     }
 
+    /// Fix round 1 (ruling C-26): the collapsed Older group. The bundled sample has nothing expired more than a
+    /// year ago, so `-LoupeOlderExpiryDemo` (DEBUG-only, with `-LoupeFixtures`) adds one synthetic scanned document
+    /// through the real mechanical scan, purely for this test.
+    func testOlderExpiryGroupIsCollapsedByDefaultTogglesAndNeverAlerts() {
+        let app = launch("guard", ["-LoupeGuardSection", "expiry", "-LoupeOlderExpiryDemo"])
+        let group = any(app, "guard.expiry.group.older")
+        XCTAssertTrue(group.waitForExistence(timeout: 60))
+        scrollTo(group, in: app)
+        XCTAssertGreaterThanOrEqual(group.frame.height, 44, "the toggle is a real tap target")
+        XCTAssertFalse(app.buttons["guard.expiry.row.older"].exists, "closed by default: its row isn't in the tree yet")
+        group.tap()
+        let row = app.buttons["guard.expiry.row.older"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "tapping expands it")
+        XCTAssertFalse(row.label.localizedCaseInsensitiveContains("inside the rule"), row.label)
+    }
+
     /// The expiry timeline brought to the top for its screenshot.
     func testExpiringSoonTimeline() {
         let app = launch("guard", ["-LoupeGuardSection", "expiry"])

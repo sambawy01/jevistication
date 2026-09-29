@@ -254,6 +254,7 @@ final class SourcesService: ObservableObject {
     #if DEBUG
     private var debugItems: [SourceItem] {
         if LaunchOptions.current.privacyPhotoDemo, DemoItems.extra.isEmpty { DemoItems.installPhotoDemo() }
+        if LaunchOptions.current.olderExpiryDemo { DemoItems.installOlderExpiryDemo() }
         return DemoItems.extra
     }
     #else

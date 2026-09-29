@@ -774,5 +774,25 @@ enum DemoItems {
                              contentHash: item.contentHash, mime: "image/png", date: item.date, dateOrigin: item.dateOrigin,
                              email: nil, facts: item.facts, duplicateOf: nil)]
     }
+
+    static let olderExpiryId = "files:loupe-demo/old-car-licence.jpg"
+
+    /// -LoupeOlderExpiryDemo (with -LoupeFixtures, fix round 1 ruling C-26): one synthetic scanned document, expired
+    /// long before the 365-day "older" cutoff (LoupeKit's `ExpiryBucket.OLDER_AFTER_DAYS`) — the bundled sample has
+    /// none, so without this a UI test cannot see the Expiring screen's collapsed Older group at all. Goes through
+    /// the real mechanical scan (`ExpiryExtractor`), not a fake row: appended, never replacing `installPhotoDemo`'s
+    /// item, and idempotent since `items()` is called repeatedly.
+    static func installOlderExpiryDemo() {
+        guard !extra.contains(where: { $0.id == olderExpiryId }) else { return }
+        let text = "CAR LICENCE\nVehicle licence\nValid until 01/01/2020"
+        let item = PhoneItems().photo(localId: "loupe-demo-older", name: "old-car-licence.jpg", ocrText: text,
+                                      createdIso: "2019-06-01", takenIso: nil, dimensions: nil, camera: nil,
+                                      hasLocation: false, screenshot: false, sizeBytes: 1000)
+        extra.append(item.doCopy(id: olderExpiryId, sourceId: "files", kind: item.kind, path: "loupe-demo/old-car-licence.jpg",
+                                 messageIndex: nil, name: item.name, text: item.text, hasText: item.hasText,
+                                 textTruncated: item.textTruncated, sizeBytes: item.sizeBytes, contentHash: item.contentHash,
+                                 mime: "image/jpeg", date: item.date, dateOrigin: item.dateOrigin, email: nil, facts: item.facts,
+                                 duplicateOf: nil))
+    }
 }
 #endif

@@ -126,42 +126,6 @@ struct FindingCard: View {
     }
 }
 
-/// Now's door to Guard: how many warnings, the subscriptions' monthly total and the next expiry, one tap away.
-struct GuardDoorCard: View {
-    let summary: WatcherSummary
-
-    var body: some View {
-        let open = summary.findings.filter { $0.verdict != .confirmed }.count
-        let next = summary.expiries.first { $0.daysRemaining >= 0 } ?? summary.expiries.first
-        HStack(spacing: 12) {
-            NeonIcon(name: "shield.lefthalf.filled", color: Palette.cyan, size: 24, active: open > 0)
-                .frame(width: 32)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(open == 0 ? "Guard: nothing raised" : "Guard: \(open) warning\(open == 1 ? "" : "s")")
-                    .font(.headline).foregroundStyle(Palette.ink)
-                HStack(spacing: 10) {
-                    if !summary.census.rows.isEmpty {
-                        Label(WatchersService.money(summary.census.monthlyTotalMinor) + "/mo", systemImage: "repeat")
-                    }
-                    if let next {
-                        Label(GuardModel.daysLeftLine(next.daysRemaining), systemImage: "calendar.badge.exclamationmark")
-                    }
-                }
-                .font(Typeface.mono(11)).foregroundStyle(Palette.inkSoft)
-                .lineLimit(1).minimumScaleFactor(0.8)
-                Text("Subscriptions, expiry dates and every finding")
-                    .font(.caption).foregroundStyle(Palette.inkSoft)
-            }
-            Spacer(minLength: 0)
-            Image(systemName: "chevron.right").foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
-        }
-        .frame(minHeight: 44)
-        .card()
-        .accessibilityElement(children: .combine)
-        .accessibilityHint("Opens Guard")
-    }
-}
-
 /// Now's card for browsing protection: "Loupe spotted N risky sites this week", opening Guard → Protection → Spotted.
 struct SpottedNowCard: View {
     let headline: String

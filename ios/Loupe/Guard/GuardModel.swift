@@ -45,8 +45,14 @@ enum GuardModel {
             case .overdue: return .overdue
             case .week: return .thisWeek
             case .month: return .thisMonth
+            case .later: return .later
             case .older: return .older
-            default: return .later
+            default:
+                // The Kotlin `ExpiryBucket` is a class, not a Swift enum, so this switch can't be proven exhaustive
+                // at compile time; every real case is handled above. Fix round 1 (ruling C-26): fail loudly in
+                // debug builds instead of silently folding an unmapped case into `.later`.
+                assertionFailure("unmapped ExpiryBucket")
+                return .later
             }
         }
     }
@@ -173,17 +179,31 @@ enum GuardModel {
         return min(1, Double(m) / Double(total))
     }
 
+    /// A currency-bearing amount, in that currency: "9.99", "EGP 450.00" (empty currency: no code, same as
+    /// `WatchersService.money` alone). The one formatter every currency-bearing amount on Guard and Home goes
+    /// through — fix round 1 (ruling C-26): a row's typical charge, the subscriptions total and Home's Money card
+    /// all used to compose this inline in three different places; irregular rows' typical charge, in particular,
+    /// never showed a code at all.
+    static func money(_ minor: Int64, currency: String) -> String {
+        let money = WatchersService.money(minor)
+        return currency.isEmpty ? money : "\(currency) \(money)"
+    }
+
     /// A merchant's own monthly figure, in its own currency ("9.99", "EGP 450.00"), or nil when irregular. Never the
     /// census total's currency — a row is always shown in its own (task T-B, part 2).
     static func monthlyAmount(_ row: CensusRow) -> String? {
-        guard let m = row.monthlyMinor else { return nil }
-        let money = WatchersService.money(m.int64Value)
-        return row.currency.isEmpty ? money : "\(row.currency) \(money)"
+        row.monthlyMinor.map { money($0.int64Value, currency: row.currency) }
     }
 
-    /// "9.99/mo", "EGP 450.00/mo", or "irregular".
+    /// "typ. EGP 50.00": an irregular merchant's typical charge, in its own currency (fix round 1, ruling C-26).
+    static func typicalAmount(_ row: CensusRow) -> String {
+        "typ. \(money(row.typicalMinor, currency: row.currency))"
+    }
+
+    /// "9.99/mo", "EGP 450.00/mo", or, for an irregular row, its typical charge with a currency ("typ. EGP 50.00") —
+    /// never the bare word "irregular" (fix round 1, ruling C-26: VoiceOver must hear an amount).
     static func perMonth(_ row: CensusRow) -> String {
-        monthlyAmount(row).map { "\($0)/mo" } ?? "irregular"
+        monthlyAmount(row).map { "\($0)/mo" } ?? typicalAmount(row)
     }
 
     /// The census with one merchant's row replaced (a Confirm) or removed (nil: not a subscription / set aside), and

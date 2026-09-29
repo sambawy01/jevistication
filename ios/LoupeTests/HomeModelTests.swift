@@ -79,6 +79,8 @@ final class HomeModelTests: XCTestCase {
     func testDocumentsOlderOnlyDocumentsGetThePlainLineNotAnAlarm() {
         let d = HomeModel.documents([doc("ancient-warranty.pdf", days: -400)], documentsCovered: true)
         XCTAssertEqual(d.headline, "1 document expired more than a year ago")
+        // Fix round 1 (ruling C-26): no reassurance claims ("Not urgent") — just where to look.
+        XCTAssertEqual(d.detail, "See Expiring for the list.")
         XCTAssertFalse(d.needsSource)
     }
 

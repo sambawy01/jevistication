@@ -54,7 +54,7 @@ struct SubscriptionsSection: View {
     /// mixed with another currency's amounts). `allRows` is the full, sorted list, so a merchant's hue here matches
     /// its hue in the list below regardless of which currency group it falls into.
     private func totalRow(_ rowsInCurrency: [CensusRow], currency: String, total: Int64, allRows: [CensusRow]) -> some View {
-        let line = currency.isEmpty ? WatchersService.money(total) : "\(currency) \(WatchersService.money(total))"
+        let line = GuardModel.money(total, currency: currency)
         return HStack(alignment: .center, spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
                 Caption(text: currency.isEmpty ? "Every month" : "Every month · \(currency)")
@@ -120,7 +120,7 @@ struct SubscriptionRow: View {
                 Text(GuardModel.monthlyAmount(row) ?? "irregular")
                     .font(Typeface.mono(15, weight: .semibold)).monospacedDigit()
                     .foregroundStyle(row.monthlyMinor == nil ? Palette.inkSoft : Palette.ink)
-                Text(row.monthlyMinor == nil ? "typ. \(WatchersService.money(row.typicalMinor))" : "/ month")
+                Text(row.monthlyMinor == nil ? GuardModel.typicalAmount(row) : "/ month")
                     .font(Typeface.mono(10)).foregroundStyle(Palette.inkSoft)
             }
             Image(systemName: "chevron.right").font(.caption).foregroundStyle(Palette.inkSoft).accessibilityHidden(true)
@@ -289,7 +289,10 @@ struct OlderExpiryDisclosure: View {
                         ExpiryTimelineRow(row: row, bucket: .older, half: half, last: i == group.rows.count - 1)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityIdentifier("guard.expiry.row")
+                    // A distinct identifier from the open buckets' rows (fix round 1, ruling C-26): the older
+                    // group's rows only enter the accessibility tree once expanded, and a UI test needs to tell
+                    // them apart from a row elsewhere on the timeline sharing the plain "guard.expiry.row" id.
+                    .accessibilityIdentifier("guard.expiry.row.older")
                 }
             }
             .padding(.top, 6)
@@ -304,10 +307,13 @@ struct OlderExpiryDisclosure: View {
             }
             .frame(minHeight: 44)
             .contentShape(Rectangle())
+            // The label only: fix round 1 (ruling C-26). No hardcoded "collapsed"/"expanded" word here —
+            // `DisclosureGroup` already reports its own expanded/collapsed state on this, its toggle control;
+            // saying it again in the label would freeze the wrong word in place once the person expands it.
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Older, \(group.rows.count) document\(group.rows.count == 1 ? "" : "s") expired more than a year ago")
+            .accessibilityIdentifier("guard.expiry.group.older")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Older, \(group.rows.count) document\(group.rows.count == 1 ? "" : "s") expired more than a year ago, collapsed")
-        .accessibilityIdentifier("guard.expiry.group.older")
     }
 }
 

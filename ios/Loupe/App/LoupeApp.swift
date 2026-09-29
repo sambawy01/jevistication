@@ -94,6 +94,10 @@ struct LaunchOptions {
     var inboxDemo = false        // -LoupeInboxDemo (DEBUG, with -LoupeFixtures): import a statement CSV into the Inbox
     var fakeAssistant = false    // -LoupeFakeAssistant (DEBUG): a configured writing assistant whose provider is an in-app fake (no network)
     var privacyPhotoDemo = false // -LoupePrivacyPhotoDemo (DEBUG, with -LoupeFixtures): a rendered test-card photo as an OCR'd item
+    /// -LoupeOlderExpiryDemo (DEBUG, with -LoupeFixtures): a synthetic scanned document expired long before the
+    /// 365-day "older" cutoff (fix round 1, ruling C-26) — the bundled sample has none, so UI tests need this to
+    /// see the Expiring screen's collapsed Older group at all. Test-only: never in the production sample.
+    var olderExpiryDemo = false
     var reviewDemo = false       // -LoupeReviewDemo (DEBUG, with -LoupeFixtures): a duplicate pair in the (throwaway) inbox, Files on
     /// -LoupePermissions granted|denied (DEBUG): onboarding's permissions step answers without iOS prompts.
     var fakePermissions: PhonePermission?
@@ -134,6 +138,7 @@ struct LaunchOptions {
         o.sortDemo = args.contains("-LoupeSortDemo") && o.fixtureMode
         o.reviewDemo = args.contains("-LoupeReviewDemo") && o.fixtureMode
         o.privacyPhotoDemo = args.contains("-LoupePrivacyPhotoDemo") && o.fixtureMode
+        o.olderExpiryDemo = args.contains("-LoupeOlderExpiryDemo") && o.fixtureMode
         o.fakeAssistant = args.contains("-LoupeFakeAssistant")
         o.inboxDemo = args.contains("-LoupeInboxDemo") && o.fixtureMode
         if let i = args.firstIndex(of: "-LoupeOpen"), i + 1 < args.count { o.openScreen = args[i + 1] }

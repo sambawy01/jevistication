@@ -113,7 +113,20 @@ final class GuardModelTests: XCTestCase {
         XCTAssertEqual(GuardModel.share(rows[0], total: 1432), 999.0 / 1432.0, accuracy: 1e-9)
         XCTAssertEqual(GuardModel.share(rows[2], total: 1432), 0)
         XCTAssertEqual(GuardModel.perMonth(rows[0]), "9.99/mo")
-        XCTAssertEqual(GuardModel.perMonth(rows[2]), "irregular")
+        // Fix round 1 (ruling C-26): perMonth used to say the bare word "irregular" here, so VoiceOver read no
+        // amount at all for an irregular row. It now says the typical charge instead.
+        XCTAssertEqual(GuardModel.perMonth(rows[2]), "typ. 50.00")
+    }
+
+    /// Fix round 1 (ruling C-26): an irregular row's typical charge, in its own currency — both the bare formatter
+    /// and perMonth (what VoiceOver reads for the row).
+    func testIrregularRowsShowTheirTypicalAmountWithCurrency() {
+        let none = sub("A", monthly: nil, typical: 5000, cadence: "irregular")
+        let egp = sub("B", monthly: nil, typical: 12345, cadence: "irregular", currency: "EGP")
+        XCTAssertEqual(GuardModel.typicalAmount(none), "typ. 50.00")
+        XCTAssertEqual(GuardModel.typicalAmount(egp), "typ. EGP 123.45")
+        XCTAssertEqual(GuardModel.perMonth(none), "typ. 50.00", "VoiceOver hears an amount, never the bare word 'irregular'")
+        XCTAssertEqual(GuardModel.perMonth(egp), "typ. EGP 123.45")
     }
 
     /// task T-B, part 2: one total per currency, from the engine's own grouping — two currencies are never summed

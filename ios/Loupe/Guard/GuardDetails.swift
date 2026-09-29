@@ -65,7 +65,7 @@ struct SubscriptionDetailView: View {
         VStack(alignment: .leading, spacing: 10) {
             fact("Cadence", row.cadence.capitalized)
             fact("Charges seen", "\(row.occurrences)")
-            fact("Typical charge", WatchersService.money(row.typicalMinor))
+            fact("Typical charge", GuardModel.money(row.typicalMinor, currency: row.currency))
             fact("Last charge", "\(GuardModel.day(row.lastChargedIso)) · \(row.daysSinceLastCharge) days ago")
             if let next = row.nextExpectedIso {
                 fact("Next expected", GuardModel.day(next))
