@@ -492,6 +492,153 @@ final class GmailTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: folder.appendingPathComponent("old1.eml").path), "outside the window: removed")
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted(), ["m1.eml", "m2.eml", "m3.eml", "m4.eml"])
     }
+
+    // MARK: Never drop mail over the per-scan cap (2026-09-29: a phishing email was one of 64 dropped)
+
+    /// A busy mailbox. `window`: the first pass's list, newest first (paged). `added[h]`: the ids added to the
+    /// inbox after historyId h, oldest first, and the historyId after them; a start with no entry answers
+    /// nothing new at that same historyId. Messages in `limited` answer 403 rateLimitExceeded.
+    private func busyMailbox(window: [String] = [], added: GmailBox<[String: ([String], String)]>,
+                             limited: GmailBox<Set<String>> = GmailBox([])) {
+        FakeGoogle.handler = { req, _ in
+            let url = req.url!
+            let q = Dictionary(uniqueKeysWithValues: (URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []).map { ($0.name, $0.value ?? "") })
+            switch url.path {
+            case "/gmail/v1/users/me/profile":
+                return (200, Self.json(["emailAddress": "me@gmail.com", "historyId": "200"]))
+            case "/gmail/v1/users/me/messages":
+                let start = Int(q["pageToken"] ?? "") ?? 0
+                let size = Int(q["maxResults"] ?? "") ?? 100
+                var o: [String: Any] = ["messages": window.dropFirst(start).prefix(size).map { ["id": $0, "threadId": "t"] }]
+                if start + size < window.count { o["nextPageToken"] = String(start + size) }
+                return (200, Self.json(o))
+            case "/gmail/v1/users/me/history":
+                let start = q["startHistoryId"] ?? ""
+                let (ids, latest) = added.value[start] ?? ([], start)
+                return (200, Self.json(["history": ids.map { ["id": "1", "messagesAdded": [["message": ["id": $0, "threadId": "t"]]]] },
+                                        "historyId": latest]))
+            default:
+                let id = url.lastPathComponent
+                if limited.value.contains(id) { return (403, Self.googleError(403, Self.quotaMessage, reason: "rateLimitExceeded")) }
+                return Self.rawReply(id)
+            }
+        }
+    }
+
+    private func gmailAccount() -> MailAccount { MailAccount(host: GmailProducer.host, port: 443, username: "me@gmail.com", auth: .gmailAPI) }
+    private func producer() -> GmailProducer { GmailProducer(account: gmailAccount(), client: client(), cacheRoot: home.appendingPathComponent("mail")) }
+    private var mailFolder: URL { home.appendingPathComponent("mail").appendingPathComponent(gmailAccount().key) }
+    private func cached() -> Set<String> {
+        Set(((try? FileManager.default.contentsOfDirectory(atPath: mailFolder.path)) ?? []).map { ($0 as NSString).deletingPathExtension })
+    }
+    private func historyStarts() -> [String] {
+        FakeGoogle.requests.filter { $0.0.url!.path == "/gmail/v1/users/me/history" }
+            .compactMap { URLComponents(url: $0.0.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "startHistoryId" }?.value }
+    }
+    private static func ids(_ prefix: String, _ range: ClosedRange<Int>) -> [String] { range.map { String(format: "%@%03d", prefix, $0) } }
+    private static func count(_ csv: String?) -> Int { csv?.split(separator: ",").count ?? 0 }
+
+    func testHistoryOverTheCapQueuesTheRestAndTheNextScanFetchesThemBeforeAdvancing() async throws {
+        let old = Self.ids("h", 1...264) // oldest first, as history lists them
+        let added = GmailBox<[String: ([String], String)]>(["200": (old, "300")])
+        busyMailbox(added: added)
+        let first = try await producer().scan(state: [GmailProducer.historyKey: "200"])
+        XCTAssertEqual(gets(), Array(old.suffix(200).reversed()), "the newest 200, newest first")
+        XCTAssertEqual(first.state[GmailProducer.historyKey], "200", "not advanced while 64 are missing")
+        XCTAssertEqual(first.state[GmailProducer.passHistoryKey], "300")
+        XCTAssertEqual(first.state[GmailProducer.passPausedKey], "0")
+        XCTAssertEqual(first.state[GmailProducer.passFreshKey], "0")
+        XCTAssertEqual(first.state[GmailProducer.passIdsKey], Array(old.prefix(64).reversed()).joined(separator: ","), "the 64 older ones are queued")
+        XCTAssertEqual(first.result.skipped.first { $0.path == "Mail" }?.reason,
+                       "not fetched yet: 64 older messages — Loupe reads 200 at a time, newest first; the next scan fetches the rest")
+        XCTAssertEqual(cached().count, 200)
+
+        // The next scan: new mail since the pass's historyId first, then the queued 64; only then 300 → 400.
+        added.update { $0["300"] = (["n1", "n2"], "400") }
+        FakeGoogle.requests = []
+        let second = try await producer().scan(state: first.state)
+        XCTAssertEqual(historyStarts(), ["300"], "asks only for what is newer than the pass")
+        XCTAssertEqual(gets(), ["n2", "n1"] + Array(old.prefix(64).reversed()))
+        XCTAssertEqual(second.state, [GmailProducer.historyKey: "400"], "advanced once every id up to it is here; the pass is cleared")
+        XCTAssertFalse(second.result.skipped.contains { $0.path == "Mail" })
+        XCTAssertEqual(cached(), Set(old + ["n1", "n2"]), "nothing was dropped")
+    }
+
+    func testFirstPassOverTheCapQueuesTheWindowAndPrunesOnlyOnceItIsAllHere() async throws {
+        let window = Self.ids("w", 1...520) // newest first, as messages.list gives them; two pages
+        busyMailbox(window: window, added: GmailBox([:]))
+        try FileManager.default.createDirectory(at: mailFolder, withIntermediateDirectories: true)
+        try Data("From: a@example.com\r\nSubject: Old\r\n\r\nold\r\n".utf8).write(to: mailFolder.appendingPathComponent("old1.eml"))
+        try GmailClient.base64url(Self.eml("Subject w450"))!.write(to: mailFolder.appendingPathComponent("w450.eml"))
+
+        let seen = GmailBox<[String]>([])
+        let first = try await producer().scan(state: [:], progress: { n, m in seen.update { $0.append("\(n)/\(m)") } })
+        XCTAssertEqual(paths().filter { $0 == "/gmail/v1/users/me/messages" }.count, 2, "the whole window is listed")
+        XCTAssertEqual(gets(), Array(window.prefix(200)))
+        XCTAssertEqual(seen.value.first, "1/201")
+        XCTAssertEqual(seen.value.last, "201/201", "this scan's share: the cached one plus 200")
+        XCTAssertNil(first.state[GmailProducer.historyKey])
+        XCTAssertEqual(first.state[GmailProducer.passFreshKey], "1")
+        XCTAssertEqual(first.state[GmailProducer.passHistoryKey], "200")
+        XCTAssertEqual(Self.count(first.state[GmailProducer.passIdsKey]), 520, "a first pass keeps its whole window")
+        XCTAssertEqual(first.result.skipped.first { $0.path == "Mail" }?.reason,
+                       "not fetched yet: 319 older messages — Loupe reads 200 at a time, newest first; the next scan fetches the rest")
+        XCTAssertTrue(cached().contains("old1"), "no pruning before the window is all here")
+        XCTAssertTrue(cached().contains("w450"), "a queued message's cached copy is kept")
+
+        FakeGoogle.requests = []
+        let second = try await producer().scan(state: first.state)
+        XCTAssertEqual(historyStarts(), ["200"], "newer mail is asked for from the pass's historyId")
+        XCTAssertFalse(paths().contains("/gmail/v1/users/me/messages"), "not listed again")
+        XCTAssertEqual(gets(), Array(window[200..<400]))
+        XCTAssertNil(second.state[GmailProducer.historyKey])
+        XCTAssertTrue(cached().contains("old1"))
+        XCTAssertTrue(cached().contains("w450"))
+
+        FakeGoogle.requests = []
+        let third = try await producer().scan(state: second.state)
+        XCTAssertEqual(gets(), window[400...].filter { $0 != "w450" })
+        XCTAssertEqual(third.state, [GmailProducer.historyKey: "200"])
+        XCTAssertEqual(cached(), Set(window), "complete: outside the window pruned, the whole window kept")
+    }
+
+    func testRateLimitInTheQueuedRestPausesAndResumesWithoutLosingAnything() async throws {
+        let old = Self.ids("h", 1...264)
+        let added = GmailBox<[String: ([String], String)]>(["200": (old, "300"), "300": (["n1"], "400")])
+        let limited = GmailBox<Set<String>>([])
+        busyMailbox(added: added, limited: limited)
+        let first = try await producer().scan(state: [GmailProducer.historyKey: "200"])
+        XCTAssertEqual(Self.count(first.state[GmailProducer.passIdsKey]), 64)
+
+        // Next scan: n1 first, then the queued rest from h064 down, until Gmail says slow down at h040.
+        limited.value = ["h040"]
+        FakeGoogle.requests = []
+        var paused: GmailProducer.Interrupted?
+        do { _ = try await producer().scan(state: first.state); XCTFail("expected the rate limit") } catch let p as GmailProducer.Interrupted { paused = p }
+        let p = try XCTUnwrap(paused)
+        XCTAssertEqual(p.fetched, 25, "n1 and h064…h041")
+        XCTAssertEqual(p.total, 65)
+        XCTAssertEqual(p.output.state[GmailProducer.historyKey], "200", "still not advanced")
+        XCTAssertEqual(p.output.state[GmailProducer.passHistoryKey], "400")
+        XCTAssertEqual(p.output.state[GmailProducer.passPausedKey], "1")
+        XCTAssertEqual(p.output.state[GmailProducer.passIdsKey], Array(old.prefix(40).reversed()).joined(separator: ","))
+        XCTAssertEqual(Set(gets()), Set(["n1"] + Self.ids("h", 40...64)))
+
+        // Resume: a paused pass continues without asking Gmail for anything else first.
+        limited.value = []
+        FakeGoogle.requests = []
+        let done = try await producer().scan(state: p.output.state)
+        XCTAssertTrue(historyStarts().isEmpty)
+        XCTAssertEqual(gets(), Array(old.prefix(40).reversed()))
+        XCTAssertEqual(done.state, [GmailProducer.historyKey: "400"])
+        XCTAssertEqual(cached(), Set(old + ["n1"]))
+    }
+
+    func testAPassSavedBeforeThePausedFlagResumesAsPaused() {
+        let pass = GmailProducer.Pass(state: [GmailProducer.passIdsKey: "a,b", GmailProducer.passHistoryKey: "9",
+                                              GmailProducer.passFreshKey: "0", "gmailPassMore": "0"])
+        XCTAssertEqual(pass, GmailProducer.Pass(ids: ["a", "b"], historyId: "9", fresh: false, paused: true))
+    }
 }
 
 /// A fake monotonic clock: sleeps are recorded and advance it at once. The automatic retry's wait (999 s) is a

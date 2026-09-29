@@ -2037,6 +2037,28 @@ their acceptance criteria are met; entries here record increments toward them.
   ran once: 464 unit tests green (2 skipped), 77 UI tests with 5 skipped and 1 failure outside Mail (the in-progress
   `SourcesScenarios.testEverySourceTurnsOffAndOnAndTheSetSurvivesARelaunch`, "files did not turn off"). Not done:
   incremental (history) passes still add to the cache without pruning until the next first pass, as before.
+- **2026-09-29 — iPhone: Gmail never drops mail over the per-scan cap (owner's report: a phishing email missed).**
+  The inbox gets ~250 GitHub notifications a day; a history pass with more than `maxPerSync` (200) new ids kept
+  the newest 200, saved the new historyId and never fetched the rest (64 in the reported pass, the phishing email
+  among them), while the Mail row said "not fetched: 64 more messages — Loupe reads 200 at a time" as if they
+  would come next. The first pass (`newer_than:30d`) cut its window the same way. Now a scan fetches at most 200,
+  newest first, and a pass with more is saved (`gmailPassIds` / `gmailPassHistoryId` / `gmailPassFresh`, and
+  `gmailPassPaused` "0"; `gmailPassMore` is gone) with the old `gmailHistoryId` kept: the historyId advances only
+  once every id up to it is cached. The next scan (Scan again or the nightly run) first asks `history.list` from
+  the pass's historyId and puts anything newer in front (newest first; a 404 or a rate limit there continues the
+  pass as it is), then fetches the next 200. A pass a rate limit paused (`gmailPassPaused` "1", and any pass saved
+  before the flag existed) still continues without asking Gmail for anything first. The first pass lists the whole
+  window (pages of 500) and keeps every id in its saved pass; pruning of cached `.eml`s outside the window runs only
+  once the whole window is here, so no queued message's cached copy is deleted. A history pass keeps only its
+  missing ids. The Mail row says "not fetched yet: N older messages — Loupe reads 200 at a time, newest first; the
+  next scan fetches the rest"; "Fetching mail: n of m" and "fetched N of M" count this scan's share (the pass's
+  cached messages plus at most 200). Tests: `GmailTests` (+4: 264 new ids → 200 fetched newest first, 64 queued,
+  historyId not advanced, then the next scan fetches 2 newer + the 64 and advances; a 520-message first pass over
+  three scans with a queued message's cached copy and a stale message both kept until the window is complete, then
+  pruned; a rate limit inside the queued rest pauses, keeps the historyId and resumes with no history call; a pass
+  saved by the previous version resumes as paused). Gate: GmailTests 25 green; the full iOS unit suite on an iPhone 17
+  Pro simulator: 500 tests, 2 skipped, 0 failures (no Kotlin touched). Not done: a mailbox receiving more than 200 a day between scans
+  keeps a growing backlog of its oldest mail (newest first each scan); nothing is dropped, but the oldest waits.
 - **2026-09-27 — iPhone pre-deployment scenario suite: every journey, every button, every change across a relaunch
   (owner request).** `ios/LoupeUITests/Scenarios/`, one file per area; each journey ends with the app terminated and
   launched again (same arguments minus the reset flags) and checks what survived: first run (Get the model → Later,

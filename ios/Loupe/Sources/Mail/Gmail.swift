@@ -254,24 +254,30 @@ final class GmailClient {
 }
 
 /// The Gmail producer. First pass: the inbox's messages from the last [firstPassWindow] (Gmail
-/// search `newer_than:30d`), newest first, at most [maxPerSync]; the mailbox's historyId is taken
-/// from users.getProfile *before* listing so nothing arriving meanwhile is lost. Later passes:
-/// users.history.list from the stored historyId (messageAdded in INBOX) — only new mail. A 404
-/// there (historyId too old) starts a fresh first pass. Each message is kept as a `.eml` under
+/// search `newer_than:30d`), all of them, newest first; the mailbox's historyId is taken from
+/// users.getProfile *before* listing so nothing arriving meanwhile is lost. Later passes:
+/// users.history.list from the stored historyId (messageAdded in INBOX) — only new mail, newest first.
+/// A 404 there (historyId too old) starts a fresh first pass. Each message is kept as a `.eml` under
 /// Application Support and read by the shared scanner and MIME parser, labelled Online (PRODUCT §4a).
 ///
-/// Resumable: a message whose `.eml` is already there is not fetched again, and the historyId is saved only
-/// once a pass has fetched everything. When Gmail still says "slow down" after the client's retries, the scan
-/// reads what it has, saves the pass (its ids, its historyId) and throws [Interrupted]; the next scan continues
-/// that pass without listing again. A first pass that completes deletes the cached messages outside its window.
+/// Never drops mail. A scan fetches at most [maxPerSync] messages, newest first; a pass with more keeps
+/// the rest as a saved pass (its ids, its historyId) and the next scan continues it. Before continuing,
+/// that scan asks history for anything newer than the pass's historyId and puts it at the front, so fresh
+/// mail never waits behind a backlog. The stored historyId advances only once every id up to it is here.
+///
+/// Resumable: a message whose `.eml` is already there is not fetched again. When Gmail still says "slow
+/// down" after the client's retries, the scan reads what it has, saves the pass as paused and throws
+/// [Interrupted]; the next scan continues that pass without asking Gmail for anything else first. A first
+/// pass deletes the cached messages outside its window only once the whole window is here.
 struct GmailProducer {
     static let historyKey = "gmailHistoryId"
-    /// An unfinished pass: its message ids (comma-separated, in fetch order), the historyId to save when it
-    /// completes, "1" for a first pass, and how many messages were over [maxPerSync].
+    /// An unfinished pass: its message ids (comma-separated, newest first; a first pass keeps the fetched ones
+    /// too, so it knows its whole window), the historyId to save when it completes, "1" for a first pass, and "1"
+    /// when a rate limit paused it ("0": it was over [maxPerSync]; the next scan adds newer mail first).
     static let passIdsKey = "gmailPassIds"
     static let passHistoryKey = "gmailPassHistoryId"
     static let passFreshKey = "gmailPassFresh"
-    static let passMoreKey = "gmailPassMore"
+    static let passPausedKey = "gmailPassPaused"
     static let host = "gmail.googleapis.com"
 
     /// The scan stopped because Gmail asked Loupe to slow down: `output` has what was fetched and the state
@@ -288,24 +294,25 @@ struct GmailProducer {
         var ids: [String]
         var historyId: String
         var fresh: Bool
-        var more: Int
+        var paused: Bool
 
-        init(ids: [String], historyId: String, fresh: Bool, more: Int) {
+        init(ids: [String], historyId: String, fresh: Bool, paused: Bool = false) {
             self.ids = ids.filter(GmailProducer.validId)
             self.historyId = historyId
             self.fresh = fresh
-            self.more = more
+            self.paused = paused
         }
 
         init?(state: [String: String]) {
             guard let ids = state[GmailProducer.passIdsKey], let h = state[GmailProducer.passHistoryKey], !h.isEmpty else { return nil }
+            // A pass saved before the paused flag existed was saved by a rate limit.
             self.init(ids: ids.split(separator: ",").map(String.init), historyId: h,
-                      fresh: state[GmailProducer.passFreshKey] == "1", more: Int(state[GmailProducer.passMoreKey] ?? "") ?? 0)
+                      fresh: state[GmailProducer.passFreshKey] == "1", paused: state[GmailProducer.passPausedKey] != "0")
         }
 
         var state: [String: String] {
             [GmailProducer.passIdsKey: ids.joined(separator: ","), GmailProducer.passHistoryKey: historyId,
-             GmailProducer.passFreshKey: fresh ? "1" : "0", GmailProducer.passMoreKey: String(more)]
+             GmailProducer.passFreshKey: fresh ? "1" : "0", GmailProducer.passPausedKey: paused ? "1" : "0"]
         }
     }
 
@@ -334,28 +341,33 @@ struct GmailProducer {
     private func file(_ id: String) -> URL { folder.appendingPathComponent("\(id).eml") }
     private func have(_ id: String) -> Bool { FileManager.default.fileExists(atPath: file(id).path) }
 
-    /// `progress(n, m)`: n of the pass's m messages are here (the fetch is paced, so 200 take about 80 s).
+    /// `progress(n, m)`: n of this scan's m messages are here — the pass's cached ones plus at most
+    /// [maxPerSync] to fetch (the fetch is paced, so 200 take about 80 s).
     func scan(state: [String: String], observer: ScanObserver = NullScanObserver(), fetched: () -> Void = {},
               progress: (Int, Int) -> Void = { _, _ in }) async throws -> PhoneScanOutput {
         let pass: Pass
         if let saved = Pass(state: state) {
-            pass = saved
+            pass = saved.paused ? saved : try await withNewer(saved)
         } else if let start = state[Self.historyKey], !start.isEmpty, let incremental = try await historyPass(from: start) {
             pass = incremental
         } else {
             pass = try await firstPass()
         }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // Newest first; the rest stays in the pass for the next scan.
+        let todo = pass.ids.filter { !have($0) }
+        let batch = todo.prefix(max(0, maxPerSync))
+        var here = pass.ids.count - todo.count
+        let total = here + batch.count
         var gone = Set<String>()
         var interrupted: GmailClient.Failure?
-        var here = pass.ids.filter(have).count
-        progress(here, pass.ids.count)
-        for id in pass.ids where !have(id) {
+        progress(here, total)
+        for id in batch {
             do {
                 let raw = try await client.raw(id: id)
                 try raw.write(to: file(id), options: [.atomic, .completeFileProtection])
                 here += 1
-                progress(here, pass.ids.count)
+                progress(here, total)
             } catch let f as GmailClient.Failure where f.kind == .notFound {
                 gone.insert(id) // deleted since it was listed
             } catch let f as GmailClient.Failure where f.kind == .rateLimited {
@@ -363,29 +375,54 @@ struct GmailProducer {
                 break
             }
         }
-        if interrupted == nil, pass.fresh { prune(keeping: Set(pass.ids)) }
+        var left = pass
+        left.ids = pass.ids.filter { !gone.contains($0) }
+        let waiting = left.ids.filter { !have($0) }.count
+        // Only once the whole window is here: a queued message must not lose its cached copy.
+        if interrupted == nil, waiting == 0, pass.fresh { prune(keeping: Set(left.ids)) }
         fetched()
         let root = SourceRoot(id: PhoneSourceIds.shared.MAIL, type: .mailExport, path: folder.path, idPrefix: "mail:\(account.key)/")
         var result = try SourceScanner(extractors: AppleExtractors.live()).scan(sources: [root], observer: observer)
         result = PhoneItems.companion.labelOnline(result: result, from: Self.host, fetchedIso: ISOStamp.now(now()))
+        guard waiting > 0 else { return PhoneScanOutput(result: result, state: [Self.historyKey: pass.historyId]) }
+        // Not all here: keep the pass (and the old historyId) so the next scan continues it. A first pass keeps
+        // its whole window (prune needs it); a history pass only what is still missing.
+        if !pass.fresh { left.ids = left.ids.filter { !have($0) } }
+        left.paused = interrupted != nil
+        var st = left.state
+        if let h = state[Self.historyKey], !h.isEmpty { st[Self.historyKey] = h }
+        let plural = waiting == 1 ? "" : "s"
         if let f = interrupted {
-            var left = pass
-            left.ids = pass.ids.filter { !gone.contains($0) }
-            let done = left.ids.filter(have).count
-            let waiting = left.ids.count - done
-            result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched yet: \(waiting) message\(waiting == 1 ? "" : "s") — Gmail asked Loupe to slow down; the next scan continues")], unavailable: result.unavailable)
-            var st = left.state
-            if let h = state[Self.historyKey], !h.isEmpty { st[Self.historyKey] = h }
-            throw Interrupted(output: PhoneScanOutput(result: result, state: st), fetched: done, total: left.ids.count, failure: f)
+            result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched yet: \(waiting) message\(plural) — Gmail asked Loupe to slow down; the next scan continues")], unavailable: result.unavailable)
+            throw Interrupted(output: PhoneScanOutput(result: result, state: st), fetched: here, total: total - gone.count, failure: f)
         }
-        if pass.more > 0 {
-            result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched: \(pass.more) more message\(pass.more == 1 ? "" : "s") — Loupe reads \(maxPerSync) at a time")], unavailable: result.unavailable)
-        }
-        return PhoneScanOutput(result: result, state: [Self.historyKey: pass.historyId])
+        result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched yet: \(waiting) older message\(plural) — Loupe reads \(maxPerSync) at a time, newest first; the next scan fetches the rest")], unavailable: result.unavailable)
+        return PhoneScanOutput(result: result, state: st)
     }
 
-    /// New mail since `start`, newest [maxPerSync] kept; nil when Gmail no longer has that history (404).
+    /// A saved pass with the mail that arrived since its historyId put in front (newest first). When Gmail
+    /// no longer has that history, or asks Loupe to slow down, the pass continues as it is.
+    private func withNewer(_ saved: Pass) async throws -> Pass {
+        let newer: (ids: [String], latest: String)?
+        do {
+            newer = try await added(since: saved.historyId)
+        } catch let f as GmailClient.Failure where f.kind == .rateLimited {
+            return saved
+        }
+        guard let newer else { return saved }
+        let known = Set(saved.ids)
+        return Pass(ids: newer.ids.filter { !known.contains($0) } + saved.ids, historyId: newer.latest, fresh: saved.fresh)
+    }
+
+    /// New mail since `start`, newest first; nil when Gmail no longer has that history (404).
     private func historyPass(from start: String) async throws -> Pass? {
+        guard let newer = try await added(since: start) else { return nil }
+        return Pass(ids: newer.ids.filter { !have($0) }, historyId: newer.latest, fresh: false)
+    }
+
+    /// The messages added to the inbox since `start`, newest first, and the mailbox's historyId now;
+    /// nil when Gmail no longer has that history (404).
+    private func added(since start: String) async throws -> (ids: [String], latest: String)? {
         var ids: [String] = []
         var seen = Set<String>()
         var latest = start
@@ -402,26 +439,23 @@ struct GmailProducer {
         } catch let f as GmailClient.Failure where f.kind == .notFound {
             return nil
         }
-        // History is oldest first; keep the newest when capped.
-        ids = ids.filter { !have($0) }
-        var more = 0
-        if ids.count > maxPerSync { more = ids.count - maxPerSync; ids = Array(ids.suffix(maxPerSync)) }
-        return Pass(ids: ids, historyId: latest, fresh: false, more: more)
+        // History is oldest first.
+        return (ids.reversed(), latest)
     }
 
-    /// The window's messages, newest first, at most [maxPerSync]. Cached messages are kept (not re-fetched).
+    /// The whole window's messages, newest first (the list is not capped: the scan fetches [maxPerSync] at a
+    /// time and keeps the rest). Cached messages are kept (not re-fetched).
     private func firstPass() async throws -> Pass {
         let historyId = try await client.profile().historyId
         var ids: [String] = []
+        var seen = Set<String>()
         var token: String?
         repeat {
-            let page = try await client.listMessages(query: firstPassWindow, maxResults: min(500, maxPerSync + 1), pageToken: token)
-            ids += (page.messages ?? []).map(\.id)
-            token = ids.count > maxPerSync ? nil : page.nextPageToken
+            let page = try await client.listMessages(query: firstPassWindow, maxResults: 500, pageToken: token)
+            for m in page.messages ?? [] where seen.insert(m.id).inserted { ids.append(m.id) }
+            token = page.nextPageToken
         } while token != nil
-        var more = 0
-        if ids.count > maxPerSync { more = ids.count - maxPerSync; ids = Array(ids.prefix(maxPerSync)) }
-        return Pass(ids: ids, historyId: historyId, fresh: true, more: more)
+        return Pass(ids: ids, historyId: historyId, fresh: true)
     }
 
     /// After a complete first pass: the cached messages outside its window go, so the cache does not grow.
