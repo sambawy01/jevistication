@@ -32,8 +32,11 @@ final class FakeRunWork: RunWork {
         return RunStageResult(count: counts[name] ?? 0, newFindings: newFindings[name] ?? 0)
     }
 
-    func scan(source: String, cancel: RunCancel, report: RunReporter) async -> RunStageResult {
-        await stage("scan:\(source)", cancel: cancel, report: report)
+    /// The sources scanned as the nightly run's ("overnight"): Mail drains its queue then.
+    var overnightScans: [String] = []
+    func scan(source: String, overnight: Bool, cancel: RunCancel, report: RunReporter) async -> RunStageResult {
+        if overnight { overnightScans.append(source) }
+        return await stage("scan:\(source)", cancel: cancel, report: report)
     }
     func privacy(cancel: RunCancel, report: RunReporter) async -> RunStageResult { await stage("privacy", cancel: cancel, report: report) }
     func mail(cancel: RunCancel, report: RunReporter) async -> RunStageResult { await stage("mail", cancel: cancel, report: report) }
@@ -68,6 +71,7 @@ final class RunCoordinatorTests: XCTestCase {
         XCTAssertEqual(record.outcome, .finished)
         XCTAssertEqual(record.stagesRun, RunStage.allCases)
         XCTAssertEqual(record.counts[.sources], 15, "items read across the sources")
+        XCTAssertTrue(work.overnightScans.isEmpty, "Run now reads Mail's newest 200; only the nightly run drains the queue")
         XCTAssertEqual(record.counts[.sort], 12)
         XCTAssertEqual(record.newFindings, RunFindings(privacy: 2, mail: 0, watchers: 1))
         XCTAssertNil(c.current)

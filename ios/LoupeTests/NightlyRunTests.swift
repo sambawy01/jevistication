@@ -112,6 +112,7 @@ final class NightlyRunTests: XCTestCase {
         let task = FakeSortTask()
         await r.sorter.handle(task)
         XCTAssertEqual(r.work.log, ["scan:files", "scan:photos", "privacy", "mail", "watchers", "sort"])
+        XCTAssertEqual(r.work.overnightScans, ["files", "photos"], "the nightly run scans as overnight (Mail drains its queue)")
         XCTAssertEqual(task.completed, [true])
         XCTAssertNil(task.expirationHandler)
         let state = r.store.load()

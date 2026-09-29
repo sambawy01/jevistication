@@ -260,7 +260,7 @@ final class GmailClient {
 /// A 404 there (historyId too old) starts a fresh first pass. Each message is kept as a `.eml` under
 /// Application Support and read by the shared scanner and MIME parser, labelled Online (PRODUCT §4a).
 ///
-/// Never drops mail. A scan fetches at most [maxPerSync] messages, newest first; a pass with more keeps
+/// Never drops mail. A scan fetches at most [maxPerSync] messages, newest first (the nightly run many more); a pass with more keeps
 /// the rest as a saved pass (its ids, its historyId) and the next scan continues it. Before continuing,
 /// that scan asks history for anything newer than the pass's historyId and puts it at the front, so fresh
 /// mail never waits behind a backlog. The stored historyId advances only once every id up to it is here.
@@ -332,7 +332,8 @@ struct GmailProducer {
     let account: MailAccount
     let client: GmailClient
     let cacheRoot: URL
-    var maxPerSync = 200
+    /// Messages fetched per scan: [MailCap.scan], or [MailCap.overnight] in the nightly run.
+    var maxPerSync = MailCap.scan
     var firstPassWindow = "newer_than:30d"
     var now: () -> Date = Date.init
 
@@ -342,9 +343,10 @@ struct GmailProducer {
     private func have(_ id: String) -> Bool { FileManager.default.fileExists(atPath: file(id).path) }
 
     /// `progress(n, m)`: n of this scan's m messages are here — the pass's cached ones plus at most
-    /// [maxPerSync] to fetch (the fetch is paced, so 200 take about 80 s).
+    /// [maxPerSync] to fetch (the fetch is paced, so 200 take about 80 s). `shouldStop` (the run's Cancel, or
+    /// iOS ending the nightly run) is asked before each message: the rest stays queued, as over the cap.
     func scan(state: [String: String], observer: ScanObserver = NullScanObserver(), fetched: () -> Void = {},
-              progress: (Int, Int) -> Void = { _, _ in }) async throws -> PhoneScanOutput {
+              shouldStop: () -> Bool = { false }, progress: (Int, Int) -> Void = { _, _ in }) async throws -> PhoneScanOutput {
         let pass: Pass
         if let saved = Pass(state: state) {
             pass = saved.paused ? saved : try await withNewer(saved)
@@ -363,6 +365,7 @@ struct GmailProducer {
         var interrupted: GmailClient.Failure?
         progress(here, total)
         for id in batch {
+            if shouldStop() { break }
             do {
                 let raw = try await client.raw(id: id)
                 try raw.write(to: file(id), options: [.atomic, .completeFileProtection])
@@ -396,7 +399,7 @@ struct GmailProducer {
             result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched yet: \(waiting) message\(plural) — Gmail asked Loupe to slow down; the next scan continues")], unavailable: result.unavailable)
             throw Interrupted(output: PhoneScanOutput(result: result, state: st), fetched: here, total: total - gone.count, failure: f)
         }
-        result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched yet: \(waiting) older message\(plural) — Loupe reads \(maxPerSync) at a time, newest first; the next scan fetches the rest")], unavailable: result.unavailable)
+        result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched yet: \(waiting) older message\(plural) — Loupe reads \(maxPerSync) at a time, newest first; the rest are fetched on the next scan or overnight while charging")], unavailable: result.unavailable)
         return PhoneScanOutput(result: result, state: st)
     }
 

@@ -550,7 +550,7 @@ final class GmailTests: XCTestCase {
         XCTAssertEqual(first.state[GmailProducer.passFreshKey], "0")
         XCTAssertEqual(first.state[GmailProducer.passIdsKey], Array(old.prefix(64).reversed()).joined(separator: ","), "the 64 older ones are queued")
         XCTAssertEqual(first.result.skipped.first { $0.path == "Mail" }?.reason,
-                       "not fetched yet: 64 older messages — Loupe reads 200 at a time, newest first; the next scan fetches the rest")
+                       "not fetched yet: 64 older messages — Loupe reads 200 at a time, newest first; the rest are fetched on the next scan or overnight while charging")
         XCTAssertEqual(cached().count, 200)
 
         // The next scan: new mail since the pass's historyId first, then the queued 64; only then 300 → 400.
@@ -582,7 +582,7 @@ final class GmailTests: XCTestCase {
         XCTAssertEqual(first.state[GmailProducer.passHistoryKey], "200")
         XCTAssertEqual(Self.count(first.state[GmailProducer.passIdsKey]), 520, "a first pass keeps its whole window")
         XCTAssertEqual(first.result.skipped.first { $0.path == "Mail" }?.reason,
-                       "not fetched yet: 319 older messages — Loupe reads 200 at a time, newest first; the next scan fetches the rest")
+                       "not fetched yet: 319 older messages — Loupe reads 200 at a time, newest first; the rest are fetched on the next scan or overnight while charging")
         XCTAssertTrue(cached().contains("old1"), "no pruning before the window is all here")
         XCTAssertTrue(cached().contains("w450"), "a queued message's cached copy is kept")
 
@@ -632,6 +632,39 @@ final class GmailTests: XCTestCase {
         XCTAssertEqual(gets(), Array(old.prefix(40).reversed()))
         XCTAssertEqual(done.state, [GmailProducer.historyKey: "400"])
         XCTAssertEqual(cached(), Set(old + ["n1"]))
+    }
+
+    func testTheNightlyCapDrainsAQueuedPassInOneRunAndAdvances() async throws {
+        let old = Self.ids("h", 1...264)
+        busyMailbox(added: GmailBox(["200": (old, "300")]))
+        let first = try await producer().scan(state: [GmailProducer.historyKey: "200"])
+        XCTAssertEqual(Self.count(first.state[GmailProducer.passIdsKey]), 64)
+        FakeGoogle.requests = []
+        var nightly = producer()
+        nightly.maxPerSync = MailCap.overnight
+        let out = try await nightly.scan(state: first.state)
+        XCTAssertEqual(gets(), Array(old.prefix(64).reversed()))
+        XCTAssertEqual(out.state, [GmailProducer.historyKey: "300"])
+
+        // A fresh 264 over the nightly cap: all fetched in one run, historyId advanced.
+        let more = Self.ids("k", 1...264)
+        busyMailbox(added: GmailBox(["300": (more, "500")]))
+        FakeGoogle.requests = []
+        let drained = try await nightly.scan(state: out.state)
+        XCTAssertEqual(gets().count, 264)
+        XCTAssertEqual(drained.state, [GmailProducer.historyKey: "500"])
+        XCTAssertEqual(cached(), Set(old + more))
+    }
+
+    func testAStoppedScanKeepsTheRestQueuedNotPaused() async throws {
+        let new = Self.ids("h", 1...30)
+        busyMailbox(added: GmailBox(["200": (new, "300")]))
+        var asked = 0
+        let out = try await producer().scan(state: [GmailProducer.historyKey: "200"], shouldStop: { asked += 1; return asked > 10 })
+        XCTAssertEqual(gets().count, 10)
+        XCTAssertEqual(out.state[GmailProducer.historyKey], "200")
+        XCTAssertEqual(out.state[GmailProducer.passPausedKey], "0", "the next scan adds newer mail first")
+        XCTAssertEqual(out.state[GmailProducer.passIdsKey], Array(new.prefix(20).reversed()).joined(separator: ","))
     }
 
     func testAPassSavedBeforeThePausedFlagResumesAsPaused() {

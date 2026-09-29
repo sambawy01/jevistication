@@ -57,29 +57,46 @@ final class MailAccountStore {
     }
 }
 
+/// How many messages a Mail scan fetches (IMAP and Gmail): a scan reads the newest [scan]; the nightly run,
+/// while charging, drains the queue up to [overnight] (still paced, and it stops cleanly when iOS ends it).
+enum MailCap {
+    static let scan = 200
+    static let overnight = 5_000
+}
+
 /// The Mail producer: one IMAP sync (only messages after the last UID seen, all again if the
 /// server's UIDVALIDITY changed), each message kept as a `.eml` file under Application Support, then
 /// the whole folder read by the common scanner and MIME parser — the same items an exported mailbox
 /// gives — and every item labelled Online (PRODUCT.md §4a).
+///
+/// Never drops new mail: a sync fetches at most [maxPerSync], newest first, and the UIDs over the cap are kept
+/// in the state ([pendingKey]) and fetched by the next scan (or the nightly run) along with anything newer. The
+/// first sync starts from the newest [maxPerSync] of the mailbox and says how many older ones it did not read.
 struct MailProducer {
     static let validityKey = "uidValidity"
     static let lastUidKey = "lastUid"
+    /// UIDs up to `lastUid` not fetched yet, newest first, comma-separated.
+    static let pendingKey = "pendingUids"
 
     let account: MailAccount
     let credential: IMAPCredential
     let cacheRoot: URL
     let makeTransport: (MailAccount) -> IMAPTransport
-    var maxPerSync = 200
+    var maxPerSync = MailCap.scan
     var now: () -> Date = Date.init
 
     var folder: URL { cacheRoot.appendingPathComponent(account.key, isDirectory: true) }
 
-    func scan(state: [String: String], observer: ScanObserver = NullScanObserver(), fetched: () -> Void = {}) async throws -> PhoneScanOutput {
+    /// `shouldStop` (the run's Cancel, or iOS ending the nightly run) is asked between batches: the rest is queued.
+    func scan(state: [String: String], observer: ScanObserver = NullScanObserver(), fetched: () -> Void = {},
+              shouldStop: () -> Bool = { false }) async throws -> PhoneScanOutput {
         let client = IMAPClient(transport: makeTransport(account))
         let known = state[Self.validityKey].flatMap(UInt32.init)
         let after = state[Self.lastUidKey].flatMap(UInt32.init) ?? 0
+        let pending = (state[Self.pendingKey] ?? "").split(separator: ",").compactMap { UInt32($0) }
         let sync = try await client.sync(username: account.username, credential: credential,
-                                         knownUidValidity: known, afterUid: after, maxMessages: maxPerSync)
+                                         knownUidValidity: known, afterUid: after, pending: pending, maxMessages: maxPerSync,
+                                         shouldStop: shouldStop)
         fetched()
         let fm = FileManager.default
         if known != sync.uidValidity { try? fm.removeItem(at: folder) }   // the old UIDs mean nothing now
@@ -90,10 +107,18 @@ struct MailProducer {
         let root = SourceRoot(id: PhoneSourceIds.shared.MAIL, type: .mailExport, path: folder.path, idPrefix: "mail:\(account.key)/")
         var result = try SourceScanner(extractors: AppleExtractors.live()).scan(sources: [root], observer: observer)
         result = PhoneItems.companion.labelOnline(result: result, from: account.host, fetchedIso: ISOStamp.now(now()))
-        if sync.remaining > 0 {
-            result = ScanResult(items: result.items, skipped: result.skipped + [Skipped(path: "Mail", reason: "not fetched: \(sync.remaining) older message\(sync.remaining == 1 ? "" : "s") — Loupe reads the newest \(maxPerSync) at a time, then only new mail")], unavailable: result.unavailable)
+        var skipped = result.skipped
+        let q = sync.queued.count
+        if q > 0 {
+            skipped.append(Skipped(path: "Mail", reason: "not fetched yet: \(q) older message\(q == 1 ? "" : "s") — Loupe reads \(maxPerSync) at a time, newest first; the rest are fetched on the next scan or overnight while charging"))
         }
-        return PhoneScanOutput(result: result, state: [Self.validityKey: String(sync.uidValidity), Self.lastUidKey: String(sync.highestUid)])
+        if sync.older > 0 {
+            skipped.append(Skipped(path: "Mail", reason: "not read: \(sync.older) older message\(sync.older == 1 ? "" : "s") from before Loupe was added — Loupe starts from the newest \(maxPerSync), then reads all new mail"))
+        }
+        result = ScanResult(items: result.items, skipped: skipped, unavailable: result.unavailable)
+        var st = [Self.validityKey: String(sync.uidValidity), Self.lastUidKey: String(sync.highestUid)]
+        if q > 0 { st[Self.pendingKey] = sync.queued.map(String.init).joined(separator: ",") }
+        return PhoneScanOutput(result: result, state: st)
     }
 
     /// Removes every fetched message of [account] from the phone.

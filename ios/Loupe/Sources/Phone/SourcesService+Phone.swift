@@ -269,23 +269,25 @@ extension SourcesService {
     /// [cancel] (a `RunCoordinator` run's Cancel, or iOS ending the nightly run) stops the scan between items: what was
     /// read is stored together with the previous scan's items it did not reach (`SourceMerge`), so a cancelled scan
     /// never leaves a cut cache; Photos keeps its change token so edited photos are read next time.
-    func scanPhone(_ s: PhoneSource, cancel: RunCancel? = nil) async {
+    func scanPhone(_ s: PhoneSource, cancel: RunCancel? = nil, overnight: Bool = false) async {
         if state(s).scanning {
             guard isPhoneEnabled(s) else { return }
             await withCheckedContinuation { phoneScanWaiters[s, default: []].append($0) }
             return
         }
         let generation = eraseGeneration
-        await scanPhoneOnce(s, cancel: cancel)
+        await scanPhoneOnce(s, cancel: cancel, overnight: overnight)
         while generation == eraseGeneration, cancel?.isCancelled != true, let waiting = phoneScanWaiters.removeValue(forKey: s) {
-            await scanPhoneOnce(s, cancel: cancel)
+            await scanPhoneOnce(s, cancel: cancel, overnight: overnight)
             waiting.forEach { $0.resume() }
         }
         // Cancelled with callers waiting for a follow-up: release them (their scan is not run).
         if let waiting = phoneScanWaiters.removeValue(forKey: s) { waiting.forEach { $0.resume() } }
     }
 
-    private func scanPhoneOnce(_ s: PhoneSource, cancel: RunCancel?) async {
+    /// [overnight]: the nightly run (charging): Mail drains its queue ([MailCap.overnight]) instead of reading
+    /// [MailCap.scan] newest first.
+    private func scanPhoneOnce(_ s: PhoneSource, cancel: RunCancel?, overnight: Bool) async {
         guard isPhoneEnabled(s), !state(s).scanning, let library else { return }
         // Files' bookmarks and Mail's account are kept with complete file protection: while the phone is locked
         // (a background launch) they read as empty, and a scan then would store an empty result over the real one.
@@ -378,11 +380,13 @@ extension SourcesService {
                 }
                 if account.auth == .gmailAPI {
                     let token = try await oauthAccessToken(account)
-                    let producer = GmailProducer(account: account, client: GmailClient(accessToken: token, session: deps.http,
+                    var producer = GmailProducer(account: account, client: GmailClient(accessToken: token, session: deps.http,
                                                                                        timing: deps.gmailTiming),
                                                  cacheRoot: deps.mailCache)
+                    producer.maxPerSync = overnight ? MailCap.overnight : MailCap.scan
                     do {
-                        let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched) { n, m in
+                        let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched,
+                                                          shouldStop: { cancel?.isCancelled == true }) { n, m in
                             if m > 0 { feed.status("Fetching mail: \(n) of \(m)") }
                         }
                         try store(out, as: PhoneSourceIds.shared.MAIL, for: s, cancel: cancel)
@@ -396,9 +400,11 @@ extension SourcesService {
                     break
                 }
                 let credential = try await mailCredential(account)
-                let producer = MailProducer(account: account, credential: credential, cacheRoot: deps.mailCache,
+                var producer = MailProducer(account: account, credential: credential, cacheRoot: deps.mailCache,
                                             makeTransport: deps.makeTransport)
-                let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched)
+                producer.maxPerSync = overnight ? MailCap.overnight : MailCap.scan
+                let out = try await producer.scan(state: deps.state.state(s.rawValue), observer: both, fetched: fetched,
+                                                  shouldStop: { cancel?.isCancelled == true })
                 try store(out, as: PhoneSourceIds.shared.MAIL, for: s, cancel: cancel)
             }
             let st = state(s)

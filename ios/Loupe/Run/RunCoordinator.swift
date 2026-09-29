@@ -22,7 +22,8 @@ protocol RunWork: AnyObject {
     func sourceIds(only: String?) -> [String]
     /// A source's name for the panel ("Photos").
     func sourceTitle(_ id: String) -> String
-    func scan(source: String, cancel: RunCancel, report: RunReporter) async -> RunStageResult
+    /// [overnight]: the nightly run (charging), which may do more per source (Mail drains its queue).
+    func scan(source: String, overnight: Bool, cancel: RunCancel, report: RunReporter) async -> RunStageResult
     func privacy(cancel: RunCancel, report: RunReporter) async -> RunStageResult
     func mail(cancel: RunCancel, report: RunReporter) async -> RunStageResult
     func watchers(cancel: RunCancel, report: RunReporter) async -> RunStageResult
@@ -238,7 +239,7 @@ final class RunCoordinator: ObservableObject {
                     if nightly, work.blocker != nil { completed = false; break }
                     current?.part = "\(work.sourceTitle(sid)) · \(i + 1) of \(ids.count)"
                     current?.item = nil
-                    let r = await work.scan(source: sid, cancel: cancel, report: reporter)
+                    let r = await work.scan(source: sid, overnight: nightly, cancel: cancel, report: reporter)
                     read += r.count
                     if !r.completed || cancel.isCancelled { completed = false; break }
                     sourcesDone.append(sid)

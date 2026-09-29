@@ -43,7 +43,7 @@ final class LiveRunWork: RunWork {
         return PhoneSource(rawValue: id)?.title ?? id
     }
 
-    func scan(source id: String, cancel: RunCancel, report: RunReporter) async -> RunStageResult {
+    func scan(source id: String, overnight: Bool, cancel: RunCancel, report: RunReporter) async -> RunStageResult {
         // The live scan the source starts is the stage's progress: its masked item names, counts, rate and ETA.
         var snapshotSub: AnyCancellable?
         var attached: UUID?
@@ -64,7 +64,7 @@ final class LiveRunWork: RunWork {
             return RunStageResult(count: Int(sources.sampleScan?.itemCount ?? 0), completed: !cancel.isCancelled)
         }
         guard let s = PhoneSource(rawValue: id) else { return RunStageResult(count: 0) }
-        await sources.scanPhone(s, cancel: cancel)
+        await sources.scanPhone(s, cancel: cancel, overnight: overnight)
         return RunStageResult(count: sources.state(s).itemCount, completed: !cancel.isCancelled)
     }
 

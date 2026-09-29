@@ -144,11 +144,18 @@ struct IMAPSyncResult: Equatable {
     let uidValidity: UInt32
     let highestUid: UInt32
     let messages: [(uid: UInt32, raw: Data)]
-    /// Newer messages left for the next sync (the per-sync cap was reached).
-    let remaining: Int
+    /// Messages up to [highestUid] not fetched yet (over the per-sync cap, or the sync was stopped), newest first:
+    /// the caller keeps them and passes them back as `pending`, so none is dropped.
+    let queued: [UInt32]
+    /// A first sync (or one after a UIDVALIDITY change) starts from the newest `maxMessages`: how many older
+    /// messages it did not read.
+    let older: Int
+
+    /// Everything this sync did not fetch.
+    var remaining: Int { queued.count + older }
 
     static func == (a: IMAPSyncResult, b: IMAPSyncResult) -> Bool {
-        a.uidValidity == b.uidValidity && a.highestUid == b.highestUid && a.remaining == b.remaining
+        a.uidValidity == b.uidValidity && a.highestUid == b.highestUid && a.queued == b.queued && a.older == b.older
             && a.messages.map(\.uid) == b.messages.map(\.uid) && a.messages.map(\.raw) == b.messages.map(\.raw)
     }
 }
@@ -222,10 +229,14 @@ final class IMAPClient {
         }
     }
 
-    /// Connects, signs in, opens INBOX read-only and fetches the messages after [afterUid] (all of
-    /// them after a UIDVALIDITY change), newest [maxMessages] at most, then logs out.
+    /// Connects, signs in, opens INBOX read-only and fetches, newest first and at most [maxMessages], the messages
+    /// after [afterUid] together with the ones a previous sync left [pending]; what is over the cap comes back as
+    /// `queued` (never dropped), and `highestUid` covers every new message. A first sync, or one after a UIDVALIDITY
+    /// change (the old UIDs and [pending] mean nothing then), starts from the newest [maxMessages]. [shouldStop] is
+    /// asked before each batch: the rest is queued. Then logs out.
     func sync(username: String, credential: IMAPCredential, mailbox: String = "INBOX",
-              knownUidValidity: UInt32?, afterUid: UInt32, maxMessages: Int) async throws -> IMAPSyncResult {
+              knownUidValidity: UInt32?, afterUid: UInt32, pending: [UInt32] = [], maxMessages: Int,
+              shouldStop: () -> Bool = { false }) async throws -> IMAPSyncResult {
         try await transport.open()
         defer { transport.close() }
         let greeting = try await nextResponse()
@@ -244,25 +255,39 @@ final class IMAPClient {
             throw Failure(kind: .mailbox, detail: "The server did not say the mailbox's UIDVALIDITY.")
         }
         let exists = examine.lazy.compactMap(IMAPParse.exists).first ?? 0
-        let from = (knownUidValidity == validity) ? afterUid : 0
+        let first = knownUidValidity != validity
+        let from = first ? 0 : afterUid
         var uids: [UInt32] = []
         if exists > 0 {
             let found = try await command("UID SEARCH UID \(from &+ 1):*")
             // "n:*" always matches the highest UID, even below n: keep only the new ones.
             uids = found.compactMap(IMAPParse.search).flatMap { $0 }.filter { $0 > from }.sorted()
         }
-        let take = Array(uids.suffix(maxMessages))
+        let cap = max(0, maxMessages)
+        var older = 0
+        var wanted: [UInt32]   // newest first
+        if first {
+            wanted = Array(uids.suffix(cap).reversed())
+            older = uids.count - wanted.count
+        } else {
+            // An empty mailbox has none of the pending ones left either.
+            wanted = exists > 0 ? Array(Set(uids).union(pending.filter { $0 <= from })).sorted(by: >) : []
+        }
+        var queued = Array(wanted.dropFirst(cap))
+        let take = Array(wanted.prefix(cap))
         var messages: [(uid: UInt32, raw: Data)] = []
         for start in stride(from: 0, to: take.count, by: batchSize) {
+            if shouldStop() { queued = Array(take[start...]) + queued; break }
             let chunk = take[start..<min(start + batchSize, take.count)]
-            let set = chunk.map(String.init).joined(separator: ",")
+            let set = chunk.sorted().map(String.init).joined(separator: ",")
             let responses = try await command("UID FETCH \(set) (UID BODY.PEEK[]<0.\(maxBytesPerMessage)>)")
+            // A requested UID the server does not return was expunged meanwhile: it is not queued again.
             messages += responses.compactMap(IMAPParse.fetch).map { (uid: $0.uid, raw: $0.body) }
         }
         _ = try? await command("LOGOUT")
         messages.sort { $0.uid < $1.uid }
-        return IMAPSyncResult(uidValidity: validity, highestUid: max(take.last ?? from, from), messages: messages,
-                              remaining: uids.count - take.count)
+        return IMAPSyncResult(uidValidity: validity, highestUid: max(uids.last ?? from, from), messages: messages,
+                              queued: queued, older: older)
     }
 }
 

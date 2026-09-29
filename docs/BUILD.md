@@ -2056,9 +2056,30 @@ their acceptance criteria are met; entries here record increments toward them.
   historyId not advanced, then the next scan fetches 2 newer + the 64 and advances; a 520-message first pass over
   three scans with a queued message's cached copy and a stale message both kept until the window is complete, then
   pruned; a rate limit inside the queued rest pauses, keeps the historyId and resumes with no history call; a pass
-  saved by the previous version resumes as paused). Gate: GmailTests 25 green; the full iOS unit suite on an iPhone 17
-  Pro simulator: 500 tests, 2 skipped, 0 failures (no Kotlin touched). Not done: a mailbox receiving more than 200 a day between scans
-  keeps a growing backlog of its oldest mail (newest first each scan); nothing is dropped, but the oldest waits.
+  saved by the previous version resumes as paused).
+  **Follow-up (coordinator ruling, same day): the nightly run drains the queue, and IMAP never drops either.**
+  `MailCap` (`MailSource.swift`): a scan (Run now, Scan again, the first check) reads `MailCap.scan` (200) newest first;
+  the nightly run reads up to `MailCap.overnight` (5,000), still paced and backed off. `RunWork.scan(source:overnight:…)`
+  carries `reason == .nightly` from `RunCoordinator` through `LiveRunWork` to `SourcesService.scanPhone(_:cancel:overnight:)`,
+  which sets the producer's cap. Both producers take `shouldStop` (the run's cancel flag: Cancel, or iOS ending the
+  background task) and stop between messages (Gmail) or batches (IMAP) with the rest queued, never lost; a foreground
+  scan never chains another. IMAP (`IMAPClient.sync(…pending:…shouldStop:)`, `MailProducer`): the new UIDs plus the
+  queued ones (`pendingUids` in the phone state, newest first) are fetched newest first up to the cap, the rest queued;
+  `lastUid` covers every new UID (the queue keeps what is not here); a queued UID the server no longer returns (expunged)
+  is not queued again; a UIDVALIDITY change drops the queue. The first sync still starts from the newest cap of the whole
+  mailbox (no date window over IMAP) and says "not read: N older messages from before Loupe was added — Loupe starts
+  from the newest 200, then reads all new mail". The queue's words, both producers: "not fetched yet: N older messages —
+  Loupe reads 200 at a time, newest first; the rest are fetched on the next scan or overnight while charging". Tests:
+  `MailQueueTests` (6: 264 new UIDs → 200 fetched, 64 queued, then 2 new + the 64; the nightly cap drains 264 at once;
+  a stopped scan queues the rest; an expunged queued UID; the first sync's older count and a UIDVALIDITY change; an
+  empty mailbox), `GmailTests` (+2: the nightly cap drains a queued pass and a fresh 264 in one run and advances the
+  historyId; a stopped scan keeps the rest queued, not paused), `RunCoordinatorTests` / `NightlyRunTests` (only the
+  nightly run scans overnight). Gate: GmailTests 27, MailQueueTests 6, PhoneSourcesTests 28, RunCoordinatorTests 15,
+  NightlyRunTests 8 green; full iOS unit suite once: 508 tests, 2 skipped, 2 failures, both wall-clock
+  budgets outside Mail (`ResultsDashboardTests.testTenThousandItemsFromTheLedger`, `UnsureQueueTests.testThreeThousand…`)
+  with the Mac at load average ~140; both pass re-run alone. Not done: Mail's account file and cache are kept
+  with complete file protection, so a nightly run while the phone is locked skips Mail (`isProtectedDataAvailable`);
+  the queue then waits for a scan with the phone unlocked.
 - **2026-09-27 — iPhone pre-deployment scenario suite: every journey, every button, every change across a relaunch
   (owner request).** `ios/LoupeUITests/Scenarios/`, one file per area; each journey ends with the app terminated and
   launched again (same arguments minus the reset flags) and checks what survived: first run (Get the model → Later,
