@@ -36,6 +36,9 @@ val phishingVectorsV13 = rootProject.file("docs/phishing-vectors-v1.3.json")
 val phishingDbFixtures = project.file("src/commonTest/fixtures/phishingdb")
 // The tracking trackers' labelled set (spec 2026-09-28 §7.3): synthetic, real-shaped Egyptian and English items.
 val trackingFixtures = project.file("src/commonTest/fixtures/tracking")
+// Fast Decisions (fastino/fast-decisions, Apache-2.0): the trimmed sample the parser tests read.
+// The full 1.9 MB development split is fetched, never committed -- tools/fetch-fast-decisions.sh.
+val fastDecisionsSample = project.file("src/commonTest/fixtures/fast-decisions/sample.jsonl")
 // shared_hosts.json: copied verbatim from Loupe Station (laya_studio/online/shared_hosts.json, commit
 // 4cb9026). It is the one source of the list: generateSharedHosts turns it into commonMain Kotlin.
 val sharedHostsJson = project.file("data/shared_hosts.json")
@@ -99,6 +102,7 @@ val generateTestPaths by tasks.registering {
     inputs.property("trackingFixtures", trackingFixtures.absolutePath)
     inputs.property("sharedHostsJson", sharedHostsJson.absolutePath)
     inputs.property("modelPriorDir", modelPriorDir.absolutePath)
+    inputs.property("fastDecisionsSample", fastDecisionsSample.absolutePath)
     val scratch = layout.buildDirectory.dir("tmp/kit-tests").get().asFile.absolutePath
     inputs.property("scratch", scratch)
     outputs.dir(outDir)
@@ -117,6 +121,7 @@ val generateTestPaths by tasks.registering {
                 "internal const val SHARED_HOSTS_JSON: String = \"" + sharedHostsJson.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val MODEL_PRIOR_DIR: String = \"" + modelPriorDir.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val TRACKING_FIXTURES: String = \"" + trackingFixtures.absolutePath.replace("\\", "/") + "\"\n" +
+                "internal const val FAST_DECISIONS_SAMPLE: String = \"" + fastDecisionsSample.absolutePath.replace("\\", "/") + "\"\n" +
                 "internal const val TEST_TMP: String = \"" + scratch.replace("\\", "/") + "\"\n",
         )
     }
@@ -242,4 +247,19 @@ tasks.named<Test>("jvmTest") {
     //   ./gradlew :loupe-kit:jvmTest --tests '*ModelPriorFitTest' -Ploupe.fit.write=true
     providers.gradleProperty("loupe.fit.write").orNull?.let { systemProperty("loupe.fit.write", it) }
     maxHeapSize = "1g"
+}
+
+// Scores the Fast Decisions development split. With no backend it runs the two reference
+// predictors (the oracle majority prior and the label-name baseline), which need no model and give
+// every published figure a floor to sit on:
+//
+//   tools/fetch-fast-decisions.sh && ./gradlew :loupe-kit:fastDecisions
+//
+// Pass a directory with --args if the data is somewhere else.
+tasks.register<JavaExec>("fastDecisions") {
+    group = "verification"
+    description = "Scores the Fast Decisions development split (baselines only without a backend)."
+    mainClass.set("dev.loupe.kit.measure.FastDecisionsMain")
+    classpath = kotlin.targets.getByName("jvm").compilations.getByName("main").output.allOutputs +
+        configurations.getByName("jvmRuntimeClasspath")
 }

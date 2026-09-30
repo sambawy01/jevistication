@@ -72,6 +72,9 @@ tasks.test {
     // PDFBox falls back to the home directory when the folder does not exist, so create it first.
     doFirst { layout.buildDirectory.dir("pdfbox-cache").get().asFile.mkdirs() }
     maxHeapSize = "1g"
+    // StockVsLoupeMeasurementTest runs only when asked (thousands of model calls on two graphs):
+    //   ./gradlew :loupe-desktop:test --tests '*StockVsLoupe*' -Ploupe.measure=stock-vs-loupe
+    providers.gradleProperty("loupe.measure").orNull?.let { systemProperty("loupe.measure", it) }
     testLogging {
         showStandardStreams = true
     }
