@@ -1360,6 +1360,25 @@ their acceptance criteria are met; entries here record increments toward them.
   straight from the device to the provider, never through a Loupe relay or model server, and that
   drafts stay in the app until a Gmail compose scope is reviewed. Test names with commas renamed so
   the Kotlin/Native test compile passes. 145 tests in `:agent`, green.
+- **2026-10-03 — Laya vs Kai-0.6B, ready to run (`agent-tier`, not run).** `vllm-sr/Decision-2.0-Kai-0.6B`
+  (Apache-2.0, a decision fine-tune of Qwen3-0.6B — the very model risk 8 names as the untuned second
+  backend) is wired for a head-to-head with the Laya Loupe ships, on the Fast Decisions development
+  split. `FastDecisionsBenchTest` (gated, in `:backend-onnx`) writes Laya's predictions through the
+  shipped path — `DecisionEngine` over `OnnxBackend` with `LayaPrompt`, INT8 — at threshold 0 so the
+  comparison is full coverage. `tools/bench/kai_predict.py` writes Kai's at a pinned revision with the
+  same question text, the same bare labels and the same first-label tie rule (Kai returns no choice
+  on an exact tie). `tools/bench/score.py` marks both with one set of rules, refuses to score unless it
+  reproduces the recorded floors (25.8% / 35.2%), and prints an exact McNemar test so a small gap is
+  not read as a win. 17 offline checks in `tools/bench/test_bench.py`; the Kotlin runner compiles and
+  skips cleanly without the model. **Not run:** this container cannot reach Hugging Face or the
+  model host, and Kai needs more memory than the Composio sandbox has — the run is in
+  [`HANDOFF-MODEL-BENCH.md`](HANDOFF-MODEL-BENCH.md), including reading Kai's `trust_remote_code`
+  files before they execute. Two findings recorded on the way: **Loupe's Laya is the untuned upstream
+  checkpoint** (`tools/export-laya-onnx.py` pins `convaiinnovations/laya-multilingual@052592a1`;
+  fine-tuning, A1/F3, is still blocked), and **the iPhone backend runs Laya on the CPU only**
+  (`OrtLayaBackend.createSession` adds no execution provider), which is why it is 36 ms. Fast
+  Decisions is English only, so nothing here speaks to Arabic; no labelled Arabic decision set exists
+  in the repo yet.
 
 ## Where the build stands
 

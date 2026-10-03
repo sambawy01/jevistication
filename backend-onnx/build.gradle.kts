@@ -25,6 +25,10 @@ dependencies {
     implementation("ai.djl.huggingface:tokenizers:0.38.0")
 
     testImplementation(kotlin("test"))
+    // The Fast Decisions parser for FastDecisionsBenchTest, which writes Laya's predictions for
+    // the model comparison (docs/HANDOFF-MODEL-BENCH.md). Test-only: the shipped backend does not
+    // depend on the app kit.
+    testImplementation(project(":loupe-kit"))
     // Reads the golden fixture. Already on the runtime classpath through DJL (same version, same
     // licence check); declared so the tests do not lean on a transitive dependency.
     testImplementation("com.google.code.gson:gson:2.13.1")
