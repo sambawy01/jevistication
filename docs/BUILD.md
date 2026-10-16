@@ -1379,6 +1379,17 @@ their acceptance criteria are met; entries here record increments toward them.
   (`OrtLayaBackend.createSession` adds no execution provider), which is why it is 36 ms. Fast
   Decisions is English only, so nothing here speaks to Arabic; no labelled Arabic decision set exists
   in the repo yet.
+- **2026-10-16 — Bonsai 2B as the on-device reply writer, ready to run (`agent-tier`, not run).**
+  Owner's pick: test PrismML's `Ternary-Bonsai-2-2B` (Qwen3.5-2B at 0.43 GB, Apache-2.0, released
+  2026-10-15) as a replacement for the BYOK cloud model on **reply drafts only** — Laya still makes
+  every decision. [`HANDOFF-BONSAI-2B.md`](HANDOFF-BONSAI-2B.md) runs Loupe's own
+  `EmailReplyWorkflow` prompt, ported byte for byte, over 18 fixed emails (English, Egyptian, MSA,
+  Franco; five traps for invented prices and hidden instructions), blind-graded by the owner next to
+  DeepSeek, then measures a full draft's time and memory on the owner's iPhone with the pinned
+  PrismML llama.cpp fork (`prism-b10777-e3de715`). The pass bar is written down before the run. Two
+  risks flagged in advance: Bonsai thinks by default and Loupe's request cannot turn it off (the
+  server must), and Loupe sends two system messages, which some Qwen templates reject. PrismML states
+  no supported languages, so Arabic is the open question. No app code changed.
 
 ## Where the build stands
 
