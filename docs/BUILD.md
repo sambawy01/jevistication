@@ -1445,6 +1445,18 @@ their acceptance criteria are met; entries here record increments toward them.
   screenshot, document, ordinary photo — so it takes those. Photos with text keep the text-reader →
   Laya / English-decider path; QR codes are decoded by the platform's built-in barcode reader and the
   link checked like any other. Untested: the nano's accuracy on pictures, Egyptian IDs and cards most of all.
+- **2026-11-24 — Stack design written: [`STACK.md`](STACK.md) (`agent-tier`, docs only).** How Laya, the
+  nano, the text readers and the barcode reader fit on one line: a `RoutingBackend` behind the existing
+  `Backend` plug (the engine, policy and ledger unchanged), model id on every ledger row, per-model bars,
+  and one change to the engine's core (an image reference on `Item` for the nano's picture questions).
+  Owner requirements built in: **models download once, during onboarding**, into a model shelf generalised
+  from Laya's (pinned hashes, Application Support, out of iCloud backup, re-downloaded only if missing,
+  restored from backup, or an update the user accepts); **the first scan is the user's choice** — now,
+  tonight while charging, after a time they pick (iOS treats it as the earliest start), or whenever
+  charging — on the existing charging task, stopping on heat or Low Power Mode and resuming; **results stay
+  on the phone and are never redone**: the durable ledger and the already-decided skip exist, and an item
+  index (content fingerprint per item) is added so unchanged items are not even re-read. Three decisions
+  left to the owner: the ledger in iPhone backups, the Franco guard, automatic model updates.
 
 ## Where the build stands
 
