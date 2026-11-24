@@ -1433,6 +1433,11 @@ their acceptance criteria are met; entries here record increments toward them.
   if the bar for "phishing" alone is raised to 0.90 — the working plan, to be confirmed on a larger
   set. Latin-script Arabic that does arrive would route to the English decider, which cannot read it;
   the default is to not act on it (stays unsure), never to flag it.
+- **2026-11-24 — Owner decision, revised: Franco routes to Laya, accuracy not a concern.** The
+  switch is "clearly English → the English decider; everything else (Arabic script and Franco) →
+  Laya". Known cost: Laya called 10 of 11 genuine Franco messages phishing at near-certainty.
+  Proposed guard (owner may waive): a Franco message is flagged only with corroborating evidence
+  (a link failing the domain checks, a request for a code), never on Laya's answer alone.
 
 ## Where the build stands
 
