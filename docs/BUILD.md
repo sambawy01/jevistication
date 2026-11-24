@@ -1438,6 +1438,13 @@ their acceptance criteria are met; entries here record increments toward them.
   Laya". Known cost: Laya called 10 of 11 genuine Franco messages phishing at near-certainty.
   Proposed guard (owner may waive): a Franco message is flagged only with corroborating evidence
   (a link failing the domain checks, a request for a code), never on Laya's answer alone.
+- **2026-11-24 — Owner decision: photos without text go to the nano.** A text reader (Apple Vision on
+  iPhone, OCRia-nano on Android and Mac) returns nothing for a picture with no text, so today such a
+  photo is skipped (`PhoneItems.photo` keeps only its facts). d1-omni-600M's vision part (~94M
+  parameters, ~100 MB shrunk) answers questions about the picture itself — bank card, passport, ID,
+  screenshot, document, ordinary photo — so it takes those. Photos with text keep the text-reader →
+  Laya / English-decider path; QR codes are decoded by the platform's built-in barcode reader and the
+  link checked like any other. Untested: the nano's accuracy on pictures, Egyptian IDs and cards most of all.
 
 ## Where the build stands
 
