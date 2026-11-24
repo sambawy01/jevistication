@@ -1390,6 +1390,20 @@ their acceptance criteria are met; entries here record increments toward them.
   risks flagged in advance: Bonsai thinks by default and Loupe's request cannot turn it off (the
   server must), and Loupe sends two system messages, which some Qwen templates reject. PrismML states
   no supported languages, so Arabic is the open question. No app code changed.
+- **2026-11-24 — Model tests run: d1-2B leads the deciders, OCRia-nano the Arabic readers
+  (`agent-tier`, results only).** Full numbers and method in [`MODEL-TESTS-2026.md`](MODEL-TESTS-2026.md).
+  On Fast Decisions (dev, 2,600) LiquidAI `d1-2B` scored 62.8% against Kai-0.6B 58.6%, Bonsai 2B
+  58.2% and the shipped, untuned Laya 47.7% (all gaps significant). On 65 synthetic Arabic
+  phishing messages d1 and Laya were close on accuracy (78% vs 74%), but at Loupe's 0.80 bar d1
+  was right 45 of 47 times with 2 false alarms where Laya was right 46 of 61 with 15 — d1 is
+  calibrated, Laya is not. d1 is 21× slower than Laya on CPU (902 vs 42 ms) and 10× bigger
+  unquantised, so the next step is an iPhone measurement, not a swap. Bonsai 2B failed as the
+  reply writer (obeyed a hidden refund instruction, invented facts, no Egyptian) and showed that
+  Loupe's two-system-message request is rejected by Qwen-family chat templates. For Arabic OCR,
+  SoMark OXR produced garbage; LlamaIndex `OCRia-nano-1` (8.1M parameters, ONNX on CPU) beat
+  Tesseract overall (77% vs 72% of characters, 33 vs 31 of 42 key facts), most on photographed
+  pages, but garbled a phishing link and carries a non-compete licence clause to check. The
+  October raw files were lost to a container recycle; this report is the record.
 
 ## Where the build stands
 
