@@ -1404,6 +1404,18 @@ their acceptance criteria are met; entries here record increments toward them.
   Tesseract overall (77% vs 72% of characters, 33 vs 31 of 42 key facts), most on photographed
   pages, but garbled a phishing link and carries a non-compete licence clause to check. The
   October raw files were lost to a container recycle; this report is the record.
+- **2026-11-24 — Next steps written: d1-2B on an iPhone, OCRia-nano for Android and the Mac
+  (`agent-tier`, docs only).** [`HANDOFF-D1-IPHONE.md`](HANDOFF-D1-IPHONE.md) has a Claude Code session on the
+  owner's Mac check that LiquidAI's own shrunk ONNX build (`d1-2B-ONNX` q4, ~1.74 GB decoder) keeps
+  the full model's answers, then replay real rows on the owner's iPhone in a throwaway ONNX Runtime
+  app: speed by message length, memory, Core ML vs CPU, and whether Loupe's pinned ORT 1.20.0 can run
+  it. Pass bar set in advance (≤ 250 ms per short message, ≤ 2.5 GB with Laya loaded), with "Laya
+  first, d1 when unsure" as the fallback design. [`OCR-ARABIC-PLAN.md`](OCR-ARABIC-PLAN.md) proposes
+  OCRia-nano-1 through LiteParse's Rust core for the Mac app and Android, where Loupe reads no Arabic
+  from images today; it names three fixes the output needs first — garbled links become
+  "unreadable", never a guessed brand domain; Persian digits and letters normalised; confidence kept
+  with the text — and a licence question for LlamaIndex. The 65-message Arabic phishing set is now
+  kept in `docs/data/arabic-phishing-v0.jsonl` so it cannot be lost again.
 
 ## Where the build stands
 
