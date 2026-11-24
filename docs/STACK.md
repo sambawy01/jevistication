@@ -191,8 +191,9 @@ user's approval (`ReviewQueue`). The optional cloud helper only fetches public f
 
 ## 12. Open decisions for the owner
 
-- **The ledger in iPhone backups.** Models are excluded from backup; the ledger (Application Support/Loupe) is
-  not, so decisions are in the user's iCloud or computer backups and survive a phone restore. Keep it that way,
-  or exclude it so results never leave the phone even in a backup?
+- ~~The ledger in iPhone backups.~~ **Decided 2026-11-24: keep it in backups.** Models stay excluded from
+  backup (they re-download once after a restore); the ledger (Application Support/Loupe) stays in the user's own
+  iCloud or computer backup, so a restored or new phone keeps every past result without rescanning. The item
+  index (§8) follows the ledger and is backed up too.
 - **The Franco guard** — keep, or let Laya's answer alone flag Franco messages.
 - **Model updates** — ask each time (as above), or update automatically on Wi-Fi while charging.

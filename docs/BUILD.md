@@ -1457,6 +1457,9 @@ their acceptance criteria are met; entries here record increments toward them.
   on the phone and are never redone**: the durable ledger and the already-decided skip exist, and an item
   index (content fingerprint per item) is added so unchanged items are not even re-read. Three decisions
   left to the owner: the ledger in iPhone backups, the Franco guard, automatic model updates.
+- **2026-11-24 — Owner decision: results stay in iPhone backups.** The ledger and the item index are
+  included in the user's iCloud or computer backup, so a restored or new phone keeps past results without a
+  rescan; the models stay out of backups and re-download once after a restore (`STACK.md` §12).
 
 ## Where the build stands
 
