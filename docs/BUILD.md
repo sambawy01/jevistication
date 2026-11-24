@@ -1416,6 +1416,14 @@ their acceptance criteria are met; entries here record increments toward them.
   "unreadable", never a guessed brand domain; Persian digits and letters normalised; confidence kept
   with the text — and a licence question for LlamaIndex. The 65-message Arabic phishing set is now
   kept in `docs/data/arabic-phishing-v0.jsonl` so it cannot be lost again.
+- **2026-11-24 — d1-omni-600M vs Laya: split decision (`agent-tier`, results only).** The owner
+  ruled out d1-2B for phones (~2 GB with Laya, and Laya alone already heats the phone) and proposed
+  a stack: Laya for Arabic, Liquid's 600M "nano" decider for English, OCRia-nano for text in images.
+  Tested here ([`MODEL-TESTS-2026.md`](MODEL-TESTS-2026.md) §1d): the nano scored 79.6% on Fast
+  Decisions dev against Laya's 47.7% — suspiciously high, likely seen in training — but only 54% on
+  the 65 Arabic messages (14 of 32 phishing caught; Franco 7 of 22) where Laya scored 74% (31 of 32).
+  Laya was 32 ms per message alone on this CPU, the unquantised nano 140 ms. Supports the owner's
+  split, with Franco routed to Laya; the nano's English needs a test it cannot have trained on.
 
 ## Where the build stands
 

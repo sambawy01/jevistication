@@ -75,6 +75,31 @@ abstain design wants. Franco is weak for all three (≈ 55–60%).
 d1 publishes 18.6 ms on an M5 Pro GPU and lists quantised builds; **its iPhone speed is the open
 question** and decides whether it can replace or back up Laya.
 
+### 1d. d1-omni-600M vs Laya (run 2026-11-24)
+
+`LiquidAI/d1-omni-600M` @ `02b55d70` (587M parameters: a 381M text trunk plus vision and audio
+encoders; lfm1.0 licence, same terms as d1-2B), fp32, its own `system_one`, the same question,
+labels and tie rule as §1a. Its code was read first (834 lines, no network or subprocess).
+Laya re-ran through `FastDecisionsBenchTest` and reproduced §1b exactly (48/65, 15 false alarms).
+
+| | Laya | d1-omni-600M |
+|---|---:|---:|
+| **Fast Decisions dev, average of 17** | 47.7% | **79.6%** |
+| `contains_pii` / `is_phishing` (of 100) | 56 / 54 | **76** / 59 |
+| **Arabic set, right** | **48/65 (74%)** | 35/65 (54%) |
+| Egyptian / Formal / Franco | **17** / **19** / **12** | 16 / 12 / 7 |
+| Arabic phishing caught | **31/32** | 14/32 |
+| Arabic genuine wrongly flagged | 16/33 | 12/33 |
+| Arabic, acting at ≥ 0.80: right / false alarms | 46 of 61 / 15 | 8 of 8 / 0 (acts on 8 only) |
+| speed, alone, the 65 Arabic messages | **32 ms** | 140 ms (fp32, unquantised) |
+
+English: Laya right & omni wrong 137, omni right & Laya wrong 877 (p = 1e-132). **Read the English
+number with suspicion:** 79.6% is above its own card's 76.9%, 17 points above its 2B sibling (62.8%),
+while its card's Decision Index is 15.95 against d1-3B's 48.57. A 600M model topping that exam by
+this much suggests it saw Fast Decisions in training. An English test it cannot have seen is needed
+before trusting it. Arabic is not among its six languages and it shows: near chance, though it
+abstains honestly. Verdict: **Laya for Arabic and Franco; the nano is a candidate for English only.**
+
 ## 2. Bonsai 2B as the on-device reply writer — rejected
 
 `docs/HANDOFF-BONSAI-2B.md`'s 18 emails, Loupe's own `EmailReplyWorkflow` prompt ported byte for
