@@ -1424,6 +1424,15 @@ their acceptance criteria are met; entries here record increments toward them.
   the 65 Arabic messages (14 of 32 phishing caught; Franco 7 of 22) where Laya scored 74% (31 of 32).
   Laya was 32 ms per message alone on this CPU, the unquantised nano 140 ms. Supports the owner's
   split, with Franco routed to Laya; the nano's English needs a test it cannot have trained on.
+- **2026-11-24 — Owner decision: Franco-Arabic is out of scope.** "Nobody uses it." Recalibration
+  was tried first on the Arabic set (temperature and Platt fitted on one half, scored on the other):
+  it cut Laya's false alarms only by making it unsure of everything (phishing flagged at the 0.80 bar
+  fell from 30 to 9 of 32), so it is not the fix. The cause was Franco: 10 of Laya's 15 false alarms
+  were genuine Franco messages it called phishing at near-certainty. On Arabic script alone (43
+  messages) Laya flags 19 of 21 phishing with 5 of 22 false alarms at 0.80, and 18 of 21 with 3 of 22
+  if the bar for "phishing" alone is raised to 0.90 — the working plan, to be confirmed on a larger
+  set. Latin-script Arabic that does arrive would route to the English decider, which cannot read it;
+  the default is to not act on it (stays unsure), never to flag it.
 
 ## Where the build stands
 
